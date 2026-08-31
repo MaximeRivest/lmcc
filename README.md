@@ -48,9 +48,7 @@ sig = a15.signature(
 adapter = a15.adapter(
     template=a15.template([
         a15.message("system",
-            "{instruction}\n\nReply with EXACTLY these sections:\n"
-            "{% for f in outputs %}<{f.name}>  {f.desc}\n{% endfor %}"
-            "Close with </done>."),
+            "{instruction}\n\nAnswer in exactly this form:\n{format}"),
         a15.directive("demos"),
         a15.message("user",
             "{% for f in inputs %}== {f.name} ==\n{f.value}\n{% endfor %}"),
@@ -79,8 +77,10 @@ thinking channel. That swap costing one word is the point of the library.
 
 1. **Adapters are signature-independent.** An entry never contains a
    signature; the two meet only at `bake`.
-2. **The lens.** The layout that writes the prompt is the data that reads
-   the reply — and it writes the demo turns, so demos cannot drift.
+2. **The lens.** One object writes the `{format}` skeleton the model
+   sees, writes the demo turns, and parses the reply — none of the three
+   can drift from the others. Swap `parse` to `{"kind": "json_object"}`
+   and skeleton, demos, and parser all become JSON together.
 3. **Scalars are mechanics; structure is vocabulary.** The kernel spells
    strings and JSON literals; anything structured requires a codec, or it
    refuses.

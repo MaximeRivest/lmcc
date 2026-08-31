@@ -1,0 +1,82 @@
+{
+ "name": "render-format-slot",
+ "kind": "render",
+ "entry": {
+  "name": "format_sections_v1",
+  "versions": {
+   "kernel": "0.1.0",
+   "vocab": {}
+  },
+  "template": {
+   "messages": [
+    {
+     "role": "system",
+     "text": "{instruction}\n\nAnswer like this:\n{format}"
+    },
+    {
+     "role": "user",
+     "text": "{q}"
+    }
+   ]
+  },
+  "parse": {
+   "kind": "sections",
+   "open": "<{name}>",
+   "tail": "</done>"
+  },
+  "requires": []
+ },
+ "signature": {
+  "instructions": "Answer.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    },
+    "desc": "short answer"
+   },
+   {
+    "name": "score",
+    "direction": "output",
+    "shape": {
+     "type": "integer"
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "q": "3+3?"
+ },
+ "expect": {
+  "messages": [
+   {
+    "role": "system",
+    "content": [
+     {
+      "kind": "text",
+      "text": "Answer.\n\nAnswer like this:\n<answer>\nshort answer\n<score>\n(integer)\n</done>"
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "content": [
+     {
+      "kind": "text",
+      "text": "3+3?"
+     }
+    ]
+   }
+  ],
+  "patch": {}
+ }
+}

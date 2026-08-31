@@ -114,6 +114,62 @@ def test_join_embed_rule_is_raw_text_identity():
                    "quoted": '"hi"', "arr": "[1,2]"}
 
 
+# ------------------------------------------------------- the {format} slot
+
+
+def _format_adapter(parse):
+    return a15.adapter(
+        template=a15.template([
+            a15.message("system", "{instruction}\n\nAnswer like this:\n{format}"),
+            a15.message("user", "{question}"),
+        ]),
+        parse=parse,
+        codecs={"payload": "json"})
+
+
+def _format_sig():
+    return a15.signature(
+        "Answer.",
+        inputs={"question": str},
+        outputs={"answer": a15.field(str, desc="short answer"), "score": int})
+
+
+def test_format_slot_sections():
+    baked = _format_adapter({"kind": "sections", "open": "<{name}>",
+                             "tail": "</done>"}).bake(
+        _format_sig(), {}, registry=_registry())
+    text = baked.render(inputs={"question": "x"}).messages[0]["content"][0]["text"]
+    assert text == ("Answer.\n\nAnswer like this:\n"
+                    "<answer>\nshort answer\n<score>\n(integer)\n</done>")
+
+
+def test_format_slot_json_lens():
+    baked = _format_adapter({"kind": "json_object"}).bake(
+        _format_sig(), {}, registry=_registry())
+    text = baked.render(inputs={"question": "x"}).messages[0]["content"][0]["text"]
+    assert text == ('Answer.\n\nAnswer like this:\n'
+                    '{\n  "answer": "short answer",\n  "score": "(integer)"\n}')
+
+
+def test_format_skeleton_tracks_hidden_fields():
+    """A routed (hidden) field must vanish from the skeleton too."""
+    sig = a15.signature(
+        "Answer.", inputs={"question": str},
+        outputs={"reasoning": a15.field(str, role="reasoning"),
+                 "answer": a15.field(str, desc="short answer")})
+    adp = a15.adapter(
+        template=a15.template([
+            a15.message("system", "{instruction}\n{format}"),
+            a15.message("user", "{question}"),
+        ]),
+        parse={"kind": "sections", "open": "<{name}>"},
+        strategies={"reasoning": "reasoning_tags"})
+    baked = adp.bake(sig, {"instruct": True}, registry=_registry())
+    text = baked.render(inputs={"question": "x"}).messages[0]["content"][0]["text"]
+    assert "<reasoning>" not in text
+    assert "<answer>\nshort answer\n" in text
+
+
 # --------------------------------------------------------------- refusals
 
 

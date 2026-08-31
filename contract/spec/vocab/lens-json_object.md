@@ -43,6 +43,11 @@ members in field order, unicode kept unescaped.
 The non-string guard makes write∘read the identity on raw text: a spelled
 string that happens to look like a quoted JSON string (e.g. `"hi"` with
 the quotes) embeds as the string `"hi"` and reads back verbatim.
+
+`format` (the `{format}` skeleton) is the kernel default: `join` over the
+placeholder texts, so the prompt shows the object shape itself —
+`{"answer": "short answer", "score": "(integer)"}` — pinned by corpus
+case 28.
 Whitespace inside embedded non-string values is **not** preserved
 byte-for-byte (read re-serializes compactly); codecs must therefore be
 whitespace-insensitive on parse, which `codec/json` is.
@@ -56,3 +61,4 @@ whitespace-insensitive on parse, which `codec/json` is.
 | `24-refuse-load-unknown-lens` | unregistered lens refuses at load |
 | `25-refuse-json-lens-malformed` | non-JSON reply refuses `lens-parse-error` |
 | `26-roundtrip-json-lens` | `lens/json_object` version travels in the artifact |
+| `28-std-json-lens-format` | `{format}` skeleton bytes (default `join` over placeholders) |

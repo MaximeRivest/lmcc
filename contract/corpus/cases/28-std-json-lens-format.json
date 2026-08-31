@@ -1,0 +1,96 @@
+{
+ "name": "std-json-lens-format",
+ "kind": "render",
+ "vocab": ["std"],
+ "entry": {
+  "name": "format_json_v1",
+  "versions": {
+   "kernel": "0.1.0",
+   "vocab": {
+    "lens/json_object": "0.1.0",
+    "codec/json": "0.1.0"
+   }
+  },
+  "template": {
+   "messages": [
+    {
+     "role": "system",
+     "text": "{instruction}\n\nAnswer like this:\n{format}"
+    },
+    {
+     "role": "user",
+     "text": "{question}"
+    }
+   ]
+  },
+  "parse": {
+   "kind": "json_object"
+  },
+  "codecs": {
+   "payload": {
+    "kind": "json"
+   }
+  },
+  "requires": []
+ },
+ "signature": {
+  "instructions": "Answer.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    },
+    "desc": "short answer"
+   },
+   {
+    "name": "score",
+    "direction": "output",
+    "shape": {
+     "type": "integer"
+    }
+   },
+   {
+    "name": "payload",
+    "direction": "output",
+    "shape": {
+     "type": "array"
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "question": "capital of France?"
+ },
+ "expect": {
+  "messages": [
+   {
+    "role": "system",
+    "content": [
+     {
+      "kind": "text",
+      "text": "Answer.\n\nAnswer like this:\n{\n  \"answer\": \"short answer\",\n  \"score\": \"(integer)\",\n  \"payload\": \"JSON matching this schema: {\\\"type\\\": \\\"array\\\"}\"\n}"
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "content": [
+     {
+      "kind": "text",
+      "text": "capital of France?"
+     }
+    ]
+   }
+  ],
+  "patch": {}
+ }
+}

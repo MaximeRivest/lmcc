@@ -168,6 +168,10 @@ class Lens:
     - ``join(spelled)`` writes gold outputs (``[(name, spelled_text)]``)
       in exactly the layout ``split`` reads — demo assistant turns can
       therefore never drift from the parser. This dual use is normative.
+    - ``format(placeholders)`` writes the reply *skeleton* the prompt
+      shows the model (the ``{format}`` template slot). The default is
+      ``join`` over the placeholder texts, so the skeleton, the demos,
+      and the parser are one object — the third face of the lens.
 
     Vocabulary packages subclass this and register a factory
     ``factory(parse_spec) -> Lens`` via ``Registry.register_lens``.
@@ -178,6 +182,9 @@ class Lens:
 
     def join(self, spelled: list[tuple[str, str]]) -> str:
         raise NotImplementedError
+
+    def format(self, placeholders: list[tuple[str, str]]) -> str:
+        return self.join(placeholders)
 
 
 def validate_sections_spec(spec: dict) -> None:

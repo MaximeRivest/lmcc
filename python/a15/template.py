@@ -4,7 +4,8 @@ The template language is deliberately *not* a programming language. It has
 exactly three constructs, so every template stays diffable, printable, and
 serializable:
 
-- slots: ``{instruction}``, ``{field_name}``, and ``{f.attr}`` inside loops
+- slots: ``{instruction}``, ``{format}`` (the lens's reply skeleton),
+  ``{field_name}``, and ``{f.attr}`` inside loops
 - loops: ``{% for f in inputs %} ... {% endfor %}`` (also ``outputs``),
   iterating the *visible* fields of the baked plan, in signature order
 - escapes: ``{{`` renders ``{``, ``}}`` renders ``}``
@@ -115,8 +116,8 @@ def validate_nodes(nodes: list[Node], *, known_fields: set[str],
                     refuse("unknown-slot",
                            f"{where}: {{{path}}} — loop attributes are {LOOP_ATTRS}")
                 continue
-            if path == "instruction":
-                continue
+            if path in ("instruction", "format"):
+                continue  # reserved slots; they shadow same-named fields
             if "." in path:
                 refuse("unknown-slot",
                        f"{where}: {{{path}}} — dotted slots are only valid inside "
@@ -179,6 +180,9 @@ def _render_slot(node: Slot, env, out: list[dict], buf: list[str],
             return
     if path == "instruction":
         buf.append(env.instruction)
+        return
+    if path == "format":
+        buf.append(env.reply_format)
         return
     f = env.field_named(path)
     _emit_value(env.value_of(f), out, buf)

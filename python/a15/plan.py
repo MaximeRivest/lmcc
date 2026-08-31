@@ -53,6 +53,10 @@ class _Env:
     def instruction(self) -> str:
         return self.baked.signature.instructions
 
+    @property
+    def reply_format(self) -> str:
+        return self.baked.reply_format()
+
     def loop_fields(self, source: str) -> list[core.Field]:
         return (self.baked.visible_inputs if source == "inputs"
                 else self.baked.visible_outputs)
@@ -95,6 +99,16 @@ class Baked:
     lens: Lens | None = None
 
     # ---------------------------------------------------------------- spell
+
+    def reply_format(self) -> str:
+        """The lens writing the prompt's reply skeleton (the ``{format}``
+        slot): the demo layout over placeholder texts. One kernel rule per
+        field: desc, else the codec's schema prose, else the mechanical
+        shape hint, else "..."."""
+        placeholders = [
+            (f.name, _placeholder(f, self.codecs.get(f.name)))
+            for f in self.visible_outputs]
+        return self.lens.format(placeholders)
 
     def spell(self, f: core.Field, value: object) -> str:
         codec = self.codecs.get(f.name)
@@ -236,6 +250,16 @@ class Baked:
         if self.patch:
             lines.append(f"patch: {self.patch}")
         return "\n".join(lines)
+
+
+def _placeholder(f: core.Field, codec) -> str:
+    if f.desc:
+        return f.desc
+    if codec is not None:
+        hint = codec.render_schema(f.shape)
+        if hint:
+            return hint
+    return core.shape_summary(f.shape) or "..."
 
 
 # -------------------------------------------------------------------- bake

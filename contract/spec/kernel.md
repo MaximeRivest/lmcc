@@ -46,9 +46,11 @@ caller supplies; a data-only entry loads against an empty registry.
 
 Three constructs; nothing else, ever:
 
-- Slots `{path}`: `{instruction}`, `{input_field_name}`, `{var.attr}`
-  inside loops. Attributes: `name`, `desc` ("" when absent), `schema`
-  (codec's schema prose, else a mechanical hint), `role`, `value`.
+- Slots `{path}`: `{instruction}`, `{format}` (the lens's reply
+  skeleton, §4), `{input_field_name}`, `{var.attr}` inside loops.
+  Attributes: `name`, `desc` ("" when absent), `schema` (codec's schema
+  prose, else a mechanical hint), `role`, `value`. `instruction` and
+  `format` are reserved and shadow same-named fields.
 - Loops `{% for f in inputs %}…{% endfor %}` (also `outputs`). Loops
   iterate the **visible** fields of the baked plan, in signature order.
 - Escapes `{{` and `}}`. A bare brace anywhere else is `template-syntax`.
@@ -59,11 +61,23 @@ rendered. Message list entries are `{role, text}` or directives
 
 ## 4. The lens (parse spec)
 
-A lens is one *document form* for the whole reply, read and written by
-the same object: `split(text, field_names) → {name: raw}` and
-`join(spelled) → text`, where `join` writes gold outputs (demo assistant
-turns) in exactly the layout `split` reads. Demos can therefore never
-drift from the parser. This dual use is normative for every lens.
+A lens is one *document form* for the whole reply, with three faces on
+one object — this triple use is normative for every lens:
+
+- `split(text, field_names) → {name: raw}` reads the reply;
+- `join(spelled) → text` writes gold outputs (demo assistant turns) in
+  exactly the layout `split` reads;
+- `format(placeholders) → text` writes the reply *skeleton* the prompt
+  shows the model — the `{format}` template slot. Default (and the
+  behavior of every 0.1 lens): `join` over the placeholder texts, so
+  `{format}` renders e.g. `<answer>\nshort answer\n…` for `sections` and
+  `{"answer": "short answer", …}` for a JSON lens.
+
+Neither the skeleton nor the demos can ever drift from the parser.
+The placeholder text per visible output field is one kernel rule:
+`desc`, else the codec's schema prose, else the mechanical shape hint,
+else `"..."`. The template still owns *whether* and *where* the skeleton
+appears; the lens owns its spelling.
 
 **The lens socket.** `parse.kind` names the lens. `sections` is kernel
 grammar — always available, never registered, never replaced. Every other
