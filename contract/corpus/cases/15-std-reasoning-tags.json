@@ -1,0 +1,82 @@
+{
+ "name": "std-reasoning-tags",
+ "kind": "parse",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "sections_v1",
+  "versions": {
+   "kernel": "0.1.0",
+   "vocab": {
+    "strategy/reasoning_tags": "0.1.0"
+   }
+  },
+  "template": {
+   "messages": [
+    {
+     "role": "system",
+     "text": "{instruction}\n\nReply with EXACTLY these sections:\n{% for f in outputs %}<{f.name}>  {f.desc}\n{% endfor %}Close with </done>."
+    },
+    {
+     "directive": "demos"
+    },
+    {
+     "directive": "history"
+    },
+    {
+     "role": "user",
+     "text": "{% for f in inputs %}== {f.name} ==\n{f.value}\n{% endfor %}"
+    }
+   ]
+  },
+  "parse": {
+   "kind": "sections",
+   "open": "<{name}>",
+   "tail": "</done>"
+  },
+  "requires": [],
+  "strategies": {
+   "reasoning": {
+    "kind": "reasoning_tags"
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Answer.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "reasoning",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    },
+    "role": "reasoning"
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "capabilities": {
+  "instruct": true
+ },
+ "response": "<answer>\nParis<think>capital</think> indeed.\n</done>",
+ "expect": {
+  "values": {
+   "answer": "Paris indeed.",
+   "reasoning": "capital"
+  }
+ }
+}

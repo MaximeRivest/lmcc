@@ -1,0 +1,66 @@
+{
+ "name": "refuse-load-version",
+ "kind": "refuse",
+ "entry": {
+  "name": "sections_v1",
+  "versions": {
+   "kernel": "9.0.0",
+   "vocab": {}
+  },
+  "template": {
+   "messages": [
+    {
+     "role": "system",
+     "text": "{instruction}\n\nReply with EXACTLY these sections:\n{% for f in outputs %}<{f.name}>  {f.desc}\n{% endfor %}Close with </done>."
+    },
+    {
+     "directive": "demos"
+    },
+    {
+     "directive": "history"
+    },
+    {
+     "role": "user",
+     "text": "{% for f in inputs %}== {f.name} ==\n{f.value}\n{% endfor %}"
+    }
+   ]
+  },
+  "parse": {
+   "kind": "sections",
+   "open": "<{name}>",
+   "tail": "</done>"
+  },
+  "requires": []
+ },
+ "signature": {
+  "instructions": "Answer the question.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    },
+    "desc": "short answer"
+   },
+   {
+    "name": "score",
+    "direction": "output",
+    "shape": {
+     "type": "integer"
+    }
+   }
+  ]
+ },
+ "expect": {
+  "code": "version-incompatible",
+  "at": "load"
+ }
+}

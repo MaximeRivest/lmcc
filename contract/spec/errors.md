@@ -1,0 +1,31 @@
+# Error codes (normative)
+
+Every refusal carries a stable code and a message naming the exact
+offender. The corpus asserts codes; messages are for humans and may improve
+without a version bump. Adding a code is a minor change; changing when one
+fires is breaking.
+
+| code | fires at | meaning |
+|---|---|---|
+| `template-syntax` | construct | bad template: bare brace, unclosed loop, unknown loop source |
+| `unknown-slot` | bake | slot names no field, or an output/dotted slot misused |
+| `unknown-parse-kind` | construct/load | parse.kind is not a kernel lens |
+| `unknown-extract-kind` | construct/load | extractor not in the kernel algebra |
+| `unknown-codec` | load/dump | codec name not registered |
+| `unknown-strategy` | load/dump | strategy name not registered |
+| `unknown-coercion` | parse | routing coercion not registered |
+| `entry-malformed` | construct/load | structural problem; message names the path |
+| `version-incompatible` | load | entry needs a version this implementation cannot honor |
+| `already-registered` | registration | duplicate name without `exist_ok` |
+| `capability-missing` | bake | strategy requires a fact the model does not declare |
+| `role-ambiguous` | bake | one role on two fields |
+| `field-uncovered` | bake | visible input never rendered by the template |
+| `field-double-covered` | bake | field is both a section and a routing target |
+| `no-codec` | bake/render | structured shape (or non-scalar value) without a codec |
+| `unmapped-type` | signature | annotation resolves to no shape and no host entry |
+| `missing-input` | render | no value supplied for a rendered field |
+| `value-invalid` | render/parse | scalar/enum/media value fails its shape |
+| `codec-render-error` | render | codec raised; message names the field |
+| `codec-parse-error` | parse | codec raised; message names the field |
+| `parse-missing-fields` | parse | reply lacks sections; `.partial` carries what was found |
+| `response-malformed` | parse | response is neither text nor a part list |

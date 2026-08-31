@@ -1,0 +1,75 @@
+{
+ "name": "std-scaled-number",
+ "kind": "parse",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "sections_v1",
+  "versions": {
+   "kernel": "0.1.0",
+   "vocab": {
+    "codec/scaled_number": "0.1.0"
+   }
+  },
+  "template": {
+   "messages": [
+    {
+     "role": "system",
+     "text": "{instruction}\n\nReply with EXACTLY these sections:\n{% for f in outputs %}<{f.name}>  {f.desc}\n{% endfor %}Close with </done>."
+    },
+    {
+     "directive": "demos"
+    },
+    {
+     "directive": "history"
+    },
+    {
+     "role": "user",
+     "text": "{% for f in inputs %}== {f.name} ==\n{f.value}\n{% endfor %}"
+    }
+   ]
+  },
+  "parse": {
+   "kind": "sections",
+   "open": "<{name}>",
+   "tail": "</done>"
+  },
+  "requires": [],
+  "codecs": {
+   "confidence": {
+    "kind": "scaled_number",
+    "options": {
+     "scale": 100,
+     "suffix": "%",
+     "round": 0
+    }
+   }
+  }
+ },
+ "signature": {
+  "instructions": "x",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "confidence",
+    "direction": "output",
+    "shape": {
+     "type": "number"
+    }
+   }
+  ]
+ },
+ "response": "<confidence>\n83%\n</done>",
+ "expect": {
+  "values": {
+   "confidence": 0.83
+  }
+ }
+}

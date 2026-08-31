@@ -1,0 +1,92 @@
+{
+ "name": "std-table-codec-parse",
+ "kind": "parse",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "sections_v1",
+  "versions": {
+   "kernel": "0.1.0",
+   "vocab": {
+    "codec/table": "0.1.0"
+   }
+  },
+  "template": {
+   "messages": [
+    {
+     "role": "system",
+     "text": "{instruction}\n\nReply with EXACTLY these sections:\n{% for f in outputs %}<{f.name}>  {f.desc}\n{% endfor %}Close with </done>."
+    },
+    {
+     "directive": "demos"
+    },
+    {
+     "directive": "history"
+    },
+    {
+     "role": "user",
+     "text": "{% for f in inputs %}== {f.name} ==\n{f.value}\n{% endfor %}"
+    }
+   ]
+  },
+  "parse": {
+   "kind": "sections",
+   "open": "<{name}>",
+   "tail": "</done>"
+  },
+  "requires": [],
+  "codecs": {
+   "rows": {
+    "kind": "table",
+    "options": {
+     "columns": [
+      "name",
+      "score"
+     ]
+    }
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Rank.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "rows",
+    "direction": "output",
+    "shape": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "name": {
+        "type": "string"
+       },
+       "score": {
+        "type": "integer"
+       }
+      }
+     }
+    }
+   }
+  ]
+ },
+ "response": "<rows>\n| name | score |\n| carol | 9 |\n</done>",
+ "expect": {
+  "values": {
+   "rows": [
+    {
+     "name": "carol",
+     "score": 9
+    }
+   ]
+  }
+ }
+}
