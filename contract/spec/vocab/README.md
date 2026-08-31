@@ -13,6 +13,9 @@ An implementation may claim any subset of the vocabulary. Claimed entries
 must pass their cases byte-exactly; unclaimed names refuse at load
 (`unknown-codec` / `unknown-strategy`) — never silently.
 
+Role names are themselves vocabulary — the function each name means and
+its alignment with the wire layer's part kinds live in `roles.md`.
+
 Current entries (all 0.1.0, provided by `a15_std`):
 
 | entry | spec |
