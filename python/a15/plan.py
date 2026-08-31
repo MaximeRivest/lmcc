@@ -20,7 +20,7 @@ from dataclasses import dataclass, field as dc_field
 from . import core
 from .adapter import Adapter
 from .errors import refuse
-from .parse import apply_routings, render_sections, split_sections
+from .parse import Lens, apply_routings
 from .strategy import Strategy, check_predicate, resolve_role_field
 from .template import render_nodes, validate_nodes
 
@@ -92,6 +92,7 @@ class Baked:
     fragments: dict[str, str] = dc_field(default_factory=dict)  # msg role -> text
     patch: dict = dc_field(default_factory=dict)
     codecs: dict[str, object] = dc_field(default_factory=dict)
+    lens: Lens | None = None
 
     # ---------------------------------------------------------------- spell
 
@@ -168,8 +169,7 @@ class Baked:
             f.annotation, demo[f.name])))
             for f in self.visible_outputs if f.name in demo]
         turns.append(core.make_message(
-            "assistant", [core.text_part(render_sections(self.adapter.parse,
-                                                         spelled))]))
+            "assistant", [core.text_part(self.lens.join(spelled))]))
         return turns
 
     def _render_history(self, history: list[dict]) -> list[dict]:
@@ -191,8 +191,14 @@ class Baked:
         text, parts = core.response_text_and_parts(response)
         text, routed = apply_routings(text, parts, self.routings,
                                       self.registry.coercions)
-        raw = split_sections(text, self.adapter.parse,
-                             [f.name for f in self.visible_outputs])
+        try:
+            raw = self.lens.split(text, [f.name for f in self.visible_outputs])
+        except Exception as exc:  # noqa: BLE001 — wrap, naming the lens
+            if hasattr(exc, "code"):
+                raise
+            refuse("lens-parse-error",
+                   f"lens {self.adapter.parse.get('kind')!r} failed to read "
+                   f"the reply: {exc}")
         values: dict = {}
         for f in self.visible_outputs:
             values[f.name] = self._coerce(f, raw[f.name])
@@ -205,10 +211,12 @@ class Baked:
     # -------------------------------------------------------------- explain
 
     def explain(self) -> str:
-        lines = [f"adapter: {self.adapter.name}",
-                 f"parse: sections open={self.adapter.parse['open']!r}"
-                 + (f" tail={self.adapter.parse['tail']!r}"
-                    if self.adapter.parse.get("tail") else "")]
+        p = self.adapter.parse
+        parse_line = f"parse: {p['kind']}"
+        if p["kind"] == "sections":
+            parse_line += f" open={p['open']!r}" + (
+                f" tail={p['tail']!r}" if p.get("tail") else "")
+        lines = [f"adapter: {self.adapter.name}", parse_line]
         for f in self.signature.inputs:
             note = "image/document part" if core.is_media(f.shape) else "text slot"
             lines.append(f"input  {f.name:<20} {note}")
@@ -237,6 +245,9 @@ def bake(adapter: Adapter, sig: core.SignatureCore, capabilities: dict,
          registry) -> Baked:
     baked = Baked(adapter=adapter, signature=sig, capabilities=capabilities,
                   registry=registry)
+
+    # 0. resolve the lens (refuses unknown kinds before any money is spent).
+    baked.lens = registry.lens(adapter.parse)
 
     # 1. resolve strategies per role, in signature order.
     seen_roles: dict[str, str] = {}

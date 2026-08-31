@@ -30,6 +30,7 @@ from .adapter import Adapter, adapter, codec, directive, message, template
 from .core import (Field, SignatureCore, field, signature, signature_from_dict,
                    signature_to_dict)
 from .errors import A15Error
+from .parse import Lens
 from .plan import Baked, RenderResult
 from .registry import Codec, Registry, default_registry
 from .serde import KERNEL_VERSION, dump, load
@@ -39,7 +40,7 @@ __version__ = KERNEL_VERSION
 
 __all__ = [
     "A15Error", "Adapter", "Baked", "Codec", "Field", "KERNEL_VERSION",
-    "Registry", "RenderResult", "SignatureCore", "Strategy", "adapter",
+    "Lens", "Registry", "RenderResult", "SignatureCore", "Strategy", "adapter",
     "codec", "default_registry", "directive", "dump", "field", "load",
     "message", "signature", "signature_from_dict", "signature_to_dict",
     "template",

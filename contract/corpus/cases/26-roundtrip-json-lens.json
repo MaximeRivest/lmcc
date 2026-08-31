@@ -1,0 +1,69 @@
+{
+ "name": "roundtrip-json-lens",
+ "kind": "roundtrip",
+ "vocab": ["std"],
+ "entry": {
+  "name": "json_lens_v1",
+  "versions": {
+   "kernel": "0.1.0",
+   "vocab": {
+    "lens/json_object": "0.1.0",
+    "codec/json": "0.1.0"
+   }
+  },
+  "template": {
+   "messages": [
+    {
+     "role": "system",
+     "text": "{instruction}"
+    },
+    {
+     "role": "user",
+     "text": "{question}"
+    }
+   ]
+  },
+  "parse": {
+   "kind": "json_object"
+  },
+  "codecs": {
+   "payload": {
+    "kind": "json"
+   }
+  },
+  "requires": []
+ },
+ "expect": {
+  "entry": {
+   "name": "json_lens_v1",
+   "versions": {
+    "kernel": "0.1.0",
+    "vocab": {
+     "codec/json": "0.1.0",
+     "lens/json_object": "0.1.0"
+    }
+   },
+   "template": {
+    "messages": [
+     {
+      "role": "system",
+      "text": "{instruction}"
+     },
+     {
+      "role": "user",
+      "text": "{question}"
+     }
+    ]
+   },
+   "parse": {
+    "kind": "json_object"
+   },
+   "codecs": {
+    "payload": {
+     "kind": "json"
+    }
+   },
+   "requires": []
+  }
+ }
+}

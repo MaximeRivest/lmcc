@@ -1,0 +1,27 @@
+{
+ "name": "refuse-load-unknown-lens",
+ "kind": "refuse",
+ "entry": {
+  "name": "json_lens_v1",
+  "versions": {
+   "kernel": "0.1.0",
+   "vocab": {}
+  },
+  "template": {
+   "messages": [
+    {
+     "role": "user",
+     "text": "{question}"
+    }
+   ]
+  },
+  "parse": {
+   "kind": "json_object"
+  },
+  "requires": []
+ },
+ "expect": {
+  "code": "unknown-parse-kind",
+  "at": "load"
+ }
+}

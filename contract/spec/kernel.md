@@ -59,7 +59,24 @@ rendered. Message list entries are `{role, text}` or directives
 
 ## 4. The lens (parse spec)
 
-One kernel lens kind: `sections`.
+A lens is one *document form* for the whole reply, read and written by
+the same object: `split(text, field_names) → {name: raw}` and
+`join(spelled) → text`, where `join` writes gold outputs (demo assistant
+turns) in exactly the layout `split` reads. Demos can therefore never
+drift from the parser. This dual use is normative for every lens.
+
+**The lens socket.** `parse.kind` names the lens. `sections` is kernel
+grammar — always available, never registered, never replaced. Every other
+kind is vocabulary: it resolves through the registry
+(`factory(parse_spec) → Lens`), refuses `unknown-parse-kind` when
+unregistered (at load and at bake), and its version travels in the
+artifact as `lens/<kind>` — exactly like codecs and strategies. A reply
+that does not fit a lens's document form at all refuses
+`lens-parse-error`; missing fields refuse `parse-missing-fields` with
+recovered values in `.partial`. Routings run before the lens in either
+case.
+
+**The kernel lens: `sections`.**
 
 ```
 { "kind": "sections", "open": "<{name}>", "close"?: str, "tail"?: str }
@@ -68,11 +85,21 @@ One kernel lens kind: `sections`.
 - **Reading**: each visible output field's marker is `open` with `{name}`
   substituted. First occurrence wins; capture runs to the next marker,
   the `close` marker, the `tail`, or end of text; result is
-  whitespace-stripped. Missing fields refuse `parse-missing-fields`,
-  carrying recovered values.
-- **Writing**: the same spec renders demo assistant turns:
-  `marker \n value \n` per field (+ `close`), then `tail`. Demos can
-  therefore never drift from the parser. This dual use is normative.
+  whitespace-stripped.
+- **Writing**: `marker \n value \n` per field (+ `close`), then `tail`.
+
+Marker templates are data, so common marker dialects are spellings of
+this one lens, not new lens kinds (pinned by corpus cases 20–21):
+
+| dialect | spec |
+|---|---|
+| plain | `{"open": "<{name}>", "tail": "</done>"}` |
+| XML-style | `{"open": "<{name}>", "close": "</{name}>"}` |
+| DSPy chat adapter | `{"open": "[[ ## {name} ## ]]", "tail": "[[ ## completed ## ]]"}` |
+
+JSON is **not** a marker dialect — it is a different document form, so it
+is a different lens: `lens/json_object`, vocabulary provided by `a15_std`
+(see `spec/vocab/lens-json_object.md`).
 
 ## 5. The extract algebra (kernel grammar)
 
@@ -127,7 +154,8 @@ some slot or input loop (`field-uncovered`, naming the fields).
 Kernel and each vocabulary entry version independently (semver; while
 major = 0, minor is breaking). Entries declare what they need; loaders
 refuse incompatibility naming both sides (`version-incompatible`). Unknown
-names refuse (`unknown-codec` / `unknown-strategy`) — never a silent skip.
+names refuse (`unknown-codec` / `unknown-strategy` / `unknown-parse-kind`)
+— never a silent skip.
 
 ## 10. Conformance
 
@@ -142,5 +170,6 @@ operations behind a JSON stdin/stdout driver: read one case object, write
 
 Streaming parse (same lens, incremental); the `requires` mechanism for
 authored-code sidecars; tools/citations strategy vocabularies; per-strategy
-media emission options; additional lens kinds. Each lands as its own
-versioned addition — never silently.
+media emission options. Each lands as its own versioned addition — never
+silently. (The lens socket closed the "additional lens kinds" gap in
+kernel 0.1: new document forms are now vocabulary, not kernel changes.)

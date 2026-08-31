@@ -1,4 +1,4 @@
-"""The parse side of the lens: extract algebra + section splitting.
+"""The lens machinery: extract algebra, the lens protocol, sections.
 
 The extractor algebra (``between``, ``pattern``, ``line_prefixed``,
 ``parts``) is kernel grammar, like the template syntax — a fixed, versioned
@@ -151,3 +151,54 @@ def render_sections(spec: dict, spelled: list[tuple[str, str]]) -> str:
     if spec.get("tail"):
         out += spec["tail"]
     return out
+
+
+# ------------------------------------------------------------------ lenses
+
+
+class Lens:
+    """The lens protocol: one reply document form, read and written by the
+    same object.
+
+    - ``split(text, field_names)`` reads visible output fields out of the
+      reply text, returning ``{name: raw string}``. Missing fields refuse
+      ``parse-missing-fields`` carrying whatever was recovered; a reply
+      that does not fit the document form at all refuses
+      ``lens-parse-error``.
+    - ``join(spelled)`` writes gold outputs (``[(name, spelled_text)]``)
+      in exactly the layout ``split`` reads — demo assistant turns can
+      therefore never drift from the parser. This dual use is normative.
+
+    Vocabulary packages subclass this and register a factory
+    ``factory(parse_spec) -> Lens`` via ``Registry.register_lens``.
+    """
+
+    def split(self, text: str, field_names: list[str]) -> dict[str, str]:
+        raise NotImplementedError
+
+    def join(self, spelled: list[tuple[str, str]]) -> str:
+        raise NotImplementedError
+
+
+def validate_sections_spec(spec: dict) -> None:
+    if "open" not in spec or "{name}" not in str(spec["open"]):
+        refuse("entry-malformed",
+               "parse.open must contain the '{name}' placeholder")
+
+
+class SectionsLens(Lens):
+    """The kernel lens: marker-delimited sections. Kernel grammar, like the
+    extract algebra — always available, never registered, never replaced.
+    Marker templates are data, so XML-style (``<{name}>`` / ``</{name}>``)
+    and DSPy-style (``[[ ## {name} ## ]]`` + tail) are both spellings of
+    this one lens, not new lens kinds."""
+
+    def __init__(self, spec: dict):
+        validate_sections_spec(spec)
+        self.spec = dict(spec)
+
+    def split(self, text: str, field_names: list[str]) -> dict[str, str]:
+        return split_sections(text, self.spec, field_names)
+
+    def join(self, spelled: list[tuple[str, str]]) -> str:
+        return render_sections(self.spec, spelled)

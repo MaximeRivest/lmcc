@@ -60,6 +60,18 @@ def load(entry: dict, *, registry=None) -> Adapter:
     if not isinstance(messages, list):
         refuse("entry-malformed", "template.messages must be a list")
 
+    parse_spec = entry["parse"]
+    if not isinstance(parse_spec, dict):
+        refuse("entry-malformed", "entry.parse must be an object")
+    lens_kind = parse_spec.get("kind")
+    if lens_kind != "sections":
+        if lens_kind not in registry.lenses:
+            refuse("unknown-parse-kind",
+                   f"parse.kind {lens_kind!r} is neither the kernel lens "
+                   f"'sections' nor a registered lens")
+        _check_vocab_version(f"lens/{lens_kind}", vocab_versions,
+                             registry.lenses[lens_kind].version)
+
     strategies: dict[str, object] = {}
     for role, s in (entry.get("strategies") or {}).items():
         where = f"strategies[{role!r}]"
@@ -121,6 +133,14 @@ def dump(adp: Adapter, registry) -> dict:
             refuse("unknown-codec",
                    f"cannot dump: codec {binding.kind!r} is not registered")
         vocab[f"codec/{binding.kind}"] = named.version
+    lens_kind = adp.parse.get("kind")
+    if lens_kind != "sections":
+        named = registry.lenses.get(lens_kind)
+        if named is None:
+            refuse("unknown-parse-kind",
+                   f"cannot dump: lens {lens_kind!r} is not registered "
+                   f"(its version is part of the artifact)")
+        vocab[f"lens/{lens_kind}"] = named.version
 
     entry: dict = {
         "name": adp.name,

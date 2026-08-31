@@ -9,6 +9,8 @@ were seeded once from the Python reference (`tools/bootstrap.py`) at
 contract creation, then human-reviewed. From that moment the direction of
 authority flipped: the files rule, the reference obeys. Do not re-run the
 seeder over behavior changes — that would silently re-bless drift.
+Cases added after creation (20+) are authored by hand first; the
+implementation is then made to pass them — authority never flips back.
 
 **Case format.** One JSON object per file:
 

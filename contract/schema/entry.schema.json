@@ -48,13 +48,23 @@
     },
     "parse": {
       "type": "object",
-      "required": ["kind", "open"],
+      "required": ["kind"],
       "properties": {
-        "kind": { "const": "sections" },
-        "open": { "type": "string", "pattern": ".*\\{name\\}.*" },
-        "close": { "type": "string" },
-        "tail": { "type": "string" }
-      }
+        "kind": { "type": "string", "minLength": 1 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "sections" } } },
+          "then": {
+            "required": ["open"],
+            "properties": {
+              "open": { "type": "string", "pattern": ".*\\{name\\}.*" },
+              "close": { "type": "string" },
+              "tail": { "type": "string" }
+            }
+          }
+        }
+      ]
     },
     "strategies": {
       "type": "object",

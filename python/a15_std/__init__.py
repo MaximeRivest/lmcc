@@ -11,7 +11,7 @@ Install into a registry explicitly::
     a15_std.install(my_registry)           # or an explicit one
 """
 
-from . import codecs, strategies
+from . import codecs, lenses, strategies
 
 VERSION = "0.1.0"
 
@@ -21,6 +21,7 @@ def install(registry=None, *, exist_ok: bool = True) -> None:
     registry = registry if registry is not None else default_registry
     codecs.install(registry, exist_ok=exist_ok)
     strategies.install(registry, exist_ok=exist_ok)
+    lenses.install(registry, exist_ok=exist_ok)
 
 
-__all__ = ["VERSION", "codecs", "install", "strategies"]
+__all__ = ["VERSION", "codecs", "install", "lenses", "strategies"]

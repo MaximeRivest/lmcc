@@ -1,0 +1,131 @@
+{
+ "name": "std-json-lens-render",
+ "kind": "render",
+ "vocab": ["std"],
+ "entry": {
+  "name": "json_lens_v1",
+  "versions": {
+   "kernel": "0.1.0",
+   "vocab": {
+    "lens/json_object": "0.1.0",
+    "codec/json": "0.1.0"
+   }
+  },
+  "template": {
+   "messages": [
+    {
+     "role": "system",
+     "text": "{instruction}\n\nReply with one JSON object holding these keys:\n{% for f in outputs %}- {f.name}: {f.desc}\n{% endfor %}"
+    },
+    {
+     "directive": "demos"
+    },
+    {
+     "role": "user",
+     "text": "{question}"
+    }
+   ]
+  },
+  "parse": {
+   "kind": "json_object"
+  },
+  "codecs": {
+   "payload": {
+    "kind": "json"
+   }
+  },
+  "requires": []
+ },
+ "signature": {
+  "instructions": "Answer the question.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    },
+    "desc": "short answer"
+   },
+   {
+    "name": "score",
+    "direction": "output",
+    "shape": {
+     "type": "integer"
+    },
+    "desc": "confidence 0-10"
+   },
+   {
+    "name": "payload",
+    "direction": "output",
+    "shape": {
+     "type": "array"
+    },
+    "desc": "supporting items"
+   }
+  ]
+ },
+ "inputs": {
+  "question": "capital of France?"
+ },
+ "demos": [
+  {
+   "question": "capital of Italy?",
+   "answer": "Rome",
+   "score": 9,
+   "payload": [
+    {
+     "a": 1
+    }
+   ]
+  }
+ ],
+ "expect": {
+  "messages": [
+   {
+    "role": "system",
+    "content": [
+     {
+      "kind": "text",
+      "text": "Answer the question.\n\nReply with one JSON object holding these keys:\n- answer: short answer\n- score: confidence 0-10\n- payload: supporting items\n"
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "content": [
+     {
+      "kind": "text",
+      "text": "capital of Italy?"
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "content": [
+     {
+      "kind": "text",
+      "text": "{\n  \"answer\": \"Rome\",\n  \"score\": 9,\n  \"payload\": [\n    {\n      \"a\": 1\n    }\n  ]\n}"
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "content": [
+     {
+      "kind": "text",
+      "text": "capital of France?"
+     }
+    ]
+   }
+  ],
+  "patch": {}
+ }
+}

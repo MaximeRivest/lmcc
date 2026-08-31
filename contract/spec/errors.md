@@ -9,7 +9,7 @@ fires is breaking.
 |---|---|---|
 | `template-syntax` | construct | bad template: bare brace, unclosed loop, unknown loop source |
 | `unknown-slot` | bake | slot names no field, or an output/dotted slot misused |
-| `unknown-parse-kind` | construct/load | parse.kind is not a kernel lens |
+| `unknown-parse-kind` | construct/load/bake | parse.kind is neither the kernel lens `sections` nor a registered lens |
 | `unknown-extract-kind` | construct/load | extractor not in the kernel algebra |
 | `unknown-codec` | load/dump | codec name not registered |
 | `unknown-strategy` | load/dump | strategy name not registered |
@@ -27,5 +27,6 @@ fires is breaking.
 | `value-invalid` | render/parse | scalar/enum/media value fails its shape |
 | `codec-render-error` | render | codec raised; message names the field |
 | `codec-parse-error` | parse | codec raised; message names the field |
-| `parse-missing-fields` | parse | reply lacks sections; `.partial` carries what was found |
+| `parse-missing-fields` | parse | reply lacks fields the lens expects; `.partial` carries what was found |
+| `lens-parse-error` | parse | reply does not fit the lens's document form at all (e.g. no JSON object) |
 | `response-malformed` | parse | response is neither text nor a part list |

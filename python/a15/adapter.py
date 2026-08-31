@@ -14,6 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field as dc_field
 
 from .errors import refuse
+from .parse import validate_sections_spec
 from .strategy import Strategy
 from .template import compile_template
 
@@ -138,8 +139,10 @@ def adapter(*, template: dict, parse: dict, strategies: dict | None = None,
 
 
 def _validate_parse_spec(spec: dict) -> None:
-    if spec.get("kind") != "sections":
-        refuse("unknown-parse-kind",
-               f"parse kind {spec.get('kind')!r} — the kernel lens is 'sections'")
-    if "open" not in spec or "{name}" not in spec["open"]:
-        refuse("entry-malformed", "parse.open must contain the '{name}' placeholder")
+    kind = spec.get("kind")
+    if not isinstance(kind, str) or not kind:
+        refuse("unknown-parse-kind", "parse.kind must name a lens")
+    if kind == "sections":
+        validate_sections_spec(spec)
+    # other kinds resolve against the registry at load/bake — the refusal
+    # point for vocabulary, same as codecs and strategies.

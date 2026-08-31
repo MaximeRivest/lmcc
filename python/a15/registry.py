@@ -5,6 +5,9 @@ defines the sockets they plug into:
 
 - **codecs**: named factories ``factory(options) -> Codec`` with a version.
 - **strategies**: named factories ``factory(options) -> Strategy``.
+- **lenses**: named factories ``factory(parse_spec) -> Lens``. The kernel
+  lens ``sections`` is grammar (always available, never registered);
+  every other lens kind is vocabulary and plugs in here.
 - **coercions**: named functions used by routings.
 - **hosts**: your language's types ⇄ plain data (the native face).
 
@@ -18,6 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .errors import refuse
+from .parse import Lens, SectionsLens
 
 
 class Codec:
@@ -56,6 +60,7 @@ class Registry:
     def __init__(self) -> None:
         self.codecs: dict[str, _Named] = {}
         self.strategies: dict[str, _Named] = {}
+        self.lenses: dict[str, _Named] = {}
         self.coercions: dict[str, object] = {}
         self.hosts: list[tuple[type, HostEntry]] = []
 
@@ -90,6 +95,29 @@ class Registry:
                    f"strategy {name!r} is not registered — install the package "
                    f"that provides it, or inline the strategy as data")
         return entry.factory(options or {})
+
+    # -------------------------------------------------------------- lenses
+
+    def register_lens(self, name: str, factory, *, version: str = "0.1.0",
+                      exist_ok: bool = False) -> None:
+        if name == "sections":
+            refuse("already-registered",
+                   "lens 'sections' is kernel grammar and cannot be replaced")
+        if name in self.lenses and not exist_ok:
+            refuse("already-registered", f"lens {name!r} is already registered")
+        self.lenses[name] = _Named(factory, version)
+
+    def lens(self, spec: dict) -> Lens:
+        kind = spec.get("kind")
+        if kind == "sections":
+            return SectionsLens(spec)
+        entry = self.lenses.get(kind)
+        if entry is None:
+            refuse("unknown-parse-kind",
+                   f"parse kind {kind!r} is neither the kernel lens "
+                   f"'sections' nor a registered lens — install the package "
+                   f"that provides it")
+        return entry.factory(spec)
 
     # ----------------------------------------------------------- coercions
 
