@@ -17,7 +17,8 @@ fires is breaking.
 | `entry-malformed` | construct/load | structural problem; message names the path |
 | `version-incompatible` | load | entry needs a version this implementation cannot honor |
 | `already-registered` | registration | duplicate name without `exist_ok` |
-| `capability-missing` | bake | strategy requires a fact the model does not declare |
+| `capability-missing` | bake | a strategy's predicate/requires — or a lens's requirement — fails against the declared facts |
+| `not-lensable` | bake | the template cannot be read backwards; message names the defect (no pattern block, unanchored hole, indistinct anchors) |
 | `role-ambiguous` | bake | one role on two fields |
 | `field-uncovered` | bake | visible input never rendered by the template |
 | `field-double-covered` | bake | field is both a section and a routing target |
@@ -28,5 +29,6 @@ fires is breaking.
 | `codec-render-error` | render | codec raised; message names the field |
 | `codec-parse-error` | parse | codec raised; message names the field |
 | `parse-missing-fields` | parse | reply lacks fields the lens expects; `.partial` carries what was found |
+| `parse-ambiguous` | parse | an anchor appears more than once in the reply — refused, never guessed |
 | `lens-parse-error` | parse | reply does not fit the lens's document form at all (e.g. no JSON object) |
 | `response-malformed` | parse | response is neither text nor a part list |

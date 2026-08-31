@@ -1,25 +1,26 @@
 {
- "name": "refuse-json-lens-malformed",
+ "name": "refuse-not-lensable",
  "kind": "refuse",
- "vocab": ["std"],
  "entry": {
-  "name": "json_lens_v1",
+  "name": "derived_bad_v1",
   "versions": {
    "kernel": "0.1.0",
-   "vocab": {
-    "lens/json_object": "0.1.0"
-   }
+   "vocab": {}
   },
   "template": {
    "messages": [
     {
+     "role": "system",
+     "text": "{instruction}\n{% for f in outputs %}{f.value}\n{% endfor %}"
+    },
+    {
      "role": "user",
-     "text": "{question}"
+     "text": "{q}"
     }
    ]
   },
   "parse": {
-   "kind": "json_object"
+   "kind": "derived"
   },
   "requires": []
  },
@@ -27,7 +28,7 @@
   "instructions": "Answer.",
   "fields": [
    {
-    "name": "question",
+    "name": "q",
     "direction": "input",
     "shape": {
      "type": "string"
@@ -42,12 +43,8 @@
    }
   ]
  },
- "capabilities": {
-  "native_structured_output": true
- },
- "response": "The answer is Paris.",
  "expect": {
-  "code": "lens-parse-error",
-  "at": "parse"
+  "code": "not-lensable",
+  "at": "bake"
  }
 }

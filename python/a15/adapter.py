@@ -144,5 +144,6 @@ def _validate_parse_spec(spec: dict) -> None:
         refuse("unknown-parse-kind", "parse.kind must name a lens")
     if kind == "sections":
         validate_sections_spec(spec)
-    # other kinds resolve against the registry at load/bake — the refusal
-    # point for vocabulary, same as codecs and strategies.
+    # "derived" is kernel grammar too: the lens is read out of the
+    # template at bake. Other kinds resolve against the registry at
+    # load/bake — the refusal point for vocabulary, same as codecs.

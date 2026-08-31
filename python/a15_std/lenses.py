@@ -19,6 +19,14 @@ VERSION = "0.1.0"
 class JsonObjectLens(Lens):
     """The reply is one JSON object; each visible output field is a member.
 
+    **This is a mode, not a template style.** A JSON object is a meaning
+    with many spellings, so this document form is only honest when the
+    provider itself enforces it: baking refuses without the declared
+    ``native_structured_output`` capability, and the lens patches the
+    request with ``response_format`` + a schema built from the visible
+    output fields. Without that capability, use invertible markers and
+    put JSON *inside* typed fields via codecs.
+
     Reading:
     - The document is the whole text, else the body of one markdown fence,
       else the first ``{`` … last ``}`` substring. Anything else refuses
@@ -39,6 +47,22 @@ class JsonObjectLens(Lens):
 
     def __init__(self, spec: dict):
         self.spec = dict(spec)
+
+    # ---------------------------------------------------------------- mode
+
+    def requires(self) -> list[str]:
+        return ["native_structured_output"]
+
+    def patch(self, fields: list) -> dict:
+        return {"response_format": {
+            "type": "json_schema",
+            "schema": {
+                "type": "object",
+                "properties": {f.name: dict(f.shape) for f in fields},
+                "required": [f.name for f in fields],
+                "additionalProperties": False,
+            },
+        }}
 
     # ---------------------------------------------------------------- read
 

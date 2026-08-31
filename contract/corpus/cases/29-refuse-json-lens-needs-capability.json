@@ -1,5 +1,5 @@
 {
- "name": "refuse-json-lens-malformed",
+ "name": "refuse-json-lens-needs-capability",
  "kind": "refuse",
  "vocab": ["std"],
  "entry": {
@@ -42,12 +42,8 @@
    }
   ]
  },
- "capabilities": {
-  "native_structured_output": true
- },
- "response": "The answer is Paris.",
  "expect": {
-  "code": "lens-parse-error",
-  "at": "parse"
+  "code": "capability-missing",
+  "at": "bake"
  }
 }

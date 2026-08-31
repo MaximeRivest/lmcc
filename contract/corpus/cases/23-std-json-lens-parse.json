@@ -73,6 +73,9 @@
    }
   ]
  },
+ "capabilities": {
+  "native_structured_output": true
+ },
  "response": "```json\n{\n  \"answer\": \"Paris\",\n  \"score\": 9,\n  \"ok\": true,\n  \"payload\": {\"rows\": [1, 2]},\n  \"chatter\": \"ignored\"\n}\n```",
  "expect": {
   "values": {

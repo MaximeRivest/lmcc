@@ -103,9 +103,22 @@
   },
   "$defs": {
     "semver": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "predicate": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "properties": {
+        "capability": { "type": "string" },
+        "not": { "$ref": "#/$defs/predicate" },
+        "all": { "type": "array", "items": { "$ref": "#/$defs/predicate" } },
+        "any": { "type": "array", "items": { "$ref": "#/$defs/predicate" } }
+      },
+      "additionalProperties": false
+    },
     "inline_strategy": {
       "type": "object",
       "properties": {
+        "predicate": { "$ref": "#/$defs/predicate" },
         "requires": { "type": "array", "items": { "type": "string" } },
         "fragments": {
           "type": "object",

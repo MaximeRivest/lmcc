@@ -79,9 +79,9 @@ The placeholder text per visible output field is one kernel rule:
 else `"..."`. The template still owns *whether* and *where* the skeleton
 appears; the lens owns its spelling.
 
-**The lens socket.** `parse.kind` names the lens. `sections` is kernel
-grammar — always available, never registered, never replaced. Every other
-kind is vocabulary: it resolves through the registry
+**The lens socket.** `parse.kind` names the lens. Two kinds are kernel
+grammar — always available, never registered, never replaced: `derived`
+and `sections`. Every other kind is vocabulary: it resolves through the registry
 (`factory(parse_spec) → Lens`), refuses `unknown-parse-kind` when
 unregistered (at load and at bake), and its version travels in the
 artifact as `lens/<kind>` — exactly like codecs and strategies. A reply
@@ -90,15 +90,53 @@ that does not fit a lens's document form at all refuses
 recovered values in `.partial`. Routings run before the lens in either
 case.
 
-**The kernel lens: `sections`.**
+**Mode hooks.** A lens may declare `requires` (capability facts checked
+at bake; `capability-missing` names the lens and the fact) and a `patch`
+(request-side data computed from the visible output fields, merged into
+the request patch; `control-conflict` on disagreement with strategies).
+This is how a document form that is only honest under provider
+enforcement — whole-object JSON — becomes a *mode*, never an
+unconditional style.
+
+**The primary kernel lens: `derived`** — the template read backwards.
+
+```
+{ "kind": "derived" }
+```
+
+The template must contain exactly one **output-pattern block**: an
+outputs loop whose body contains `{f.value}`. That block is one
+description read in three directions:
+
+- **Prompt**: `{f.value}` renders as the field's placeholder (rule
+  below) — the shape is *shown* to the model, never merely described.
+- **Demos**: the block instantiated with gold values writes assistant
+  turns.
+- **Parser**: per visible output field, the literal text before the
+  hole (instantiated) is its **anchor**; the literal after it is its
+  close. Reading: anchors are found by their whitespace-stripped forms,
+  first occurrence, any order; capture runs to the field's close, the
+  next anchor, or end of text; result is whitespace-stripped.
+
+Derivation refuses at bake (`not-lensable`, naming the defect) when:
+there is no pattern block or more than one; a field's hole has no
+literal before it; two fields' anchors coincide; a body nests loops or
+holds two holes. **Ambiguity refuses at parse** (`parse-ambiguous`):
+an anchor occurring more than once in a reply is never guessed at.
+The placeholder rule (kernel-normative, one rule for `{f.value}` in
+pattern blocks and for `{format}`): `desc`, else the codec's schema
+prose, else the mechanical shape hint, else `"..."`.
+
+**The declared kernel lens: `sections`.**
 
 ```
 { "kind": "sections", "open": "<{name}>", "close"?: str, "tail"?: str }
 ```
 
 - **Reading**: each visible output field's marker is `open` with `{name}`
-  substituted. First occurrence wins; capture runs to the next marker,
-  the `close` marker, the `tail`, or end of text; result is
+  substituted. First occurrence wins; a marker occurring more than once
+  refuses `parse-ambiguous`; capture runs to the next marker, the
+  `close` marker, the `tail`, or end of text; result is
   whitespace-stripped.
 - **Writing**: `marker \n value \n` per field (+ `close`), then `tail`.
 
@@ -126,12 +164,19 @@ stripped matches; `coerce` applies a registered coercion by name.
 
 ## 6. Strategies
 
-`Strategy = { requires: [fact], fragments: {msg_role: text},
-controls: {…}, routings: [Routing], visible: bool }` — all data.
+`Strategy = { predicate?: Predicate, requires: [fact],
+fragments: {msg_role: text}, controls: {…}, routings: [Routing],
+visible: bool }` — all data.
 
-At bake, per role in signature order: predicate facts check against the
-declared capabilities dict (`capability-missing` names role, strategy,
-fact); `@role` in routings and `{field}` in fragments bind to the role's
+`Predicate = {"capability": fact} | {"not": P} | {"all": [P]} |
+{"any": [P]}` — a boolean expression over the declared capability
+facts (see `spec/vocab/capabilities.md`), so a strategy can say *"when
+the model does NOT have native reasoning"*. `requires` is sugar for an
+all-of.
+
+At bake, per role in signature order: the predicate (and `requires`)
+check against the declared capabilities dict (`capability-missing`
+names role, strategy, and the failing fact or predicate); `@role` in routings and `{field}` in fragments bind to the role's
 field; `visible: false` removes the field from loops and sections (its
 routings must serve it — `entry-malformed` otherwise); fragments append to
 the system message (created if absent); controls merge into the request

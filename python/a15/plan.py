@@ -20,9 +20,9 @@ from dataclasses import dataclass, field as dc_field
 from . import core
 from .adapter import Adapter
 from .errors import refuse
-from .parse import Lens, apply_routings
+from .parse import DerivedLens, Lens, apply_routings
 from .strategy import Strategy, check_predicate, resolve_role_field
-from .template import render_nodes, validate_nodes
+from .template import Loop, Slot, Text, render_nodes, validate_nodes
 
 
 @dataclass
@@ -65,12 +65,13 @@ class _Env:
         return self.baked.signature.field_named(name)
 
     def schema_of(self, f: core.Field) -> str:
-        codec = self.baked.codecs.get(f.name)
-        if codec is not None:
-            return codec.render_schema(f.shape)
-        return core.shape_summary(f.shape)
+        return self.baked.schema_hint(f)
 
     def value_of(self, f: core.Field) -> tuple[str, object]:
+        if f.direction == "output":
+            # a {f.value} hole in an output-pattern block renders as its
+            # placeholder — the shape the model copies, never a value.
+            return ("text", _placeholder(f, self.baked.codecs.get(f.name)))
         if f.name not in self.values:
             refuse("missing-input", f"no value supplied for field {f.name!r}")
         value = self.baked.registry.lower_value(f.annotation, self.values[f.name])
@@ -99,6 +100,12 @@ class Baked:
     lens: Lens | None = None
 
     # ---------------------------------------------------------------- spell
+
+    def schema_hint(self, f: core.Field) -> str:
+        codec = self.codecs.get(f.name)
+        if codec is not None:
+            return codec.render_schema(f.shape)
+        return core.shape_summary(f.shape)
 
     def reply_format(self) -> str:
         """The lens writing the prompt's reply skeleton (the ``{format}``
@@ -262,6 +269,85 @@ def _placeholder(f: core.Field, codec) -> str:
     return core.shape_summary(f.shape) or "..."
 
 
+# ---------------------------------------------------------- derived lens
+
+
+def _output_value_loops(nodes) -> list[Loop]:
+    """All outputs-loops whose body contains a direct {var.value} slot."""
+    found: list[Loop] = []
+    for node in nodes:
+        if isinstance(node, Loop):
+            if node.source == "outputs" and any(
+                    isinstance(n, Slot) and n.path == f"{node.var}.value"
+                    for n in node.body):
+                found.append(node)
+            found.extend(_output_value_loops(node.body))
+    return found
+
+
+def _derive_lens(baked: "Baked") -> DerivedLens:
+    """Read the template backwards: the output-pattern block (the outputs
+    loop containing ``{f.value}``) becomes per-field anchors. Refusals
+    (``not-lensable``) name the exact defect — never a bad parse later."""
+    blocks: list[Loop] = []
+    for _msg, nodes in baked.adapter.compiled_messages():
+        if nodes is not None:
+            blocks.extend(_output_value_loops(nodes))
+    if not blocks:
+        refuse("not-lensable",
+               "parse kind 'derived' needs exactly one outputs loop "
+               "containing {f.value} — the template has none")
+    if len(blocks) > 1:
+        refuse("not-lensable",
+               f"the template has {len(blocks)} output-pattern blocks; "
+               f"a derived lens needs exactly one")
+    loop = blocks[0]
+    anchors: list[tuple[str, str, str]] = []
+    for f in baked.visible_outputs:
+        pre: list[str] = []
+        post: list[str] = []
+        target = pre
+        for node in loop.body:
+            if isinstance(node, Text):
+                target.append(node.text)
+            elif isinstance(node, Slot):
+                attr = node.path.partition(".")[2]
+                if attr == "value":
+                    if target is post:
+                        refuse("not-lensable",
+                               "the output-pattern block has two {f.value} "
+                               "holes per field; one value, one hole")
+                    target = post
+                elif attr == "name":
+                    target.append(f.name)
+                elif attr == "desc":
+                    target.append(f.desc or "")
+                elif attr == "schema":
+                    target.append(baked.schema_hint(f))
+                elif attr == "role":
+                    target.append(f.role)
+            else:
+                refuse("not-lensable",
+                       "nested loops inside the output-pattern block are "
+                       "not invertible")
+        prefix, suffix = "".join(pre), "".join(post)
+        if not prefix.rstrip():
+            refuse("not-lensable",
+                   f"field {f.name!r}: no literal text before {{f.value}} — "
+                   f"nothing anchors the parser; put the field's marker "
+                   f"before the hole")
+        anchors.append((f.name, prefix, suffix))
+    seen: dict[str, str] = {}
+    for name, prefix, _suffix in anchors:
+        key = prefix.rstrip()
+        if key in seen:
+            refuse("not-lensable",
+                   f"fields {seen[key]!r} and {name!r} share the anchor "
+                   f"{key!r}; anchors must tell fields apart")
+        seen[key] = name
+    return DerivedLens(anchors)
+
+
 # -------------------------------------------------------------------- bake
 
 
@@ -269,9 +355,6 @@ def bake(adapter: Adapter, sig: core.SignatureCore, capabilities: dict,
          registry) -> Baked:
     baked = Baked(adapter=adapter, signature=sig, capabilities=capabilities,
                   registry=registry)
-
-    # 0. resolve the lens (refuses unknown kinds before any money is spent).
-    baked.lens = registry.lens(adapter.parse)
 
     # 1. resolve strategies per role, in signature order.
     seen_roles: dict[str, str] = {}
@@ -323,6 +406,24 @@ def bake(adapter: Adapter, sig: core.SignatureCore, capabilities: dict,
                    f"field {f.name!r} has a structured shape "
                    f"({f.shape.get('type')}) and no codec bound — the kernel "
                    f"only spells scalars")
+
+    # 3.5 the lens: derive from the template, or resolve through the
+    #     registry; then its capability gate and request patch.
+    if adapter.parse.get("kind") == "derived":
+        baked.lens = _derive_lens(baked)
+    else:
+        baked.lens = registry.lens(adapter.parse)
+    for fact in baked.lens.requires():
+        if not capabilities.get(fact):
+            refuse("capability-missing",
+                   f"lens {adapter.parse.get('kind')!r} requires capability "
+                   f"{fact!r}, which the model does not declare — use an "
+                   f"invertible marker template instead")
+    for key, value in (baked.lens.patch(baked.visible_outputs) or {}).items():
+        if key in baked.patch and baked.patch[key] != value:
+            refuse("control-conflict",
+                   f"lens and strategies disagree on request control {key!r}")
+        baked.patch[key] = value
 
     # 4. template validation + input coverage.
     known = {f.name for f in sig.fields}

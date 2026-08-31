@@ -32,6 +32,9 @@ def _registry():
     return registry
 
 
+SO = {"native_structured_output": True}  # the JSON-mode gate
+
+
 # ------------------------------------------------------- marker profiles
 
 
@@ -69,7 +72,7 @@ def test_dspy_profile_is_pure_data():
 
 
 def test_json_lens_demo_roundtrips():
-    baked = _adapter({"kind": "json_object"}).bake(_sig(), {},
+    baked = _adapter({"kind": "json_object"}).bake(_sig(), SO,
                                                    registry=_registry())
     demo = {"question": "q", "answer": "Paris", "score": 9,
             "payload": [{"a": 1}]}
@@ -80,7 +83,7 @@ def test_json_lens_demo_roundtrips():
 
 
 def test_json_lens_reads_fence_and_native_values():
-    baked = _adapter({"kind": "json_object"}).bake(_sig(), {},
+    baked = _adapter({"kind": "json_object"}).bake(_sig(), SO,
                                                    registry=_registry())
     reply = ('```json\n{"answer": "Paris", "score": 9, '
              '"payload": [1, 2], "chatter": "ignored"}\n```')
@@ -89,7 +92,7 @@ def test_json_lens_reads_fence_and_native_values():
 
 
 def test_json_lens_missing_key_refuses_with_partial():
-    baked = _adapter({"kind": "json_object"}).bake(_sig(), {},
+    baked = _adapter({"kind": "json_object"}).bake(_sig(), SO,
                                                    registry=_registry())
     with pytest.raises(a15.A15Error) as err:
         baked.parse('{"answer": "Paris"}')
@@ -98,7 +101,7 @@ def test_json_lens_missing_key_refuses_with_partial():
 
 
 def test_json_lens_malformed_refuses():
-    baked = _adapter({"kind": "json_object"}).bake(_sig(), {},
+    baked = _adapter({"kind": "json_object"}).bake(_sig(), SO,
                                                    registry=_registry())
     with pytest.raises(a15.A15Error) as err:
         baked.parse("no json here")
@@ -145,7 +148,7 @@ def test_format_slot_sections():
 
 def test_format_slot_json_lens():
     baked = _format_adapter({"kind": "json_object"}).bake(
-        _format_sig(), {}, registry=_registry())
+        _format_sig(), SO, registry=_registry())
     text = baked.render(inputs={"question": "x"}).messages[0]["content"][0]["text"]
     assert text == ('Answer.\n\nAnswer like this:\n'
                     '{\n  "answer": "short answer",\n  "score": "(integer)"\n}')
@@ -174,10 +177,28 @@ def test_format_skeleton_tracks_hidden_fields():
 
 
 def test_bake_unknown_lens_refuses():
+    adp = a15.adapter(
+        template=a15.template([a15.message("user", "{question}")]),
+        parse={"kind": "json_object"})
+    sig = a15.signature("x", inputs={"question": str},
+                        outputs={"answer": str})
+    with pytest.raises(a15.A15Error) as err:
+        adp.bake(sig, SO, registry=a15.Registry())  # std not installed
+    assert err.value.code == "unknown-parse-kind"
+
+
+def test_json_lens_is_a_gated_mode():
+    """No declared native_structured_output => refuse; with it => the
+    request carries response_format with the signature's schema."""
     adp = _adapter({"kind": "json_object"})
     with pytest.raises(a15.A15Error) as err:
-        adp.bake(_sig(), {}, registry=a15.Registry())  # std not installed
-    assert err.value.code == "unknown-parse-kind"
+        adp.bake(_sig(), {}, registry=_registry())
+    assert err.value.code == "capability-missing"
+    baked = adp.bake(_sig(), SO, registry=_registry())
+    patch = baked.render(inputs={"question": "x"}).patch
+    schema = patch["response_format"]["schema"]
+    assert schema["required"] == ["answer", "score", "payload"]
+    assert schema["properties"]["score"] == {"type": "integer"}
 
 
 def test_load_unknown_lens_refuses():

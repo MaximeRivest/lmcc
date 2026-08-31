@@ -72,6 +72,9 @@
    }
   ]
  },
+ "capabilities": {
+  "native_structured_output": true
+ },
  "inputs": {
   "question": "capital of France?"
  },
@@ -126,6 +129,30 @@
     ]
    }
   ],
-  "patch": {}
+  "patch": {
+   "response_format": {
+    "type": "json_schema",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "answer": {
+       "type": "string"
+      },
+      "score": {
+       "type": "integer"
+      },
+      "payload": {
+       "type": "array"
+      }
+     },
+     "required": [
+      "answer",
+      "score",
+      "payload"
+     ],
+     "additionalProperties": false
+    }
+   }
+  }
  }
 }

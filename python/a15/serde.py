@@ -64,7 +64,7 @@ def load(entry: dict, *, registry=None) -> Adapter:
     if not isinstance(parse_spec, dict):
         refuse("entry-malformed", "entry.parse must be an object")
     lens_kind = parse_spec.get("kind")
-    if lens_kind != "sections":
+    if lens_kind not in ("sections", "derived"):
         if lens_kind not in registry.lenses:
             refuse("unknown-parse-kind",
                    f"parse.kind {lens_kind!r} is neither the kernel lens "
@@ -134,7 +134,7 @@ def dump(adp: Adapter, registry) -> dict:
                    f"cannot dump: codec {binding.kind!r} is not registered")
         vocab[f"codec/{binding.kind}"] = named.version
     lens_kind = adp.parse.get("kind")
-    if lens_kind != "sections":
+    if lens_kind not in ("sections", "derived"):
         named = registry.lenses.get(lens_kind)
         if named is None:
             refuse("unknown-parse-kind",

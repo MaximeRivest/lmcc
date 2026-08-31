@@ -5,6 +5,25 @@ output field is a member keyed by field name (the JSON-adapter style).
 
 Spec: `{ "kind": "json_object" }`. No options in 0.1.0.
 
+**This lens is a mode, not a template style.** A JSON object is a
+meaning with many spellings, so the exchange form is only honest when
+the provider enforces it. Therefore, normatively:
+
+- baking **refuses** (`capability-missing`) unless the model declares
+  `native_structured_output` (see `capabilities.md`);
+- the lens patches the request with the enforcement control, built from
+  the visible output fields at bake:
+
+```json
+{ "response_format": { "type": "json_schema", "schema": {
+    "type": "object", "properties": { "<field>": <shape>, ... },
+    "required": [ "<field>", ... ], "additionalProperties": false } } }
+```
+
+Without the capability, do not ask a model for JSON prose — use an
+invertible marker template and put JSON *inside* typed fields via
+codecs.
+
 A lens owns the *document form* only. Field values still go through the
 field's codec or the kernel scalar rules — this lens hands each of them a
 raw string, exactly like `sections` does. Routings (e.g. `<think>`
@@ -62,3 +81,4 @@ whitespace-insensitive on parse, which `codec/json` is.
 | `25-refuse-json-lens-malformed` | non-JSON reply refuses `lens-parse-error` |
 | `26-roundtrip-json-lens` | `lens/json_object` version travels in the artifact |
 | `28-std-json-lens-format` | `{format}` skeleton bytes (default `join` over placeholders) |
+| `29-refuse-json-lens-needs-capability` | the mode gate: no declared `native_structured_output` refuses at bake |

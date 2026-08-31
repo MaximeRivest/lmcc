@@ -104,6 +104,11 @@ def split_sections(text: str, spec: dict, field_names: list[str]) -> dict[str, s
     positions: dict[str, int] = {}
     for name in field_names:
         marker = open_tpl.replace("{name}", name)
+        count = text.count(marker)
+        if count > 1:
+            refuse("parse-ambiguous",
+                   f"marker {marker!r} for field {name!r} appears {count} "
+                   f"times in the reply — refusing to guess which one is real")
         idx = text.find(marker)
         if idx < 0:
             continue
@@ -158,7 +163,9 @@ def render_sections(spec: dict, spelled: list[tuple[str, str]]) -> str:
 
 class Lens:
     """The lens protocol: one reply document form, read and written by the
-    same object.
+    same object. ``requires``/``patch`` are the mode hooks: a lens may
+    demand declared capability facts and contribute request-side data
+    (e.g. provider-enforced structured output), checked at bake.
 
     - ``split(text, field_names)`` reads visible output fields out of the
       reply text, returning ``{name: raw string}``. Missing fields refuse
@@ -186,6 +193,14 @@ class Lens:
     def format(self, placeholders: list[tuple[str, str]]) -> str:
         return self.join(placeholders)
 
+    def requires(self) -> list[str]:
+        """Capability facts the model must declare for this document form."""
+        return []
+
+    def patch(self, fields: list) -> dict:
+        """Request-side data this document form needs (engine controls)."""
+        return {}
+
 
 def validate_sections_spec(spec: dict) -> None:
     if "open" not in spec or "{name}" not in str(spec["open"]):
@@ -209,3 +224,54 @@ class SectionsLens(Lens):
 
     def join(self, spelled: list[tuple[str, str]]) -> str:
         return render_sections(self.spec, spelled)
+
+
+class DerivedLens(Lens):
+    """The template read backwards: anchors are the literal text around
+    each ``{f.value}`` hole in the template's output-pattern block.
+
+    ``anchors``: ordered ``[(field_name, prefix, suffix)]``, instantiated
+    per visible output field at bake. Matching uses the whitespace-
+    stripped forms; ``join`` reproduces the full literals, so demos show
+    the exact pattern the parser reads."""
+
+    def __init__(self, anchors: list[tuple[str, str, str]]):
+        self.anchors = list(anchors)
+
+    def split(self, text: str, field_names: list[str]) -> dict[str, str]:
+        wanted = [a for a in self.anchors if a[0] in field_names]
+        boundaries: list[tuple[int, int, str, str]] = []
+        for name, prefix, suffix in wanted:
+            marker = prefix.rstrip()
+            count = text.count(marker)
+            if count > 1:
+                refuse("parse-ambiguous",
+                       f"anchor {marker!r} for field {name!r} appears {count} "
+                       f"times in the reply — refusing to guess")
+            idx = text.find(marker)
+            if idx < 0:
+                continue
+            boundaries.append((idx, idx + len(marker), name, suffix))
+        boundaries.sort()
+        raw: dict[str, str] = {}
+        for i, (start, after, name, suffix) in enumerate(boundaries):
+            end = boundaries[i + 1][0] if i + 1 < len(boundaries) else len(text)
+            chunk = text[after:end]
+            close = suffix.strip()
+            if close:
+                c_idx = chunk.find(close)
+                if c_idx >= 0:
+                    chunk = chunk[:c_idx]
+            raw[name] = chunk.strip()
+        missing = [n for n in field_names if n not in raw]
+        if missing:
+            refuse("parse-missing-fields",
+                   "reply is missing pattern section(s): "
+                   + ", ".join(repr(n) for n in missing), partial=raw)
+        return raw
+
+    def join(self, spelled: list[tuple[str, str]]) -> str:
+        by_name = dict(spelled)
+        pieces = [prefix + by_name[name] + suffix
+                  for name, prefix, suffix in self.anchors if name in by_name]
+        return "".join(pieces).strip("\n")
