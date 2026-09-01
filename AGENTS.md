@@ -60,11 +60,13 @@ a decision, derive from these before inventing anything:
 | entries never contain signatures | `schema/entry.schema.json` |
 | duplicated anchors refuse, never guess | corpus case 32 |
 | plans and registries are JSON-serializable data | `tests/test_agent_surface.py` |
+| docs cannot drift from code: every raised error code is in `spec/errors.md`, every registered vocab entry is indexed with a real spec file, case files match their declared names, std predicates only name declared facts, plans carry acceptance criteria | `tests/test_coherence.py` |
 
 ## Sense — how to see the system state
 
 - `baked.describe()` → the whole plan as a plain dict (lens, anchors,
-  visible/hidden fields, routings, fragments, patch, codecs, strategies).
+  visible/hidden fields, routings, fragments, patch, codecs, strategies,
+  and `versions` — the exact vocabulary versions the plan stands on).
   `baked.explain()` is its pretty-printer. Read plans, not code.
 - `registry.describe()` → every registered codec/strategy/lens/coercion/
   host with versions. One call answers "what vocabulary exists here?"

@@ -14,3 +14,4 @@ Protocol per plan: spec → corpus (hand-authored bytes) → code →
 | `03-turns-face.md` | tool calls/results spelled into the next prompt, probe-checked | M |
 | `04-tools-citations-strategies.md` | strategy vocabularies for the reserved roles | M |
 | `05-second-implementation.md` | Go or TS kernel; harness passes byte-exact | L |
+| `06-structured-fix-hints.md` | refusals carry a machine-actionable `fix` payload | S |

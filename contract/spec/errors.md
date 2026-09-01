@@ -22,6 +22,7 @@ fires is breaking.
 | `role-ambiguous` | bake | one role on two fields |
 | `field-uncovered` | bake | visible input never rendered by the template |
 | `field-double-covered` | bake | field is both a section and a routing target |
+| `control-conflict` | bake | two strategies (or a lens and a strategy) disagree on a request control |
 | `no-codec` | bake/render | structured shape (or non-scalar value) without a codec |
 | `unmapped-type` | signature | annotation resolves to no shape and no host entry |
 | `missing-input` | render | no value supplied for a rendered field |

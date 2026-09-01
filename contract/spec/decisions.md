@@ -71,3 +71,15 @@ with acceptance criteria), this log (memory), and data introspection
 (`baked.describe()`, `registry.describe()`). Reason: the system's users
 include agents; legibility and a closed verify loop are design
 requirements, not conveniences.
+
+**D-11 · The map is verified, not trusted.** Documentation claims are
+cross-checked mechanically (`tests/test_coherence.py`): raised error
+codes must be documented, the vocab index must be complete with real
+spec files, corpus filenames must match their declared names, std
+predicates may only name declared capability facts, and plans must
+carry acceptance criteria. Reason: an agent can only rely on a map
+whose claims fail tests when they rot — the corpus move, applied to the
+docs themselves. Proof it was needed: the first run caught
+`control-conflict` raised in the kernel but absent from `errors.md`.
+Cost: adding vocabulary or codes now touches the index/table too —
+which is the point.

@@ -21,6 +21,7 @@ from . import core
 from .adapter import Adapter
 from .errors import refuse
 from .parse import DerivedLens, Lens, apply_routings
+from .serde import KERNEL_VERSION
 from .strategy import Strategy, check_predicate, resolve_role_field
 from .template import Loop, Slot, Text, render_nodes, validate_nodes
 
@@ -261,6 +262,20 @@ class Baked:
         elif hasattr(self.lens, "spec"):
             out["lens"].update({k: v for k, v in self.lens.spec.items()
                                 if k != "kind"})
+        vocab: dict[str, str] = {}
+        for fname, codec in self.codecs.items():
+            named = self.registry.codecs.get(getattr(codec, "kind", None))
+            if named is not None:
+                vocab[f"codec/{codec.kind}"] = named.version
+        for r in self.resolved:
+            named = self.registry.strategies.get(r.name)
+            if named is not None:
+                vocab[f"strategy/{r.name}"] = named.version
+        lens_kind = self.adapter.parse.get("kind")
+        named = self.registry.lenses.get(lens_kind)
+        if named is not None:
+            vocab[f"lens/{lens_kind}"] = named.version
+        out["versions"] = {"kernel": KERNEL_VERSION, "vocab": vocab}
         return out
 
     def explain(self) -> str:
