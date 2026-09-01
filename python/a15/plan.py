@@ -401,6 +401,15 @@ def bake(adapter: Adapter, sig: core.SignatureCore, capabilities: dict,
         baked.codecs[fname] = registry.codec(binding.kind, binding.options)
         baked.codecs[fname].kind = binding.kind
     for f in baked.visible_outputs + baked.visible_inputs:
+        # the entry's binding wins; else the registered type's default
+        # renderer (per-runtime code, never serialized) fills in.
+        if f.name not in baked.codecs:
+            default = registry.default_codec_for(f.annotation)
+            if default is not None:
+                baked.codecs[f.name] = registry.codec(
+                    default["kind"], default.get("options", {}))
+                baked.codecs[f.name].kind = default["kind"]
+    for f in baked.visible_outputs + baked.visible_inputs:
         if core.is_structured(f.shape) and f.name not in baked.codecs:
             refuse("no-codec",
                    f"field {f.name!r} has a structured shape "

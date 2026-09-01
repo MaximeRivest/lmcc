@@ -18,6 +18,7 @@ convenience, but nothing in the kernel reads it implicitly during
 
 from __future__ import annotations
 
+import typing
 from dataclasses import dataclass
 
 from .errors import refuse
@@ -48,6 +49,7 @@ class HostEntry:
     shape: dict
     lower: object  # callable(host_value) -> plain value
     lift: object | None = None  # callable(plain value) -> host value
+    codec: dict | None = None  # default spelling: {"kind": ..., "options": {}}
 
 
 @dataclass
@@ -128,8 +130,19 @@ class Registry:
 
     # --------------------------------------------------------------- hosts
 
-    def register_host(self, host_type: type, *, shape: dict, lower, lift=None) -> None:
-        self.hosts.append((host_type, HostEntry(shape, lower, lift)))
+    def register_host(self, host_type: type, *, shape: dict, lower, lift=None,
+                      codec: str | dict | None = None) -> None:
+        """Bind a native type: its neutral shape, how a value lowers to
+        plain data (and lifts back), and optionally its default codec —
+        the renderer that spells it for the model when the entry binds
+        none. Host bindings are per-runtime code and are never
+        serialized; only shapes and codec names travel in artifacts."""
+        if isinstance(codec, str):
+            codec = {"kind": codec, "options": {}}
+        elif isinstance(codec, dict) and "kind" not in codec:
+            refuse("entry-malformed",
+                   f"host {host_type!r}: codec binding needs a 'kind'")
+        self.hosts.append((host_type, HostEntry(shape, lower, lift, codec)))
 
     def host_for(self, annotation: object) -> HostEntry | None:
         for host_type, entry in self.hosts:
@@ -139,17 +152,42 @@ class Registry:
                 return entry
         return None
 
+    @staticmethod
+    def _item_annotation(annotation: object) -> object | None:
+        """The element annotation of ``list[X]``, else None."""
+        if typing.get_origin(annotation) in (list, typing.List):
+            args = typing.get_args(annotation)
+            if args:
+                return args[0]
+        return None
+
     def lower_value(self, annotation: object, value: object) -> object:
+        item = self._item_annotation(annotation)
+        if item is not None and isinstance(value, list):
+            return [self.lower_value(item, v) for v in value]
         entry = self.host_for(annotation) if annotation is not None else None
         if entry is not None:
             return entry.lower(value)
         return value
 
     def lift_value(self, annotation: object, value: object) -> object:
+        item = self._item_annotation(annotation)
+        if item is not None and isinstance(value, list):
+            return [self.lift_value(item, v) for v in value]
         entry = self.host_for(annotation) if annotation is not None else None
         if entry is not None and entry.lift is not None:
             return entry.lift(value)
         return value
+
+    def default_codec_for(self, annotation: object) -> dict | None:
+        """The registered type's default codec binding, looking through
+        ``list[X]`` to the element type."""
+        entry = self.host_for(annotation) if annotation is not None else None
+        if entry is None:
+            item = self._item_annotation(annotation)
+            if item is not None:
+                entry = self.host_for(item)
+        return entry.codec if entry is not None else None
 
 
 default_registry = Registry()

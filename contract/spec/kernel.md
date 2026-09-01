@@ -29,6 +29,17 @@ shapes mechanically for the language's own constructs; foreign types resolve
 through the **host socket** or refuse (`unmapped-type`, naming field and
 type). Host lowerings are per-language code and are **never serialized**.
 
+**The host socket** binds a native type once, per runtime:
+`(shape, lower, lift?, codec?)` — its neutral shape, how a value lowers
+to plain data and lifts back (both recurse through `list[X]`), and
+optionally its **default codec**: the renderer that spells the type when
+the entry binds none. Precedence at bake: the entry's per-field codec
+binding wins; else the type's registered default; else structured shapes
+refuse (`no-codec`). Trade-off, stated: an entry-bound codec travels in
+the artifact and is the byte-exact cross-runtime path; a host default is
+per-runtime convenience code — two runtimes may legitimately spell the
+same type differently unless the entry pins the codec.
+
 A `shape` containing `"media"` (e.g. `{"media": "image"}`) is a media
 shape: its value is a plain part-data dict and it renders as a message part
 at its slot position, not as text.
