@@ -231,6 +231,38 @@ class Baked:
 
     # -------------------------------------------------------------- explain
 
+    def describe(self) -> dict:
+        """The whole plan as plain, JSON-serializable data. ``explain()``
+        is a pretty-printer over this. Agents: read plans, not code."""
+        routed = {r["field"] for r in self.routings}
+        out: dict = {
+            "adapter": self.adapter.name,
+            "lens": {"kind": self.adapter.parse.get("kind")},
+            "capabilities": dict(self.capabilities),
+            "inputs": [{"name": f.name, "shape": f.shape,
+                        "media": core.is_media(f.shape)}
+                       for f in self.visible_inputs],
+            "outputs": [{"name": f.name, "shape": f.shape,
+                         "spelled_by": (self.codecs[f.name].kind
+                                        if f.name in self.codecs
+                                        else "kernel-scalar"),
+                         "routed": f.name in routed}
+                        for f in self.visible_outputs],
+            "hidden": [f.name for f in self.signature.fields
+                       if f not in self.visible_inputs
+                       and f not in self.visible_outputs],
+            "strategies": {r.role: r.name for r in self.resolved},
+            "routings": [dict(r) for r in self.routings],
+            "fragments": dict(self.fragments),
+            "patch": dict(self.patch),
+        }
+        if hasattr(self.lens, "anchors"):
+            out["lens"]["anchors"] = [list(a) for a in self.lens.anchors]
+        elif hasattr(self.lens, "spec"):
+            out["lens"].update({k: v for k, v in self.lens.spec.items()
+                                if k != "kind"})
+        return out
+
     def explain(self) -> str:
         p = self.adapter.parse
         parse_line = f"parse: {p['kind']}"

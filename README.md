@@ -101,6 +101,19 @@ thinking channel. That swap costing one word is the point of the library.
 7. **The corpus is the authority.** A second implementation (Go, TS) is
    conformant when the harness passes byte-exactly — not before.
 
+## For agents (and fast-moving humans)
+
+`AGENTS.md` is the cockpit: the system map, the invariants and the
+tests that enforce them, the accretion protocol (spec → corpus → code),
+and the introspection surface (`baked.describe()`,
+`registry.describe()`). `plans/` is the work queue with acceptance
+criteria; `contract/spec/decisions.md` is the append-only memory of why
+things are the way they are. One command verifies everything:
+
+```
+./check
+```
+
 ## Running the checks
 
 ```

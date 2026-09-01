@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# The one command. Green here = the contract holds.
+# 1) unit + corpus tests  2) conformance harness  3) schema validation
+# 4) README quickstart runs verbatim
+set -euo pipefail
+cd "$(dirname "$0")"
+
+step() { printf '\n== %s ==\n' "$1"; }
+
+run_py() {  # run python with repo layout on the path
+  (cd python && PYTHONPATH=. python "$@")
+}
+
+step "1/4 unit + corpus tests"
+if pytest --version >/dev/null 2>&1; then
+  (cd python && PYTHONPATH=. pytest -q tests/)
+else
+  (cd python && PYTHONPATH=. nix run nixpkgs#python3Packages.pytest -- -q tests/)
+fi
+
+step "2/4 conformance harness (corpus is the authority)"
+run_py ../contract/harness/runner.py
+
+step "3/4 schema validation (every corpus entry, both directions)"
+if python -c 'import jsonschema' 2>/dev/null; then
+  PYVAL=python
+else
+  PYVAL="nix shell --impure --expr with_import_placeholder"
+fi
+if [ "$PYVAL" = python ]; then
+  python - <<'EOF'
+import json, glob, jsonschema
+schema = json.load(open('contract/schema/entry.schema.json'))
+n = 0
+for f in sorted(glob.glob('contract/corpus/cases/*.json')):
+    case = json.load(open(f))
+    jsonschema.validate(case['entry'], schema)
+    if isinstance(case.get('expect'), dict) and 'entry' in case['expect']:
+        jsonschema.validate(case['expect']['entry'], schema)
+    n += 1
+print(n, 'cases validate against the schema')
+EOF
+else
+  nix shell --impure --expr \
+    'with import <nixpkgs> {}; python3.withPackages (p: [ p.jsonschema ])' \
+    -c python3 - <<'EOF'
+import json, glob, jsonschema
+schema = json.load(open('contract/schema/entry.schema.json'))
+n = 0
+for f in sorted(glob.glob('contract/corpus/cases/*.json')):
+    case = json.load(open(f))
+    jsonschema.validate(case['entry'], schema)
+    if isinstance(case.get('expect'), dict) and 'entry' in case['expect']:
+        jsonschema.validate(case['expect']['entry'], schema)
+    n += 1
+print(n, 'cases validate against the schema')
+EOF
+fi
+
+step "4/4 README quickstart, verbatim"
+run_py - <<'EOF'
+import re, pathlib
+text = pathlib.Path('../README.md').read_text()
+code = '\n'.join(re.findall(r'```python\n(.*?)```', text, re.DOTALL))
+exec(compile(code, 'README-quickstart', 'exec'))
+print('README quickstart runs verbatim')
+EOF
+
+printf '\nALL GREEN\n'

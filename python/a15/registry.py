@@ -161,6 +161,25 @@ class Registry:
                 return args[0]
         return None
 
+    # ------------------------------------------------------------ describe
+
+    def describe(self) -> dict:
+        """Everything registered here, as plain data: one call answers
+        "what vocabulary does this runtime speak?"""
+        return {
+            "codecs": {n: e.version for n, e in sorted(self.codecs.items())},
+            "strategies": {n: e.version
+                           for n, e in sorted(self.strategies.items())},
+            "lenses": {"sections": "kernel", "derived": "kernel",
+                       **{n: e.version
+                          for n, e in sorted(self.lenses.items())}},
+            "coercions": sorted(self.coercions),
+            "hosts": [{"type": getattr(t, "__name__", str(t)),
+                       "shape": dict(e.shape),
+                       "codec": e.codec}
+                      for t, e in self.hosts],
+        }
+
     def lower_value(self, annotation: object, value: object) -> object:
         item = self._item_annotation(annotation)
         if item is not None and isinstance(value, list):
