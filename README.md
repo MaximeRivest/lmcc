@@ -114,6 +114,13 @@ things are the way they are. One command verifies everything:
 ./check
 ```
 
+## Learning the kernel
+
+`GUIDE.md` is the kernel-only walkthrough (no std pack): signatures,
+the derived lens, refusals, inline strategies, host types, your own
+codecs, and the artifact. Every code block in it is executed by the
+test suite — the guide cannot drift from the kernel.
+
 ## Running the checks
 
 ```
