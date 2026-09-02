@@ -131,4 +131,6 @@ and their reasons. Read it before proposing a design change — most
 - Versions: semver per vocabulary entry; while major = 0, minor is
   breaking. Artifacts pin what they need; loaders refuse mismatches.
 - Research lineage lives outside this repo (`~/Projects/adapter-rfc`,
-  dspy roadmap docs); `decisions.md` cites it where relevant.
+  dspy roadmap docs); `decisions.md` cites it where relevant. The map to
+  all of it is `research/` (sources by tier, research axes, ranked
+  conversations). Read `research/axes.md` before proposing a design.
