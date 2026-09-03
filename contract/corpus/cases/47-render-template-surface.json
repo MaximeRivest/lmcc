@@ -1,0 +1,147 @@
+{
+ "name": "render-template-surface",
+ "kind": "render",
+ "entry": {
+  "name": "surface_v1",
+  "versions": {
+   "kernel": "0.1.0",
+   "vocab": {}
+  },
+  "template": {
+   "messages": [
+    {
+     "role": "system",
+     "text": "{instruction}\n{% for f in inputs %}IN {f.name} [{f.role}] {f.desc} {f.schema}\n{% endfor %}{% for f in outputs %}OUT {f.name} [{f.role}] {f.desc} {f.schema}\n{% endfor %}{{braces}}\n{format}"
+    },
+    {
+     "directive": "history"
+    },
+    {
+     "role": "user",
+     "text": "{q} {n}"
+    }
+   ]
+  },
+  "parse": {
+   "kind": "sections",
+   "open": "[[ ## {name} ## ]]",
+   "tail": "[[ ## completed ## ]]"
+  },
+  "requires": []
+ },
+ "signature": {
+  "instructions": "Do.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    },
+    "desc": "the question"
+   },
+   {
+    "name": "n",
+    "direction": "input",
+    "shape": {
+     "type": "integer"
+    },
+    "role": "citable"
+   },
+   {
+    "name": "reasoning",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    },
+    "role": "reasoning",
+    "desc": "think"
+   },
+   {
+    "name": "score",
+    "direction": "output",
+    "shape": {
+     "type": "number"
+    }
+   },
+   {
+    "name": "level",
+    "direction": "output",
+    "shape": {
+     "enum": [
+      "low",
+      "high"
+     ],
+     "type": "string"
+    }
+   },
+   {
+    "name": "note",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "q": "hi",
+  "n": 3
+ },
+ "history": [
+  {
+   "role": "user",
+   "content": "earlier"
+  },
+  {
+   "role": "assistant",
+   "content": [
+    {
+     "kind": "text",
+     "text": "ok"
+    }
+   ]
+  }
+ ],
+ "expect": {
+  "messages": [
+   {
+    "role": "system",
+    "content": [
+     {
+      "kind": "text",
+      "text": "Do.\nIN q [plain] the question \nIN n [citable]  (integer)\nOUT reasoning [reasoning] think \nOUT score [plain]  (number)\nOUT level [plain]  one of: low, high\nOUT note [plain]  \n{braces}\n[[ ## reasoning ## ]]\nthink\n[[ ## score ## ]]\n(number)\n[[ ## level ## ]]\none of: low, high\n[[ ## note ## ]]\n...\n[[ ## completed ## ]]"
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "content": [
+     {
+      "kind": "text",
+      "text": "earlier"
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "content": [
+     {
+      "kind": "text",
+      "text": "ok"
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "content": [
+     {
+      "kind": "text",
+      "text": "hi 3"
+     }
+    ]
+   }
+  ],
+  "patch": {}
+ }
+}
