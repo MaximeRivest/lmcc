@@ -1,0 +1,74 @@
+{
+ "name": "refuse-load-regex-dialect",
+ "kind": "refuse",
+ "entry": {
+  "name": "derived_v1",
+  "versions": {
+   "kernel": "0.1.0",
+   "vocab": {}
+  },
+  "template": {
+   "messages": [
+    {
+     "role": "system",
+     "text": "{instruction}\n\nAnswer in exactly this form:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+    },
+    {
+     "role": "user",
+     "text": "{q}"
+    }
+   ]
+  },
+  "parse": {
+   "kind": "derived"
+  },
+  "requires": [],
+  "strategies": {
+   "reasoning": {
+    "visible": false,
+    "routings": [
+     {
+      "extract": {
+       "kind": "pattern",
+       "regex": "(?=Thought)(.*)"
+      },
+      "field": "@role",
+      "join": "\n",
+      "strip": true
+     }
+    ]
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Answer.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "reasoning",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    },
+    "role": "reasoning"
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "expect": {
+  "code": "entry-malformed",
+  "at": "load"
+ }
+}

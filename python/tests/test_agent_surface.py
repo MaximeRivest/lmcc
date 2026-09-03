@@ -8,7 +8,7 @@ import pathlib
 import lmcc
 import lmcc_std
 
-STDLIB = {"__future__", "dataclasses", "json", "re", "typing"}
+STDLIB = {"__future__", "dataclasses", "decimal", "json", "math", "re", "typing"}
 
 
 def test_kernel_imports_stdlib_only():

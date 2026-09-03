@@ -1,0 +1,59 @@
+{
+ "name": "refuse-json-lens-duplicate-key",
+ "kind": "refuse",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "json_lens_v1",
+  "versions": {
+   "kernel": "0.1.0",
+   "vocab": {
+    "lens/json_object": "0.1.0"
+   }
+  },
+  "template": {
+   "messages": [
+    {
+     "role": "system",
+     "text": "{instruction}"
+    },
+    {
+     "role": "user",
+     "text": "{question}"
+    }
+   ]
+  },
+  "parse": {
+   "kind": "json_object"
+  },
+  "requires": []
+ },
+ "signature": {
+  "instructions": "Answer.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "capabilities": {
+  "native_structured_output": true
+ },
+ "response": "{\"answer\": \"A\", \"answer\": \"B\"}",
+ "expect": {
+  "code": "parse-ambiguous",
+  "at": "parse"
+ }
+}

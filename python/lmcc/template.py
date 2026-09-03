@@ -25,11 +25,14 @@ from dataclasses import dataclass
 
 from .errors import refuse
 
+# ASCII-explicit on purpose: \w and \s are Unicode in Python and ASCII in
+# RE2/Go, and the template grammar must be one grammar everywhere.
 _TOKEN = re.compile(
     r"(?P<escape>\{\{|\}\})"
     r"|(?P<loop>\{%\s*for\s+(?P<var>[A-Za-z_]\w*)\s+in\s+(?P<source>[A-Za-z_]\w*)\s*%\})"
     r"|(?P<end>\{%\s*endfor\s*%\})"
-    r"|(?P<slot>\{(?P<path>[A-Za-z_][\w.]*)\})"
+    r"|(?P<slot>\{(?P<path>[A-Za-z_][\w.]*)\})",
+    re.ASCII,
 )
 
 LOOP_SOURCES = ("inputs", "outputs")

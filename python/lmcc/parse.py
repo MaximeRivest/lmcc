@@ -14,9 +14,17 @@ from __future__ import annotations
 
 import re
 
+from . import core
 from .errors import refuse
 
 EXTRACT_KINDS = ("between", "pattern", "line_prefixed", "parts")
+
+# Regex constructs outside the portable dialect (kernel §5): lookaround,
+# backreferences, atomic groups, possessive quantifiers, and named groups
+# (Python spells them (?P<n>), JavaScript (?<n>) — neither is universal;
+# the algebra reads group 1, so names buy nothing). Scanned with escapes
+# skipped so ``\(?=`` is not a false positive.
+_NON_RE2 = re.compile(r"\(\?[=!>]|\(\?P?<|\\[1-9]|\\k<|[*+?}]\+")
 
 
 def validate_extract(spec: dict, *, where: str) -> None:
@@ -28,28 +36,74 @@ def validate_extract(spec: dict, *, where: str) -> None:
     required = {"between": ("open", "close"), "pattern": ("regex",),
                 "line_prefixed": ("prefix",), "parts": ("part",)}[kind]
     for key in required:
-        if key not in spec:
-            refuse("entry-malformed", f"{where}: extract {kind!r} needs {key!r}")
+        if key not in spec or not isinstance(spec[key], str) or (
+                key != "part" and spec[key] == ""):
+            refuse("entry-malformed",
+                   f"{where}: extract {kind!r} needs a non-empty string {key!r}")
+    if kind == "pattern":
+        _check_re2(spec["regex"], where=where)
+
+
+def _check_re2(regex: str, *, where: str) -> None:
+    unescaped = re.sub(r"\\[^1-9k]", "", regex)   # drop escapes, keep \1 \k
+    hit = _NON_RE2.search(unescaped)
+    if hit:
+        refuse("entry-malformed",
+               f"{where}: regex {regex!r} uses {hit.group(0)!r}, which is "
+               f"outside the portable RE2 dialect (no lookaround, "
+               f"backreferences, named groups, atomic or possessive "
+               f"constructs)")
+    try:
+        re.compile(regex, re.DOTALL)
+    except re.error as exc:
+        refuse("entry-malformed", f"{where}: regex {regex!r} does not compile: {exc}")
 
 
 def run_text_extract(text: str, spec: dict, strip: bool) -> tuple[str, list[str]]:
-    """Apply one extractor to text. Returns (possibly stripped text, matches)."""
+    """Apply one extractor to text. Returns (possibly stripped text, matches).
+
+    Semantics are spelled out in kernel §5 so that no host regex quirk
+    leaks in: ``between`` and ``line_prefixed`` are plain scans; ``pattern``
+    is leftmost-first, non-overlapping, dot-matches-newline, empty matches
+    discarded."""
     kind = spec["kind"]
+    spans: list[tuple[int, int, str]] = []   # (start, end, capture)
     if kind == "between":
-        pattern = re.compile(
-            re.escape(spec["open"]) + r"(.*?)" + re.escape(spec["close"]), re.DOTALL)
+        open_, close = spec["open"], spec["close"]
+        pos = 0
+        while True:
+            i = text.find(open_, pos)
+            if i < 0:
+                break
+            j = text.find(close, i + len(open_))
+            if j < 0:
+                break
+            spans.append((i, j + len(close), text[i + len(open_):j]))
+            pos = j + len(close)
+    elif kind == "line_prefixed":
+        prefix = spec["prefix"]
+        pos = 0
+        for line in text.split("\n"):
+            if line.startswith(prefix):
+                spans.append((pos, pos + len(line), line[len(prefix):]))
+            pos += len(line) + 1
     elif kind == "pattern":
         pattern = re.compile(spec["regex"], re.DOTALL)
-    elif kind == "line_prefixed":
-        pattern = re.compile(
-            r"^" + re.escape(spec["prefix"]) + r"(.*)$", re.MULTILINE)
+        for m in pattern.finditer(text):
+            if m.end() == m.start():
+                continue
+            spans.append((m.start(), m.end(),
+                          m.group(1) if pattern.groups else m.group(0)))
     else:
         refuse("unknown-extract-kind", f"extract kind {kind!r} does not read text")
-    matches: list[str] = []
-    for m in pattern.finditer(text):
-        matches.append(m.group(1) if pattern.groups else m.group(0))
-    if strip:
-        text = pattern.sub("", text)
+    matches = [cap if cap is not None else "" for _, _, cap in spans]
+    if strip and spans:
+        pieces, pos = [], 0
+        for start, end, _ in spans:
+            pieces.append(text[pos:start])
+            pos = end
+        pieces.append(text[pos:])
+        text = "".join(pieces)
     return text, matches
 
 
@@ -71,7 +125,7 @@ def apply_routings(text: str, parts: list[dict], routings: list[dict],
                 text, spec, strip=bool(routing.get("strip", False)))
         value: object = matches
         if "join" in routing:
-            value = routing["join"].join(m.strip() for m in matches)
+            value = routing["join"].join(core.strip(m) for m in matches)
         coerce = routing.get("coerce")
         if coerce is not None:
             fn = coercions.get(coerce["kind"])
@@ -115,6 +169,11 @@ def split_sections(text: str, spec: dict, field_names: list[str]) -> dict[str, s
         positions[name] = idx
         boundaries.append((idx, idx + len(marker), name))
     if tail:
+        count = text.count(tail)
+        if count > 1:
+            refuse("parse-ambiguous",
+                   f"tail {tail!r} appears {count} times in the reply — "
+                   f"refusing to guess which one ends the reply")
         t_idx = text.find(tail)
         if t_idx >= 0:
             boundaries.append((t_idx, t_idx, None))
@@ -127,11 +186,8 @@ def split_sections(text: str, spec: dict, field_names: list[str]) -> dict[str, s
         end = boundaries[i + 1][0] if i + 1 < len(boundaries) else len(text)
         chunk = text[after:end]
         if close_tpl:
-            close = close_tpl.replace("{name}", name)
-            c_idx = chunk.find(close)
-            if c_idx >= 0:
-                chunk = chunk[:c_idx]
-        raw[name] = chunk.strip()
+            chunk = _cut_at_close(chunk, close_tpl.replace("{name}", name), name)
+        raw[name] = core.strip(chunk)
 
     missing = [n for n in field_names if n not in raw]
     if missing:
@@ -141,10 +197,51 @@ def split_sections(text: str, spec: dict, field_names: list[str]) -> dict[str, s
     return raw
 
 
+def _cut_at_close(chunk: str, close: str, name: str) -> str:
+    """Capture up to the field's close marker. A close appearing twice in
+    the capture region is refused, exactly like a repeated anchor — the
+    value contains the marker and the reply cannot be read one way."""
+    if not close:
+        return chunk
+    count = chunk.count(close)
+    if count > 1:
+        refuse("parse-ambiguous",
+               f"close marker {close!r} for field {name!r} appears {count} "
+               f"times in its section — refusing to guess where it ends")
+    idx = chunk.find(close)
+    return chunk if idx < 0 else chunk[:idx]
+
+
+def check_collisions(spelled: list[tuple[str, str]],
+                     markers: list[str]) -> None:
+    """The write-side half of invertibility (kernel §4): a spelled value
+    that contains any marker the lens reads would produce a demo the lens
+    reads differently. Refuse, naming field and marker."""
+    for name, value in spelled:
+        for marker in markers:
+            if marker and marker in value:
+                refuse("value-collides",
+                       f"field {name!r}: its spelled value contains the lens "
+                       f"marker {marker!r}; the demo could not be read back "
+                       f"as written")
+
+
+def sections_markers(spec: dict, names: list[str]) -> list[str]:
+    out = []
+    for name in names:
+        out.append(spec["open"].replace("{name}", name))
+        if spec.get("close"):
+            out.append(spec["close"].replace("{name}", name))
+    if spec.get("tail"):
+        out.append(spec["tail"])
+    return out
+
+
 def render_sections(spec: dict, spelled: list[tuple[str, str]]) -> str:
     """The lens writing forward: render gold outputs in the exact layout the
     parser reads. Used for demo assistant turns, so demos can never drift
     from the parser."""
+    check_collisions(spelled, sections_markers(spec, [n for n, _ in spelled]))
     pieces: list[str] = []
     for name, value in spelled:
         open_marker = spec["open"].replace("{name}", name)
@@ -242,7 +339,7 @@ class DerivedLens(Lens):
         wanted = [a for a in self.anchors if a[0] in field_names]
         boundaries: list[tuple[int, int, str, str]] = []
         for name, prefix, suffix in wanted:
-            marker = prefix.rstrip()
+            marker = core.rstrip(prefix)
             count = text.count(marker)
             if count > 1:
                 refuse("parse-ambiguous",
@@ -256,13 +353,8 @@ class DerivedLens(Lens):
         raw: dict[str, str] = {}
         for i, (start, after, name, suffix) in enumerate(boundaries):
             end = boundaries[i + 1][0] if i + 1 < len(boundaries) else len(text)
-            chunk = text[after:end]
-            close = suffix.strip()
-            if close:
-                c_idx = chunk.find(close)
-                if c_idx >= 0:
-                    chunk = chunk[:c_idx]
-            raw[name] = chunk.strip()
+            chunk = _cut_at_close(text[after:end], core.strip(suffix), name)
+            raw[name] = core.strip(chunk)
         missing = [n for n in field_names if n not in raw]
         if missing:
             refuse("parse-missing-fields",
@@ -272,6 +364,11 @@ class DerivedLens(Lens):
 
     def join(self, spelled: list[tuple[str, str]]) -> str:
         by_name = dict(spelled)
+        markers = []
+        for name, prefix, suffix in self.anchors:
+            markers.append(core.rstrip(prefix))
+            markers.append(core.strip(suffix))
+        check_collisions(spelled, markers)
         pieces = [prefix + by_name[name] + suffix
                   for name, prefix, suffix in self.anchors if name in by_name]
         return "".join(pieces).strip("\n")

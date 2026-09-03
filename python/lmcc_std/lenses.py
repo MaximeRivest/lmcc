@@ -8,10 +8,11 @@ in contract/spec/vocab/lens-json_object.md and is pinned by corpus cases.
 
 from __future__ import annotations
 
-import json
-
+from lmcc import core
 from lmcc.errors import refuse
 from lmcc.parse import Lens
+
+from . import jsontext
 
 VERSION = "0.1.0"
 
@@ -32,12 +33,13 @@ class JsonObjectLens(Lens):
       else the first ``{`` … last ``}`` substring. Anything else refuses
       ``lens-parse-error``; so does a document that is not a JSON object.
     - A string member is the field's raw text verbatim. Any other member
-      re-serializes compactly (``,`` and ``:`` separators, unicode kept,
-      member order preserved) — the field's codec or scalar rule then
-      parses that raw text, so ``{"rows": [...]}`` feeds a json codec and
-      ``{"score": 9}`` feeds the kernel integer rule unchanged.
-    - Unknown members are ignored. Missing fields refuse
-      ``parse-missing-fields`` with the recovered raw values in ``.partial``.
+      is handed over as its **source text** — the field's codec or scalar
+      rule then parses that raw text, so ``{"rows": [1, 2]}`` feeds a json
+      codec ``[1, 2]`` and ``{"score": 9}`` feeds the kernel integer rule
+      ``9``, digits and spacing exactly as the model wrote them.
+    - Unknown members are ignored; a field's key appearing twice refuses
+      ``parse-ambiguous``. Missing fields refuse ``parse-missing-fields``
+      with the recovered raw values in ``.partial``.
 
     Writing (demos): spelled text that parses as **non-string** JSON embeds
     as that JSON value; anything else embeds as a JSON string. The document
@@ -67,14 +69,17 @@ class JsonObjectLens(Lens):
     # ---------------------------------------------------------------- read
 
     def split(self, text: str, field_names: list[str]) -> dict[str, str]:
-        data = self._document(text)
+        members = self._document(text)
+        wanted = set(field_names)
         raw: dict[str, str] = {}
-        for name in field_names:
-            if name not in data:
+        for key, value, source in members:
+            if key not in wanted:
                 continue
-            value = data[name]
-            raw[name] = value if isinstance(value, str) else json.dumps(
-                value, ensure_ascii=False, separators=(",", ":"))
+            if key in raw:
+                refuse("parse-ambiguous",
+                       f"json_object: member {key!r} appears more than once "
+                       f"in the reply — refusing to guess which one is real")
+            raw[key] = value if isinstance(value, str) else core.strip(source)
         missing = [n for n in field_names if n not in raw]
         if missing:
             refuse("parse-missing-fields",
@@ -82,30 +87,25 @@ class JsonObjectLens(Lens):
                    + ", ".join(repr(n) for n in missing), partial=raw)
         return raw
 
-    def _document(self, text: str) -> dict:
-        t = text.strip()
+    def _document(self, text: str) -> list[tuple[str, object, str]]:
+        t = core.strip(text)
         if t.startswith("```"):
             first_nl = t.find("\n")
             closing = t.rfind("```")
             if first_nl >= 0 and closing > first_nl:
-                t = t[first_nl + 1:closing].strip()
+                t = core.strip(t[first_nl + 1:closing])
         try:
-            data = json.loads(t)
-        except ValueError:
+            return jsontext.members(t)
+        except ValueError as first:
             start, end = t.find("{"), t.rfind("}")
             if not (0 <= start < end):
                 refuse("lens-parse-error",
-                       "json_object: reply contains no JSON object")
+                       f"json_object: reply contains no JSON object ({first})")
             try:
-                data = json.loads(t[start:end + 1])
+                return jsontext.members(t[start:end + 1])
             except ValueError as exc:
                 refuse("lens-parse-error",
-                       f"json_object: reply is not valid JSON: {exc}")
-        if not isinstance(data, dict):
-            refuse("lens-parse-error",
-                   f"json_object: reply is a JSON {type(data).__name__}, "
-                   f"not an object")
-        return data
+                       f"json_object: reply is not a JSON object: {exc}")
 
     # --------------------------------------------------------------- write
 
@@ -114,14 +114,14 @@ class JsonObjectLens(Lens):
         for name, text in spelled:
             value: object = text
             try:
-                parsed = json.loads(text)
+                parsed = jsontext.loads(text)
             except ValueError:
                 pass
             else:
                 if not isinstance(parsed, str):
                     value = parsed
             obj[name] = value
-        return json.dumps(obj, indent=2, ensure_ascii=False)
+        return jsontext.dumps(obj, indent=2)
 
 
 def install(registry, *, exist_ok: bool = True) -> None:

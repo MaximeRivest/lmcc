@@ -1,0 +1,179 @@
+{
+ "name": "std-json-number-spelling",
+ "kind": "render",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "std_spelling_v1",
+  "versions": {
+   "kernel": "0.1.0",
+   "vocab": {
+    "codec/json": "0.1.0",
+    "codec/table": "0.1.0",
+    "codec/scaled_number": "0.1.0"
+   }
+  },
+  "template": {
+   "messages": [
+    {
+     "role": "system",
+     "text": "{instruction}\n{% for f in outputs %}{f.name}: {f.schema}\n{% endfor %}"
+    },
+    {
+     "directive": "demos"
+    },
+    {
+     "role": "user",
+     "text": "{q}"
+    }
+   ]
+  },
+  "parse": {
+   "kind": "sections",
+   "open": "<{name}>",
+   "tail": "</done>"
+  },
+  "requires": [],
+  "codecs": {
+   "data": {
+    "kind": "json"
+   },
+   "rows": {
+    "kind": "table",
+    "options": {
+     "columns": [
+      "name",
+      "score",
+      "ok"
+     ]
+    }
+   },
+   "conf": {
+    "kind": "scaled_number",
+    "options": {
+     "scale": 100,
+     "suffix": "%"
+    }
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Spell.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "data",
+    "direction": "output",
+    "shape": {
+     "type": "object"
+    }
+   },
+   {
+    "name": "rows",
+    "direction": "output",
+    "shape": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "name": {
+        "type": "string"
+       },
+       "score": {
+        "type": "number"
+       },
+       "ok": {
+        "type": "boolean"
+       }
+      }
+     }
+    }
+   },
+   {
+    "name": "conf",
+    "direction": "output",
+    "shape": {
+     "type": "number"
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "q": "go"
+ },
+ "demos": [
+  {
+   "q": "went",
+   "data": {
+    "x": 1.0,
+    "y": 1e+21,
+    "z": true,
+    "s": "é\n\"q\"",
+    "n": null,
+    "e": {},
+    "l": []
+   },
+   "rows": [
+    {
+     "name": "a",
+     "score": 2.5,
+     "ok": true
+    },
+    {
+     "name": "b",
+     "score": 3,
+     "ok": false
+    }
+   ],
+   "conf": 0.78
+  }
+ ],
+ "expect": {
+  "messages": [
+   {
+    "role": "system",
+    "content": [
+     {
+      "kind": "text",
+      "text": "Spell.\ndata: JSON matching this schema: {\"type\": \"object\"}\nrows: | name | score | ok |  (one row per item)\nconf: a number like 83%\n"
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "content": [
+     {
+      "kind": "text",
+      "text": "went"
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "content": [
+     {
+      "kind": "text",
+      "text": "<data>\n{\n  \"x\": 1,\n  \"y\": 1e+21,\n  \"z\": true,\n  \"s\": \"é\\n\\\"q\\\"\",\n  \"n\": null,\n  \"e\": {},\n  \"l\": []\n}\n<rows>\n| a | 2.5 | true |\n| b | 3 | false |\n<conf>\n78%\n</done>"
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "content": [
+     {
+      "kind": "text",
+      "text": "go"
+     }
+    ]
+   }
+  ],
+  "patch": {}
+ }
+}

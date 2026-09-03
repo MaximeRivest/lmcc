@@ -97,8 +97,12 @@ assert values == {"title": "Dune", "year": 1965, "confident": True}
 
 Typed values: `1965` is an `int`, `True` is a `bool` — kernel scalar
 rules (strings verbatim; integer/number/boolean as JSON literals; enums
-by membership). Surrounding chatter falls away because the anchors are
-found *inside* the reply.
+by membership). These rules are pinned to the character
+(`contract/spec/kernel.md` §7a): `+5` is not an integer, `Yes` is a
+boolean, only ASCII whitespace is trimmed, and `3.0` is spelled `3` —
+the same in every implementation, which is what makes the corpus
+byte-exact across languages. Surrounding chatter falls away because
+the anchors are found *inside* the reply.
 
 The lens law, checkable in one line — what the lens wrote as a demo,
 the lens reads back identically:
@@ -107,6 +111,21 @@ the lens reads back identically:
 demo_turn = request.messages[2]["content"][0]["text"]
 assert baked.parse(demo_turn) == {"title": "1984", "year": 1949,
                                   "confident": True}
+```
+
+The law holds for every demo the lens agrees to write. A demo value that
+contains one of the lens's own markers (a title of `"</title> oops"`)
+could not be read back as written — so the lens refuses to write it
+(`value-collides`) rather than produce a demo its parser would misread:
+
+```python
+try:
+    baked.render(inputs={"text": "x"},
+                 demos=[{"text": "y", "title": "Dune </title> II",
+                         "year": 1, "confident": True}])
+    raise AssertionError("should have refused")
+except lmcc.LMCCError as err:
+    assert err.code == "value-collides"
 ```
 
 ## 5. Refusal is the interface

@@ -24,10 +24,33 @@ Field = { name, direction: "input"|"output", shape: JSONSchema,
           role: str = "plain", desc: str? }
 ```
 
-Shapes are JSON Schema. Frontends lower their language's annotations to
-shapes mechanically for the language's own constructs; foreign types resolve
-through the **host socket** or refuse (`unmapped-type`, naming field and
-type). Host lowerings are per-language code and are **never serialized**.
+The plain-data form is `schema/signature.schema.json`. Field names are
+ASCII identifiers (`[A-Za-z_][A-Za-z0-9_]*`) and unique within a
+signature; `direction` is `input` or `output`; `shape` is an object.
+Anything else refuses `signature-malformed`, naming the field. Names are
+restricted because they become template slots, lens markers, and JSON
+member keys in every host language; a frontend that wants other names
+maps them.
+
+Shapes are JSON Schema, but the kernel **interprets only** these
+keywords — every other keyword is carried untouched for codecs, lenses,
+and request patches to read:
+
+| shape | kernel meaning |
+|---|---|
+| `{"type": "string"}` | text, verbatim |
+| `{"type": "integer"}` · `{"type": "number"}` · `{"type": "boolean"}` | kernel scalars (§7) |
+| `{"enum": [...]}` (+ optional `type`) | membership; values are strings or integers |
+| `{"type": "array", "items"?: shape}` · `{"type": "object", ...}` | structured: needs a codec (§7) |
+| `{"media": "image" \| "document" \| ...}` | a message part, not text |
+
+**Frontends.** Each language lowers its own signature syntax to this
+form mechanically: Python type hints (`str`, `list[int]`,
+`Literal[...]`, raw shape dicts), Go struct tags (`lmcc:"name,role=..."`),
+JSON Schema documents, DSPy-style strings — all are frontends; none is
+the contract. Foreign types resolve through the **host socket** or refuse
+(`unmapped-type`, naming field and type). Host lowerings are
+per-language code and are **never serialized**.
 
 **The host socket** binds a native type once, per runtime:
 `(shape, lower, lift?, codec?)` — its neutral shape, how a value lowers
@@ -90,6 +113,18 @@ The placeholder text per visible output field is one kernel rule:
 else `"..."`. The template still owns *whether* and *where* the skeleton
 appears; the lens owns its spelling.
 
+**Invertibility, stated exactly.** For the kernel lenses, `split(join(x))
+== x` holds for every `x` whose spelled values are outer-whitespace-free
+(§7a) and contain none of the lens's own markers. The second condition is
+**enforced**: `join` refuses `value-collides` (naming the field and the
+marker) when a spelled value contains any marker the lens reads — an
+open/close/tail marker, or a derived anchor/close. The first condition is
+a stated normalization, not a refusal: marker lenses trim what they read,
+so outer whitespace of a value does not survive a round trip. Model
+replies are read with the same rules; a reply that omits a close marker
+*and* contains that marker inside the value is a double fault the reader
+cannot detect — that is the one stated hole.
+
 **The lens socket.** `parse.kind` names the lens. Two kinds are kernel
 grammar — always available, never registered, never replaced: `derived`
 and `sections`. Every other kind is vocabulary: it resolves through the registry
@@ -127,7 +162,9 @@ description read in three directions:
   hole (instantiated) is its **anchor**; the literal after it is its
   close. Reading: anchors are found by their whitespace-stripped forms,
   first occurrence, any order; capture runs to the field's close, the
-  next anchor, or end of text; result is whitespace-stripped.
+  next anchor, or end of text; result is whitespace-stripped. A close
+  occurring more than once inside a field's capture region refuses
+  `parse-ambiguous`, exactly like a repeated anchor.
 
 Derivation refuses at bake (`not-lensable`, naming the defect) when:
 there is no pattern block or more than one; a field's hole has no
@@ -148,7 +185,10 @@ prose, else the mechanical shape hint, else `"..."`.
   substituted. First occurrence wins; a marker occurring more than once
   refuses `parse-ambiguous`; capture runs to the next marker, the
   `close` marker, the `tail`, or end of text; result is
-  whitespace-stripped.
+  whitespace-stripped. The same rule guards every marker the lens
+  reads: a `tail` occurring more than once in the reply, or a `close`
+  occurring more than once inside a field's capture region, refuses
+  `parse-ambiguous`.
 - **Writing**: `marker \n value \n` per field (+ `close`), then `tail`.
 
 Marker templates are data, so common marker dialects are spellings of
@@ -171,7 +211,30 @@ vocabulary: `between {open, close}`, `pattern {regex}` (group 1 if
 present), `line_prefixed {prefix}`, `parts {part}` (reads native response
 parts by kind). Routings run **before** section splitting; a routing with
 `strip: true` removes its matches from the visible text. `join` joins
-stripped matches; `coerce` applies a registered coercion by name.
+the whitespace-stripped matches; `coerce` applies a registered coercion
+by name.
+
+Exact matching semantics, so two implementations cannot differ:
+
+- `between`: scan left to right; find `open`, then the first `close`
+  after it; the match is the whole span, the capture is the text
+  between; continue after the `close`. An `open` with no later `close`
+  ends the scan.
+- `line_prefixed`: lines are split on `\n` (a trailing `\r` stays part
+  of the line). A line beginning with `prefix` matches; the capture is
+  the rest of the line; stripping removes the line's text and keeps its
+  `\n`.
+- `pattern`: the regex dialect is **RE2 syntax** — the portable core
+  shared by Go, Python, JavaScript, Rust, and Java. Lookahead,
+  lookbehind, backreferences, atomic groups, possessive quantifiers,
+  and named groups (Python spells them `(?P<n>`, JavaScript `(?<n>`;
+  neither is universal, and the algebra reads group 1 anyway) are
+  outside the contract and refuse `entry-malformed` at construct and
+  load. Matching is leftmost-first, non-overlapping, with `.` matching
+  newlines. The capture is group 1 when the pattern has groups, else the
+  whole match; stripping removes the whole match. Empty matches are
+  discarded; a pattern that can match the empty string is outside the
+  contract (implementations differ on how they advance past one).
 
 ## 6. Strategies
 
@@ -203,6 +266,46 @@ JSON literals, `enum` by membership. **Structured shapes (`object`/`array`)
 with no codec bound refuse at bake** (`no-codec`). This line — scalars are
 mechanics, everything else is vocabulary — is normative.
 
+### 7a. Text rules (normative; every implementation, every vocabulary)
+
+Byte-exact conformance across languages needs the primitive text
+operations pinned. Vocabulary specs inherit these rules unless they say
+otherwise.
+
+- **Whitespace** — wherever this spec or a vocabulary spec says
+  *strip*/*trim*, the set is exactly the six ASCII characters U+0009,
+  U+000A, U+000B, U+000C, U+000D, U+0020. Unicode spaces (no-break
+  space, ideographic space, …) are content and survive. Chosen because
+  every language's built-in `strip`/`trim`/`TrimSpace` strips a
+  *different* Unicode set; ASCII is the only set they all agree on.
+- **Strings** — sequences of Unicode scalar values, never normalized;
+  `\r\n` is not rewritten. Byte-exact means code-point-exact after JSON
+  decoding.
+- **Integer text** (reading) — after stripping, `-?[0-9]+`, ASCII digits
+  only; anything else (`+5`, `1,000`, `1_000`, `٣`) refuses
+  `value-invalid`. Writing: the decimal digits, `-` if negative.
+  Implementations must carry at least the int64 range; the corpus never
+  relies on wider integers.
+- **Number text** (reading) — after stripping,
+  `-?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?`; `NaN`, `Infinity`, `.5`, `5.`
+  refuse `value-invalid`. Values are IEEE-754 binary64.
+- **Number spelling** (writing) — the ECMAScript `Number::toString`
+  algorithm (ECMA-262 §6.1.6.1.20) over the shortest round-trip digits:
+  `3` for `3.0`, `0.5`, `0.000001`, `1e-7`, `1e+21`,
+  `123456789012345680000`. Chosen because it is the one number-to-text
+  algorithm with a precise public specification and the widest
+  deployment (every JSON.stringify; Go's encoding/json). Non-finite
+  values refuse `value-invalid`.
+- **Booleans** — reading: after stripping and ASCII case-folding,
+  `true`/`yes` → true, `false`/`no` → false, else `value-invalid`.
+  Writing: `true` / `false`.
+- **Enum** — reading: the stripped text equals the spelling of one
+  member (integers by their decimal form); writing: that spelling.
+- **Rounding** (for vocabulary that rounds) — round-half-to-even on the
+  binary64 value: `round(x, n)` is `roundeven(x × 10ⁿ) / 10ⁿ` computed in
+  binary64. This is IEEE's default and costs nothing in any language;
+  it means `2.675` rounds to `2.67`, as its binary value dictates.
+
 ## 8. Bake, render, parse
 
 ```
@@ -232,9 +335,15 @@ names refuse (`unknown-codec` / `unknown-strategy` / `unknown-parse-kind`)
 The corpus (`corpus/cases/*.json`) is the authority. An implementation is
 conformant when the harness passes every case **byte-exactly** (rendered
 text, parsed values, error codes). Case kinds: `render`, `parse`,
-`roundtrip`, `refuse`. Non-Python implementations expose the same four
-operations behind a JSON stdin/stdout driver: read one case object, write
-`{"ok": bool, "detail": str}`.
+`roundtrip`, `refuse`; the case file format is `schema/case.schema.json`.
+
+**The driver protocol** (language-neutral). The harness starts one
+process (`runner.py --driver CMD`) and speaks JSON Lines on its
+stdin/stdout: one case object per line in, one `{"ok": bool, "detail":
+str}` per line out, in order, until EOF. The driver installs the packs a
+case names in `vocab` into an otherwise empty registry, runs the case's
+kind, and compares itself; the harness only counts. Values compare by
+JSON equality: objects unordered, arrays ordered, numbers by value.
 
 ## Deliberate gaps (0.1)
 

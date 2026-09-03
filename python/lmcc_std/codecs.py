@@ -8,14 +8,20 @@ failing test, not an argument.
 
 from __future__ import annotations
 
-import json
 import re
 
+from lmcc import core
+from lmcc.errors import LMCCError
 from lmcc.registry import Codec
+
+from . import jsontext
 
 VERSION = "0.1.0"
 
-_FENCE = re.compile(r"^\s*```[a-zA-Z0-9_-]*\s*\n(.*?)\n?\s*```\s*$", re.DOTALL)
+_WS = "[ \t\n\r\f\v]*"
+_FENCE = re.compile(
+    "^" + _WS + "```[a-zA-Z0-9_-]*" + _WS + r"\n(.*?)\n?" + _WS + "```" + _WS + "$",
+    re.DOTALL)
 
 
 class JsonCodec(Codec):
@@ -25,16 +31,16 @@ class JsonCodec(Codec):
         self.indent = options.get("indent", 2)
 
     def render_schema(self, shape: dict) -> str:
-        return "JSON matching this schema: " + json.dumps(shape, ensure_ascii=False)
+        return "JSON matching this schema: " + jsontext.dumps(shape, indent=None)
 
     def render_value(self, value, shape: dict) -> str:
-        return json.dumps(value, indent=self.indent, ensure_ascii=False)
+        return jsontext.dumps(value, indent=self.indent)
 
     def parse_value(self, text: str, shape: dict):
         m = _FENCE.match(text)
         if m:
             text = m.group(1)
-        return json.loads(text)
+        return jsontext.loads(text)
 
 
 class TableCodec(Codec):
@@ -65,7 +71,7 @@ class TableCodec(Codec):
             cells = []
             for col in self.columns:
                 cell = item.get(col)
-                cell = self.null if cell is None else str(cell)
+                cell = self.null if cell is None else self._spell(cell, col)
                 cell = cell.replace(self.escape, self.escape * 2)
                 cell = cell.replace(self.delimiter, self.escape + self.delimiter)
                 cells.append(cell)
@@ -73,15 +79,27 @@ class TableCodec(Codec):
             rows.append(f"{d} " + f" {d} ".join(cells) + f" {d}")
         return "\n".join(rows)
 
+    @staticmethod
+    def _spell(cell, col: str) -> str:
+        if isinstance(cell, str):
+            return cell
+        if isinstance(cell, bool):
+            return "true" if cell else "false"
+        if isinstance(cell, int):
+            return str(cell)
+        if isinstance(cell, float):
+            return core.format_number(cell)
+        raise ValueError(f"column {col!r}: {type(cell).__name__} is not a cell value")
+
     def parse_value(self, text: str, shape: dict):
         item_props = (shape.get("items") or {}).get("properties", {})
         out = []
-        for line in text.splitlines():
-            line = line.strip()
+        for line in text.split("\n"):
+            line = core.strip(line)
             if not line.startswith(self.delimiter):
                 continue
             cells = self._split(line)
-            if [c.strip() for c in cells] == self.columns:
+            if [core.strip(c) for c in cells] == self.columns:
                 continue  # header row
             if len(cells) != len(self.columns):
                 raise ValueError(
@@ -89,11 +107,11 @@ class TableCodec(Codec):
                     f"({self.columns}): {line!r}")
             item = {}
             for col, cell in zip(self.columns, cells):
-                cell = cell.strip()
+                cell = core.strip(cell)
                 if cell == self.null:
                     item[col] = None
                     continue
-                item[col] = self._coerce_cell(cell, item_props.get(col, {}))
+                item[col] = _read(item_props.get(col, {}), cell, f"column {col!r}")
             out.append(item)
         return out
 
@@ -118,18 +136,6 @@ class TableCodec(Codec):
         cells.append("".join(cur))
         return cells
 
-    @staticmethod
-    def _coerce_cell(cell: str, prop: dict):
-        t = prop.get("type")
-        if t == "integer":
-            return int(cell)
-        if t == "number":
-            return float(cell)
-        if t == "boolean":
-            return cell.lower() in ("true", "yes")
-        return cell
-
-
 class ScaledNumberCodec(Codec):
     """Numbers spelled at a friendlier scale, e.g. 0.78 ⇄ "78%".
 
@@ -146,18 +152,26 @@ class ScaledNumberCodec(Codec):
         return f"a number like {example}"
 
     def render_value(self, value, shape: dict) -> str:
-        scaled = value * self.scale
+        scaled = float(value) * self.scale
         if self.round is not None:
-            scaled = round(scaled, self.round)
-            if self.round == 0:
-                scaled = int(scaled)
-        return f"{scaled}{self.suffix}"
+            # kernel §7a rounding: half-to-even on the binary64 value
+            p = 10.0 ** self.round
+            scaled = round(scaled * p) / p
+        return f"{core.format_number(scaled)}{self.suffix}"
 
     def parse_value(self, text: str, shape: dict):
-        text = text.strip()
+        text = core.strip(text)
         if self.suffix and text.endswith(self.suffix):
             text = text[: -len(self.suffix)]
-        return float(text.strip()) / self.scale
+        return _read({"type": "number"}, text, "scaled_number") / self.scale
+
+
+def _read(shape: dict, text: str, where: str):
+    """Kernel scalar rules, surfaced as a codec error (the spec's word)."""
+    try:
+        return core.read_value(shape, text, where=where)
+    except LMCCError as err:
+        raise ValueError(err.detail) from None
 
 
 def install(registry, *, exist_ok: bool = True) -> None:

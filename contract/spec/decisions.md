@@ -94,3 +94,67 @@ pre-release rename from `a15`: Python imports become `lmcc` and `lmcc_std`,
 and `A15Error` becomes `LMCCError`. No compatibility aliases remain.
 Historical conversation keys keep the former name because changing those
 keys would break durable links.
+
+**D-13 · Text primitives are pinned to portable definitions (kernel
+§7a).** Strip means the six ASCII whitespace characters; integer and
+number text have explicit grammars; numbers are spelled with the
+ECMAScript `Number::toString` algorithm; booleans are `true`/`false`;
+rounding is half-to-even in binary64. Reason: every host language's
+built-in `strip`, `int()`, `float()`, and float formatting differ in
+some corner (Unicode spaces, `+5`, `1_000`, `1.0` vs `1`, `1e+20` vs
+`100000000000000000000`), so "byte-exact across languages" was a hope
+until each primitive had one definition. ECMAScript's algorithm was
+chosen because it is the one number spelling with a precise public
+specification and the widest deployment. Cost: `1.0` now renders as
+`1`, `+5` refuses, a no-break space at a value's edge survives, and
+the Python reference formats numbers itself instead of calling
+`json.dumps`. Pinned by corpus cases 35–37, 44, 45.
+
+**D-14 · The `pattern` extractor's dialect is RE2, minus named groups.**
+Lookaround, backreferences, atomic groups, possessive quantifiers, and
+named groups refuse `entry-malformed` at construct/load; empty matches
+are discarded; `between` and `line_prefixed` are defined as plain scans
+with no regex at all. Reason: Go, Python, JavaScript, Rust and Java
+agree on the RE2 core and on nothing beyond it; named groups have two
+incompatible spellings and buy nothing when the algebra reads group 1.
+Cost: a handful of Python-only regex idioms are unavailable in
+routings; the reference lints them syntactically rather than proving
+RE2 conformance. Pinned by corpus cases 40–42.
+
+**D-15 · Invertibility is stated exactly, and its write side is
+enforced.** `join` refuses `value-collides` when a spelled demo value
+contains any marker the lens reads; `split` refuses `parse-ambiguous`
+when a close marker or tail occurs twice in its region, exactly as for
+repeated anchors. The remaining normalization (outer whitespace of a
+value does not survive a round trip) and the one undetectable double
+fault (a reply that omits its close marker *and* contains it inside the
+value) are written into kernel §4 instead of being implied away.
+Reason: the README promised that demos and parser cannot drift; before
+this a demo whose value contained `</answer>` would have been written
+and then read back wrongly with no error. Escaping was rejected because
+marker lenses have no escape syntax and inventing one changes what
+models see. Cost: a demo value containing a marker must be rephrased.
+Pinned by corpus cases 38–39.
+
+**D-16 · Signatures are validated data with a schema.** Field names are
+ASCII identifiers and unique; direction and shape are checked;
+`signature-malformed` names the offender. `schema/signature.schema.json`
+and `schema/case.schema.json` join the entry schema, and `./check`
+validates every corpus case against all three. Reason: field names
+become template slots, lens markers, and JSON member keys in every host
+language (where integer-like keys reorder in JavaScript and Unicode
+identifiers differ per language); the second implementation reads case
+files and deserves a schema for them. Cost: Unicode field names are a
+frontend's job to map. Pinned by corpus case 43.
+
+**D-17 · `lens/json_object` hands over source text, not a
+re-serialization.** A non-string member reaches the field's codec as the
+exact characters the model wrote (outer whitespace trimmed); a field key
+appearing twice refuses `parse-ambiguous`; parsing is strict RFC 8259.
+Reason: re-serialization required every implementation to agree on a
+compact serializer *and* lost information (digits, big integers in
+JavaScript); source spans require only a JSON reader that reports member
+offsets, which every language can write in a page. Cost: what a codec
+receives now contains the model's own spacing, so codecs must be
+whitespace-insensitive — `codec/json` already was. Pinned by corpus
+cases 23 (unchanged bytes) and 46.

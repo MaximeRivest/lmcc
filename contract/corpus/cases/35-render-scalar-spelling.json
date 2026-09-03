@@ -1,0 +1,196 @@
+{
+ "name": "render-scalar-spelling",
+ "kind": "render",
+ "entry": {
+  "name": "scalars_v1",
+  "versions": {
+   "kernel": "0.1.0",
+   "vocab": {}
+  },
+  "template": {
+   "messages": [
+    {
+     "role": "system",
+     "text": "{instruction}"
+    },
+    {
+     "directive": "demos"
+    },
+    {
+     "role": "user",
+     "text": "x={x} flag={flag} count={count} level={level}"
+    }
+   ]
+  },
+  "parse": {
+   "kind": "sections",
+   "open": "<{name}>",
+   "tail": "</done>"
+  },
+  "requires": []
+ },
+ "signature": {
+  "instructions": "Spell.",
+  "fields": [
+   {
+    "name": "x",
+    "direction": "input",
+    "shape": {
+     "type": "number"
+    }
+   },
+   {
+    "name": "flag",
+    "direction": "input",
+    "shape": {
+     "type": "boolean"
+    }
+   },
+   {
+    "name": "count",
+    "direction": "input",
+    "shape": {
+     "type": "integer"
+    }
+   },
+   {
+    "name": "level",
+    "direction": "input",
+    "shape": {
+     "enum": [
+      "low",
+      "high"
+     ],
+     "type": "string"
+    }
+   },
+   {
+    "name": "a",
+    "direction": "output",
+    "shape": {
+     "type": "number"
+    }
+   },
+   {
+    "name": "b",
+    "direction": "output",
+    "shape": {
+     "type": "number"
+    }
+   },
+   {
+    "name": "c",
+    "direction": "output",
+    "shape": {
+     "type": "number"
+    }
+   },
+   {
+    "name": "d",
+    "direction": "output",
+    "shape": {
+     "type": "number"
+    }
+   },
+   {
+    "name": "e",
+    "direction": "output",
+    "shape": {
+     "type": "number"
+    }
+   },
+   {
+    "name": "f",
+    "direction": "output",
+    "shape": {
+     "type": "number"
+    }
+   },
+   {
+    "name": "g",
+    "direction": "output",
+    "shape": {
+     "type": "number"
+    }
+   },
+   {
+    "name": "h",
+    "direction": "output",
+    "shape": {
+     "type": "number"
+    }
+   },
+   {
+    "name": "i",
+    "direction": "output",
+    "shape": {
+     "type": "integer"
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "x": 0.5,
+  "flag": true,
+  "count": -12,
+  "level": "high"
+ },
+ "demos": [
+  {
+   "x": 0.25,
+   "flag": false,
+   "count": 0,
+   "level": "low",
+   "a": 3.0,
+   "b": 1e+21,
+   "c": 1e-06,
+   "d": 1e-07,
+   "e": 123456789012345680000,
+   "f": -0.5,
+   "g": -0.0,
+   "h": 1.5e+300,
+   "i": 9007199254740993
+  }
+ ],
+ "expect": {
+  "messages": [
+   {
+    "role": "system",
+    "content": [
+     {
+      "kind": "text",
+      "text": "Spell."
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "content": [
+     {
+      "kind": "text",
+      "text": "x=0.25 flag=false count=0 level=low"
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "content": [
+     {
+      "kind": "text",
+      "text": "<a>\n3\n<b>\n1e+21\n<c>\n0.000001\n<d>\n1e-7\n<e>\n123456789012345680000\n<f>\n-0.5\n<g>\n0\n<h>\n1.5e+300\n<i>\n9007199254740993\n</done>"
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "content": [
+     {
+      "kind": "text",
+      "text": "x=0.5 flag=true count=-12 level=high"
+     }
+    ]
+   }
+  ],
+  "patch": {}
+ }
+}

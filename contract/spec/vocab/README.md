@@ -18,7 +18,7 @@ Role names are themselves vocabulary — the function each name means and
 its alignment with the wire layer's part kinds live in `roles.md`.
 The capability facts predicates may name live in `capabilities.md`.
 
-Current entries (all 0.1.0, provided by `lmcc_std`):
+Current entries (all 0.1.0, provided by `python/lmcc_std` and, byte-identically, by `go/lmccstd`):
 
 | entry | spec |
 |---|---|

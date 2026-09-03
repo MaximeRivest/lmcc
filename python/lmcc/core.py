@@ -17,13 +17,95 @@ Imports nothing outside the standard library. That is a rule, not an accident.
 
 from __future__ import annotations
 
-import json
+import decimal
+import math
+import re
 import typing
 from dataclasses import dataclass, field as dc_field
 
 from .errors import refuse
 
 DIRECTIONS = ("input", "output")
+
+# ------------------------------------------------- text rules (kernel §7a)
+#
+# Portable by construction: every strip/grammar below is defined on ASCII
+# so that Go, JS, Rust and Python agree byte for byte. Never use str.strip()
+# or int()/float() directly on model text anywhere in the kernel or std.
+
+WHITESPACE = " \t\n\r\f\v"
+_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_INTEGER = re.compile(r"^-?[0-9]+$")
+_NUMBER = re.compile(r"^-?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?$")
+
+
+def strip(text: str) -> str:
+    """Trim the six ASCII whitespace characters, nothing else."""
+    return text.strip(WHITESPACE)
+
+
+def rstrip(text: str) -> str:
+    return text.rstrip(WHITESPACE)
+
+
+def is_identifier(name: object) -> bool:
+    return isinstance(name, str) and _IDENTIFIER.match(name) is not None
+
+
+def format_number(value: float) -> str:
+    """ECMAScript Number::toString over the shortest round-trip digits.
+
+    ``3.0`` → ``3``, ``1e21`` → ``1e+21``, ``1e-7`` → ``1e-7``, ``-0.0`` → ``0``.
+    Refuses non-finite values: they have no portable text.
+    """
+    value = float(value)
+    if not math.isfinite(value):
+        refuse("value-invalid", f"{value!r} has no portable number spelling")
+    if value == 0:
+        return "0"
+    sign = "-" if value < 0 else ""
+    digits_t, exponent = decimal.Decimal(repr(abs(value))).as_tuple()[1:]
+    digits = "".join(map(str, digits_t)).lstrip("0") or "0"
+    stripped = digits.rstrip("0")
+    exponent += len(digits) - len(stripped)
+    digits = stripped
+    k = len(digits)
+    n = k + exponent            # value = 0.d1..dk × 10^n
+    if k <= n <= 21:
+        body = digits + "0" * (n - k)
+    elif 0 < n <= 21:
+        body = digits[:n] + "." + digits[n:]
+    elif -6 < n <= 0:
+        body = "0." + "0" * (-n) + digits
+    else:
+        e = n - 1
+        mant = digits if k == 1 else digits[0] + "." + digits[1:]
+        body = f"{mant}e{'+' if e >= 0 else '-'}{abs(e)}"
+    return sign + body
+
+
+def read_integer(text: str, *, where: str) -> int:
+    t = strip(text)
+    if not _INTEGER.match(t):
+        refuse("value-invalid", f"{where}: {t!r} is not an integer")
+    return int(t)
+
+
+def read_number(text: str, *, where: str) -> float:
+    t = strip(text)
+    if not _NUMBER.match(t):
+        refuse("value-invalid", f"{where}: {t!r} is not a number")
+    return float(t)
+
+
+def read_boolean(text: str, *, where: str) -> bool:
+    t = strip(text)
+    low = "".join(chr(ord(c) + 32) if "A" <= c <= "Z" else c for c in t)
+    if low in ("true", "yes"):
+        return True
+    if low in ("false", "no"):
+        return False
+    refuse("value-invalid", f"{where}: {t!r} is not a boolean")
 
 _SCALAR_SHAPES: dict[type, dict] = {
     str: {"type": "string"},
@@ -112,17 +194,44 @@ def signature(
             shape = annotation_to_shape(ann, registry, field_name=name)
             fields.append(Field(name, direction, shape, role=role, desc=desc,
                                 annotation=None if isinstance(ann, dict) else ann))
-    return SignatureCore(instructions, fields)
+    return _validated(SignatureCore(instructions, fields))
 
 
 def signature_from_dict(data: dict) -> SignatureCore:
     """Load a signature from its plain-data form (the corpus form)."""
-    fields = [
-        Field(f["name"], f["direction"], f["shape"],
-              role=f.get("role", "plain"), desc=f.get("desc"))
-        for f in data.get("fields", [])
-    ]
-    return SignatureCore(data.get("instructions", ""), fields)
+    if not isinstance(data, dict) or not isinstance(data.get("fields", []), list):
+        refuse("signature-malformed", "a signature is an object with a fields list")
+    fields = []
+    for f in data.get("fields", []):
+        if not isinstance(f, dict):
+            refuse("signature-malformed", "each field is an object")
+        fields.append(Field(f.get("name"), f.get("direction"), f.get("shape"),
+                            role=f.get("role", "plain"), desc=f.get("desc")))
+    return _validated(SignatureCore(data.get("instructions", ""), fields))
+
+
+def _validated(sig: SignatureCore) -> SignatureCore:
+    """The rules of schema/signature.schema.json plus name uniqueness."""
+    seen: set[str] = set()
+    for f in sig.fields:
+        if not is_identifier(f.name):
+            refuse("signature-malformed",
+                   f"field name {f.name!r} is not an ASCII identifier "
+                   f"([A-Za-z_][A-Za-z0-9_]*)")
+        if f.name in seen:
+            refuse("signature-malformed", f"field {f.name!r} is declared twice")
+        seen.add(f.name)
+        if f.direction not in DIRECTIONS:
+            refuse("signature-malformed",
+                   f"field {f.name!r}: direction {f.direction!r} is not input/output")
+        if not isinstance(f.shape, dict):
+            refuse("signature-malformed", f"field {f.name!r}: shape must be an object")
+        if not is_identifier(f.role):
+            refuse("signature-malformed",
+                   f"field {f.name!r}: role {f.role!r} is not an identifier")
+        if f.desc is not None and not isinstance(f.desc, str):
+            refuse("signature-malformed", f"field {f.name!r}: desc must be a string")
+    return sig
 
 
 def signature_to_dict(sig: SignatureCore) -> dict:
@@ -203,54 +312,70 @@ def is_structured(shape: dict) -> bool:
 # ---------------------------------------------------- scalar spell / parse
 
 
-def spell_scalar(f: Field, value: object) -> str:
-    """Kernel mechanics: strings verbatim, scalars as JSON literals."""
-    shape = f.shape
+def spell_value(shape: dict, value: object, *, where: str) -> str:
+    """Kernel mechanics (§7a): strings verbatim, integers in decimal,
+    numbers by the ECMAScript spelling, booleans as ``true``/``false``,
+    enums by member spelling. Refuses anything structured (``no-codec``)."""
     if "enum" in shape:
-        if value not in shape["enum"]:
+        if isinstance(value, bool) or value not in shape["enum"]:
             refuse("value-invalid",
-                   f"field {f.name!r}: value {value!r} is not one of {shape['enum']}")
+                   f"{where}: value {value!r} is not one of {shape['enum']}")
         return str(value)
     t = shape.get("type")
     if t == "string":
-        return value if isinstance(value, str) else str(value)
-    if t in ("integer", "number", "boolean"):
-        return json.dumps(value)
+        if isinstance(value, str):
+            return value
+        if isinstance(value, bool):
+            return "true" if value else "false"
+        if isinstance(value, int):
+            return str(value)
+        if isinstance(value, float):
+            return format_number(value)
+        refuse("value-invalid", f"{where}: {value!r} is not text")
+    if t == "integer":
+        if isinstance(value, bool) or not isinstance(value, int):
+            refuse("value-invalid", f"{where}: {value!r} is not an integer")
+        return str(value)
+    if t == "number":
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            refuse("value-invalid", f"{where}: {value!r} is not a number")
+        return format_number(value)
+    if t == "boolean":
+        if not isinstance(value, bool):
+            refuse("value-invalid", f"{where}: {value!r} is not a boolean")
+        return "true" if value else "false"
     if isinstance(value, str):
         return value
     refuse("no-codec",
-           f"field {f.name!r}: value of type {type(value).__name__} has no codec "
+           f"{where}: value of type {type(value).__name__} has no codec "
            f"bound and is not a scalar — bind a codec for this field")
 
 
-def parse_scalar(f: Field, text: str) -> object:
-    shape = f.shape
+def read_value(shape: dict, text: str, *, where: str) -> object:
+    """Kernel mechanics (§7a), reading direction. Vocabulary reuses this
+    (the table codec reads cells with it) so one grammar rules everywhere."""
     if "enum" in shape:
-        stripped = text.strip()
+        stripped = strip(text)
         for v in shape["enum"]:
             if str(v) == stripped:
                 return v
-        refuse("value-invalid",
-               f"field {f.name!r}: {stripped!r} is not one of {shape['enum']}")
+        refuse("value-invalid", f"{where}: {stripped!r} is not one of {shape['enum']}")
     t = shape.get("type")
     if t == "integer":
-        try:
-            return int(text.strip())
-        except ValueError:
-            refuse("value-invalid", f"field {f.name!r}: {text.strip()!r} is not an integer")
+        return read_integer(text, where=where)
     if t == "number":
-        try:
-            return float(text.strip())
-        except ValueError:
-            refuse("value-invalid", f"field {f.name!r}: {text.strip()!r} is not a number")
+        return read_number(text, where=where)
     if t == "boolean":
-        low = text.strip().lower()
-        if low in ("true", "yes"):
-            return True
-        if low in ("false", "no"):
-            return False
-        refuse("value-invalid", f"field {f.name!r}: {text.strip()!r} is not a boolean")
+        return read_boolean(text, where=where)
     return text
+
+
+def spell_scalar(f: Field, value: object) -> str:
+    return spell_value(f.shape, value, where=f"field {f.name!r}")
+
+
+def parse_scalar(f: Field, text: str) -> object:
+    return read_value(f.shape, text, where=f"field {f.name!r}")
 
 
 # ---------------------------------------------------------------- messages

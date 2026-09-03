@@ -1,0 +1,77 @@
+{
+ "name": "parse-line-prefixed-routing",
+ "kind": "parse",
+ "entry": {
+  "name": "derived_v1",
+  "versions": {
+   "kernel": "0.1.0",
+   "vocab": {}
+  },
+  "template": {
+   "messages": [
+    {
+     "role": "system",
+     "text": "{instruction}\n\nAnswer in exactly this form:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+    },
+    {
+     "role": "user",
+     "text": "{q}"
+    }
+   ]
+  },
+  "parse": {
+   "kind": "derived"
+  },
+  "requires": [],
+  "strategies": {
+   "reasoning": {
+    "visible": false,
+    "routings": [
+     {
+      "extract": {
+       "kind": "line_prefixed",
+       "prefix": "> "
+      },
+      "field": "@role",
+      "join": "\n",
+      "strip": true
+     }
+    ]
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Answer.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "reasoning",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    },
+    "role": "reasoning"
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "response": "> step one\r\n> step two\n<answer>\nParis\n</answer>",
+ "expect": {
+  "values": {
+   "reasoning": "step one\nstep two",
+   "answer": "Paris"
+  }
+ }
+}

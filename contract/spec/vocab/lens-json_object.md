@@ -33,19 +33,22 @@ stripping) run before the lens, so strategies compose unchanged.
 
 1. **Locate the document.** Strip the text. If it starts with a markdown
    fence (```` ``` ````, any info string), the document is the fence body.
-   Then: parse the whole document as JSON; on failure, retry on the
+   Then: parse the whole document as strict JSON (`NaN`/`Infinity`,
+   comments, trailing commas are not JSON); on failure, retry on the
    substring from the first `{` to the last `}`. If nothing parses, or the
    parsed value is not an object, refuse `lens-parse-error`.
 2. **Raw string per field.**
-   - a string member → the raw text, **verbatim** (no re-encoding);
-   - any other member → its compact serialization: separators `,` and
-     `:`, no added whitespace, unicode kept unescaped, object member
-     order preserved as in the document.
-   So `{"rows": [...]}` feeds a `json` codec and `{"score": 9}` feeds the
-   kernel integer rule unchanged.
-3. **Unknown members are ignored** (models add chatter keys). Missing
-   fields refuse `parse-missing-fields`; `.partial` carries the recovered
-   raw strings.
+   - a string member → the decoded string, **verbatim**;
+   - any other member → the member's **source text**, exactly as it
+     appears in the document (outer whitespace trimmed) — no
+     re-serialization, so digits, spacing, and member order are the
+     model's own.
+   So `{"rows": [1, 2]}` feeds a `json` codec the text `[1, 2]` and
+   `{"score": 9}` feeds the kernel integer rule `9` unchanged.
+3. **Unknown members are ignored** (models add chatter keys). A field's
+   key appearing **twice** in the document refuses `parse-ambiguous`
+   (never last-wins). Missing fields refuse `parse-missing-fields`;
+   `.partial` carries the recovered raw strings.
 
 ## Writing (`join` — demo assistant turns)
 
@@ -56,8 +59,8 @@ For each `(name, spelled_text)` in visible-output order:
   and `9` / `true` embed as number / boolean);
 - otherwise embed `spelled_text` as a JSON string.
 
-The document is the object serialized with **two-space indentation**,
-members in field order, unicode kept unescaped.
+The document is the object in the indented JSON layout of
+`codec-json.md` (two spaces), members in field order.
 
 The non-string guard makes write∘read the identity on raw text: a spelled
 string that happens to look like a quoted JSON string (e.g. `"hi"` with
@@ -68,8 +71,8 @@ placeholder texts, so the prompt shows the object shape itself —
 `{"answer": "short answer", "score": "(integer)"}` — pinned by corpus
 case 28.
 Whitespace inside embedded non-string values is **not** preserved
-byte-for-byte (read re-serializes compactly); codecs must therefore be
-whitespace-insensitive on parse, which `codec/json` is.
+byte-for-byte across write∘read (write re-indents); codecs must therefore
+be whitespace-insensitive on parse, which `codec/json` is.
 
 ## Corpus
 
@@ -82,3 +85,4 @@ whitespace-insensitive on parse, which `codec/json` is.
 | `26-roundtrip-json-lens` | `lens/json_object` version travels in the artifact |
 | `28-std-json-lens-format` | `{format}` skeleton bytes (default `join` over placeholders) |
 | `29-refuse-json-lens-needs-capability` | the mode gate: no declared `native_structured_output` refuses at bake |
+| `46-refuse-json-lens-duplicate-key` | a field key appearing twice refuses `parse-ambiguous` |

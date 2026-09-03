@@ -113,8 +113,10 @@ def test_join_embed_rule_is_raw_text_identity():
     spelled = [("s", "plain"), ("n", "9"), ("b", "true"),
                ("quoted", '"hi"'), ("arr", "[1, 2]")]
     raw = lens.split(lens.join(spelled), [n for n, _ in spelled])
+    # non-string members come back as their source text: what join wrote
+    # (indented) is exactly what split hands over, digits and spacing intact
     assert raw == {"s": "plain", "n": "9", "b": "true",
-                   "quoted": '"hi"', "arr": "[1,2]"}
+                   "quoted": '"hi"', "arr": "[\n    1,\n    2\n  ]"}
 
 
 # ------------------------------------------------------- the {format} slot

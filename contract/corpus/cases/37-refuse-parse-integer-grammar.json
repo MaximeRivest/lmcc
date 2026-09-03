@@ -1,0 +1,53 @@
+{
+ "name": "refuse-parse-integer-grammar",
+ "kind": "refuse",
+ "entry": {
+  "name": "scalars_v1",
+  "versions": {
+   "kernel": "0.1.0",
+   "vocab": {}
+  },
+  "template": {
+   "messages": [
+    {
+     "role": "system",
+     "text": "{instruction}"
+    },
+    {
+     "role": "user",
+     "text": "{q}"
+    }
+   ]
+  },
+  "parse": {
+   "kind": "sections",
+   "open": "<{name}>",
+   "tail": "</done>"
+  },
+  "requires": []
+ },
+ "signature": {
+  "instructions": "Read.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "i",
+    "direction": "output",
+    "shape": {
+     "type": "integer"
+    }
+   }
+  ]
+ },
+ "response": "<i>\n+5\n</done>",
+ "expect": {
+  "code": "value-invalid",
+  "at": "parse"
+ }
+}

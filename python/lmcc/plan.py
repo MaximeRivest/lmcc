@@ -378,7 +378,7 @@ def _derive_lens(baked: "Baked") -> DerivedLens:
                        "nested loops inside the output-pattern block are "
                        "not invertible")
         prefix, suffix = "".join(pre), "".join(post)
-        if not prefix.rstrip():
+        if not core.rstrip(prefix):
             refuse("not-lensable",
                    f"field {f.name!r}: no literal text before {{f.value}} — "
                    f"nothing anchors the parser; put the field's marker "
@@ -386,7 +386,7 @@ def _derive_lens(baked: "Baked") -> DerivedLens:
         anchors.append((f.name, prefix, suffix))
     seen: dict[str, str] = {}
     for name, prefix, _suffix in anchors:
-        key = prefix.rstrip()
+        key = core.rstrip(prefix)
         if key in seen:
             refuse("not-lensable",
                    f"fields {seen[key]!r} and {name!r} share the anchor "
