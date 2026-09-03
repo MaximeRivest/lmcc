@@ -13,5 +13,5 @@ Protocol per plan: spec → corpus (hand-authored bytes) → code →
 | `02-parse-combinators.md` | declared recovery pipelines for messy replies (level 1) | M |
 | `03-turns-face.md` | tool calls/results spelled into the next prompt, probe-checked | M |
 | `04-tools-citations-strategies.md` | strategy vocabularies for the reserved roles | M |
-| `05-second-implementation.md` | Go or TS kernel; harness passes byte-exact | L |
+| `05-second-implementation.md` | ✅ Go kernel; harness passes byte-exact (46/46) | L |
 | `06-structured-fix-hints.md` | refusals carry a machine-actionable `fix` payload | S |

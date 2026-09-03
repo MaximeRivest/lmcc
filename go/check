@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# The Go implementation's own verify loop: format, vet, unit tests, and
+# the corpus in-process. ./check at the repo root calls this and then
+# runs the same binary through the language-neutral harness.
+set -euo pipefail
+cd "$(dirname "$0")"
+
+unformatted=$(gofmt -l .)
+if [ -n "$unformatted" ]; then
+  echo "gofmt: files need formatting:"; echo "$unformatted"; exit 1
+fi
+go vet ./...
+go test ./...
+go build -o bin/lmcc-conform ./cmd/lmcc-conform
+echo "go: green"

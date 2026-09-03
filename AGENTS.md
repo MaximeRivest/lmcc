@@ -12,13 +12,15 @@ values, as inspectable, versioned, cross-language data.
 
 ```
   L5  programs            your code: signatures + values in, values out
-  L4  vocabulary packs    python/lmcc_std (+ anyone's): codecs, strategies,
-                          lenses, hosts — plugged into sockets, zero privilege
+  L4  vocabulary packs    python/lmcc_std, go/lmccstd (+ anyone's): codecs,
+                          strategies, lenses, hosts — plugged into sockets,
+                          zero privilege
   L3  the plan            bake(entry × signature × capabilities) → Baked
                           all refusals fire HERE, before any money is spent
   L2  the entry           the artifact: template + parse + strategies +
                           codecs, pure data (schema/entry.schema.json)
-  L1  kernel mechanics    python/lmcc/ — core (shapes, scalars, messages),
+  L1  kernel mechanics    python/lmcc/ (reference) and go/lmcc/ (independent)
+                          — core (shapes, scalars, text rules, messages),
                           template (3 constructs), parse (lens + extract
                           algebra), plan (bake/render/parse), serde, registry
   L0  the contract        contract/ — spec (meaning), schema (form),
@@ -52,13 +54,16 @@ a decision, derive from these before inventing anything:
 
 | invariant | enforced by |
 |---|---|
-| corpus is byte-exact authority | `contract/harness/runner.py` (34+ cases) |
-| `parse(join(x)) == x` for every lens | `tests/test_kernel.py`, `test_derived.py`, `test_lenses.py` |
+| corpus is byte-exact authority | `contract/harness/runner.py` (46 cases) |
+| the contract is portable: an independent Go kernel passes every case byte-exactly, and both kernels raise the same error-code set | `./check` step 5 (`runner.py --driver go/bin/lmcc-conform`), `tests/test_coherence.py` |
+| text primitives are portable: ASCII strip, explicit integer/number grammars, ECMAScript number spelling, RE2 regex (kernel §7a, §5) | corpus 35–37, 40–42, 44, 45; `tests/test_text_rules.py`; `go/lmcc/text_test.go` |
+| `split(join(x)) == x` for marker-free, trimmed `x`; `join` refuses collisions (`value-collides`) | `tests/test_kernel.py`, `test_derived.py`, `test_lenses.py`, `test_text_rules.py`; corpus 38 |
 | all refusals fire at bake, never mid-render | refuse-corpus cases (`at: bake`) |
 | data-only entries load with zero registrations | corpus case 08 + empty-registry harness default |
 | kernel imports stdlib only, ships zero vocabulary | `tests/test_agent_surface.py` |
 | entries never contain signatures | `schema/entry.schema.json` |
-| duplicated anchors refuse, never guess | corpus case 32 |
+| duplicated anchors, closes, tails, and JSON keys refuse, never guess | corpus cases 32, 39, 46 |
+| signatures and cases are schema-valid data | `./check` step 3 (`schema/signature.schema.json`, `schema/case.schema.json`); corpus 43 |
 | plans and registries are JSON-serializable data | `tests/test_agent_surface.py` |
 | docs cannot drift from code: every raised error code is in `spec/errors.md`, every registered vocab entry is indexed with a real spec file, case files match their declared names, std predicates only name declared facts, plans carry acceptance criteria | `tests/test_coherence.py` |
 
@@ -96,14 +101,22 @@ Checklists:
 - **new capability fact**: row in `spec/vocab/capabilities.md` (minor
   version bump) → a corpus case that predicates on it.
 - **new error code**: row in `spec/errors.md` → a refuse-corpus case
-  asserting it. Changing *when* a code fires is breaking.
+  asserting it → raised in **both** kernels (the coherence test
+  requires identical code sets). Changing *when* a code fires is
+  breaking.
 - **kernel change**: touches `spec/kernel.md` first; expect corpus
-  changes to be reviewed as contract changes.
+  changes to be reviewed as contract changes; implement in `python/`
+  and `go/` — the corpus will not pass until both agree.
+- **anything that touches model text**: use the §7a primitives
+  (`core.strip`, `read_integer`, `format_number` / `lmcc.Strip`,
+  `ReadInteger`, `FormatNumber`), never the host language's own
+  `strip`/`int`/`float`/`repr`. That is where cross-language drift hides.
 
 ## Verify — one command
 
 ```
-./check     # tests + harness + schema + README-verbatim; green = holds
+./check     # python tests + harness + schemas + README-verbatim
+            # + go/check + the Go binary through the harness; green = holds
 ```
 
 Run it before you start (baseline), after every meaningful change, and

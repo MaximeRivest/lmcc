@@ -19,11 +19,14 @@ contract/          the authority (no code)
   corpus/          fixture cases — byte-exact, the real source of truth
   harness/         runs any implementation against the corpus
 python/
-  lmcc/             the kernel: mechanics only (template engine, lens,
-                   bake/render/parse, serde, sockets, refusals)
+  lmcc/             the reference kernel: mechanics only (template engine,
+                   lens, bake/render/parse, serde, sockets, refusals)
   lmcc_std/         the standard vocabulary pack — a separate package,
                    registered through the same sockets as yours
   tests/           kernel tests + the corpus, as pytest
+go/
+  lmcc/, lmccstd/  an independent Go implementation of both, stdlib only
+  cmd/lmcc-conform the corpus driver the harness runs it through
 ```
 
 **The kernel ships zero codecs, zero strategies, zero host types.** Every
@@ -97,8 +100,33 @@ thinking channel. That swap costing one word is the point of the library.
    money is spent.
 6. **Loud refusal, stable codes.** `contract/spec/errors.md`; asserted by
    the corpus. Silent wrong rendering is the one forbidden bug.
-7. **The corpus is the authority.** A second implementation (Go, TS) is
-   conformant when the harness passes byte-exactly — not before.
+7. **The corpus is the authority.** An implementation is conformant when
+   the harness passes byte-exactly — not before. Two do today: the
+   Python reference and an independent Go kernel (`go/`), both run by
+   `./check`. The primitives that make "byte-exact" meaningful across
+   languages — whitespace, number grammars and spelling, the regex
+   dialect — are pinned in `kernel.md` §5 and §7a rather than left to
+   each host language's `strip`, `float`, and `re`.
+8. **Signatures are neutral data; syntaxes are frontends.** Python type
+   hints, Go struct tags, JSON Schema, or any signature DSL lower to
+   the same `SignatureCore` (`schema/signature.schema.json`). The kernel
+   never sees the syntax you wrote.
+
+## What "portable" means here, exactly
+
+- The **artifact** (the entry) is plain data and travels anywhere.
+- The **kernel** is portable: the corpus proves two independent
+  implementations produce the same bytes and the same refusals.
+- **Vocabulary** (codecs, strategies, lenses) is code, per language.
+  An artifact that names `codec/json` runs in a runtime only if that
+  runtime has a pack claiming `codec/json` at a compatible version;
+  otherwise it refuses by name (`unknown-codec`). Byte-exactness across
+  runtimes holds when both packs pass the entry's corpus cases.
+- **Host types** never travel; each runtime binds its own.
+
+So an artifact is portable data whose executable meaning is supplied,
+verified, and versioned per runtime — not code that runs everywhere by
+itself. That trade-off is deliberate and stated, not hidden.
 
 ## For agents (and fast-moving humans)
 
@@ -123,8 +151,11 @@ test suite — the guide cannot drift from the kernel.
 ## Running the checks
 
 ```
-cd python && PYTHONPATH=. pytest tests/            # kernel + corpus
-PYTHONPATH=python python contract/harness/runner.py  # harness alone
+./check                                            # everything, both languages
+cd python && PYTHONPATH=. pytest tests/            # python kernel + corpus
+PYTHONPATH=python python contract/harness/runner.py  # harness, python reference
+cd go && ./check                                   # go kernel + corpus
+PYTHONPATH=python python contract/harness/runner.py --driver go/bin/lmcc-conform
 ```
 
 ## Rename
@@ -137,6 +168,9 @@ Historical conversation links keep the old name so those links still work.
 ## Status (0.1.0) — deliberate gaps
 
 Streaming parse, the `requires` declaration for authored-code sidecars,
-tools/citations strategy vocabularies, media emission options, and non-Python
-implementations are all out, on purpose, and listed in
-`contract/spec/kernel.md`. Each lands as a versioned addition.
+tools/citations strategy vocabularies, and media emission options are
+out, on purpose, and listed in `contract/spec/kernel.md`. Each lands as
+a versioned addition. Known, stated holes in what *is* in: marker
+lenses trim outer whitespace of values (a round trip normalizes it),
+and a reply that omits its close marker while containing that marker
+inside the value cannot be detected (`kernel.md` §4).

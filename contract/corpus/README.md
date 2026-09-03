@@ -11,6 +11,9 @@ authority flipped: the files rule, the reference obeys. Do not re-run the
 seeder over behavior changes — that would silently re-bless drift.
 Cases added after creation (20+) are authored by hand first; the
 implementation is then made to pass them — authority never flips back.
+Cases 35–46 were authored while writing the Go implementation: each one
+pins a rule the spec had left to the host language (number spelling,
+whitespace, regex dialect, marker collisions, signature validity).
 
 **Case format.** One JSON object per file:
 
@@ -23,4 +26,9 @@ implementation is then made to pass them — authority never flips back.
   `{code, at}` for refusals
 
 Comparison is deep equality — byte-exact text, exact numbers, exact error
-codes.
+codes. Objects compare unordered, arrays ordered, numbers by value.
+
+**Running another implementation.** `harness/runner.py --driver CMD`
+starts CMD once and streams cases as JSON Lines (`spec/kernel.md` §10);
+`go/cmd/lmcc-conform` is the Go driver. The case format itself is
+`schema/case.schema.json`.

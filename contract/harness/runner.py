@@ -9,13 +9,20 @@ Cases live in ``contract/corpus/cases/*.json``. Each case names a kind:
 
 A driver adapts one implementation to the harness. The in-process
 ``PythonDriver`` covers the reference implementation; other languages
-implement the same four calls behind a JSON stdin/stdout protocol
-(see contract/spec/kernel.md §harness).
+implement the same four calls behind a JSON Lines stdin/stdout protocol
+(``SubprocessDriver``; see contract/spec/kernel.md §10): one case object
+per line in, one ``{"ok": bool, "detail": str}`` per line out, in order.
+
+    python runner.py                     # the Python reference
+    python runner.py --driver 'go run ./cmd/lmcc-conform'   # any other
 """
 
 from __future__ import annotations
 
+import argparse
 import json
+import shlex
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -78,6 +85,39 @@ class PythonDriver:
                     "detail": f"unexpected refusal [{err.code}]: {err.detail}"}
 
 
+class SubprocessDriver:
+    """Any implementation behind the JSON Lines protocol. The process is
+    started once; cases stream through it in order."""
+
+    def __init__(self, command: str, cwd: Path | None = None):
+        self.name = command
+        self.proc = subprocess.Popen(
+            shlex.split(command), cwd=cwd, stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE, text=True, encoding="utf-8", bufsize=1)
+
+    def run(self, case: dict) -> dict:
+        assert self.proc.stdin and self.proc.stdout
+        self.proc.stdin.write(json.dumps(case, ensure_ascii=False) + "\n")
+        self.proc.stdin.flush()
+        line = self.proc.stdout.readline()
+        if not line:
+            code = self.proc.wait()
+            return {"ok": False,
+                    "detail": f"driver exited (status {code}) before answering"}
+        try:
+            answer = json.loads(line)
+        except ValueError:
+            return {"ok": False, "detail": f"driver wrote non-JSON: {line!r}"}
+        if not isinstance(answer, dict) or not isinstance(answer.get("ok"), bool):
+            return {"ok": False, "detail": f"driver answer malformed: {line!r}"}
+        return {"ok": answer["ok"], "detail": str(answer.get("detail", ""))}
+
+    def close(self) -> None:
+        if self.proc.stdin:
+            self.proc.stdin.close()
+        self.proc.wait()
+
+
 def _compare(expected, got, what: str) -> dict:
     if expected == got:
         return {"ok": True, "detail": ""}
@@ -101,22 +141,36 @@ class Report:
 def run_corpus(driver=None, cases_dir: Path = CASES_DIR) -> Report:
     driver = driver or PythonDriver()
     passed, failed, failures = 0, 0, []
-    for path in sorted(cases_dir.glob("*.json")):
-        case = json.loads(path.read_text())
-        result = driver.run(case)
-        if result["ok"]:
-            passed += 1
-        else:
-            failed += 1
-            failures.append((path.name, result["detail"]))
+    try:
+        for path in sorted(cases_dir.glob("*.json")):
+            case = json.loads(path.read_text(encoding="utf-8"))
+            result = driver.run(case)
+            if result["ok"]:
+                passed += 1
+            else:
+                failed += 1
+                failures.append((path.name, result["detail"]))
+    finally:
+        if hasattr(driver, "close"):
+            driver.close()
     return Report(passed, failed, failures)
 
 
-def main() -> int:
-    report = run_corpus()
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("--driver", metavar="CMD",
+                    help="run CMD as a JSON Lines driver instead of the "
+                         "in-process Python reference")
+    ap.add_argument("--cwd", metavar="DIR", help="working directory for CMD")
+    args = ap.parse_args(argv)
+    if args.driver:
+        driver = SubprocessDriver(args.driver, cwd=Path(args.cwd) if args.cwd else None)
+    else:
+        driver = PythonDriver()
+    report = run_corpus(driver)
     for name, detail in report.failures:
         print(f"FAIL {name}\n{detail}\n")
-    print(f"{report.passed} passed, {report.failed} failed")
+    print(f"[{driver.name}] {report.passed} passed, {report.failed} failed")
     return 0 if report.ok else 1
 
 

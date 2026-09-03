@@ -158,3 +158,18 @@ offsets, which every language can write in a page. Cost: what a codec
 receives now contains the model's own spacing, so codecs must be
 whitespace-insensitive — `codec/json` already was. Pinned by corpus
 cases 23 (unchanged bytes) and 46.
+
+**D-18 · The second implementation is Go, stdlib only, and `./check`
+runs it.** `go/` implements the kernel and the std pack from the
+contract, exposes the corpus driver `cmd/lmcc-conform` (JSON Lines,
+kernel §10), and adds a Go struct-tag signature frontend. Both kernels
+must raise exactly the same set of error codes (`test_coherence.py`).
+Reason: Go is the runtime most unlike Python — no ordered maps, no
+dynamic JSON, RE2 regex, fixed-width integers — so every accidental
+Python-ism in the spec surfaced while writing it (D-13 to D-17 are
+that list). TypeScript would have shared too many defaults with the
+rules chosen. Cost: an ordered-JSON type and a strict parser had to be
+written by hand (encoding/json cannot preserve member order), the
+kernel uses panic/recover internally behind an error-returning API (the
+encoding/json precedent), and `./check` now needs a Go toolchain (falls
+back to `nix shell nixpkgs#go`).

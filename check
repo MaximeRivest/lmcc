@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # The one command. Green here = the contract holds.
-# 1) unit + corpus tests  2) conformance harness  3) schema validation
+# 1) unit + corpus tests (Python)   2) conformance harness, Python reference
+# 3) schema validation (entries, signatures, cases)
 # 4) README quickstart runs verbatim
+# 5) the Go implementation: its own checks, then the corpus through the
+#    language-neutral harness — cross-language conformance, byte-exact
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -11,53 +14,45 @@ run_py() {  # run python with repo layout on the path
   (cd python && PYTHONPATH=. python "$@")
 }
 
-step "1/4 unit + corpus tests"
+step "1/5 unit + corpus tests (python)"
 if pytest --version >/dev/null 2>&1; then
   (cd python && PYTHONPATH=. pytest -q tests/)
+elif python -c 'import pytest' 2>/dev/null; then
+  (cd python && PYTHONPATH=. python -m pytest -q tests/)
 else
   (cd python && PYTHONPATH=. nix run nixpkgs#python3Packages.pytest -- -q tests/)
 fi
 
-step "2/4 conformance harness (corpus is the authority)"
+step "2/5 conformance harness, python reference (corpus is the authority)"
 run_py ../contract/harness/runner.py
 
-step "3/4 schema validation (every corpus entry, both directions)"
-if python -c 'import jsonschema' 2>/dev/null; then
-  PYVAL=python
-else
-  PYVAL="nix shell --impure --expr with_import_placeholder"
-fi
-if [ "$PYVAL" = python ]; then
-  python - <<'EOF'
+step "3/5 schema validation (entries, signatures, cases)"
+VALIDATE='
 import json, glob, jsonschema
-schema = json.load(open('contract/schema/entry.schema.json'))
+entry = json.load(open("contract/schema/entry.schema.json"))
+signature = json.load(open("contract/schema/signature.schema.json"))
+case_schema = json.load(open("contract/schema/case.schema.json"))
 n = 0
-for f in sorted(glob.glob('contract/corpus/cases/*.json')):
+for f in sorted(glob.glob("contract/corpus/cases/*.json")):
     case = json.load(open(f))
-    jsonschema.validate(case['entry'], schema)
-    if isinstance(case.get('expect'), dict) and 'entry' in case['expect']:
-        jsonschema.validate(case['expect']['entry'], schema)
+    jsonschema.validate(case, case_schema)
+    jsonschema.validate(case["entry"], entry)
+    if "entry" in case.get("expect", {}):
+        jsonschema.validate(case["expect"]["entry"], entry)
+    if "signature" in case and case["expect"].get("code") != "signature-malformed":
+        jsonschema.validate(case["signature"], signature)
     n += 1
-print(n, 'cases validate against the schema')
-EOF
+print(n, "cases validate against the case, entry and signature schemas")
+'
+if python -c 'import jsonschema' 2>/dev/null; then
+  python -c "$VALIDATE"
 else
   nix shell --impure --expr \
     'with import <nixpkgs> {}; python3.withPackages (p: [ p.jsonschema ])' \
-    -c python3 - <<'EOF'
-import json, glob, jsonschema
-schema = json.load(open('contract/schema/entry.schema.json'))
-n = 0
-for f in sorted(glob.glob('contract/corpus/cases/*.json')):
-    case = json.load(open(f))
-    jsonschema.validate(case['entry'], schema)
-    if isinstance(case.get('expect'), dict) and 'entry' in case['expect']:
-        jsonschema.validate(case['expect']['entry'], schema)
-    n += 1
-print(n, 'cases validate against the schema')
-EOF
+    -c python3 -c "$VALIDATE"
 fi
 
-step "4/4 README quickstart, verbatim"
+step "4/5 README quickstart, verbatim"
 run_py - <<'EOF'
 import re, pathlib
 text = pathlib.Path('../README.md').read_text()
@@ -65,5 +60,14 @@ code = '\n'.join(re.findall(r'```python\n(.*?)```', text, re.DOTALL))
 exec(compile(code, 'README-quickstart', 'exec'))
 print('README quickstart runs verbatim')
 EOF
+
+step "5/5 go implementation: own checks, then the corpus via the harness"
+if command -v go >/dev/null 2>&1; then
+  (cd go && ./check)
+else
+  echo "go not on PATH; using nix shell nixpkgs#go"
+  (cd go && nix shell nixpkgs#go -c ./check)
+fi
+run_py ../contract/harness/runner.py --driver ../go/bin/lmcc-conform
 
 printf '\nALL GREEN\n'

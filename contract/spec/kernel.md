@@ -345,6 +345,9 @@ case names in `vocab` into an otherwise empty registry, runs the case's
 kind, and compares itself; the harness only counts. Values compare by
 JSON equality: objects unordered, arrays ordered, numbers by value.
 
+**Conformant implementations.** `python/` (the reference) and `go/`
+(independent, stdlib only, `go/cmd/lmcc-conform`). Both run in `./check`.
+
 ## Deliberate gaps (0.1)
 
 Streaming parse (same lens, incremental); the `requires` mechanism for

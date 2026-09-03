@@ -108,3 +108,33 @@ def test_plans_have_acceptance_criteria():
     for plan in plans:
         text = plan.read_text().lower()
         assert "acceptance" in text, f"{plan.name} has no acceptance criteria"
+
+
+def _go_raised_codes() -> set[str]:
+    """Every code the Go implementation can raise: refuse("x"),
+    refusef("x", ...), and literal Error{Code: "x"} constructions."""
+    codes: set[str] = set()
+    for go in sorted((ROOT / "go").rglob("*.go")):
+        if go.name.endswith("_test.go"):
+            continue
+        text = go.read_text()
+        codes |= set(re.findall(r'refuse[f]?\("([a-z0-9-]+)"', text))
+        codes |= set(re.findall(r'refusePartial\("([a-z0-9-]+)"', text))
+        codes |= set(re.findall(r'Code:\s*"([a-z0-9-]+)"', text))
+    return codes
+
+
+def test_go_implementation_raises_only_documented_codes():
+    """The second implementation lives under the same rule as the first:
+    a code it can raise must be in spec/errors.md."""
+    raised = _go_raised_codes()
+    assert raised, "the Go implementation exists and raises codes"
+    undocumented = raised - _documented_codes()
+    assert not undocumented, (
+        f"codes raised in go/ but missing from spec/errors.md: {sorted(undocumented)}")
+
+
+def test_both_implementations_raise_the_same_codes():
+    """Neither kernel may have a refusal the other cannot produce — a
+    one-sided code is a behavior the corpus cannot pin across languages."""
+    assert _go_raised_codes() == _raised_codes()
