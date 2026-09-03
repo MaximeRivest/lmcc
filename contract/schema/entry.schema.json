@@ -4,23 +4,37 @@
   "title": "LMCC adapter entry",
   "description": "The artifact: one adapter as plain data. Codec and strategy OPTION internals are owned by their vocabulary specs and deliberately left loose here.",
   "type": "object",
-  "required": ["versions", "template", "parse"],
+  "required": [
+    "versions",
+    "template",
+    "parse"
+  ],
   "properties": {
-    "name": { "type": "string" },
+    "name": {
+      "type": "string"
+    },
     "versions": {
       "type": "object",
-      "required": ["kernel"],
+      "required": [
+        "kernel"
+      ],
       "properties": {
-        "kernel": { "$ref": "#/$defs/semver" },
+        "kernel": {
+          "$ref": "#/$defs/semver"
+        },
         "vocab": {
           "type": "object",
-          "additionalProperties": { "$ref": "#/$defs/semver" }
+          "additionalProperties": {
+            "$ref": "#/$defs/semver"
+          }
         }
       }
     },
     "template": {
       "type": "object",
-      "required": ["messages"],
+      "required": [
+        "messages"
+      ],
       "properties": {
         "messages": {
           "type": "array",
@@ -28,17 +42,37 @@
             "oneOf": [
               {
                 "type": "object",
-                "required": ["role", "text"],
+                "required": [
+                  "role",
+                  "text"
+                ],
                 "properties": {
-                  "role": { "enum": ["system", "user", "assistant"] },
-                  "text": { "type": "string" }
+                  "role": {
+                    "enum": [
+                      "system",
+                      "user",
+                      "assistant"
+                    ]
+                  },
+                  "text": {
+                    "type": "string"
+                  }
                 },
                 "additionalProperties": false
               },
               {
                 "type": "object",
-                "required": ["directive"],
-                "properties": { "directive": { "enum": ["demos", "history"] } },
+                "required": [
+                  "directive"
+                ],
+                "properties": {
+                  "directive": {
+                    "enum": [
+                      "demos",
+                      "history"
+                    ]
+                  }
+                },
                 "additionalProperties": false
               }
             ]
@@ -48,19 +82,39 @@
     },
     "parse": {
       "type": "object",
-      "required": ["kind"],
+      "required": [
+        "kind"
+      ],
       "properties": {
-        "kind": { "type": "string", "minLength": 1 }
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        }
       },
       "allOf": [
         {
-          "if": { "properties": { "kind": { "const": "sections" } } },
-          "then": {
-            "required": ["open"],
+          "if": {
             "properties": {
-              "open": { "type": "string", "pattern": ".*\\{name\\}.*" },
-              "close": { "type": "string" },
-              "tail": { "type": "string" }
+              "kind": {
+                "const": "sections"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "open"
+            ],
+            "properties": {
+              "open": {
+                "type": "string",
+                "pattern": ".*\\{name\\}.*"
+              },
+              "close": {
+                "type": "string"
+              },
+              "tail": {
+                "type": "string"
+              }
             }
           }
         }
@@ -72,25 +126,43 @@
         "oneOf": [
           {
             "type": "object",
-            "required": ["kind"],
+            "required": [
+              "kind"
+            ],
             "properties": {
-              "kind": { "type": "string" },
-              "options": { "type": "object" }
+              "kind": {
+                "type": "string"
+              },
+              "options": {
+                "type": "object"
+              }
             },
             "additionalProperties": false
           },
-          { "$ref": "#/$defs/inline_strategy" }
+          {
+            "$ref": "#/$defs/inline_strategy"
+          }
         ]
       }
     },
     "codecs": {
+      "description": "Codec bindings by field name, plus the optional '@structured' default for every structured or uninterpreted shape (kernel.md §1, §7). Name bindings win.",
       "type": "object",
+      "propertyNames": {
+        "pattern": "^([A-Za-z_][A-Za-z0-9_]*|@structured)$"
+      },
       "additionalProperties": {
         "type": "object",
-        "required": ["kind"],
+        "required": [
+          "kind"
+        ],
         "properties": {
-          "kind": { "type": "string" },
-          "options": { "type": "object" }
+          "kind": {
+            "type": "string"
+          },
+          "options": {
+            "type": "object"
+          }
         },
         "additionalProperties": false
       }
@@ -98,61 +170,117 @@
     "requires": {
       "type": "array",
       "description": "Declared non-data requirements (authored code sidecars). Empty in kernel 0.1; the declaration mechanism is reserved.",
-      "items": { "type": "object" }
+      "items": {
+        "type": "object"
+      }
     }
   },
   "$defs": {
-    "semver": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "semver": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
     "predicate": {
       "type": "object",
       "minProperties": 1,
       "maxProperties": 1,
       "properties": {
-        "capability": { "type": "string" },
-        "not": { "$ref": "#/$defs/predicate" },
-        "all": { "type": "array", "items": { "$ref": "#/$defs/predicate" } },
-        "any": { "type": "array", "items": { "$ref": "#/$defs/predicate" } }
+        "capability": {
+          "type": "string"
+        },
+        "not": {
+          "$ref": "#/$defs/predicate"
+        },
+        "all": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/predicate"
+          }
+        },
+        "any": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/predicate"
+          }
+        }
       },
       "additionalProperties": false
     },
     "inline_strategy": {
       "type": "object",
       "properties": {
-        "predicate": { "$ref": "#/$defs/predicate" },
-        "requires": { "type": "array", "items": { "type": "string" } },
+        "predicate": {
+          "$ref": "#/$defs/predicate"
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "fragments": {
           "type": "object",
-          "additionalProperties": { "type": "string" }
+          "additionalProperties": {
+            "type": "string"
+          }
         },
-        "controls": { "type": "object" },
+        "controls": {
+          "type": "object"
+        },
         "routings": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["extract", "field"],
+            "required": [
+              "extract",
+              "field"
+            ],
             "properties": {
               "extract": {
                 "type": "object",
-                "required": ["kind"],
+                "required": [
+                  "kind"
+                ],
                 "properties": {
-                  "kind": { "enum": ["between", "pattern", "line_prefixed", "parts"] }
+                  "kind": {
+                    "enum": [
+                      "between",
+                      "pattern",
+                      "line_prefixed",
+                      "parts"
+                    ]
+                  }
                 }
               },
-              "field": { "type": "string" },
-              "join": { "type": "string" },
-              "strip": { "type": "boolean" },
+              "field": {
+                "type": "string"
+              },
+              "join": {
+                "type": "string"
+              },
+              "strip": {
+                "type": "boolean"
+              },
               "coerce": {
                 "type": "object",
-                "required": ["kind"],
+                "required": [
+                  "kind"
+                ],
                 "properties": {
-                  "kind": { "type": "string" },
-                  "options": { "type": "object" }
+                  "kind": {
+                    "type": "string"
+                  },
+                  "options": {
+                    "type": "object"
+                  }
                 }
               }
             }
           }
         },
-        "visible": { "type": "boolean" }
+        "visible": {
+          "type": "boolean"
+        }
       },
       "additionalProperties": false
     }

@@ -1,11 +1,12 @@
 # Plan 07 — DSPy signature parity
 
-**Motivation.** "Anything a DSPy signature can hold, a SignatureCore can
-carry" must be a checked claim, not a belief. The check is a *total
-lowering with refusal*: every DSPy signature either lowers to a
-SignatureCore that carries all of its information, or refuses naming
-the exact attribute it cannot carry. Silent loss is the forbidden
-outcome (rule 3).
+**Goal (ratified).** Write, save, and render **any** DSPy signature in
+LMCC; render and parse it the LMCC way, not DSPy's way. Two checked
+claims: (1) every DSPy signature lowers to a SignatureCore losing
+nothing but the three attributes DSPy itself declares no-ops; (2) every
+such signature bakes, renders and parses with LMCC's own adapters — no
+bake refusal is ever caused by a DSPy-expressible signature. Prompt
+bytes need not match DSPy's adapters.
 
 **How the claim is made checkable.**
 
@@ -17,13 +18,10 @@ outcome (rule 3).
    round-trip (render → parse, both kernels via corpus cases of the
    lowered data) or refuse with the named code. A DSPy feature absent
    from the catalog is *not claimed*.
-3. A **differential** check against DSPy's own `ChatAdapter.format`:
-   for every catalog row, DSPy's messages and LMCC's render of the
-   DSPy-dialect entry compare byte for byte. This is the strongest
-   possible "make sure": the prompts are DSPy's prompts. It needs
-   `dspy` importable; `./check` runs it when a DSPy dev shell exists
-   and **fails loudly, never skips**, when the step is requested but
-   the shell is missing.
+3. **No differential byte-compare with DSPy's adapters** (withdrawn:
+   LMCC renders its own way). The catalog instead asserts that each
+   lowered signature bakes, renders and parses through the DSPy-dialect
+   entry with `@structured: json`, in both kernels via corpus cases.
 
 ## Inventory (upstream `stanfordnlp/dspy` main @ 59ce7601, 2026-08-31)
 
@@ -67,24 +65,21 @@ outcome (rule 3).
 | parsing: `json_repair` + `ast.literal_eval` fallback + pydantic validation | refuse (`value-invalid`, `codec-parse-error`) | by design different: LMCC never guesses; recovery is plan 02 (combinators) and plan 06 (fix hints), declared as data |
 | native tool-call history replay (#9823/#9824) | — | plan 04 + decision D |
 
-## Decisions required before code (each: spec → corpus → both kernels)
+## Decisions taken (spec → corpus → both kernels, all green)
 
-- **B** shape-keyed default codec bindings in entries — the largest gap;
-  without it LMCC cannot express a DSPy-style "one adapter for every
-  signature" at all when signatures have structured fields.
-- **C** nullable scalars.
-- **D** history turns as field dicts.
-- **E** host type families.
-- **F** incomplete demos: refuse (current) or placeholder text declared
-  in the entry.
+- **B** `@structured` default codec bindings — D-20, corpus 48–49.
+- **C** nullable scalars — D-21, corpus 51–52.
+- **D** history field turns — D-22, corpus 53.
+- **F** incomplete demos omit, never invent — D-22, corpus 53–54.
+- **G** (new) uninterpreted shapes are codec territory — D-19, corpus 50.
+- **E** host type families: frontend-only (the DSPy frontend registers
+  each pydantic model it meets); no kernel change needed.
 
 ## Acceptance criteria
 
-- [ ] Decisions B–F ratified and logged (`decisions.md`).
-- [ ] Kernel spec amended for each; corpus cases for each (lowered
+- [x] Decisions B–G ratified and logged (`decisions.md`).
+- [x] Kernel spec amended for each; corpus cases for each (lowered
       data, so the Go kernel proves them without DSPy).
 - [ ] `python/lmcc_dspy` lowers every catalog row or refuses by name;
       `tests/test_dspy_catalog.py` covers every row of the table.
-- [ ] Differential check: catalog prompts equal `dspy.ChatAdapter`
-      output byte for byte (DSPy-dialect entry).
 - [ ] Rows marked plan 04 stay listed as *not claimed* until plan 04.

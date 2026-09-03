@@ -111,17 +111,27 @@ func (b *Baked) coerce(f *Field, text string) any {
 // ------------------------------------------------------------ render env
 
 type env struct {
-	b      *Baked
-	values *Object
+	b       *Baked
+	values  *Object
+	partial bool // a demo/history turn: input loops iterate supplied fields only
 }
 
 func (e env) instruction() string { return e.b.Signature.Instructions }
 func (e env) replyFormat() string { return e.b.replyFormat() }
 func (e env) loopFields(source string) []*Field {
-	if source == "inputs" {
+	if source != "inputs" {
+		return e.b.VisibleOutputs
+	}
+	if !e.partial {
 		return e.b.VisibleInputs
 	}
-	return e.b.VisibleOutputs
+	var out []*Field
+	for _, f := range e.b.VisibleInputs {
+		if e.values.Has(f.Name) {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 func (e env) fieldNamed(name string) *Field { return e.b.Signature.FieldNamed(name) }
 func (e env) schemaOf(f *Field) string      { return e.b.schemaHint(f) }
@@ -173,7 +183,7 @@ func (b *Baked) Render(inputs *Object, demos []*Object, history []*Object) (res 
 			}
 			continue
 		}
-		parts := b.renderMessage(nodes, inputs)
+		parts := b.renderMessage(nodes, inputs, false)
 		role, _ := m.Str("role")
 		if role == "system" && !fragmentsDone {
 			parts = MergeTextParts(append(parts, TextPart("\n\n"+sysFragment)))
@@ -192,9 +202,9 @@ func (b *Baked) Render(inputs *Object, demos []*Object, history []*Object) (res 
 	return RenderResult{Messages: messages, Patch: b.PatchData.Clone()}, nil
 }
 
-func (b *Baked) renderMessage(nodes []node, values *Object) []any {
+func (b *Baked) renderMessage(nodes []node, values *Object, partial bool) []any {
 	rb := &renderBuf{}
-	renderNodes(nodes, env{b, values}, rb, nil)
+	renderNodes(nodes, env{b, values, partial}, rb, nil)
 	rb.flushText()
 	return MergeTextParts(rb.out)
 }
@@ -204,7 +214,7 @@ func (b *Baked) renderDemo(demo *Object) []any {
 	for i, m := range b.Adapter.Messages {
 		nodes := b.Adapter.compiled[i]
 		if role, _ := m.Str("role"); nodes != nil && role == "user" {
-			if parts := b.renderMessage(nodes, demo); len(parts) > 0 {
+			if parts := b.renderMessage(nodes, demo, true); len(parts) > 0 {
 				turns = append(turns, MakeMessage("user", parts))
 			}
 		}
@@ -219,12 +229,22 @@ func (b *Baked) renderDemo(demo *Object) []any {
 	return turns
 }
 
+// renderHistory (kernel §8): a message {role, content} verbatim, or a
+// field turn {"fields": {...}} rendered exactly like a demo.
 func (b *Baked) renderHistory(history []*Object) []any {
 	var turns []any
 	for _, t := range history {
+		if t.Has("fields") && !t.Has("role") {
+			fields := t.Object("fields")
+			if fields == nil {
+				refuse("value-invalid", "history field turn: 'fields' must be an object")
+			}
+			turns = append(turns, b.renderDemo(fields)...)
+			continue
+		}
 		role, _ := t.Str("role")
 		if role != "user" && role != "assistant" {
-			refusef("value-invalid", "history turn role %q must be user/assistant", role)
+			refusef("value-invalid", "history item must be {role: user|assistant, content} or {fields: {...}}; got keys %v", t.Keys)
 		}
 		content, _ := t.Get("content")
 		parts, ok := content.([]any)
@@ -517,9 +537,11 @@ func Bake(a *Adapter, sig *Signature, capabilities *Object, reg *Registry) (b *B
 		}
 	}
 
-	// 3. codecs.
+	// 3. codecs: name bindings, then the entry's @structured default, then
+	//    the host type's default; refuse structured shapes with none.
+	structuredDefault := a.Codecs.Object("@structured")
 	for _, fname := range a.Codecs.Keys {
-		if sig.FieldNamed(fname) == nil {
+		if fname == "@structured" || sig.FieldNamed(fname) == nil {
 			continue
 		}
 		binding := a.Codecs.Object(fname)
@@ -530,6 +552,12 @@ func Bake(a *Adapter, sig *Signature, capabilities *Object, reg *Registry) (b *B
 	visible := append(append([]*Field{}, b.VisibleOutputs...), b.VisibleInputs...)
 	for _, f := range visible {
 		if _, bound := b.Codecs[f.Name]; !bound {
+			if structuredDefault != nil && IsStructured(f.Shape) {
+				kind, _ := structuredDefault.Str("kind")
+				b.Codecs[f.Name] = reg.codec(kind, structuredDefault.Object("options"))
+				b.codecKinds[f.Name] = kind
+				continue
+			}
 			if d := reg.defaultCodecFor(f.Annotation); d != nil {
 				kind, _ := d.Str("kind")
 				b.Codecs[f.Name] = reg.codec(kind, d.Object("options"))

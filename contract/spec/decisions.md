@@ -173,3 +173,46 @@ written by hand (encoding/json cannot preserve member order), the
 kernel uses panic/recover internally behind an error-returning API (the
 encoding/json precedent), and `./check` now needs a Go toolchain (falls
 back to `nix shell nixpkgs#go`).
+
+**D-19 · The kernel's shape set is closed; everything else is codec
+territory.** A shape the kernel does not interpret (`anyOf` of two real
+types, `$ref`, `{}`, no interpreted keyword) is *structured* for the
+`no-codec` rule. Reason: the goal is to carry **any** frontend's
+signature (a Union, a pydantic model with `$defs`, `Any`) as data
+without the kernel ever spelling something it does not understand;
+refusing at bake keeps rule 3. Cost: `Union[str, int]` needs a codec
+even though its members are scalars — spelling and reading a union is a
+codec's judgment, not the kernel's. Pinned by corpus 50.
+
+**D-20 · Entries may bind a `@structured` default codec.** Precedence:
+field-name binding, then `@structured`, then the host type's default,
+then refuse. Reason: adapters are signature-independent, and before this
+no adapter could spell `list[str]` for a signature it had never seen —
+which made "one adapter for every signature" (the DSPy shape of use)
+inexpressible. A single sigil key keeps the entry schema closed. Cost:
+an entry that binds `@structured` decides the spelling of every
+structured field at once; per-field bindings still win. Pinned by
+corpus 48–49.
+
+**D-21 · Nullable scalars read and write `null`.** Only the two bare
+spellings (`{"type": [T, "null"]}`, `{"anyOf": [S, {"type": "null"}]}`)
+are nullable; the text is exactly `null`. Reason: `Optional[X]` is the
+most common non-scalar annotation in signatures and DSPy special-cases
+it; one exact literal keeps reading unambiguous across languages. Cost:
+a nullable *string* cannot carry the literal text `null`; `None`, `N/A`
+and friends refuse — recovery is plan 02/06 data, never a kernel guess.
+Pinned by corpus 51–52.
+
+**D-22 · History turns may be field dicts; incomplete examples omit,
+never invent.** A history item is a message (verbatim) or
+`{"fields": {...}}`, rendered exactly like a demo through the template
+and the lens; in demo/history turns an inputs loop iterates only the
+supplied fields, while a bare slot with no value still refuses
+`missing-input`; outputs absent from an example are omitted from its
+assistant turn. Reason: a conversation held as typed values (DSPy
+`History`, a tool loop) must render through the one description the
+model is asked to follow, or it drifts; and DSPy's "Not supplied for
+this particular example" placeholder was rejected because it puts text
+in the model's mouth that no lens can read back. Cost: the `fields`
+wrapper is one more shape in the history list; flat dicts refuse.
+Pinned by corpus 53–54.

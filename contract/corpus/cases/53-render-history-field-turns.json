@@ -1,0 +1,157 @@
+{
+ "name": "render-history-field-turns",
+ "kind": "render",
+ "entry": {
+  "name": "chat_v1",
+  "versions": {
+   "kernel": "0.1.0",
+   "vocab": {}
+  },
+  "template": {
+   "messages": [
+    {
+     "role": "system",
+     "text": "{instruction}"
+    },
+    {
+     "directive": "history"
+    },
+    {
+     "role": "user",
+     "text": "{% for f in inputs %}== {f.name} ==\n{f.value}\n{% endfor %}"
+    }
+   ]
+  },
+  "parse": {
+   "kind": "sections",
+   "open": "[[ ## {name} ## ]]",
+   "tail": "[[ ## completed ## ]]"
+  },
+  "requires": []
+ },
+ "signature": {
+  "instructions": "Chat.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "hint",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "a",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "score",
+    "direction": "output",
+    "shape": {
+     "type": "integer"
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "q": "third",
+  "hint": "h3"
+ },
+ "history": [
+  {
+   "fields": {
+    "q": "first",
+    "hint": "h1",
+    "a": "one",
+    "score": 1
+   }
+  },
+  {
+   "role": "assistant",
+   "content": "raw turn"
+  },
+  {
+   "fields": {
+    "q": "second",
+    "a": "two"
+   }
+  }
+ ],
+ "expect": {
+  "messages": [
+   {
+    "role": "system",
+    "content": [
+     {
+      "kind": "text",
+      "text": "Chat."
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "content": [
+     {
+      "kind": "text",
+      "text": "== q ==\nfirst\n== hint ==\nh1\n"
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "content": [
+     {
+      "kind": "text",
+      "text": "[[ ## a ## ]]\none\n[[ ## score ## ]]\n1\n[[ ## completed ## ]]"
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "content": [
+     {
+      "kind": "text",
+      "text": "raw turn"
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "content": [
+     {
+      "kind": "text",
+      "text": "== q ==\nsecond\n"
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "content": [
+     {
+      "kind": "text",
+      "text": "[[ ## a ## ]]\ntwo\n[[ ## completed ## ]]"
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "content": [
+     {
+      "kind": "text",
+      "text": "== q ==\nthird\n== hint ==\nh3\n"
+     }
+    ]
+   }
+  ],
+  "patch": {}
+ }
+}

@@ -43,6 +43,13 @@ and request patches to read:
 | `{"enum": [...]}` (+ optional `type`) | membership; values are strings or integers |
 | `{"type": "array", "items"?: shape}` · `{"type": "object", ...}` | structured: needs a codec (§7) |
 | `{"media": "image" \| "document" \| ...}` | a message part, not text |
+| **nullable** forms of a scalar/enum: `{"type": ["integer", "null"]}` or `{"anyOf": [S, {"type": "null"}]}` (either order) | the scalar, plus `null` (§7a) |
+| anything else (`anyOf` of two real types, `$ref`, `{}`, no interpreted keyword) | **uninterpreted**: treated as structured — needs a codec (§7) |
+
+The last row is the rule that makes the set closed: what the kernel does
+not understand it never spells by itself. A frontend may lower any type
+system's shape (a Union, a pydantic model with `$defs`, `Any`) and the
+shape is carried whole; a codec, not the kernel, gives it text.
 
 **Frontends.** Each language lowers its own signature syntax to this
 form mechanically: Python type hints (`str`, `list[int]`,
@@ -57,9 +64,12 @@ per-language code and are **never serialized**.
 to plain data and lifts back (both recurse through `list[X]`), and
 optionally its **default codec**: the renderer that spells the type when
 the entry binds none. Precedence at bake: the entry's per-field codec
-binding wins; else the type's registered default; else structured shapes
-refuse (`no-codec`). Trade-off, stated: an entry-bound codec travels in
-the artifact and is the byte-exact cross-runtime path; a host default is
+binding wins; else the entry's **`@structured`** binding (a default for
+every structured or uninterpreted shape — the way an adapter stays
+signature-independent while still spelling `list[str]` or a model type);
+else the type's registered default; else structured shapes refuse
+(`no-codec`). Trade-off, stated: an entry-bound codec travels in the
+artifact and is the byte-exact cross-runtime path; a host default is
 per-runtime convenience code — two runtimes may legitimately spell the
 same type differently unless the entry pins the codec.
 
@@ -87,6 +97,10 @@ Three constructs; nothing else, ever:
   `format` are reserved and shadow same-named fields.
 - Loops `{% for f in inputs %}…{% endfor %}` (also `outputs`). Loops
   iterate the **visible** fields of the baked plan, in signature order.
+  In a **demo or history turn** (§8) an inputs loop iterates only the
+  visible inputs the turn supplies, so an incomplete example renders
+  its known fields and omits the rest; a bare slot with no value still
+  refuses `missing-input` — omission is honest, invention is not.
 - Escapes `{{` and `}}`. A bare brace anywhere else is `template-syntax`.
 
 Bare slots may name **input** fields only; outputs are parsed, not
@@ -296,6 +310,11 @@ otherwise.
   algorithm with a precise public specification and the widest
   deployment (every JSON.stringify; Go's encoding/json). Non-finite
   values refuse `value-invalid`.
+- **Null** — for nullable shapes (§1) only: writing a missing value
+  spells `null`; reading the stripped text `null` (exactly, lowercase)
+  yields the null value; any other text reads through the underlying
+  scalar rule. A nullable string therefore cannot carry the literal text
+  `null` — stated, not hidden. Non-nullable shapes never accept `null`.
 - **Booleans** — reading: after stripping and ASCII case-folding,
   `true`/`yes` → true, `false`/`no` → false, else `value-invalid`.
   Writing: `true` / `false`.
@@ -318,6 +337,20 @@ Render output messages are plain dicts, structurally lm15-shaped:
 `{"role": r, "content": [{"kind": "text"|"image"|…, …}]}`. Adjacent text
 parts merge; empty messages drop. `parse` accepts a bare string or a
 response dict with a `content` part list. The kernel never performs I/O.
+
+**Demos** are field dicts (inputs and outputs by name). Each renders as
+the entry's user templates over the demo's inputs, then one assistant
+turn written by the lens over the outputs the demo supplies; outputs
+absent from the demo are omitted from that turn.
+
+**History** items are either messages `{"role": "user"|"assistant",
+"content": …}` (emitted verbatim) or **field turns** `{"fields": {…}}`
+(rendered exactly like a demo, through the template and the lens). The
+second form is how a conversation held as typed values — DSPy's
+`History`, a tool loop's prior rounds — renders through the same
+description as everything else, so history can never drift from the
+format the model is asked to produce. Anything else refuses
+`value-invalid`.
 
 Bake checks input coverage: every visible input must be reachable from
 some slot or input loop (`field-uncovered`, naming the fields).

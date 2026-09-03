@@ -71,7 +71,8 @@ class PythonDriver:
                 return _compare(expect["values"], values, "values")
             if kind == "refuse":
                 if "inputs" in case:
-                    baked.render(inputs=case["inputs"], demos=case.get("demos"))
+                    baked.render(inputs=case["inputs"], demos=case.get("demos"),
+                                 history=case.get("history"))
                 if "response" in case:
                     baked.parse(case["response"])
                 return {"ok": False,

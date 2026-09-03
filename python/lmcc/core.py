@@ -287,9 +287,37 @@ def annotation_to_shape(ann: object, registry=None, *, field_name: str = "?") ->
            f"register a host type for it or pass a JSON-Schema dict")
 
 
+_SCALAR_TYPES = ("string", "integer", "number", "boolean")
+
+
+def nullable_base(shape: dict) -> tuple[dict, bool]:
+    """Kernel §1: a nullable form of a scalar/enum shape is that shape plus
+    null. Returns ``(base_shape, is_nullable)``; non-nullable shapes come
+    back unchanged. Only the two spellings the spec names are recognized:
+    ``{"type": [T, "null"]}`` and ``{"anyOf": [S, {"type": "null"}]}``."""
+    t = shape.get("type")
+    if isinstance(t, list):
+        others = [x for x in t if x != "null"]
+        if "null" in t and len(others) == 1 and len(t) == 2:
+            base = {k: v for k, v in shape.items() if k != "type"}
+            base["type"] = others[0]
+            return base, True
+        return shape, False
+    alts = shape.get("anyOf")
+    if isinstance(alts, list) and len(alts) == 2 and len(shape) == 1:
+        nulls = [a for a in alts if isinstance(a, dict) and a == {"type": "null"}]
+        others = [a for a in alts if a not in nulls]
+        if len(nulls) == 1 and len(others) == 1 and isinstance(others[0], dict):
+            base = others[0]
+            if "enum" in base or base.get("type") in _SCALAR_TYPES:
+                return base, True
+    return shape, False
+
+
 def shape_summary(shape: dict) -> str:
     """A short human hint for a field's shape, used by ``{f.schema}`` when
     no codec is bound. Codecs override this with their own schema prose."""
+    shape, _ = nullable_base(shape)
     if "enum" in shape:
         return "one of: " + ", ".join(str(v) for v in shape["enum"])
     if "media" in shape:
@@ -305,8 +333,13 @@ def is_media(shape: dict) -> bool:
 
 
 def is_structured(shape: dict) -> bool:
-    """Structured shapes require a codec; the kernel refuses to guess."""
-    return shape.get("type") in ("object", "array")
+    """Structured shapes require a codec; the kernel refuses to guess.
+    Kernel §1: object/array, and every *uninterpreted* shape (no media, no
+    enum, no scalar type) — the set the kernel spells itself is closed."""
+    base, _ = nullable_base(shape)
+    if is_media(base) or "enum" in base:
+        return False
+    return base.get("type") not in _SCALAR_TYPES
 
 
 # ---------------------------------------------------- scalar spell / parse
@@ -315,7 +348,13 @@ def is_structured(shape: dict) -> bool:
 def spell_value(shape: dict, value: object, *, where: str) -> str:
     """Kernel mechanics (§7a): strings verbatim, integers in decimal,
     numbers by the ECMAScript spelling, booleans as ``true``/``false``,
-    enums by member spelling. Refuses anything structured (``no-codec``)."""
+    enums by member spelling, ``null`` for nullable shapes. Refuses
+    anything structured (``no-codec``)."""
+    shape, nullable = nullable_base(shape)
+    if value is None:
+        if nullable:
+            return "null"
+        refuse("value-invalid", f"{where}: null is not allowed by the shape")
     if "enum" in shape:
         if isinstance(value, bool) or value not in shape["enum"]:
             refuse("value-invalid",
@@ -354,6 +393,9 @@ def spell_value(shape: dict, value: object, *, where: str) -> str:
 def read_value(shape: dict, text: str, *, where: str) -> object:
     """Kernel mechanics (§7a), reading direction. Vocabulary reuses this
     (the table codec reads cells with it) so one grammar rules everywhere."""
+    shape, nullable = nullable_base(shape)
+    if nullable and strip(text) == "null":
+        return None
     if "enum" in shape:
         stripped = strip(text)
         for v in shape["enum"]:

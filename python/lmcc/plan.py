@@ -44,11 +44,14 @@ class RenderResult:
 
 
 class _Env:
-    """The template's window onto the plan during one render."""
+    """The template's window onto the plan during one render. ``partial``
+    marks a demo/history turn: input loops then iterate only the fields
+    the turn supplies (kernel §3)."""
 
-    def __init__(self, baked: "Baked", values: dict):
+    def __init__(self, baked: "Baked", values: dict, *, partial: bool = False):
         self.baked = baked
         self.values = values
+        self.partial = partial
 
     @property
     def instruction(self) -> str:
@@ -59,8 +62,11 @@ class _Env:
         return self.baked.reply_format()
 
     def loop_fields(self, source: str) -> list[core.Field]:
-        return (self.baked.visible_inputs if source == "inputs"
-                else self.baked.visible_outputs)
+        if source != "inputs":
+            return self.baked.visible_outputs
+        if self.partial:
+            return [f for f in self.baked.visible_inputs if f.name in self.values]
+        return self.baked.visible_inputs
 
     def field_named(self, name: str) -> core.Field:
         return self.baked.signature.field_named(name)
@@ -170,10 +176,10 @@ class Baked:
                 "system", [core.text_part(self.fragments["system"])]))
         return RenderResult(messages=messages, patch=dict(self.patch))
 
-    def _render_message(self, nodes, values: dict) -> list[dict]:
+    def _render_message(self, nodes, values: dict, *, partial: bool = False) -> list[dict]:
         out: list[dict] = []
         buf: list[str] = []
-        render_nodes(nodes, _Env(self, values), out, buf)
+        render_nodes(nodes, _Env(self, values, partial=partial), out, buf)
         if buf:
             out.append(core.text_part("".join(buf)))
         return core.merge_text_parts(out)
@@ -184,7 +190,7 @@ class Baked:
         turns: list[dict] = []
         for msg, nodes in self.adapter.compiled_messages():
             if nodes is not None and msg["role"] == "user":
-                parts = self._render_message(nodes, demo)
+                parts = self._render_message(nodes, demo, partial=True)
                 if parts:
                     turns.append(core.make_message("user", parts))
         spelled = [(f.name, self.spell(f, self.registry.lower_value(
@@ -195,12 +201,23 @@ class Baked:
         return turns
 
     def _render_history(self, history: list[dict]) -> list[dict]:
+        """Kernel §8: a history item is a message ``{role, content}``, emitted
+        verbatim, or a field turn ``{"fields": {...}}``, rendered exactly
+        like a demo — through the template and the lens."""
         turns = []
         for turn in history:
+            if not isinstance(turn, dict):
+                refuse("value-invalid", "history items must be objects")
+            if "fields" in turn and "role" not in turn:
+                if not isinstance(turn["fields"], dict):
+                    refuse("value-invalid", "history field turn: 'fields' must be an object")
+                turns.extend(self._render_demo(turn["fields"]))
+                continue
             role = turn.get("role")
             if role not in ("user", "assistant"):
                 refuse("value-invalid",
-                       f"history turn role {role!r} must be user/assistant")
+                       f"history item must be {{role: user|assistant, content}} or "
+                       f"{{fields: {{...}}}}; got keys {sorted(turn)}")
             content = turn.get("content")
             parts = content if isinstance(content, list) else [core.text_part(
                 str(content))]
@@ -441,21 +458,29 @@ def bake(adapter: Adapter, sig: core.SignatureCore, capabilities: dict,
     baked.visible_inputs = [f for f in sig.inputs if f.name not in hidden]
     baked.visible_outputs = [f for f in sig.outputs if f.name not in hidden]
 
-    # 3. codecs: instantiate bindings; refuse structured shapes with none.
+    # 3. codecs: name bindings, then the entry's @structured default, then
+    #    the host type's default; refuse structured shapes with none.
+    structured_default = adapter.codecs.get("@structured")
     for fname, binding in adapter.codecs.items():
-        if sig.field_named(fname) is None:
+        if fname == "@structured" or sig.field_named(fname) is None:
             continue  # adapters are signature-independent; unused bindings rest
         baked.codecs[fname] = registry.codec(binding.kind, binding.options)
         baked.codecs[fname].kind = binding.kind
     for f in baked.visible_outputs + baked.visible_inputs:
-        # the entry's binding wins; else the registered type's default
-        # renderer (per-runtime code, never serialized) fills in.
-        if f.name not in baked.codecs:
-            default = registry.default_codec_for(f.annotation)
-            if default is not None:
-                baked.codecs[f.name] = registry.codec(
-                    default["kind"], default.get("options", {}))
-                baked.codecs[f.name].kind = default["kind"]
+        if f.name in baked.codecs:
+            continue
+        if structured_default is not None and core.is_structured(f.shape):
+            baked.codecs[f.name] = registry.codec(structured_default.kind,
+                                                  structured_default.options)
+            baked.codecs[f.name].kind = structured_default.kind
+            continue
+        # the registered type's default renderer (per-runtime code, never
+        # serialized) fills in last.
+        default = registry.default_codec_for(f.annotation)
+        if default is not None:
+            baked.codecs[f.name] = registry.codec(
+                default["kind"], default.get("options", {}))
+            baked.codecs[f.name].kind = default["kind"]
     for f in baked.visible_outputs + baked.visible_inputs:
         if core.is_structured(f.shape) and f.name not in baked.codecs:
             refuse("no-codec",

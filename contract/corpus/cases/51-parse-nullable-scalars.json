@@ -1,0 +1,99 @@
+{
+ "name": "parse-nullable-scalars",
+ "kind": "parse",
+ "entry": {
+  "name": "derived_v1",
+  "versions": {
+   "kernel": "0.1.0",
+   "vocab": {}
+  },
+  "template": {
+   "messages": [
+    {
+     "role": "system",
+     "text": "{instruction}\n\nAnswer in exactly this form:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+    },
+    {
+     "role": "user",
+     "text": "{q}"
+    }
+   ]
+  },
+  "parse": {
+   "kind": "derived"
+  },
+  "requires": []
+ },
+ "signature": {
+  "instructions": "x",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "n",
+    "direction": "output",
+    "shape": {
+     "type": [
+      "integer",
+      "null"
+     ]
+    }
+   },
+   {
+    "name": "s",
+    "direction": "output",
+    "shape": {
+     "anyOf": [
+      {
+       "type": "null"
+      },
+      {
+       "type": "string"
+      }
+     ]
+    }
+   },
+   {
+    "name": "e",
+    "direction": "output",
+    "shape": {
+     "anyOf": [
+      {
+       "enum": [
+        "a",
+        "b"
+       ]
+      },
+      {
+       "type": "null"
+      }
+     ]
+    }
+   },
+   {
+    "name": "t",
+    "direction": "output",
+    "shape": {
+     "type": [
+      "string",
+      "null"
+     ]
+    }
+   }
+  ]
+ },
+ "response": "<n>\nnull\n</n>\n<s>\nhello\n</s>\n<e>\nnull\n</e>\n<t>\nNULL\n</t>",
+ "expect": {
+  "values": {
+   "n": null,
+   "s": "hello",
+   "e": null,
+   "t": "NULL"
+  }
+ }
+}

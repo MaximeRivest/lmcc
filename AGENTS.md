@@ -54,7 +54,7 @@ a decision, derive from these before inventing anything:
 
 | invariant | enforced by |
 |---|---|
-| corpus is byte-exact authority | `contract/harness/runner.py` (47 cases) |
+| corpus is byte-exact authority | `contract/harness/runner.py` (54 cases) |
 | the contract is portable: an independent Go kernel passes every case byte-exactly, and both kernels raise the same error-code set | `./check` step 5 (`runner.py --driver go/bin/lmcc-conform`), `tests/test_coherence.py` |
 | text primitives are portable: ASCII strip, explicit integer/number grammars, ECMAScript number spelling, RE2 regex (kernel §7a, §5) | corpus 35–37, 40–42, 44, 45; `tests/test_text_rules.py`; `go/lmcc/text_test.go` |
 | `split(join(x)) == x` for marker-free, trimmed `x`; `join` refuses collisions (`value-collides`) | `tests/test_kernel.py`, `test_derived.py`, `test_lenses.py`, `test_text_rules.py`; corpus 38 |

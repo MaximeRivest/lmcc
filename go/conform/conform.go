@@ -111,7 +111,7 @@ func run(c *lmcc.Object, kind string, expect *lmcc.Object, reg *lmcc.Registry) (
 		return compare(expect.Object("values"), values, "values"), nil
 	case "refuse":
 		if c.Has("inputs") {
-			if _, err := baked.Render(c.Object("inputs"), objects(c.List("demos")), nil); err != nil {
+			if _, err := baked.Render(c.Object("inputs"), objects(c.List("demos")), objects(c.List("history"))); err != nil {
 				return outcome{}, err
 			}
 		}

@@ -277,14 +277,77 @@ func shapeType(shape *Object) string {
 	return t
 }
 
-func IsMedia(shape *Object) bool      { return shape != nil && shape.Has("media") }
-func IsStructured(shape *Object) bool { t := shapeType(shape); return t == "object" || t == "array" }
+func IsMedia(shape *Object) bool { return shape != nil && shape.Has("media") }
+
+var scalarTypes = []string{"string", "integer", "number", "boolean"}
+
+// NullableBase (kernel §1): a nullable form of a scalar/enum shape is that
+// shape plus null. Returns the base shape and whether null is allowed.
+func NullableBase(shape *Object) (*Object, bool) {
+	if shape == nil {
+		return shape, false
+	}
+	if raw, ok := shape.Get("type"); ok {
+		if list, ok := raw.([]any); ok {
+			if len(list) != 2 {
+				return shape, false
+			}
+			var other string
+			hasNull := false
+			for _, t := range list {
+				s, _ := t.(string)
+				if s == "null" {
+					hasNull = true
+				} else {
+					other = s
+				}
+			}
+			if !hasNull || other == "" {
+				return shape, false
+			}
+			base := shape.Clone()
+			base.Set("type", other)
+			return base, true
+		}
+		return shape, false
+	}
+	alts := shape.List("anyOf")
+	if len(alts) == 2 && shape.Len() == 1 {
+		var base *Object
+		nulls := 0
+		for _, a := range alts {
+			ao, ok := a.(*Object)
+			if !ok {
+				return shape, false
+			}
+			if Equal(ao, Obj("type", "null")) {
+				nulls++
+			} else {
+				base = ao
+			}
+		}
+		if nulls == 1 && base != nil && (base.Has("enum") || contains(scalarTypes, shapeType(base))) {
+			return base, true
+		}
+	}
+	return shape, false
+}
+
+// IsStructured: object/array and every uninterpreted shape need a codec.
+func IsStructured(shape *Object) bool {
+	base, _ := NullableBase(shape)
+	if IsMedia(base) || base.Has("enum") {
+		return false
+	}
+	return !contains(scalarTypes, shapeType(base))
+}
 
 // ShapeSummary is the mechanical hint used when no codec provides one.
 func ShapeSummary(shape *Object) string {
 	if shape == nil {
 		return ""
 	}
+	shape, _ = NullableBase(shape)
 	if e, ok := shape.Get("enum"); ok {
 		vals := []string{}
 		for _, v := range e.([]any) {
@@ -318,6 +381,13 @@ func enumSpelling(v any) string {
 
 // SpellValue: kernel §7a writing direction.
 func SpellValue(shape *Object, value any, where string) string {
+	shape, nullable := NullableBase(shape)
+	if value == nil {
+		if nullable {
+			return "null"
+		}
+		refusef("value-invalid", "%s: null is not allowed by the shape", where)
+	}
 	if e, ok := shape.Get("enum"); ok {
 		for _, m := range e.([]any) {
 			if _, isBool := value.(bool); !isBool && Equal(m, value) {
@@ -375,6 +445,10 @@ func boolText(b bool) string {
 
 // ReadValue: kernel §7a reading direction.
 func ReadValue(shape *Object, text string, where string) any {
+	shape, nullable := NullableBase(shape)
+	if nullable && Strip(text) == "null" {
+		return nil
+	}
 	if e, ok := shape.Get("enum"); ok {
 		t := Strip(text)
 		for _, m := range e.([]any) {

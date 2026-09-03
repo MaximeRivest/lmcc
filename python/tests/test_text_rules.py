@@ -193,3 +193,43 @@ def test_jsontext_members_keep_source_text_and_duplicates():
     assert members == [("a", [1, 2], "[1,   2]"), ("b", "s", '"s"'), ("a", 3, "3")]
     with pytest.raises(ValueError):
         jsontext.members('{"a": 1} trailing')
+
+
+# ------------------------------------------------------ nullable / closed set
+
+@pytest.mark.parametrize("shape, base, nullable", [
+    ({"type": ["integer", "null"]}, {"type": "integer"}, True),
+    ({"type": ["null", "string"]}, {"type": "string"}, True),
+    ({"anyOf": [{"type": "string"}, {"type": "null"}]}, {"type": "string"}, True),
+    ({"anyOf": [{"type": "null"}, {"enum": ["a"]}]}, {"enum": ["a"]}, True),
+    ({"type": ["integer", "string"]}, {"type": ["integer", "string"]}, False),
+    ({"type": ["integer", "string", "null"]}, {"type": ["integer", "string", "null"]}, False),
+    ({"anyOf": [{"type": "object"}, {"type": "null"}]},
+     {"anyOf": [{"type": "object"}, {"type": "null"}]}, False),   # structured stays codec territory
+    ({"anyOf": [{"type": "string"}, {"type": "null"}], "desc": "x"},
+     {"anyOf": [{"type": "string"}, {"type": "null"}], "desc": "x"}, False),  # only the bare spelling
+])
+def test_nullable_base(shape, base, nullable):
+    assert core.nullable_base(shape) == (base, nullable)
+
+
+@pytest.mark.parametrize("shape, structured", [
+    ({"type": "string"}, False), ({"enum": [1]}, False), ({"media": "image"}, False),
+    ({"type": ["integer", "null"]}, False),
+    ({"type": "array"}, True), ({"type": "object"}, True),
+    ({"anyOf": [{"type": "string"}, {"type": "integer"}]}, True),
+    ({"$ref": "#/$defs/X"}, True), ({}, True),
+    ({"anyOf": [{"type": "object"}, {"type": "null"}]}, True),
+])
+def test_uninterpreted_shapes_are_structured(shape, structured):
+    assert core.is_structured(shape) is structured
+
+
+def test_null_spelling_and_reading():
+    n = {"type": ["integer", "null"]}
+    assert core.spell_value(n, None, where="t") == "null"
+    assert core.read_value(n, " null\n", where="t") is None
+    assert core.read_value(n, "3", where="t") == 3
+    with pytest.raises(lmcc.LMCCError):
+        core.spell_value({"type": "integer"}, None, where="t")
+    assert core.read_value({"type": ["string", "null"]}, "NULL", where="t") == "NULL"
