@@ -1,8 +1,8 @@
 # Vocabulary specifications
 
-Every named codec, strategy, and lens is a **vocabulary entry**: a
+Every named format, strategy, and lens is a **vocabulary entry**: a
 versioned spec file here plus corpus cases pinning its behavior. No entry
-is privileged — `codec/json` and your lab's codec graduate the same way:
+is privileged — `format/json` and your lab's format graduate the same way:
 
 1. Write the spec file (behavior, options, the ugly cases: escaping,
    nulls, fences — everything two implementations could disagree on).
@@ -11,7 +11,7 @@ is privileged — `codec/json` and your lab's codec graduate the same way:
 
 An implementation may claim any subset of the vocabulary. Claimed entries
 must pass their cases byte-exactly; unclaimed names refuse at load
-(`unknown-codec` / `unknown-strategy` / `unknown-parse-kind`) — never
+(`unknown-format` / `unknown-strategy` / `unknown-parse-kind`) — never
 silently.
 
 Role names are themselves vocabulary — the function each name means and
@@ -22,9 +22,9 @@ Current entries (all 0.1.0, provided by `python/lmcc_std` and, byte-identically,
 
 | entry | spec |
 |---|---|
-| `codec/json` | `codec-json.md` |
-| `codec/table` | `codec-table.md` |
-| `codec/scaled_number` | `codec-scaled_number.md` |
+| `format/json` | `format-json.md` |
+| `format/table` | `format-table.md` |
+| `format/scaled_number` | `format-scaled_number.md` |
 | `strategy/prefix_cot` | `strategy-reasoning.md` |
 | `strategy/reasoning_tags` | `strategy-reasoning.md` |
 | `strategy/native_reasoning` | `strategy-reasoning.md` |

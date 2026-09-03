@@ -1,0 +1,83 @@
+{
+ "name": "refuse-bind-routing-target-unknown",
+ "kind": "refuse",
+ "entry": {
+  "name": "sub_v1",
+  "versions": {
+   "kernel": "0.2.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "directive": "demos"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "parse": {
+   "kind": "derived"
+  },
+  "strategies": {
+   "work": {
+    "visible": false,
+    "routings": [
+     {
+      "from": "text",
+      "between": [
+       "<w>",
+       "</w>"
+      ],
+      "to": "@role",
+      "consume": true
+     },
+     {
+      "from": "text",
+      "between": [
+       "<n>",
+       "</n>"
+      ],
+      "to": "@role.notes",
+      "consume": true
+     }
+    ]
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Do.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "work",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    },
+    "role": "work"
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "expect": {
+  "code": "unknown-slot",
+  "at": "bind"
+ }
+}

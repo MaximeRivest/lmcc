@@ -1,0 +1,105 @@
+{
+ "name": "derived-dspy-markers",
+ "kind": "render",
+ "entry": {
+  "name": "dspy_sections_v1",
+  "versions": {
+   "kernel": "0.2.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n\nReply with EXACTLY these sections:\n{% for f in outputs %}[[ ## {f.name} ## ]]\n{f.value}\n{% endfor %}[[ ## completed ## ]]"
+   },
+   {
+    "directive": "demos"
+   },
+   {
+    "role": "user",
+    "text": "{% for f in inputs %}== {f.name} ==\n{f.value}\n{% endfor %}"
+   }
+  ],
+  "parse": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Answer the question.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    },
+    "desc": "short answer"
+   },
+   {
+    "name": "score",
+    "direction": "output",
+    "shape": {
+     "type": "integer"
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "question": "3+3?"
+ },
+ "demos": [
+  {
+   "question": "2+2?",
+   "answer": "4",
+   "score": 10
+  }
+ ],
+ "expect": {
+  "messages": [
+   {
+    "role": "system",
+    "content": [
+     {
+      "kind": "text",
+      "text": "Answer the question.\n\nReply with EXACTLY these sections:\n[[ ## answer ## ]]\nshort answer\n[[ ## score ## ]]\n(integer)\n[[ ## completed ## ]]"
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "content": [
+     {
+      "kind": "text",
+      "text": "== question ==\n2+2?\n"
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "content": [
+     {
+      "kind": "text",
+      "text": "[[ ## answer ## ]]\n4\n[[ ## score ## ]]\n10\n[[ ## completed ## ]]"
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "content": [
+     {
+      "kind": "text",
+      "text": "== question ==\n3+3?\n"
+     }
+    ]
+   }
+  ],
+  "patch": {}
+ }
+}

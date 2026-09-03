@@ -1,0 +1,57 @@
+{
+ "name": "derived-xml-markers",
+ "kind": "parse",
+ "entry": {
+  "name": "xml_sections_v1",
+  "versions": {
+   "kernel": "0.2.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n\nReply with one <name>...</name> element per field:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "parse": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Answer.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "score",
+    "direction": "output",
+    "shape": {
+     "type": "integer"
+    }
+   }
+  ]
+ },
+ "response": "<answer>\nParis\n</answer>\nnoise between sections\n<score>\n9\n</score>\ntrailing chatter",
+ "expect": {
+  "values": {
+   "answer": "Paris",
+   "score": 9
+  }
+ }
+}

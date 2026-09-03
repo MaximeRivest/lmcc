@@ -32,7 +32,7 @@ def _raised_codes() -> set[str]:
             for node in ast.walk(tree):
                 if (isinstance(node, ast.Call)
                         and isinstance(node.func, ast.Name)
-                        and node.func.id == "refuse"
+                        and node.func.id in ("refuse",)
                         and node.args
                         and isinstance(node.args[0], ast.Constant)
                         and isinstance(node.args[0].value, str)):
@@ -63,7 +63,7 @@ def test_corpus_case_names_match_filenames():
         assert number.isdigit(), f"{path.name}: expected NN-name.json"
         assert case["name"] == name, (
             f"{path.name}: file says {name!r}, case says {case['name']!r}")
-        assert case["kind"] in ("render", "parse", "roundtrip", "refuse")
+        assert case["kind"] in ("render", "parse", "roundtrip", "refuse", "plan")
 
 
 def test_vocab_index_is_complete_and_spec_files_exist():
@@ -72,8 +72,8 @@ def test_vocab_index_is_complete_and_spec_files_exist():
     registry = lmcc.Registry()
     lmcc_std.install(registry)
     index = (SPEC / "vocab" / "README.md").read_text()
-    for name in registry.codecs:
-        assert f"`codec/{name}`" in index, f"codec/{name} missing from index"
+    for name in registry.formats:
+        assert f"`format/{name}`" in index, f"format/{name} missing from index"
     for name in registry.strategies:
         assert f"`strategy/{name}`" in index, f"strategy/{name} missing"
     for name in registry.lenses:
@@ -134,7 +134,13 @@ def test_go_implementation_raises_only_documented_codes():
         f"codes raised in go/ but missing from spec/errors.md: {sorted(undocumented)}")
 
 
+# Codes only a runtime that places code can raise; the Go kernel places
+# none (kernel §5, plan 08 V3-6). Everything else must match exactly.
+PYTHON_ONLY = {"format-not-self-contained"}
+
+
 def test_both_implementations_raise_the_same_codes():
     """Neither kernel may have a refusal the other cannot produce — a
-    one-sided code is a behavior the corpus cannot pin across languages."""
-    assert _go_raised_codes() == _raised_codes()
+    one-sided code is a behavior the corpus cannot pin across languages
+    (except the declared placement-only codes)."""
+    assert _go_raised_codes() == _raised_codes() - PYTHON_ONLY

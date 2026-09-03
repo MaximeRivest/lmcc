@@ -15,6 +15,7 @@ const whitespace = " \t\n\r\f\v"
 
 var (
 	identifierRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	roleRE       = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$`)
 	integerRE    = regexp.MustCompile(`^-?[0-9]+$`)
 	numberRE     = regexp.MustCompile(`^-?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?$`)
 )
@@ -77,11 +78,11 @@ func FormatNumber(f float64) string {
 func ReadInteger(text, where string) int64 {
 	t := Strip(text)
 	if !integerRE.MatchString(t) {
-		refusef("value-invalid", "%s: %q is not an integer", where, t)
+		refusef("parse-value", "%s: %q is not an integer", where, t)
 	}
 	n, err := strconv.ParseInt(t, 10, 64)
 	if err != nil {
-		refusef("value-invalid", "%s: %q is outside the int64 range", where, t)
+		refusef("parse-value", "%s: %q is outside the int64 range", where, t)
 	}
 	return n
 }
@@ -89,11 +90,11 @@ func ReadInteger(text, where string) int64 {
 func ReadNumber(text, where string) float64 {
 	t := Strip(text)
 	if !numberRE.MatchString(t) {
-		refusef("value-invalid", "%s: %q is not a number", where, t)
+		refusef("parse-value", "%s: %q is not a number", where, t)
 	}
 	f, err := strconv.ParseFloat(t, 64)
 	if err != nil || math.IsInf(f, 0) {
-		refusef("value-invalid", "%s: %q is not a finite number", where, t)
+		refusef("parse-value", "%s: %q is not a finite number", where, t)
 	}
 	return f
 }
@@ -107,7 +108,7 @@ func ReadBoolean(text, where string) bool {
 	case "false", "no":
 		return false
 	}
-	refusef("value-invalid", "%s: %q is not a boolean", where, t)
+	refusef("parse-value", "%s: %q is not a boolean", where, t)
 	return false
 }
 

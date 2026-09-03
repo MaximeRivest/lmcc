@@ -23,15 +23,16 @@ Requires `instruct`. **Hidden** (`visible: false`). Options: `open`
 > After every sentence of output, add your thinking inside
 > {open}...{close} tags.
 
-Routing: `between {open, close}` → the role field, `join: "\n"`,
-`strip: true` — spans are removed from the visible text before section
-splitting, so thinking never pollutes other fields.
+Routing: `{from: text, between: [open, close], to: @role, consume: true}`
+— the spans are removed from the text the lens sees, so thinking never
+pollutes other fields; the field's format reads `span.text` (the
+matches, stripped, joined by newlines).
 
 ## strategy/native_reasoning
 
 Models with a native thinking channel. Requires `native_reasoning`.
-**Hidden.** No fragments, no token cost. Routing: `parts {part:
-"thinking"}` → the role field, `join: "\n"`.
+**Hidden.** No fragments, no token cost. Routing: `{from:
+channel:thinking, to: @role}`.
 
-**Corpus.** `10-refuse-bake-capability.json` (predicate refusal),
+**Corpus.** `10-refuse-bind-capability.json` (predicate refusal),
 `15-std-reasoning-tags.json` (route + strip).

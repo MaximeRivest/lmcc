@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:lmcc:schema:signature:0.1.0",
+  "$id": "urn:lmcc:schema:signature:0.2.0",
   "title": "LMCC signature (SignatureCore)",
   "description": "The frontend-neutral typed contract every language lowers to: instructions plus ordered fields. Uniqueness of field names is enforced by implementations (signature-malformed), not expressible here.",
   "type": "object",
@@ -46,10 +46,16 @@
           "$ref": "#/$defs/shape"
         },
         "role": {
-          "$ref": "#/$defs/identifier"
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*$"
         },
         "desc": {
           "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "the type's name as the frontend spells it; formats resolve by it first"
         }
       },
       "additionalProperties": false

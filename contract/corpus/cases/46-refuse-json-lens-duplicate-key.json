@@ -7,27 +7,24 @@
  "entry": {
   "name": "json_lens_v1",
   "versions": {
-   "kernel": "0.1.0",
+   "kernel": "0.2.0",
    "vocab": {
     "lens/json_object": "0.1.0"
    }
   },
-  "template": {
-   "messages": [
-    {
-     "role": "system",
-     "text": "{instruction}"
-    },
-    {
-     "role": "user",
-     "text": "{question}"
-    }
-   ]
-  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}"
+   },
+   {
+    "role": "user",
+    "text": "{question}"
+   }
+  ],
   "parse": {
    "kind": "json_object"
-  },
-  "requires": []
+  }
  },
  "signature": {
   "instructions": "Answer.",

@@ -1,0 +1,57 @@
+{
+ "name": "parse-bare-output-slots",
+ "kind": "parse",
+ "entry": {
+  "name": "bare_v1",
+  "versions": {
+   "kernel": "0.2.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\nReply exactly like this:\n{{\"answer\": \"{answer}\", \"score\": {score}}}"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "parse": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Answer.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "score",
+    "direction": "output",
+    "shape": {
+     "type": "integer"
+    }
+   }
+  ]
+ },
+ "response": "{\"answer\": \"Paris\", \"score\": 9}",
+ "expect": {
+  "values": {
+   "answer": "Paris",
+   "score": 9
+  }
+ }
+}

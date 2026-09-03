@@ -4,37 +4,31 @@
  "entry": {
   "name": "derived_v1",
   "versions": {
-   "kernel": "0.1.0",
+   "kernel": "0.2.0",
    "vocab": {}
   },
-  "template": {
-   "messages": [
-    {
-     "role": "system",
-     "text": "{instruction}\n\nAnswer in exactly this form:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
-    },
-    {
-     "role": "user",
-     "text": "{q}"
-    }
-   ]
-  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n\nAnswer in exactly this form:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
   "parse": {
    "kind": "derived"
   },
-  "requires": [],
   "strategies": {
    "reasoning": {
     "visible": false,
     "routings": [
      {
-      "extract": {
-       "kind": "pattern",
-       "regex": "Thought: ([^\\n]+)"
-      },
-      "field": "@role",
-      "join": "\n",
-      "strip": true
+      "from": "text",
+      "pattern": "Thought: ([^\\n]+)",
+      "to": "@role",
+      "consume": true
      }
     ]
    }

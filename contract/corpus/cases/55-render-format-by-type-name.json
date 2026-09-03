@@ -1,0 +1,137 @@
+{
+ "name": "render-format-by-type-name",
+ "kind": "render",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "typed_v1",
+  "versions": {
+   "kernel": "0.2.0",
+   "vocab": {
+    "format/json": "0.1.0"
+   }
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n\nAnswer in exactly this form:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "directive": "demos"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "parse": {
+   "kind": "derived"
+  },
+  "formats": {
+   "Person": {
+    "use": "json",
+    "options": {
+     "indent": null
+    }
+   },
+   "object": {
+    "use": "json"
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Extract.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "who",
+    "direction": "output",
+    "shape": {
+     "type": "object",
+     "properties": {
+      "name": {
+       "type": "string"
+      },
+      "age": {
+       "type": "integer"
+      }
+     }
+    },
+    "type": "Person"
+   },
+   {
+    "name": "extra",
+    "direction": "output",
+    "shape": {
+     "type": "object"
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "q": "go"
+ },
+ "demos": [
+  {
+   "q": "went",
+   "who": {
+    "name": "Ann",
+    "age": 41
+   },
+   "extra": {
+    "k": [
+     1,
+     2
+    ]
+   }
+  }
+ ],
+ "expect": {
+  "messages": [
+   {
+    "role": "system",
+    "content": [
+     {
+      "kind": "text",
+      "text": "Extract.\n\nAnswer in exactly this form:\n<who>\nJSON matching this schema: {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\"}, \"age\": {\"type\": \"integer\"}}}\n</who>\n<extra>\nJSON matching this schema: {\"type\": \"object\"}\n</extra>\n"
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "content": [
+     {
+      "kind": "text",
+      "text": "went"
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "content": [
+     {
+      "kind": "text",
+      "text": "<who>\n{\"name\": \"Ann\", \"age\": 41}\n</who>\n<extra>\n{\n  \"k\": [\n    1,\n    2\n  ]\n}\n</extra>"
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "content": [
+     {
+      "kind": "text",
+      "text": "go"
+     }
+    ]
+   }
+  ],
+  "patch": {}
+ }
+}

@@ -38,7 +38,7 @@ This is deliberate — roles are a research surface, and inventing one must
 cost nothing. The vocabulary exists for the *shared* names: publishing a
 strategy pack against a role name is a claim about this table. Promoting
 a new role here is a versioned change (minor to add, breaking to change
-meaning), same discipline as codecs.
+meaning), same discipline as formats.
 
 Reserved rows name the function now so the ecosystem does not fork on
 naming before the strategies land.

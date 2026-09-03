@@ -16,3 +16,4 @@ Protocol per plan: spec → corpus (hand-authored bytes) → code →
 | `05-second-implementation.md` | ✅ Go kernel; harness passes byte-exact (46/46) | L |
 | `06-structured-fix-hints.md` | refusals carry a machine-actionable `fix` payload | S |
 | `07-dspy-parity.md` | ✅ any DSPy signature lowers, renders, parses; 16-row catalog vs real DSPy | L |
+| `08-v3-alignment.md` | ✅ the contract is the v3 design: formats by type, strategies by role, parts/spans, UDFs, `@lmcc.fn`, plan faces | XL |

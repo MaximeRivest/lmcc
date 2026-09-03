@@ -82,7 +82,7 @@ def fill_expect(case: dict) -> dict:
         case["expect"] = {"entry": lmcc_mod.dump(adapter, registry)}
         return case
     sig = lmcc_mod.signature_from_dict(case["signature"])
-    baked = adapter.bake(sig, case.get("capabilities", {}), registry=registry)
+    baked = adapter.bind(sig, case.get("capabilities", {}), registry=registry)
     if case["kind"] == "render":
         result = baked.render(inputs=case.get("inputs", {}),
                               demos=case.get("demos"),

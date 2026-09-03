@@ -1,0 +1,186 @@
+{
+ "name": "render-structured-default-format",
+ "kind": "render",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "dspy_like_v1",
+  "versions": {
+   "kernel": "0.2.0",
+   "vocab": {
+    "format/json": "0.1.0"
+   }
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n\nAnswer in exactly this form:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "directive": "demos"
+   },
+   {
+    "role": "user",
+    "text": "{% for f in inputs %}[[ ## {f.name} ## ]]\n{f.value}\n{% endfor %}"
+   }
+  ],
+  "parse": {
+   "kind": "derived"
+  },
+  "formats": {
+   "*": {
+    "use": "json",
+    "options": {
+     "indent": null
+    }
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Extract.",
+  "fields": [
+   {
+    "name": "doc",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "ctx",
+    "direction": "input",
+    "shape": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    }
+   },
+   {
+    "name": "who",
+    "direction": "input",
+    "shape": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ]
+    }
+   },
+   {
+    "name": "items",
+    "direction": "output",
+    "shape": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    }
+   },
+   {
+    "name": "meta",
+    "direction": "output",
+    "shape": {
+     "type": "object",
+     "properties": {
+      "n": {
+       "type": "integer"
+      }
+     }
+    }
+   },
+   {
+    "name": "pick",
+    "direction": "output",
+    "shape": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "integer"
+      }
+     ]
+    }
+   },
+   {
+    "name": "count",
+    "direction": "output",
+    "shape": {
+     "type": [
+      "integer",
+      "null"
+     ]
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "doc": "d",
+  "ctx": [
+   "a",
+   "b"
+  ],
+  "who": null
+ },
+ "demos": [
+  {
+   "doc": "e",
+   "ctx": [],
+   "who": "me",
+   "items": [
+    "x"
+   ],
+   "meta": {
+    "n": 2
+   },
+   "pick": 7,
+   "count": null
+  }
+ ],
+ "expect": {
+  "messages": [
+   {
+    "role": "system",
+    "content": [
+     {
+      "kind": "text",
+      "text": "Extract.\n\nAnswer in exactly this form:\n<items>\nJSON matching this schema: {\"type\": \"array\", \"items\": {\"type\": \"string\"}}\n</items>\n<meta>\nJSON matching this schema: {\"type\": \"object\", \"properties\": {\"n\": {\"type\": \"integer\"}}}\n</meta>\n<pick>\nJSON matching this schema: {\"anyOf\": [{\"type\": \"string\"}, {\"type\": \"integer\"}]}\n</pick>\n<count>\n(integer)\n</count>\n"
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "content": [
+     {
+      "kind": "text",
+      "text": "[[ ## doc ## ]]\ne\n[[ ## ctx ## ]]\n[]\n[[ ## who ## ]]\nme\n"
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "content": [
+     {
+      "kind": "text",
+      "text": "<items>\n[\"x\"]\n</items>\n<meta>\n{\"n\": 2}\n</meta>\n<pick>\n7\n</pick>\n<count>\nnull\n</count>"
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "content": [
+     {
+      "kind": "text",
+      "text": "[[ ## doc ## ]]\nd\n[[ ## ctx ## ]]\n[\"a\", \"b\"]\n[[ ## who ## ]]\nnull\n"
+     }
+    ]
+   }
+  ],
+  "patch": {}
+ }
+}

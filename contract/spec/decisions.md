@@ -237,3 +237,28 @@ round-tripped through the DSPy-shaped entry), not about DSPy's prompt
 bytes. Cost: `./check` builds a DSPy venv with uv on first run (network
 once); `Optional[Model]` lifts to a dict, not a model (only bare model
 types get host bindings); DSPy's lenient parsing is not reproduced.
+
+**D-24 · The contract is the v3 design (kernel 0.2).** Formats replace
+codecs and are keyed by **type name** or structural key, never by field
+name; a format is `write(value) → parts`, `read(span) → value`,
+optional `describe`, with declared `accepts`/`direction`/`emits`/
+`round_trip`; the kernel keeps only its scalar/enum/null and media-part
+defaults and refuses `no-format` for anything structured. A format may
+be **shipped whole** (language, source, deps, sha256, author); `load`
+never runs it; runtimes admit by hash and self-containment and refuse
+by name when they will not or cannot place it. Strategies gain
+`choose`, `placement`, and the `{from, to, consume}` routing form; the
+`sections` lens is gone (every marker dialect is a derived pattern,
+tails and bare output slots included); the lens socket stays for
+document forms a signature-independent pattern cannot spell
+(`json_object`). `@lmcc.fn`, `Role`, `One`, `Refusal(code, hint,
+partial)`, `plan.skeleton()`/`prefix()` land. Reason: the 0.1 kernel had
+narrowed v3 (codecs by field name, media as a kernel special case, no
+parts, no UDFs) and D-20 was the symptom; the maintainer ratified v3 as
+written, accepting that runtime type bindings are the stated
+language-specific leak and that UDFs are the portable path when one
+cares. Costs, each stated in `plans/08`: a second corpus seeding
+(reviewed diff by diff), a second kernel rewrite, Go declares UDF cases
+unclaimed and lacks `format-not-self-contained`, strict escapes remain
+(`{{"answer": "{answer}"}}`), `reach` from the v2 pack-authors notes is
+not adopted, and `parser()`/`grammar` stay gaps.

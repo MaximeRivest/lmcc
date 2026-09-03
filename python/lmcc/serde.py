@@ -1,25 +1,22 @@
-"""Serde: the artifact. Dump an adapter to plain data; load it back.
+"""Serde: the artifact (kernel §5, §6; schema/entry.schema.json).
 
-The entry format is the contract's file format (contract/schema/
-entry.schema.json). Two rules with no exceptions:
+Two rules with no exceptions:
 
 - **Zero ambient state.** ``load`` resolves names only through the registry
-  you hand it. A data-only entry (no named refs) loads with an empty one.
-- **Loud refusal.** Unknown kinds, malformed structure, and incompatible
-  versions refuse naming the exact reference and path.
-
-Versioning: the kernel and each vocabulary entry are versioned separately.
-While the kernel is 0.x, minor versions are treated as breaking (the usual
-semver-0 convention).
+  you hand it. A data-only entry loads with an empty one.
+- **Loud refusal.** Unknown names, malformed structure, incompatible
+  versions, and shipped code this runtime will not place refuse, naming
+  the exact reference and path. Loading never runs a UDF.
 """
 
 from __future__ import annotations
 
-from .adapter import Adapter, CodecBinding, StrategyBinding, adapter as make_adapter
+from . import formats as _formats
+from .adapter import Adapter, adapter as make_adapter
 from .errors import refuse
 from .strategy import Strategy
 
-KERNEL_VERSION = "0.1.0"
+KERNEL_VERSION = "0.2.0"
 
 
 def _parse_version(version: object, *, what: str) -> tuple[int, int, int]:
@@ -36,14 +33,19 @@ def _check_compatible(kind: str, theirs: str, ours: str) -> None:
     ok = t[0] == o[0] and (t[1] <= o[1] if t[0] > 0 else t[1] == o[1])
     if not ok:
         refuse("version-incompatible",
-               f"{kind}: entry needs {theirs}, this implementation provides {ours}")
+               f"{kind}: artifact needs {theirs}, this implementation provides {ours}")
+
+
+def _check_vocab_version(ref: str, declared: dict, provided: str) -> None:
+    if ref in declared:
+        _check_compatible(ref, declared[ref], provided)
 
 
 # ---------------------------------------------------------------------- load
 
 
 def load(entry: dict, *, registry=None) -> Adapter:
-    from .registry import Registry, default_registry
+    from .registry import default_registry
     registry = registry if registry is not None else default_registry
 
     if not isinstance(entry, dict):
@@ -51,24 +53,28 @@ def load(entry: dict, *, registry=None) -> Adapter:
     for key in ("template", "parse", "versions"):
         if key not in entry:
             refuse("entry-malformed", f"entry is missing required key {key!r}")
-
     versions = entry["versions"]
+    if not isinstance(versions, dict):
+        refuse("entry-malformed", "versions must be an object")
     _check_compatible("kernel", versions.get("kernel", "0.0.0"), KERNEL_VERSION)
-    vocab_versions = versions.get("vocab", {})
+    vocab_versions = versions.get("vocab", {}) or {}
 
-    messages = entry["template"].get("messages")
-    if not isinstance(messages, list):
-        refuse("entry-malformed", "template.messages must be a list")
+    template = entry["template"]
+    if isinstance(template, dict) and "messages" in template:
+        refuse("entry-malformed",
+               "template is a list in kernel 0.2 (the 0.1 {\"messages\": [...]} form is gone)")
+    if not isinstance(template, list):
+        refuse("entry-malformed", "template must be a list")
 
     parse_spec = entry["parse"]
     if not isinstance(parse_spec, dict):
         refuse("entry-malformed", "entry.parse must be an object")
     lens_kind = parse_spec.get("kind")
-    if lens_kind not in ("sections", "derived"):
+    if lens_kind != "derived":
         if lens_kind not in registry.lenses:
             refuse("unknown-parse-kind",
-                   f"parse.kind {lens_kind!r} is neither the kernel lens "
-                   f"'sections' nor a registered lens")
+                   f"parse.kind {lens_kind!r} is neither the kernel lens 'derived' nor a "
+                   f"registered lens")
         _check_vocab_version(f"lens/{lens_kind}", vocab_versions,
                              registry.lenses[lens_kind].version)
 
@@ -77,37 +83,43 @@ def load(entry: dict, *, registry=None) -> Adapter:
         where = f"strategies[{role!r}]"
         if not isinstance(s, dict):
             refuse("entry-malformed", f"{where}: must be an object")
-        if "kind" in s:
-            name = s["kind"]
+        if "use" in s:
+            name = s["use"]
             if name not in registry.strategies:
-                refuse("unknown-strategy",
-                       f"{where}: strategy {name!r} is not registered")
+                refuse("unknown-strategy", f"{where}: strategy {name!r} is not registered")
             _check_vocab_version(f"strategy/{name}", vocab_versions,
                                  registry.strategies[name].version)
-            strategies[role] = {"kind": name, "options": s.get("options", {})}
+            strategies[role] = {"use": name, "options": dict(s.get("options", {}))}
         else:
             strategies[role] = Strategy.from_dict(s, where=where)
 
-    codecs: dict[str, dict] = {}
-    for fname, c in (entry.get("codecs") or {}).items():
-        where = f"codecs[{fname!r}]"
-        if not isinstance(c, dict) or "kind" not in c:
-            refuse("entry-malformed", f"{where}: must be an object with 'kind'")
-        name = c["kind"]
-        if name not in registry.codecs:
-            refuse("unknown-codec", f"{where}: codec {name!r} is not registered")
-        _check_vocab_version(f"codec/{name}", vocab_versions,
-                             registry.codecs[name].version)
-        codecs[fname] = {"kind": name, "options": c.get("options", {})}
+    formats: dict[str, object] = {}
+    for key, f in (entry.get("formats") or {}).items():
+        where = f"formats[{key!r}]"
+        if not isinstance(f, dict):
+            refuse("entry-malformed", f"{where}: must be an object")
+        if "use" in f:
+            name = f["use"]
+            if name not in registry.formats:
+                refuse("unknown-format", f"{where}: format {name!r} is not registered")
+            _check_vocab_version(f"format/{name}", vocab_versions,
+                                 registry.formats[name].version)
+            formats[key] = {"use": name, "options": dict(f.get("options", {}))}
+        elif "language" in f:
+            for req in ("write", "sha256"):
+                if req not in f:
+                    refuse("entry-malformed", f"{where}: a shipped format needs {req!r}")
+            if not registry.allow_udf:
+                refuse("format-untrusted",
+                       f"{where}: the artifact ships a {f['language']} UDF and this runtime "
+                       f"will not place code (Registry(allow_udf=True) to allow)")
+            formats[key] = _formats.load_udf(f, where=where)
+            formats[key].shipped = dict(f)  # kept whole for dump
+        else:
+            refuse("entry-malformed", f"{where}: a format entry is {{use}} or a shipped UDF")
 
-    return make_adapter(template={"messages": messages}, parse=entry["parse"],
-                        strategies=strategies, codecs=codecs,
-                        name=entry.get("name", "adapter"))
-
-
-def _check_vocab_version(ref: str, declared: dict, provided: str) -> None:
-    if ref in declared:
-        _check_compatible(ref, declared[ref], provided)
+    return make_adapter(messages=template, parse=parse_spec, strategies=strategies,
+                        formats=formats, name=entry.get("name", "adapter"))
 
 
 # ---------------------------------------------------------------------- dump
@@ -117,40 +129,53 @@ def dump(adp: Adapter, registry) -> dict:
     vocab: dict[str, str] = {}
     strategies: dict[str, dict] = {}
     for role, binding in adp.strategies.items():
-        strategies[role] = binding.to_dict()
-        if binding.ref is not None:
-            named = registry.strategies.get(binding.ref)
+        if isinstance(binding, Strategy):
+            strategies[role] = binding.to_dict()
+        else:
+            named = registry.strategies.get(binding["use"])
             if named is None:
                 refuse("unknown-strategy",
-                       f"cannot dump: strategy {binding.ref!r} is not registered "
+                       f"cannot dump: strategy {binding['use']!r} is not registered "
                        f"(its version is part of the artifact)")
-            vocab[f"strategy/{binding.ref}"] = named.version
-    codecs: dict[str, dict] = {}
-    for fname, binding in adp.codecs.items():
-        codecs[fname] = binding.to_dict()
-        named = registry.codecs.get(binding.kind)
-        if named is None:
-            refuse("unknown-codec",
-                   f"cannot dump: codec {binding.kind!r} is not registered")
-        vocab[f"codec/{binding.kind}"] = named.version
+            vocab[f"strategy/{binding['use']}"] = named.version
+            strategies[role] = _ref(binding)
+    formats: dict[str, dict] = {}
+    for key, binding in adp.formats.items():
+        if isinstance(binding, dict) and "use" in binding:
+            named = registry.formats.get(binding["use"])
+            if named is None:
+                refuse("unknown-format", f"cannot dump: format {binding['use']!r} is not registered")
+            vocab[f"format/{binding['use']}"] = named.version
+            formats[key] = _ref(binding)
+        elif isinstance(binding, dict):
+            formats[key] = dict(binding)
+        elif getattr(binding, "shipped", None) is not None:
+            formats[key] = dict(binding.shipped)
+        else:
+            formats[key] = _formats.ship(binding)
     lens_kind = adp.parse.get("kind")
-    if lens_kind not in ("sections", "derived"):
+    if lens_kind != "derived":
         named = registry.lenses.get(lens_kind)
         if named is None:
             refuse("unknown-parse-kind",
-                   f"cannot dump: lens {lens_kind!r} is not registered "
-                   f"(its version is part of the artifact)")
+                   f"cannot dump: lens {lens_kind!r} is not registered (its version is "
+                   f"part of the artifact)")
         vocab[f"lens/{lens_kind}"] = named.version
-
     entry: dict = {
         "name": adp.name,
         "versions": {"kernel": KERNEL_VERSION, "vocab": vocab},
-        "template": {"messages": [dict(m) for m in adp.template["messages"]]},
+        "template": [dict(m) for m in adp.template],
         "parse": dict(adp.parse),
     }
     if strategies:
         entry["strategies"] = strategies
-    if codecs:
-        entry["codecs"] = codecs
-    entry["requires"] = []
+    if formats:
+        entry["formats"] = formats
     return entry
+
+
+def _ref(binding: dict) -> dict:
+    out = {"use": binding["use"]}
+    if binding.get("options"):
+        out["options"] = dict(binding["options"])
+    return out

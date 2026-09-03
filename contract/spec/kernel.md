@@ -1,390 +1,302 @@
 # The LMCC kernel — normative specification
 
-**Version 0.1.0** (kernel). Status: reference-proven — the Python
-implementation in `python/lmcc` and this document were built together; where
-they disagree, fix the corpus first, then both.
+**Version 0.2.0** (kernel). Status: the v3 design (`plans/08`), built with
+two implementations (`python/lmcc`, `go/lmcc`) against the corpus. Where
+this document and the corpus disagree, fix the corpus first, then both.
 
-**One sentence.** LMCC is the language model calling convention: it maps a
-declared I/O contract to model messages and maps the reply back to typed
-values, as inspectable, shareable, versioned data.
+**One sentence.** When a program calls a function in another language, a
+calling convention says where each argument goes, how the result comes
+back, and how each type crosses. A model is another language; LMCC is its
+calling convention.
 
-**What the kernel is.** Mechanics only: the template engine, the lens, the
-bake/render/parse pipeline, serde, the sockets, and the refusal taxonomy.
-The kernel ships **zero codecs, zero strategies, zero host types**. Every
-named codec/strategy is vocabulary (see `spec/vocab/`), registered through
-sockets, certified by the corpus. The precedent is serde-without-serde_json.
+```
+signature (your typed function)
+        │  write: each value → its place on the wire
+        ▼
+   the wire: messages, parts, request controls        ← the adapter lays this out
+        │  read: the reply → each typed value
+        ▼
+your typed return value
+```
+
+LMCC never touches the network. It lays out the call and reads the
+return. The nouns: **signature, adapter, template, lens, format, part,
+span, role, strategy, capability**; the verb: **bind**. The kernel ships
+no formats and no strategies beyond the defaults §5 names.
 
 ---
 
-## 1. SignatureCore (the neutral input)
+## 1. Signature
 
 ```
-SignatureCore = { instructions: str, fields: [Field] }
+Signature = { instructions: str, fields: [Field] }
 Field = { name, direction: "input"|"output", shape: JSONSchema,
-          role: str = "plain", desc: str? }
+          type?: str, role?: str = "plain", desc?: str }
 ```
 
-The plain-data form is `schema/signature.schema.json`. Field names are
-ASCII identifiers (`[A-Za-z_][A-Za-z0-9_]*`) and unique within a
-signature; `direction` is `input` or `output`; `shape` is an object.
-Anything else refuses `signature-malformed`, naming the field. Names are
-restricted because they become template slots, lens markers, and JSON
-member keys in every host language; a frontend that wants other names
-maps them.
-
-Shapes are JSON Schema, but the kernel **interprets only** these
-keywords — every other keyword is carried untouched for codecs, lenses,
-and request patches to read:
+Plain-data form: `schema/signature.schema.json`. Field names are ASCII
+identifiers, unique; `signature-malformed` names the offender. `shape`
+is JSON Schema; the kernel reads only these keywords and carries every
+other one untouched for formats to use:
 
 | shape | kernel meaning |
 |---|---|
-| `{"type": "string"}` | text, verbatim |
-| `{"type": "integer"}` · `{"type": "number"}` · `{"type": "boolean"}` | kernel scalars (§7) |
-| `{"enum": [...]}` (+ optional `type`) | membership; values are strings or integers |
-| `{"type": "array", "items"?: shape}` · `{"type": "object", ...}` | structured: needs a codec (§7) |
-| `{"media": "image" \| "document" \| ...}` | a message part, not text |
-| **nullable** forms of a scalar/enum: `{"type": ["integer", "null"]}` or `{"anyOf": [S, {"type": "null"}]}` (either order) | the scalar, plus `null` (§7a) |
-| anything else (`anyOf` of two real types, `$ref`, `{}`, no interpreted keyword) | **uninterpreted**: treated as structured — needs a codec (§7) |
+| `{"type": "string" \| "integer" \| "number" \| "boolean"}` | kernel scalar (§5 defaults) |
+| `{"enum": [...]}` | membership; strings or integers |
+| nullable forms `{"type": [T, "null"]}`, `{"anyOf": [S, {"type": "null"}]}` | the scalar/enum plus `null` |
+| `{"media": kind}` | a part of that kind (§5 defaults) |
+| `{"type": "array", "items"?}` · `{"type": "object", ...}` · anything else | **structured**: needs a format, no default |
 
-The last row is the rule that makes the set closed: what the kernel does
-not understand it never spells by itself. A frontend may lower any type
-system's shape (a Union, a pydantic model with `$defs`, `Any`) and the
-shape is carried whole; a codec, not the kernel, gives it text.
+`type` is the type's name **as the frontend spells it** (`Person`,
+`pd.DataFrame`, `list[Person]`). Formats resolve by it first (§5); it is
+the one place the artifact touches a host language, and it does so by
+name only. `role` is what the field means to the exchange
+(`spec/vocab/roles.md`); roles are namespaced strings (`tools`,
+`tools.calls`), each bound to at most one field.
 
-**Frontends.** Each language lowers its own signature syntax to this
-form mechanically: Python type hints (`str`, `list[int]`,
-`Literal[...]`, raw shape dicts), Go struct tags (`lmcc:"name,role=..."`),
-JSON Schema documents, DSPy-style strings — all are frontends; none is
-the contract. Foreign types resolve through the **host socket** or refuse
-(`unmapped-type`, naming field and type). Host lowerings are
-per-language code and are **never serialized**.
+**Frontends.** `@lmcc.fn` (Python: parameters → inputs, return type →
+outputs, dataclass return for several, docstring → instructions,
+`Role["reasoning", T]` for roles), Go struct tags, `lmcc_dspy`, JSON —
+every syntax lowers to this form; none is the contract. A type a
+frontend cannot lower refuses `unmapped-type`, naming the field.
 
-**The host socket** binds a native type once, per runtime:
-`(shape, lower, lift?, codec?)` — its neutral shape, how a value lowers
-to plain data and lifts back (both recurse through `list[X]`), and
-optionally its **default codec**: the renderer that spells the type when
-the entry binds none. Precedence at bake: the entry's per-field codec
-binding wins; else the entry's **`@structured`** binding (a default for
-every structured or uninterpreted shape — the way an adapter stays
-signature-independent while still spelling `list[str]` or a model type);
-else the type's registered default; else structured shapes refuse
-(`no-codec`). Trade-off, stated: an entry-bound codec travels in the
-artifact and is the byte-exact cross-runtime path; a host default is
-per-runtime convenience code — two runtimes may legitimately spell the
-same type differently unless the entry pins the codec.
+## 2. Adapter and template
 
-A `shape` containing `"media"` (e.g. `{"media": "image"}`) is a media
-shape: its value is a plain part-data dict and it renders as a message part
-at its slot position, not as text.
+An adapter is a template, a parse rule, strategies by **role**, and
+formats by **type** — never a field name. That is what lets one adapter
+serve every signature. The template is a message list of `{role, text}`
+and directives `{"directive": "demos" | "history"}`, with exactly three
+constructs:
 
-## 2. The entry (the artifact)
+| construct | example | meaning |
+|---|---|---|
+| slot | `{instruction}`, `{format}`, `{question}`, `{answer}`, `{f.name}`, `{f.value}` | a value goes here |
+| loop | `{% for f in inputs %} … {% endfor %}` (also `outputs`) | once per visible field, signature order |
+| escape | `{{`, `}}` | a literal brace; a bare brace is `template-syntax` |
 
-See `schema/entry.schema.json`. An entry carries: `versions` (kernel +
-per-vocabulary), `template`, `parse`, `strategies` (named refs or inline
-data), `codecs` (named refs), `requires` (reserved: declared code sidecars).
-The adapter is **signature-independent**: no entry ever contains a
-signature. Loading is pure: names resolve only against the registry the
-caller supplies; a data-only entry loads against an empty registry.
+Loop attributes: `name`, `desc` ("" when absent), `type` ("" when
+absent), `schema` (the format's `describe`, else the mechanical hint),
+`role`, `value`. `instruction` and `format` are reserved. An input slot
+renders the value through its format; an **output slot** (`{answer}` or
+`{f.value}` in an outputs loop) renders the field's **placeholder**:
+`desc`, else the format's `describe`, else the mechanical hint, else
+`...` — the shape is shown, never merely described. In demo and history
+turns an inputs loop iterates only the fields the turn supplies; a bare
+slot with no value refuses `missing-input`.
 
-## 3. Template language
+Every input must be reachable from a slot or an inputs loop
+(`field-uncovered`).
 
-Three constructs; nothing else, ever:
-
-- Slots `{path}`: `{instruction}`, `{format}` (the lens's reply
-  skeleton, §4), `{input_field_name}`, `{var.attr}` inside loops.
-  Attributes: `name`, `desc` ("" when absent), `schema` (codec's schema
-  prose, else a mechanical hint), `role`, `value`. `instruction` and
-  `format` are reserved and shadow same-named fields.
-- Loops `{% for f in inputs %}…{% endfor %}` (also `outputs`). Loops
-  iterate the **visible** fields of the baked plan, in signature order.
-  In a **demo or history turn** (§8) an inputs loop iterates only the
-  visible inputs the turn supplies, so an incomplete example renders
-  its known fields and omits the rest; a bare slot with no value still
-  refuses `missing-input` — omission is honest, invention is not.
-- Escapes `{{` and `}}`. A bare brace anywhere else is `template-syntax`.
-
-Bare slots may name **input** fields only; outputs are parsed, not
-rendered. Message list entries are `{role, text}` or directives
-`{"directive": "demos"|"history"}`.
-
-## 4. The lens (parse spec)
-
-A lens is one *document form* for the whole reply, with three faces on
-one object — this triple use is normative for every lens:
-
-- `split(text, field_names) → {name: raw}` reads the reply;
-- `join(spelled) → text` writes gold outputs (demo assistant turns) in
-  exactly the layout `split` reads;
-- `format(placeholders) → text` writes the reply *skeleton* the prompt
-  shows the model — the `{format}` template slot. Default (and the
-  behavior of every 0.1 lens): `join` over the placeholder texts, so
-  `{format}` renders e.g. `<answer>\nshort answer\n…` for `sections` and
-  `{"answer": "short answer", …}` for a JSON lens.
-
-Neither the skeleton nor the demos can ever drift from the parser.
-The placeholder text per visible output field is one kernel rule:
-`desc`, else the codec's schema prose, else the mechanical shape hint,
-else `"..."`. The template still owns *whether* and *where* the skeleton
-appears; the lens owns its spelling.
-
-**Invertibility, stated exactly.** For the kernel lenses, `split(join(x))
-== x` holds for every `x` whose spelled values are outer-whitespace-free
-(§7a) and contain none of the lens's own markers. The second condition is
-**enforced**: `join` refuses `value-collides` (naming the field and the
-marker) when a spelled value contains any marker the lens reads — an
-open/close/tail marker, or a derived anchor/close. The first condition is
-a stated normalization, not a refusal: marker lenses trim what they read,
-so outer whitespace of a value does not survive a round trip. Model
-replies are read with the same rules; a reply that omits a close marker
-*and* contains that marker inside the value is a double fault the reader
-cannot detect — that is the one stated hole.
-
-**The lens socket.** `parse.kind` names the lens. Two kinds are kernel
-grammar — always available, never registered, never replaced: `derived`
-and `sections`. Every other kind is vocabulary: it resolves through the registry
-(`factory(parse_spec) → Lens`), refuses `unknown-parse-kind` when
-unregistered (at load and at bake), and its version travels in the
-artifact as `lens/<kind>` — exactly like codecs and strategies. A reply
-that does not fit a lens's document form at all refuses
-`lens-parse-error`; missing fields refuse `parse-missing-fields` with
-recovered values in `.partial`. Routings run before the lens in either
-case.
-
-**Mode hooks.** A lens may declare `requires` (capability facts checked
-at bake; `capability-missing` names the lens and the fact) and a `patch`
-(request-side data computed from the visible output fields, merged into
-the request patch; `control-conflict` on disagreement with strategies).
-This is how a document form that is only honest under provider
-enforcement — whole-object JSON — becomes a *mode*, never an
-unconditional style.
-
-**The primary kernel lens: `derived`** — the template read backwards.
+## 3. Bind, render, parse
 
 ```
-{ "kind": "derived" }
+bind(adapter, signature, capabilities, registry) → plan   every refusal fires here
+plan.render(inputs, demos?, history?) → {messages, patch}   pure
+plan.parse(response) → {field: value}                      pure
+plan.describe() · plan.explain() · plan.skeleton() · plan.prefix()
 ```
 
-The template must contain exactly one **output-pattern block**: an
-outputs loop whose body contains `{f.value}`. That block is one
-description read in three directions:
+Messages are lm15-shaped: `{"role", "content": [part, …]}`; adjacent
+text parts merge; empty messages drop. A response is a string or
+`{"content": [part, …]}`. **Demos** are field dicts: the user templates
+over the demo's inputs, then one assistant turn written by the lens over
+the outputs the demo supplies (absent outputs are omitted). **History**
+items are messages (verbatim) or `{"fields": {…}}` turns rendered like
+demos; anything else refuses `value-invalid`.
 
-- **Prompt**: `{f.value}` renders as the field's placeholder (rule
-  below) — the shape is *shown* to the model, never merely described.
-- **Demos**: the block instantiated with gold values writes assistant
-  turns.
-- **Parser**: per visible output field, the literal text before the
-  hole (instantiated) is its **anchor**; the literal after it is its
-  close. Reading: anchors are found by their whitespace-stripped forms,
-  first occurrence, any order; capture runs to the field's close, the
-  next anchor, or end of text; result is whitespace-stripped. A close
-  occurring more than once inside a field's capture region refuses
-  `parse-ambiguous`, exactly like a repeated anchor.
+`skeleton()` is what the derived lens knows the reply must contain:
+`{"prefill": text before the first output hole, "stops": [the last
+close or tail]}` (a `grammar` face is a stated gap). `prefix()` is the
+rendered messages that do not depend on inputs (system, demos, history
+turns before the first message with an input slot) — the cache-stable
+bytes.
 
-Derivation refuses at bake (`not-lensable`, naming the defect) when:
-there is no pattern block or more than one; a field's hole has no
-literal before it; two fields' anchors coincide; a body nests loops or
-holds two holes. **Ambiguity refuses at parse** (`parse-ambiguous`):
-an anchor occurring more than once in a reply is never guessed at.
-The placeholder rule (kernel-normative, one rule for `{f.value}` in
-pattern blocks and for `{format}`): `desc`, else the codec's schema
-prose, else the mechanical shape hint, else `"..."`.
+## 4. The template is the lens
 
-**The declared kernel lens: `sections`.**
+`parse: {"kind": "derived"}` (the kernel lens). The **output pattern** is
+the set of output holes in the template — `{f.value}` in one outputs
+loop, or bare output slots — and it must live in one message. Read
+backwards:
 
-```
-{ "kind": "sections", "open": "<{name}>", "close"?: str, "tail"?: str }
-```
+- per visible output field, the literal before its hole (loop body
+  instantiated with the field's `name`/`desc`/`type`/`schema`/`role`)
+  is its **anchor**; the literal after it, up to the next hole, its
+  **close**; the literal after an outputs loop, up to the next slot and
+  to the end of its line, is the pattern's **tail** — the marker that
+  ends the reply, never the prose that may follow it. For bare output slots the lines holding the
+  holes are the pattern: an anchor starts at the later of its line's
+  start or the previous hole, a close ends at the earlier of the next
+  hole or the line's end;
+- anchors are matched by their whitespace-stripped forms, first
+  occurrence, any order; a capture runs to the field's close, the next
+  anchor, the tail, or end of text, and is stripped (§7a);
+- demos and the `{format}` skeleton are written through the same
+  pattern: `join` (values) and `format` (placeholders) are the lens
+  writing forward.
 
-- **Reading**: each visible output field's marker is `open` with `{name}`
-  substituted. First occurrence wins; a marker occurring more than once
-  refuses `parse-ambiguous`; capture runs to the next marker, the
-  `close` marker, the `tail`, or end of text; result is
-  whitespace-stripped. The same rule guards every marker the lens
-  reads: a `tail` occurring more than once in the reply, or a `close`
-  occurring more than once inside a field's capture region, refuses
-  `parse-ambiguous`.
-- **Writing**: `marker \n value \n` per field (+ `close`), then `tail`.
+Refusals: no pattern or two (`not-lensable`); a hole with no literal
+before it, two holes sharing an anchor, nested loops in the pattern
+(`not-lensable`, naming the field); an anchor, close, or tail occurring
+twice in its region (`parse-ambiguous`); missing fields
+(`parse-missing-fields`, `.partial` carries what was read); a spelled
+demo value containing a marker the lens reads (`value-collides`).
+Invertibility, stated exactly: `split(join(x)) == x` for marker-free,
+outer-whitespace-free values; a reply that omits its close *and*
+contains it inside the value is the one undetectable double fault.
 
-Marker templates are data, so common marker dialects are spellings of
-this one lens, not new lens kinds (pinned by corpus cases 20–21):
+**The JSON rule.** "Reply with a JSON object" names a format, not a
+pattern; it cannot be read backwards. Spell the pattern
+(`{{"answer": {answer}}}` with a `json` format on `answer`), or use a
+document-form lens from vocabulary: `parse.kind` may name a registered
+lens (`lens/json_object`), which declares the capability facts it needs
+and the request patch it adds. Unknown kinds refuse `unknown-parse-kind`.
 
-| dialect | spec |
+## 5. Formats: how a type is written and read
+
+A **format** is how one type crosses: `write(value, field) → parts`
+(text is a part; a string is one text part), `read(span, field) →
+value`, and optionally `describe(field) → text` (what the model is told
+when it must reply with one; default: the type's name, else the
+mechanical hint). A format declares:
+
+| fact | meaning |
 |---|---|
-| plain | `{"open": "<{name}>", "tail": "</done>"}` |
-| XML-style | `{"open": "<{name}>", "close": "</{name}>"}` |
-| DSPy chat adapter | `{"open": "[[ ## {name} ## ]]", "tail": "[[ ## completed ## ]]"}` |
+| `accepts` | what it carries: type names, structural keys (`object`, `list[*]`, `list[object]`, `string`, `media:image`), or `*` |
+| `direction` | `in`, `out`, `both` |
+| `emits` | `text` or `parts` |
+| `round_trip` | whether `read(write(v)) == v`; a lossy format cannot write demos (`demo-not-renderable`) |
 
-JSON is **not** a marker dialect — it is a different document form, so it
-is a different lens: `lens/json_object`, vocabulary provided by `lmcc_std`
-(see `spec/vocab/lens-json_object.md`).
+**Resolution**, per field at bind, recorded in the plan:
 
-## 5. The extract algebra (kernel grammar)
+1. the artifact's `formats[type]` — exact type name;
+2. the artifact's most specific structural key: `list[object]` before
+   `list[*]` before `object` before `string` … before `*`; `media:image`
+   before `media:*`;
+3. the runtime's type binding (code, per language, never serialized);
+4. the kernel default: scalars, enums and nullables by §7a; a media
+   value that is already a part passes through;
+5. refuse `no-format`, naming the field and its shape.
 
-Fixed set, versioned with the kernel — like template syntax, not like
-vocabulary: `between {open, close}`, `pattern {regex}` (group 1 if
-present), `line_prefixed {prefix}`, `parts {part}` (reads native response
-parts by kind). Routings run **before** section splitting; a routing with
-`strip: true` removes its matches from the visible text. `join` joins
-the whitespace-stripped matches; `coerce` applies a registered coercion
-by name.
+A format owns the whole value it accepts; the kernel never nests
+formats. A format that composes (a list layout writing each element) asks
+the plan for the element's format and refuses `no-format` at the path
+(`answer[].age`) itself. Binding a format to a field it does not accept
+refuses `format-shape-mismatch`; an input-only format on an output,
+`format-direction`. `write` failures surface as `format-write-error`,
+`read` failures as `format-read-error`; a value the kernel defaults
+cannot spell is `value-invalid`, text they cannot read is `parse-value`.
 
-Exact matching semantics, so two implementations cannot differ:
+**Artifact entries** under `formats`, keyed by type name or structural
+key, are either a **reference** `{"use": name, "options"?}` to a named
+format the runtime registers (vocabulary: `format-json.md` …, versioned
+as `format/<name>`), or a **shipped UDF**:
 
-- `between`: scan left to right; find `open`, then the first `close`
-  after it; the match is the whole span, the capture is the text
-  between; continue after the `close`. An `open` with no later `close`
-  ends the scan.
-- `line_prefixed`: lines are split on `\n` (a trailing `\r` stays part
-  of the line). A line beginning with `prefix` matches; the capture is
-  the rest of the line; stripping removes the line's text and keeps its
-  `\n`.
-- `pattern`: the regex dialect is **RE2 syntax** — the portable core
-  shared by Go, Python, JavaScript, Rust, and Java. Lookahead,
-  lookbehind, backreferences, atomic groups, possessive quantifiers,
-  and named groups (Python spells them `(?P<n>`, JavaScript `(?<n>`;
-  neither is universal, and the algebra reads group 1 anyway) are
-  outside the contract and refuse `entry-malformed` at construct and
-  load. Matching is leftmost-first, non-overlapping, with `.` matching
-  newlines. The capture is group 1 when the pattern has groups, else the
-  whole match; stripping removes the whole match. Empty matches are
-  discarded; a pattern that can match the empty string is outside the
-  contract (implementations differ on how they advance past one).
-
-## 6. Strategies
-
-`Strategy = { predicate?: Predicate, requires: [fact],
-fragments: {msg_role: text}, controls: {…}, routings: [Routing],
-visible: bool }` — all data.
-
-`Predicate = {"capability": fact} | {"not": P} | {"all": [P]} |
-{"any": [P]}` — a boolean expression over the declared capability
-facts (see `spec/vocab/capabilities.md`), so a strategy can say *"when
-the model does NOT have native reasoning"*. `requires` is sugar for an
-all-of.
-
-At bake, per role in signature order: the predicate (and `requires`)
-check against the declared capabilities dict (`capability-missing`
-names role, strategy, and the failing fact or predicate); `@role` in routings and `{field}` in fragments bind to the role's
-field; `visible: false` removes the field from loops and sections (its
-routings must serve it — `entry-malformed` otherwise); fragments append to
-the system message (created if absent); controls merge into the request
-patch (`control-conflict` on disagreement). A role may bind one field
-(`role-ambiguous`). A field both visible and routed is `field-double-covered`.
-
-## 7. Codecs and kernel spelling
-
-A codec spells one plain value: `render_schema(shape)`,
-`render_value(value, shape)`, `parse_value(text, shape)`. The kernel itself
-spells only scalars — strings verbatim, `integer`/`number`/`boolean` as
-JSON literals, `enum` by membership. **Structured shapes (`object`/`array`)
-with no codec bound refuse at bake** (`no-codec`). This line — scalars are
-mechanics, everything else is vocabulary — is normative.
-
-### 7a. Text rules (normative; every implementation, every vocabulary)
-
-Byte-exact conformance across languages needs the primitive text
-operations pinned. Vocabulary specs inherit these rules unless they say
-otherwise.
-
-- **Whitespace** — wherever this spec or a vocabulary spec says
-  *strip*/*trim*, the set is exactly the six ASCII characters U+0009,
-  U+000A, U+000B, U+000C, U+000D, U+0020. Unicode spaces (no-break
-  space, ideographic space, …) are content and survive. Chosen because
-  every language's built-in `strip`/`trim`/`TrimSpace` strips a
-  *different* Unicode set; ASCII is the only set they all agree on.
-- **Strings** — sequences of Unicode scalar values, never normalized;
-  `\r\n` is not rewritten. Byte-exact means code-point-exact after JSON
-  decoding.
-- **Integer text** (reading) — after stripping, `-?[0-9]+`, ASCII digits
-  only; anything else (`+5`, `1,000`, `1_000`, `٣`) refuses
-  `value-invalid`. Writing: the decimal digits, `-` if negative.
-  Implementations must carry at least the int64 range; the corpus never
-  relies on wider integers.
-- **Number text** (reading) — after stripping,
-  `-?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?`; `NaN`, `Infinity`, `.5`, `5.`
-  refuse `value-invalid`. Values are IEEE-754 binary64.
-- **Number spelling** (writing) — the ECMAScript `Number::toString`
-  algorithm (ECMA-262 §6.1.6.1.20) over the shortest round-trip digits:
-  `3` for `3.0`, `0.5`, `0.000001`, `1e-7`, `1e+21`,
-  `123456789012345680000`. Chosen because it is the one number-to-text
-  algorithm with a precise public specification and the widest
-  deployment (every JSON.stringify; Go's encoding/json). Non-finite
-  values refuse `value-invalid`.
-- **Null** — for nullable shapes (§1) only: writing a missing value
-  spells `null`; reading the stripped text `null` (exactly, lowercase)
-  yields the null value; any other text reads through the underlying
-  scalar rule. A nullable string therefore cannot carry the literal text
-  `null` — stated, not hidden. Non-nullable shapes never accept `null`.
-- **Booleans** — reading: after stripping and ASCII case-folding,
-  `true`/`yes` → true, `false`/`no` → false, else `value-invalid`.
-  Writing: `true` / `false`.
-- **Enum** — reading: the stripped text equals the spelling of one
-  member (integers by their decimal form); writing: that spelling.
-- **Rounding** (for vocabulary that rounds) — round-half-to-even on the
-  binary64 value: `round(x, n)` is `roundeven(x × 10ⁿ) / 10ⁿ` computed in
-  binary64. This is IEEE's default and costs nothing in any language;
-  it means `2.675` rounds to `2.67`, as its binary value dictates.
-
-## 8. Bake, render, parse
-
-```
-bake(entry, signature, capabilities, registry) → Plan     (all refusals early)
-render(plan, inputs, demos?, history?) → messages + patch  (pure)
-parse(plan, response) → {field: value}                     (pure)
+```json
+{"language": "python", "deps": [], "write": "def write(v, f): …",
+ "read": "def read(span, f): …", "describe"?: "…", "sha256": "…",
+ "authored_by": "…"}
 ```
 
-Render output messages are plain dicts, structurally lm15-shaped:
-`{"role": r, "content": [{"kind": "text"|"image"|…, …}]}`. Adjacent text
-parts merge; empty messages drop. `parse` accepts a bare string or a
-response dict with a `content` part list. The kernel never performs I/O.
+Loading never runs a UDF. A runtime that will not place code refuses
+`format-untrusted`; a tampered hash `udf-tampered`; source that reaches
+into globals `format-not-self-contained`; a language the host cannot
+place `udf-unplaceable`. Where it runs is the host's rule. A type with
+no artifact entry uses the runtime binding or the kernel default, and
+`plan.describe()` says which — this is the stated place where two
+runtimes may legitimately spell the same type differently.
 
-**Demos** are field dicts (inputs and outputs by name). Each renders as
-the entry's user templates over the demo's inputs, then one assistant
-turn written by the lens over the outputs the demo supplies; outputs
-absent from the demo are omitted from that turn.
+## 6. Strategies: how a meaning travels
 
-**History** items are either messages `{"role": "user"|"assistant",
-"content": …}` (emitted verbatim) or **field turns** `{"fields": {…}}`
-(rendered exactly like a demo, through the template and the lens). The
-second form is how a conversation held as typed values — DSPy's
-`History`, a tool loop's prior rounds — renders through the same
-description as everything else, so history can never drift from the
-format the model is asked to produce. Anything else refuses
-`value-invalid`.
+```
+Strategy = { when?: Predicate, requires?: [fact], visible?: bool = true,
+             fragments?: {message role: text}, controls?: {…},
+             placement?: {"@role": "controls.<key>" | "message:<role>"},
+             routings?: [Routing] }
+         | { choose: [{when: Predicate, use: Strategy}…, {else: Strategy}] }
+Routing  = { from: "text" | "channel:<part kind>",
+             between?: [open, close] | pattern?: regex | line_prefixed?: prefix,
+             to: "@role" | "@role.<sub>", consume?: bool }
+Predicate = {capability} | {not} | {all} | {any}
+```
 
-Bake checks input coverage: every visible input must be reachable from
-some slot or input loop (`field-uncovered`, naming the fields).
+Strategies are keyed by role in the artifact, as data, or referenced
+`{"use": name, "options"?}` (vocabulary, `strategy/<name>`). At bind, in
+signature order: `choose` picks the first alternative whose `when`
+holds (`capability-missing` if none and no `else`); `when`/`requires`
+are checked against the declared capabilities (`capability-missing`
+names role, strategy, fact); `@role` binds to the field bearing the
+role, `@role.<sub>` to the field bearing role `<role>.<sub>`
+(`role-ambiguous` if two fields share one); `{field}` in fragments binds
+the name; `visible: false` hides the field from loops and the pattern;
+`placement` writes the field's parts through its format into the request
+patch (`controls.<key>`) or appends them to a message (`message:<role>`)
+instead of a slot; fragments append to the named message (created if
+absent, system first); controls merge into the patch (`control-conflict`).
+A field both visible and routed is `field-double-covered`.
 
-## 9. Versioning
+Routings run **before** the lens. `from: text` scans the reply text —
+`between` (plain scan), `line_prefixed` (lines split on `\n`), `pattern`
+(RE2, group 1, empty matches discarded) — each match becomes a text
+part; `consume` removes the matches from the text the lens sees.
+`from: channel:<kind>` collects the response parts of that kind. The
+collected parts are the field's **span**; the field's format reads it.
+`span.text` is the stripped text parts joined by `\n`.
 
-Kernel and each vocabulary entry version independently (semver; while
-major = 0, minor is breaking). Entries declare what they need; loaders
-refuse incompatibility naming both sides (`version-incompatible`). Unknown
-names refuse (`unknown-codec` / `unknown-strategy` / `unknown-parse-kind`)
-— never a silent skip.
+Two contracts, checked at bind: a routing's span kind must be one the
+format's `read` accepts (`format-span-mismatch`); a placement's kind
+must match what the format `emits` (`format-placement-mismatch`).
 
-## 10. Conformance
+## 7. Kernel defaults and text rules
 
-The corpus (`corpus/cases/*.json`) is the authority. An implementation is
-conformant when the harness passes every case **byte-exactly** (rendered
-text, parsed values, error codes). Case kinds: `render`, `parse`,
-`roundtrip`, `refuse`; the case file format is `schema/case.schema.json`.
+### 7a. Text rules (normative for every implementation and every format)
 
-**The driver protocol** (language-neutral). The harness starts one
-process (`runner.py --driver CMD`) and speaks JSON Lines on its
-stdin/stdout: one case object per line in, one `{"ok": bool, "detail":
-str}` per line out, in order, until EOF. The driver installs the packs a
-case names in `vocab` into an otherwise empty registry, runs the case's
-kind, and compares itself; the harness only counts. Values compare by
-JSON equality: objects unordered, arrays ordered, numbers by value.
+- **Whitespace** — *strip* means exactly U+0009, U+000A, U+000B, U+000C,
+  U+000D, U+0020. Unicode spaces are content.
+- **Strings** — Unicode scalar values, never normalized; `\r\n` kept.
+- **Integer text** — `-?[0-9]+`; else `parse-value`. Written in decimal.
+  Implementations carry at least int64.
+- **Number text** — `-?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?`; binary64.
+  Written with the ECMAScript `Number::toString` algorithm (`3`, `0.5`,
+  `1e-7`, `1e+21`); non-finite refuses `value-invalid`.
+- **Booleans** — read `true|yes` / `false|no` after ASCII case-folding;
+  written `true`/`false`.
+- **Enum** — the stripped text equals a member's spelling.
+- **Null** — nullable shapes only: written `null`, read `null` exactly.
+- **Rounding** — half-to-even in binary64: `roundeven(x·10ⁿ)/10ⁿ`.
+- **Regex** — RE2 syntax; lookaround, backreferences, named groups,
+  atomic/possessive constructs refuse `entry-malformed`.
 
-**Conformant implementations.** `python/` (the reference) and `go/`
-(independent, stdlib only, `go/cmd/lmcc-conform`). Both run in `./check`.
+### 7b. Kernel default formats
 
-## Deliberate gaps (0.1)
+Scalars, enums and nullables write and read by §7a; strings are one
+text part, verbatim. A field whose shape is `{"media": kind}` writes a
+value that is already a part dict as that part (`{"kind": kind, …}`)
+and reads the first part of that kind from its span. Nothing structured
+has a default.
 
-Streaming parse (same lens, incremental); the `requires` mechanism for
-authored-code sidecars; tools/citations strategy vocabularies; per-strategy
-media emission options. Each lands as its own versioned addition — never
-silently. (The lens socket closed the "additional lens kinds" gap in
-kernel 0.1: new document forms are now vocabulary, not kernel changes.)
+## 8. Versioning and conformance
+
+Kernel and every vocabulary entry version independently (semver; while
+major = 0, minor is breaking). Artifacts pin what they need; loaders
+refuse `version-incompatible` naming both sides; unknown names refuse
+(`unknown-format`, `unknown-strategy`, `unknown-parse-kind`).
+
+The corpus (`corpus/cases/*.json`, `schema/case.schema.json`) is the
+authority: an implementation is conformant when the harness passes every
+case byte-exactly — rendered text and parts, parsed values, refusal
+codes. Case kinds: `render`, `parse`, `roundtrip`, `refuse`. A case may
+declare `requires: ["udf:python"]`; a driver that cannot place that
+language answers `{"ok": true, "unclaimed": "udf:python"}` and the
+harness counts it apart — declared, never silent.
+
+**The driver protocol.** `runner.py --driver CMD` starts one process and
+streams JSON Lines: one case per line in, one `{"ok", "detail"?,
+"unclaimed"?}` per line out. Values compare by JSON equality: objects
+unordered, arrays ordered, numbers by value.
+
+## Deliberate gaps (0.2)
+
+`plan.parser()` streaming (plan 01), the `grammar` face of `skeleton()`,
+parse combinators (plan 02), turns (plan 03), tools/citations strategy
+vocabularies (plan 04), fix hints (plan 06). Each lands as a versioned
+addition.

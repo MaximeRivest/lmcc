@@ -8,7 +8,8 @@ import pytest
 
 import lmcc
 from lmcc import core
-from lmcc.parse import DerivedLens, SectionsLens, run_text_extract, validate_extract
+from lmcc.parse import DerivedLens, _text_spans
+from lmcc.strategy import validate_routing
 from lmcc_std import jsontext
 
 
@@ -29,7 +30,7 @@ def test_number_spelling_is_ecmascript(value, text):
 
 def test_non_finite_numbers_refuse():
     for bad in (float("nan"), float("inf"), float("-inf")):
-        with pytest.raises(lmcc.LMCCError) as err:
+        with pytest.raises(lmcc.Refusal) as err:
             core.format_number(bad)
         assert err.value.code == "value-invalid"
 
@@ -44,9 +45,9 @@ def test_integer_grammar_accepts(text, value):
 
 @pytest.mark.parametrize("text", ["+5", "1,000", "1_000", "٣", "1.0", "", "0x1f"])
 def test_integer_grammar_rejects(text):
-    with pytest.raises(lmcc.LMCCError) as err:
+    with pytest.raises(lmcc.Refusal) as err:
         core.read_integer(text, where="t")
-    assert err.value.code == "value-invalid"
+    assert err.value.code == "parse-value"
 
 
 @pytest.mark.parametrize("text, value", [
@@ -57,15 +58,15 @@ def test_number_grammar_accepts(text, value):
 
 @pytest.mark.parametrize("text", [".5", "5.", "NaN", "Infinity", "+1", "1e", "1_0"])
 def test_number_grammar_rejects(text):
-    with pytest.raises(lmcc.LMCCError) as err:
+    with pytest.raises(lmcc.Refusal) as err:
         core.read_number(text, where="t")
-    assert err.value.code == "value-invalid"
+    assert err.value.code == "parse-value"
 
 
 def test_boolean_words_ascii_casefold_only():
     assert core.read_boolean("TRUE", where="t") is True
     assert core.read_boolean("No", where="t") is False
-    with pytest.raises(lmcc.LMCCError):
+    with pytest.raises(lmcc.Refusal):
         core.read_boolean("oui", where="t")
 
 
@@ -85,86 +86,91 @@ def test_strip_is_ascii_whitespace_only():
     [{"name": "a", "direction": "output", "shape": "string"}],
 ])
 def test_signature_validation(fields):
-    with pytest.raises(lmcc.LMCCError) as err:
+    with pytest.raises(lmcc.Refusal) as err:
         lmcc.signature_from_dict({"instructions": "", "fields": fields})
     assert err.value.code == "signature-malformed"
 
 
 def test_python_frontend_validates_too():
-    with pytest.raises(lmcc.LMCCError) as err:
+    with pytest.raises(lmcc.Refusal) as err:
         lmcc.signature("x", inputs={"my field": str})
     assert err.value.code == "signature-malformed"
 
 
 # ------------------------------------------------------------- extractors
 
+def _run(text, routing):
+    from lmcc.parse import apply_routings
+    rest, found = apply_routings(text, [], [("f", routing)])
+    return rest, [p["text"] for p in found["f"].parts]
+
+
 def test_between_is_a_plain_scan():
-    text, found = run_text_extract("a<t>1</t>b<t>2</t><t>open", {
-        "kind": "between", "open": "<t>", "close": "</t>"}, strip=True)
+    text, found = _run("a<t>1</t>b<t>2</t><t>open", {"from": "text", "between": ["<t>", "</t>"], "consume": True})
     assert found == ["1", "2"]
     assert text == "ab<t>open"
 
 
 def test_line_prefixed_keeps_newlines_and_cr():
-    text, found = run_text_extract("> a\r\nx\n> b", {
-        "kind": "line_prefixed", "prefix": "> "}, strip=True)
+    text, found = _run("> a\r\nx\n> b", {"from": "text", "line_prefixed": "> ", "consume": True})
     assert found == ["a\r", "b"]
     assert text == "\nx\n"
 
 
-def test_pattern_discards_empty_matches_and_strips_whole_match():
-    text, found = run_text_extract("k: 1, k: 22.", {
-        "kind": "pattern", "regex": "k: ([0-9]*)"}, strip=True)
+def test_pattern_discards_empty_matches_and_consumes_whole_match():
+    text, found = _run("k: 1, k: 22.", {"from": "text", "pattern": "k: ([0-9]*)", "consume": True})
     assert found == ["1", "22"]
     assert text == ", ."
+
+
+def test_span_text_strips_and_joins_every_text_bearing_part():
+    span = lmcc.Span([{"kind": "text", "text": " a "}, {"kind": "thinking", "text": "b\n"}, {"kind": "image", "data": "x"}])
+    assert span.text == "a\nb" and span.of("image") == [{"kind": "image", "data": "x"}]
 
 
 @pytest.mark.parametrize("regex", [
     "(?=a)b", "(?!a)b", "(?<=a)b", "(?<!a)b", "(a)\\1", "(?>a)", "a++", "a{2}+",
     "(?P<x>a)", "(?<x>a)"])
 def test_regex_outside_re2_refuses(regex):
-    with pytest.raises(lmcc.LMCCError) as err:
-        validate_extract({"kind": "pattern", "regex": regex}, where="t")
+    with pytest.raises(lmcc.Refusal) as err:
+        validate_routing({"from": "text", "pattern": regex, "to": "@role"}, where="t")
     assert err.value.code == "entry-malformed"
 
 
 @pytest.mark.parametrize("regex", ["\\(?=a\\)", "(?:a)", "(?i)a", "a\\+\\+", "[+]+"])
 def test_re2_lint_has_no_false_positives(regex):
-    validate_extract({"kind": "pattern", "regex": regex}, where="t")
+    validate_routing({"from": "text", "pattern": regex, "to": "@role"}, where="t")
 
 
 # ---------------------------------------------------------- invertibility
 
-def test_sections_join_refuses_marker_collisions():
-    lens = SectionsLens({"kind": "sections", "open": "<{name}>", "tail": "</done>"})
+def test_derived_join_refuses_marker_collisions():
+    lens = DerivedLens([("a", "<a>\n", "\n"), ("b", "<b>\n", "\n")], tail="</done>")
     for bad in ("x <b> y", "x </done> y", "<a>"):
-        with pytest.raises(lmcc.LMCCError) as err:
+        with pytest.raises(lmcc.Refusal) as err:
             lens.join([("a", bad), ("b", "ok")])
         assert err.value.code == "value-collides"
     assert lens.join([("a", "fine"), ("b", "ok")]) == "<a>\nfine\n<b>\nok\n</done>"
-
-
-def test_derived_join_refuses_anchor_and_close_collisions():
-    lens = DerivedLens([("a", "<a>\n", "\n</a>\n"), ("b", "<b>\n", "\n</b>\n")])
+    xml = DerivedLens([("a", "<a>\n", "\n</a>\n"), ("b", "<b>\n", "\n</b>\n")])
     for bad in ("has </a> inside", "has <b> inside"):
-        with pytest.raises(lmcc.LMCCError) as err:
-            lens.join([("a", bad), ("b", "ok")])
+        with pytest.raises(lmcc.Refusal) as err:
+            xml.join([("a", bad), ("b", "ok")])
         assert err.value.code == "value-collides"
 
 
 def test_lens_law_holds_on_marker_free_trimmed_values():
-    lens = SectionsLens({"kind": "sections", "open": "<{name}>", "close": "</{name}>"})
+    lens = DerivedLens([("a", "<a>\n", "\n</a>\n"), ("b", "<b>\n", "\n</b>\n")])
     x = [("a", "line one\nline two"), ("b", "<not-a-marker>")]
     assert lens.split(lens.join(x), ["a", "b"]) == dict(x)
 
 
 def test_repeated_close_and_tail_refuse():
-    lens = SectionsLens({"kind": "sections", "open": "<{name}>", "close": "</{name}>"})
-    with pytest.raises(lmcc.LMCCError) as err:
+    lens = DerivedLens([("a", "<a>\n", "\n</a>\n")])
+    with pytest.raises(lmcc.Refusal) as err:
         lens.split("<a>\nx </a> y\n</a>", ["a"])
     assert err.value.code == "parse-ambiguous"
-    tailed = SectionsLens({"kind": "sections", "open": "<{name}>", "tail": "</done>"})
-    with pytest.raises(lmcc.LMCCError) as err:
+    tailed = DerivedLens([("a", "<a>\n", "\n")], tail="</done>")
+    with pytest.raises(lmcc.Refusal) as err:
         tailed.split("<a>\nx </done> y\n</done>", ["a"])
     assert err.value.code == "parse-ambiguous"
 
@@ -230,6 +236,6 @@ def test_null_spelling_and_reading():
     assert core.spell_value(n, None, where="t") == "null"
     assert core.read_value(n, " null\n", where="t") is None
     assert core.read_value(n, "3", where="t") == 3
-    with pytest.raises(lmcc.LMCCError):
+    with pytest.raises(lmcc.Refusal):
         core.spell_value({"type": "integer"}, None, where="t")
     assert core.read_value({"type": ["string", "null"]}, "NULL", where="t") == "NULL"

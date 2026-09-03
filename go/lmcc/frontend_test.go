@@ -26,21 +26,24 @@ type photo struct{ b64 string }
 
 func TestStructTagsLowerToSignatureCore(t *testing.T) {
 	reg := NewRegistry()
-	_ = reg.RegisterHost(reflect.TypeOf(photo{}), Obj("media", "image"),
-		func(v any) any { return Obj("data", v.(photo).b64, "mime", "image/png") }, nil, nil)
+	reg.BindFormat(reflect.TypeOf(photo{}), &FormatSpec{
+		NameValue: "photo", AcceptsSet: []string{"media:image"}, EmitsKind: "parts", Dir: "in",
+		WriteFn: func(v any, f *Field) (any, error) {
+			return []any{Obj("kind", "image", "data", v.(photo).b64, "mime", "image/png")}, nil
+		}}, Obj("media", "image"))
 	sig, err := StructSignature("Answer.", qaIn{}, qaOut{}, reg)
 	if err != nil {
 		t.Fatal(err)
 	}
 	got := MarshalJSON(SignatureToJSON(sig), -1)
 	want := `{"instructions": "Answer.", "fields": [` +
-		`{"name": "question", "direction": "input", "shape": {"type": "string"}}, ` +
-		`{"name": "photo", "direction": "input", "shape": {"media": "image"}}, ` +
-		`{"name": "reasoning", "direction": "output", "shape": {"type": "string"}, "role": "reasoning"}, ` +
-		`{"name": "answer", "direction": "output", "shape": {"type": "string"}, "desc": "short answer"}, ` +
-		`{"name": "score", "direction": "output", "shape": {"type": "integer"}}, ` +
-		`{"name": "ratio", "direction": "output", "shape": {"type": "number"}}, ` +
-		`{"name": "tags", "direction": "output", "shape": {"type": "array", "items": {"type": "string"}}}]}`
+		`{"name": "question", "direction": "input", "shape": {"type": "string"}, "type": "string"}, ` +
+		`{"name": "photo", "direction": "input", "shape": {"media": "image"}, "type": "photo"}, ` +
+		`{"name": "reasoning", "direction": "output", "shape": {"type": "string"}, "type": "string", "role": "reasoning"}, ` +
+		`{"name": "answer", "direction": "output", "shape": {"type": "string"}, "type": "string", "desc": "short answer"}, ` +
+		`{"name": "score", "direction": "output", "shape": {"type": "integer"}, "type": "int"}, ` +
+		`{"name": "ratio", "direction": "output", "shape": {"type": "number"}, "type": "float64"}, ` +
+		`{"name": "tags", "direction": "output", "shape": {"type": "array", "items": {"type": "string"}}, "type": "[]string"}]}`
 	if got != want {
 		t.Errorf("lowered signature\n got %s\nwant %s", got, want)
 	}
@@ -49,12 +52,12 @@ func TestStructTagsLowerToSignatureCore(t *testing.T) {
 	adapter, err := NewAdapter("v", []*Object{
 		Obj("role", "system", "text", "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"),
 		Obj("role", "user", "text", "{question}{photo}")},
-		Obj("kind", "derived"), nil, Obj("tags", Obj("kind", "csv")))
+		Obj("kind", "derived"), nil, Obj("[]string", Obj("use", "csv", "options", NewObject())))
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = reg.RegisterCodec("csv", func(*Object) (Codec, error) { return csvCodec{}, nil }, "0.1.0", false)
-	baked, err := adapter.Bake(sig, Obj("image_input", true), reg)
+	_ = reg.RegisterFormat("csv", func(*Object) (Format, error) { return csvFormat{}, nil }, "0.1.0", false)
+	baked, err := adapter.Bind(sig, Obj("image_input", true), reg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,19 +86,25 @@ func TestUnmappedTypeRefusesByName(t *testing.T) {
 	}
 }
 
-type csvCodec struct{}
+type csvFormat struct{}
 
-func (csvCodec) RenderSchema(*Object) string { return "comma-separated" }
-func (csvCodec) RenderValue(v any, _ *Object) (string, error) {
+func (csvFormat) Name() string           { return "" }
+func (csvFormat) Accepts() []string      { return []string{"list[string]"} }
+func (csvFormat) Direction() string      { return "both" }
+func (csvFormat) Emits() string          { return "text" }
+func (csvFormat) RoundTrip() bool        { return true }
+func (csvFormat) Reads() []string        { return []string{"text"} }
+func (csvFormat) Describe(*Field) string { return "comma-separated" }
+func (csvFormat) Write(v any, _ *Field) (any, error) {
 	var parts []string
 	for _, x := range v.([]any) {
 		parts = append(parts, x.(string))
 	}
 	return joinComma(parts), nil
 }
-func (csvCodec) ParseValue(text string, _ *Object) (any, error) {
+func (csvFormat) Read(span Span, _ *Field) (any, error) {
 	var out []any
-	for _, p := range splitComma(text) {
+	for _, p := range splitComma(span.Text()) {
 		out = append(out, Strip(p))
 	}
 	return out, nil

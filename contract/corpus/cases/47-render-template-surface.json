@@ -4,30 +4,25 @@
  "entry": {
   "name": "surface_v1",
   "versions": {
-   "kernel": "0.1.0",
+   "kernel": "0.2.0",
    "vocab": {}
   },
-  "template": {
-   "messages": [
-    {
-     "role": "system",
-     "text": "{instruction}\n{% for f in inputs %}IN {f.name} [{f.role}] {f.desc} {f.schema}\n{% endfor %}{% for f in outputs %}OUT {f.name} [{f.role}] {f.desc} {f.schema}\n{% endfor %}{{braces}}\n{format}"
-    },
-    {
-     "directive": "history"
-    },
-    {
-     "role": "user",
-     "text": "{q} {n}"
-    }
-   ]
-  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in inputs %}IN {f.name} [{f.role}] {f.desc} {f.schema}\n{% endfor %}{% for f in outputs %}OUT {f.name} [{f.role}] {f.desc} {f.schema}\n{% endfor %}{{braces}}\n{% for f in outputs %}[[ ## {f.name} ## ]]\n{f.value}\n{% endfor %}[[ ## completed ## ]]"
+   },
+   {
+    "directive": "history"
+   },
+   {
+    "role": "user",
+    "text": "{q} {n}"
+   }
+  ],
   "parse": {
-   "kind": "sections",
-   "open": "[[ ## {name} ## ]]",
-   "tail": "[[ ## completed ## ]]"
-  },
-  "requires": []
+   "kind": "derived"
+  }
  },
  "signature": {
   "instructions": "Do.",

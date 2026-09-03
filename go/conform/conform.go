@@ -5,6 +5,7 @@ package conform
 
 import (
 	"fmt"
+	"strings"
 
 	"lmcc/lmcc"
 	"lmcc/lmccstd"
@@ -23,6 +24,19 @@ func RunLine(line string) (ok bool, detail string) {
 	return RunCase(c)
 }
 
+// RunLineOutcome is RunLine with the unclaimed tag.
+func RunLineOutcome(line string) Outcome {
+	raw, err := lmcc.ParseJSON(line)
+	if err != nil {
+		return Outcome{Detail: "case is not JSON: " + err.Error()}
+	}
+	c, isObj := raw.(*lmcc.Object)
+	if !isObj {
+		return Outcome{Detail: "case is not an object"}
+	}
+	return RunCaseOutcome(c)
+}
+
 // RunCase runs one parsed case: builds the registry the case names,
 // runs its kind, compares, and never panics.
 func RunCase(c *lmcc.Object) (ok bool, detail string) {
@@ -34,7 +48,36 @@ func RunCase(c *lmcc.Object) (ok bool, detail string) {
 	return runCase(c)
 }
 
+// Outcome carries ok/detail and, for cases this driver cannot place
+// (shipped UDFs in a language it has no placer for), the unclaimed tag.
+type Outcome struct {
+	OK        bool
+	Detail    string
+	Unclaimed string
+}
+
 func runCase(c *lmcc.Object) (bool, string) {
+	o := RunCaseOutcome(c)
+	return o.OK, o.Detail
+}
+
+// RunCaseOutcome runs one case and reports unclaimed placements.
+func RunCaseOutcome(c *lmcc.Object) (out Outcome) {
+	defer func() {
+		if r := recover(); r != nil {
+			out = Outcome{Detail: fmt.Sprintf("driver panic: %v", r)}
+		}
+	}()
+	for _, req := range c.List("requires") {
+		if s, _ := req.(string); strings.HasPrefix(s, "udf:") {
+			return Outcome{OK: true, Unclaimed: s}
+		}
+	}
+	ok, detail := runCaseInner(c)
+	return Outcome{OK: ok, Detail: detail}
+}
+
+func runCaseInner(c *lmcc.Object) (bool, string) {
 	kind, _ := c.Str("kind")
 	expect := c.Object("expect")
 	reg := lmcc.NewRegistry()
@@ -90,11 +133,18 @@ func run(c *lmcc.Object, kind string, expect *lmcc.Object, reg *lmcc.Registry) (
 	if err != nil {
 		return outcome{}, err
 	}
-	baked, err := lmcc.Bake(adapter, sig, c.Object("capabilities"), reg)
+	baked, err := lmcc.Bind(adapter, sig, c.Object("capabilities"), reg)
 	if err != nil {
 		return outcome{}, err
 	}
 	switch kind {
+	case "plan":
+		prefix, err := baked.Prefix(objects(c.List("demos")), objects(c.List("history")))
+		if err != nil {
+			return outcome{}, err
+		}
+		got := lmcc.Obj("skeleton", baked.Skeleton(), "prefix", prefix)
+		return compare(lmcc.Obj("skeleton", expect.Object("skeleton"), "prefix", expect.List("prefix")), got, "plan"), nil
 	case "render":
 		res, err := baked.Render(c.Object("inputs"), objects(c.List("demos")), objects(c.List("history")))
 		if err != nil {

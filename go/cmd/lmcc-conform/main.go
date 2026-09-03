@@ -27,8 +27,12 @@ func main() {
 		if line == "" {
 			continue
 		}
-		ok, detail := conform.RunLine(line)
-		fmt.Fprintln(out, lmcc.MarshalJSON(lmcc.Obj("ok", ok, "detail", detail), -1))
+		answer := conform.RunLineOutcome(line)
+		o := lmcc.Obj("ok", answer.OK, "detail", answer.Detail)
+		if answer.Unclaimed != "" {
+			o.Set("unclaimed", answer.Unclaimed)
+		}
+		fmt.Fprintln(out, lmcc.MarshalJSON(o, -1))
 		out.Flush()
 	}
 }

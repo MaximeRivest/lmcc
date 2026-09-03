@@ -4,28 +4,25 @@
  "entry": {
   "name": "prefix_cot_style_v1",
   "versions": {
-   "kernel": "0.1.0",
+   "kernel": "0.2.0",
    "vocab": {}
   },
-  "template": {
-   "messages": [
-    {
-     "role": "system",
-     "text": "{instruction}"
-    },
-    {
-     "role": "user",
-     "text": "{q}"
-    }
-   ]
-  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n{% endfor %}"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
   "parse": {
-   "kind": "sections",
-   "open": "<{name}>"
+   "kind": "derived"
   },
   "strategies": {
    "reasoning": {
-    "predicate": {
+    "when": {
      "not": {
       "capability": "native_reasoning"
      }
@@ -34,8 +31,7 @@
      "system": "Think step by step in the reasoning section before answering."
     }
    }
-  },
-  "requires": []
+  }
  },
  "signature": {
   "instructions": "Answer.",
@@ -75,7 +71,7 @@
     "content": [
      {
       "kind": "text",
-      "text": "Answer.\n\nThink step by step in the reasoning section before answering."
+      "text": "Answer.\n<reasoning>\n...\n<answer>\n...\n\n\nThink step by step in the reasoning section before answering."
      }
     ]
    },

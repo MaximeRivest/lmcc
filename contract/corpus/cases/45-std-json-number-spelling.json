@@ -7,40 +7,35 @@
  "entry": {
   "name": "std_spelling_v1",
   "versions": {
-   "kernel": "0.1.0",
+   "kernel": "0.2.0",
    "vocab": {
-    "codec/json": "0.1.0",
-    "codec/table": "0.1.0",
-    "codec/scaled_number": "0.1.0"
+    "format/json": "0.1.0",
+    "format/table": "0.1.0",
+    "format/scaled_number": "0.1.0"
    }
   },
-  "template": {
-   "messages": [
-    {
-     "role": "system",
-     "text": "{instruction}\n{% for f in outputs %}{f.name}: {f.schema}\n{% endfor %}"
-    },
-    {
-     "directive": "demos"
-    },
-    {
-     "role": "user",
-     "text": "{q}"
-    }
-   ]
-  },
-  "parse": {
-   "kind": "sections",
-   "open": "<{name}>",
-   "tail": "</done>"
-  },
-  "requires": [],
-  "codecs": {
-   "data": {
-    "kind": "json"
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}{f.name}: {f.schema}\n{% endfor %}\n{% for f in outputs %}<{f.name}>\n{f.value}\n{% endfor %}</done>"
    },
-   "rows": {
-    "kind": "table",
+   {
+    "directive": "demos"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "parse": {
+   "kind": "derived"
+  },
+  "formats": {
+   "object": {
+    "use": "json"
+   },
+   "list[object]": {
+    "use": "table",
     "options": {
      "columns": [
       "name",
@@ -49,8 +44,8 @@
      ]
     }
    },
-   "conf": {
-    "kind": "scaled_number",
+   "number": {
+    "use": "scaled_number",
     "options": {
      "scale": 100,
      "suffix": "%"
@@ -142,7 +137,7 @@
     "content": [
      {
       "kind": "text",
-      "text": "Spell.\ndata: JSON matching this schema: {\"type\": \"object\"}\nrows: | name | score | ok |  (one row per item)\nconf: a number like 83%\n"
+      "text": "Spell.\ndata: JSON matching this schema: {\"type\": \"object\"}\nrows: | name | score | ok |  (one row per item)\nconf: a number like 83%\n\n<data>\nJSON matching this schema: {\"type\": \"object\"}\n<rows>\n| name | score | ok |  (one row per item)\n<conf>\na number like 83%\n</done>"
      }
     ]
    },

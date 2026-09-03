@@ -1,45 +1,44 @@
 package lmcc
 
-// Adapter is the signature-independent artifact in memory: a template,
-// a parse spec, and optional strategy/codec bindings. It meets a
-// signature only at Bake.
+import "strconv"
+
+// Adapter: a template, a parse rule, strategies by role, formats by type
+// — never a field name. It meets a signature only at Bind.
 type Adapter struct {
 	Name       string
-	Messages   []*Object // {role, text} or {directive}
+	Template   []*Object // {role, text} | {directive}
 	Parse      *Object
-	Strategies *Object  // role -> {"kind","options"} (ref) or *Strategy (inline)
-	Codecs     *Object  // field -> {"kind","options"}
-	compiled   [][]node // nil for directives
+	Strategies *Object // role -> *Strategy | {"use","options"}
+	Formats    *Object // type/structural key -> {"use","options"} | shipped *Object | Format
+	compiled   [][]node
 }
 
-// NewAdapter builds an adapter from data. Template syntax and the parse
-// spec are validated at construction (template-syntax, entry-malformed,
-// unknown-extract-kind) — the earliest gate.
-func NewAdapter(name string, messages []*Object, parse *Object, strategies, codecs *Object) (a *Adapter, err error) {
+// NewAdapter builds an adapter from data; template syntax is validated here.
+func NewAdapter(name string, template []*Object, parse *Object, strategies, formats *Object) (a *Adapter, err error) {
 	defer catch(&err)
-	a = &Adapter{Name: name, Parse: parse, Strategies: strategies, Codecs: codecs}
+	a = &Adapter{Name: name, Parse: parse, Strategies: strategies, Formats: formats}
 	if a.Name == "" {
 		a.Name = "adapter"
 	}
 	if a.Strategies == nil {
 		a.Strategies = NewObject()
 	}
-	if a.Codecs == nil {
-		a.Codecs = NewObject()
+	if a.Formats == nil {
+		a.Formats = NewObject()
 	}
-	if a.Parse == nil || !a.Parse.Has("kind") {
-		refuse("entry-malformed", "entry.parse must be an object with 'kind'")
+	if a.Parse == nil {
+		a.Parse = Obj("kind", "derived")
 	}
-	if kind, _ := a.Parse.Str("kind"); kind == "sections" {
-		validateSectionsSpec(a.Parse)
+	if kind, ok := a.Parse.Str("kind"); !ok || kind == "" {
+		refuse("unknown-parse-kind", "parse.kind must name a lens")
 	}
-	for i, m := range messages {
-		where := "template.messages[" + itoa(i) + "]"
+	for i, m := range template {
+		where := "template[" + strconv.Itoa(i) + "]"
 		if d, ok := m.Str("directive"); ok {
 			if d != "demos" && d != "history" {
-				refusef("entry-malformed", "%s: directive %q is not demos/history", where, d)
+				refusef("entry-malformed", "%s: directive must be demos or history", where)
 			}
-			a.Messages = append(a.Messages, m.Clone())
+			a.Template = append(a.Template, m.Clone())
 			a.compiled = append(a.compiled, nil)
 			continue
 		}
@@ -48,22 +47,19 @@ func NewAdapter(name string, messages []*Object, parse *Object, strategies, code
 		if (role != "system" && role != "user" && role != "assistant") || !ok {
 			refusef("entry-malformed", "%s: a message is {role, text} or {directive}", where)
 		}
-		a.Messages = append(a.Messages, m.Clone())
+		a.Template = append(a.Template, m.Clone())
 		a.compiled = append(a.compiled, compileTemplate(text, where))
 	}
 	for _, role := range a.Strategies.Keys {
-		v, _ := a.Strategies.Get(role)
-		if s, ok := v.(*Strategy); ok {
+		if s, ok := mustGet(a.Strategies, role).(*Strategy); ok {
 			s.validate("strategies[" + role + "]")
 		}
 	}
 	return a, nil
 }
 
-// Bake resolves adapter × signature × capabilities into a plan.
-func (a *Adapter) Bake(sig *Signature, capabilities *Object, reg *Registry) (*Baked, error) {
-	return Bake(a, sig, capabilities, reg)
+func (a *Adapter) Bind(sig *Signature, capabilities *Object, reg *Registry) (*Plan, error) {
+	return Bind(a, sig, capabilities, reg)
 }
 
-// Dump writes the artifact.
 func (a *Adapter) Dump(reg *Registry) (*Object, error) { return Dump(a, reg) }

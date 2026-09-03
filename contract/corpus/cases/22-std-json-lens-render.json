@@ -1,40 +1,39 @@
 {
  "name": "std-json-lens-render",
  "kind": "render",
- "vocab": ["std"],
+ "vocab": [
+  "std"
+ ],
  "entry": {
   "name": "json_lens_v1",
   "versions": {
-   "kernel": "0.1.0",
+   "kernel": "0.2.0",
    "vocab": {
     "lens/json_object": "0.1.0",
-    "codec/json": "0.1.0"
+    "format/json": "0.1.0"
    }
   },
-  "template": {
-   "messages": [
-    {
-     "role": "system",
-     "text": "{instruction}\n\nReply with one JSON object holding these keys:\n{% for f in outputs %}- {f.name}: {f.desc}\n{% endfor %}"
-    },
-    {
-     "directive": "demos"
-    },
-    {
-     "role": "user",
-     "text": "{question}"
-    }
-   ]
-  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n\nReply with one JSON object holding these keys:\n{% for f in outputs %}- {f.name}: {f.desc}\n{% endfor %}"
+   },
+   {
+    "directive": "demos"
+   },
+   {
+    "role": "user",
+    "text": "{question}"
+   }
+  ],
   "parse": {
    "kind": "json_object"
   },
-  "codecs": {
-   "payload": {
-    "kind": "json"
+  "formats": {
+   "list[*]": {
+    "use": "json"
    }
-  },
-  "requires": []
+  }
  },
  "signature": {
   "instructions": "Answer the question.",

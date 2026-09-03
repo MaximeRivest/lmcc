@@ -15,6 +15,7 @@ type Field struct {
 	Name       string
 	Direction  string
 	Shape      *Object
+	Type       string // the type's name as the frontend spells it ("" when unknown)
 	Role       string
 	Desc       *string
 	Annotation reflect.Type
@@ -70,6 +71,13 @@ func SignatureFromJSON(data *Object) (sig *Signature, err error) {
 			f.Name, _ = fo.Str("name")
 			f.Direction, _ = fo.Str("direction")
 			f.Shape = fo.Object("shape") // nil unless an object; validated below
+			if t, ok := fo.Get("type"); ok {
+				ts, isStr := t.(string)
+				if !isStr {
+					refusef("signature-malformed", "field %q: type must be a string", f.Name)
+				}
+				f.Type = ts
+			}
 			if fo.Has("role") {
 				f.Role, _ = fo.Str("role") // "" when not text: fails validation
 			}
@@ -92,6 +100,9 @@ func SignatureToJSON(sig *Signature) *Object {
 	fields := []any{}
 	for _, f := range sig.Fields {
 		o := Obj("name", f.Name, "direction", f.Direction, "shape", f.Shape)
+		if f.Type != "" {
+			o.Set("type", f.Type)
+		}
 		if f.Role != "plain" {
 			o.Set("role", f.Role)
 		}
@@ -121,8 +132,8 @@ func validateSignature(sig *Signature) {
 		if f.Shape == nil {
 			refusef("signature-malformed", "field %q: shape must be an object", f.Name)
 		}
-		if !IsIdentifier(f.Role) {
-			refusef("signature-malformed", "field %q: role %q is not an identifier",
+		if !roleRE.MatchString(f.Role) {
+			refusef("signature-malformed", "field %q: role %q is not a (dotted) identifier",
 				f.Name, f.Role)
 		}
 	}
@@ -164,6 +175,7 @@ func SignatureOf(instructions string, inputs, outputs *Object, reg *Registry) (s
 				}
 			}
 			f.Shape, f.Annotation = typeToShape(typ, reg, name)
+			f.Type = TypeName(f.Annotation)
 			sig.Fields = append(sig.Fields, f)
 		}
 	}
@@ -223,6 +235,7 @@ func StructSignature(instructions string, in, out any, reg *Registry) (sig *Sign
 				}
 			}
 			f.Shape, f.Annotation = typeToShape(sf.Type, reg, f.Name)
+			f.Type = TypeName(sf.Type)
 			sig.Fields = append(sig.Fields, f)
 		}
 	}
@@ -243,10 +256,22 @@ func typeToShape(typ any, reg *Registry, fieldName string) (*Object, reflect.Typ
 	return reflectShape(t, reg, fieldName), t
 }
 
+// TypeName is the type's name as the Go frontend spells it: "string",
+// "int", "[]Person", "Person". Formats resolve by it first (kernel §5).
+func TypeName(t reflect.Type) string {
+	if t == nil {
+		return ""
+	}
+	if t.Name() != "" {
+		return t.Name()
+	}
+	return t.String()
+}
+
 func reflectShape(t reflect.Type, reg *Registry, fieldName string) *Object {
 	if reg != nil {
-		if h := reg.hostFor(t); h != nil {
-			return h.Shape.Clone()
+		if shape := reg.shapeFor(t); shape != nil {
+			return shape.Clone()
 		}
 	}
 	switch t.Kind() {
@@ -263,9 +288,26 @@ func reflectShape(t reflect.Type, reg *Registry, fieldName string) *Object {
 		return Obj("type", "array", "items", reflectShape(t.Elem(), reg, fieldName))
 	case reflect.Map:
 		return Obj("type", "object")
+	case reflect.Struct:
+		// the language's own construct: lowered mechanically, still structured
+		props := NewObject()
+		required := []any{}
+		for i := 0; i < t.NumField(); i++ {
+			sf := t.Field(i)
+			if !sf.IsExported() {
+				continue
+			}
+			name := strings.ToLower(sf.Name)
+			if tag, ok := sf.Tag.Lookup("lmcc"); ok && strings.Split(tag, ",")[0] != "" {
+				name = strings.Split(tag, ",")[0]
+			}
+			props.Set(name, reflectShape(sf.Type, reg, fieldName+"."+name))
+			required = append(required, name)
+		}
+		return Obj("type", "object", "properties", props, "required", required)
 	}
 	refusef("unmapped-type",
-		"field %q: cannot map Go type %v to a shape; register a host type for it or pass a raw shape",
+		"field %q: cannot map Go type %v to a shape; pass a raw shape, or lower it in your frontend",
 		fieldName, t)
 	return nil
 }
@@ -431,7 +473,7 @@ func SpellValue(shape *Object, value any, where string) string {
 	if s, ok := value.(string); ok {
 		return s
 	}
-	refusef("no-codec", "%s: value of type %T has no codec bound and is not a scalar — bind a codec for this field",
+	refusef("no-format", "%s: value of type %T has no format and is not a scalar — bind a format for this field",
 		where, value)
 	return ""
 }
@@ -456,7 +498,7 @@ func ReadValue(shape *Object, text string, where string) any {
 				return m
 			}
 		}
-		refusef("value-invalid", "%s: %q is not one of the enum", where, t)
+		refusef("parse-value", "%s: %q is not one of the enum", where, t)
 	}
 	switch shapeType(shape) {
 	case "integer":
@@ -467,6 +509,55 @@ func ReadValue(shape *Object, text string, where string) any {
 		return ReadBoolean(text, where)
 	}
 	return text
+}
+
+// ------------------------------------------------------------ parts, spans
+
+// Span is what a routing or the lens captured for one field: parts.
+type Span struct{ Parts []any }
+
+func SpanOfText(text string) Span { return Span{[]any{TextPart(text)}} }
+
+// Text: every part that carries text, stripped, joined by newlines (§6).
+func (s Span) Text() string {
+	var out []string
+	for _, p := range s.Parts {
+		if po, ok := p.(*Object); ok {
+			if t, ok := po.Str("text"); ok {
+				out = append(out, Strip(t))
+			}
+		}
+	}
+	return strings.Join(out, "\n")
+}
+
+func (s Span) Of(kind string) []any {
+	var out []any
+	for _, p := range s.Parts {
+		if po, ok := p.(*Object); ok {
+			if k, _ := po.Str("kind"); k == kind {
+				out = append(out, p)
+			}
+		}
+	}
+	return out
+}
+
+// AsParts: a format's Write returns text (one text part) or a part list.
+func AsParts(written any, where string) []any {
+	switch w := written.(type) {
+	case string:
+		return []any{TextPart(w)}
+	case []any:
+		for _, p := range w {
+			if po, ok := p.(*Object); !ok || !po.Has("kind") {
+				refusef("format-write-error", "%s: write returned a non-part in its list", where)
+			}
+		}
+		return w
+	}
+	refusef("format-write-error", "%s: write must return text or a list of parts, got %T", where, written)
+	return nil
 }
 
 // ---------------------------------------------------------------- messages

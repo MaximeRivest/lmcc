@@ -15,9 +15,21 @@ Cases 35–46 were authored while writing the Go implementation: each one
 pins a rule the spec had left to the host language (number spelling,
 whitespace, regex dialect, marker collisions, signature validity).
 
+**Second seeding (kernel 0.2, plan 08).** When the contract moved to the
+v3 design, cases 01–54 were converted by a script (template list,
+`codecs` → `formats` by structural key, the routing form, refusal codes)
+and every `sections` template became a derived pattern. For the eleven
+render cases whose bytes changed, the new expectation was regenerated
+from the reference and each diff was reviewed by hand: every change is
+the pattern loop rendering placeholders where a description loop used
+to render `name  desc`. Cases 55–73 were hand-authored for what v3 adds.
+Authority is frozen again from this point.
+
 **Case format.** One JSON object per file:
 
-- `kind`: `render` | `parse` | `roundtrip` | `refuse`
+- `kind`: `render` | `parse` | `roundtrip` | `refuse` | `plan` (skeleton + prefix)
+- `requires`: placements the case needs (`udf:python`); a driver without
+  them answers `unclaimed` and the harness counts those apart
 - `vocab`: packs the harness must install (e.g. `["std"]`); absent means
   the case must pass against an **empty registry**
 - `entry`, `signature`, `capabilities`, `inputs`, `demos`, `history`,

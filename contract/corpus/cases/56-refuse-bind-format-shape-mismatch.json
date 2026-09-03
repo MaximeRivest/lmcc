@@ -1,0 +1,62 @@
+{
+ "name": "refuse-bind-format-shape-mismatch",
+ "kind": "refuse",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "mismatch_v1",
+  "versions": {
+   "kernel": "0.2.0",
+   "vocab": {
+    "format/table": "0.1.0"
+   }
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n\nAnswer in exactly this form:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "parse": {
+   "kind": "derived"
+  },
+  "formats": {
+   "string": {
+    "use": "table",
+    "options": {
+     "columns": [
+      "a"
+     ]
+    }
+   }
+  }
+ },
+ "signature": {
+  "instructions": "x",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "a",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "expect": {
+  "code": "format-shape-mismatch",
+  "at": "bind"
+ }
+}

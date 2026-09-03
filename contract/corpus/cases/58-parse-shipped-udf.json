@@ -1,0 +1,78 @@
+{
+ "name": "parse-shipped-udf",
+ "kind": "parse",
+ "requires": [
+  "udf:python"
+ ],
+ "entry": {
+  "name": "udf_v1",
+  "versions": {
+   "kernel": "0.2.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n\nAnswer in exactly this form:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "directive": "demos"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "parse": {
+   "kind": "derived"
+  },
+  "formats": {
+   "Person": {
+    "language": "python",
+    "deps": [],
+    "write": "def write(p, f):\n    return p['name'] + ' (' + str(p['age']) + ')'",
+    "read": "def read(span, f):\n    name, _, rest = span.text.rpartition(' (')\n    return {'name': name, 'age': int(rest[:-1])}",
+    "describe": "def describe(f):\n    return 'name (age)'",
+    "sha256": "b56b17c3e2afbedf3bb9d8de82a49ded449f7d382e79f0f6e74d982341c68883",
+    "authored_by": "corpus",
+    "accepts": [
+     "Person"
+    ],
+    "emits": "text",
+    "round_trip": true,
+    "reads": [
+     "text"
+    ]
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Extract.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "who",
+    "direction": "output",
+    "shape": {
+     "type": "object"
+    },
+    "type": "Person"
+   }
+  ]
+ },
+ "response": "<who>\nBo (7)\n</who>",
+ "expect": {
+  "values": {
+   "who": {
+    "name": "Bo",
+    "age": 7
+   }
+  }
+ }
+}

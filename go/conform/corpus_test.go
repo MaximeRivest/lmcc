@@ -22,9 +22,12 @@ func TestCorpus(t *testing.T) {
 		}
 		name := filepath.Base(f)
 		t.Run(name, func(t *testing.T) {
-			ok, detail := RunLine(string(data))
-			if !ok {
-				t.Errorf("%s\n%s", name, detail)
+			o := RunLineOutcome(string(data))
+			if o.Unclaimed != "" {
+				t.Skipf("unclaimed: %s", o.Unclaimed)
+			}
+			if !o.OK {
+				t.Errorf("%s\n%s", name, o.Detail)
 			}
 		})
 	}

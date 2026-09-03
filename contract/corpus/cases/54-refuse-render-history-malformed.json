@@ -4,30 +4,25 @@
  "entry": {
   "name": "chat_v1",
   "versions": {
-   "kernel": "0.1.0",
+   "kernel": "0.2.0",
    "vocab": {}
   },
-  "template": {
-   "messages": [
-    {
-     "role": "system",
-     "text": "{instruction}"
-    },
-    {
-     "directive": "history"
-    },
-    {
-     "role": "user",
-     "text": "{% for f in inputs %}== {f.name} ==\n{f.value}\n{% endfor %}"
-    }
-   ]
-  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}[[ ## {f.name} ## ]]\n{f.value}\n{% endfor %}[[ ## completed ## ]]"
+   },
+   {
+    "directive": "history"
+   },
+   {
+    "role": "user",
+    "text": "{% for f in inputs %}== {f.name} ==\n{f.value}\n{% endfor %}"
+   }
+  ],
   "parse": {
-   "kind": "sections",
-   "open": "[[ ## {name} ## ]]",
-   "tail": "[[ ## completed ## ]]"
-  },
-  "requires": []
+   "kind": "derived"
+  }
  },
  "signature": {
   "instructions": "Chat.",

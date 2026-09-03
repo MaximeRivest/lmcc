@@ -40,7 +40,7 @@ class PythonDriver:
         self.lmcc = lmcc
 
     def _registry(self, case: dict):
-        registry = self.lmcc.Registry()
+        registry = self.lmcc.Registry(allow_udf="udf:python" in case.get("requires", []))
         if "std" in case.get("vocab", []):
             import lmcc_std
             lmcc_std.install(registry)
@@ -58,8 +58,12 @@ class PythonDriver:
                 dumped = lmcc.dump(adapter, registry)
                 return _compare(expect["entry"], dumped, "entry")
             sig = lmcc.signature_from_dict(case["signature"])
-            baked = adapter.bake(sig, case.get("capabilities", {}),
+            baked = adapter.bind(sig, case.get("capabilities", {}),
                                  registry=registry)
+            if kind == "plan":
+                got = {"skeleton": baked.skeleton(),
+                       "prefix": baked.prefix(demos=case.get("demos"), history=case.get("history"))}
+                return _compare({"skeleton": expect["skeleton"], "prefix": expect["prefix"]}, got, "plan")
             if kind == "render":
                 result = baked.render(inputs=case.get("inputs", {}),
                                       demos=case.get("demos"),
@@ -79,11 +83,11 @@ class PythonDriver:
                         "detail": f"expected refusal {expect['code']!r}, "
                                   f"but nothing refused"}
             return {"ok": False, "detail": f"unknown case kind {kind!r}"}
-        except lmcc.LMCCError as err:
+        except lmcc.Refusal as err:
             if kind == "refuse" and err.code == expect["code"]:
                 return {"ok": True, "detail": ""}
             return {"ok": False,
-                    "detail": f"unexpected refusal [{err.code}]: {err.detail}"}
+                    "detail": f"unexpected refusal [{err.code}]: {err.hint}"}
 
 
 class SubprocessDriver:
@@ -111,7 +115,10 @@ class SubprocessDriver:
             return {"ok": False, "detail": f"driver wrote non-JSON: {line!r}"}
         if not isinstance(answer, dict) or not isinstance(answer.get("ok"), bool):
             return {"ok": False, "detail": f"driver answer malformed: {line!r}"}
-        return {"ok": answer["ok"], "detail": str(answer.get("detail", ""))}
+        out = {"ok": answer["ok"], "detail": str(answer.get("detail", ""))}
+        if answer.get("unclaimed"):
+            out["unclaimed"] = str(answer["unclaimed"])
+        return out
 
     def close(self) -> None:
         if self.proc.stdin:
@@ -133,6 +140,7 @@ class Report:
     passed: int
     failed: int
     failures: list[tuple[str, str]]
+    unclaimed: list[tuple[str, str]] = None  # (case, what the driver cannot place)
 
     @property
     def ok(self) -> bool:
@@ -141,12 +149,14 @@ class Report:
 
 def run_corpus(driver=None, cases_dir: Path = CASES_DIR) -> Report:
     driver = driver or PythonDriver()
-    passed, failed, failures = 0, 0, []
+    passed, failed, failures, unclaimed = 0, 0, [], []
     try:
         for path in sorted(cases_dir.glob("*.json")):
             case = json.loads(path.read_text(encoding="utf-8"))
             result = driver.run(case)
-            if result["ok"]:
+            if result.get("unclaimed"):
+                unclaimed.append((path.name, result["unclaimed"]))
+            elif result["ok"]:
                 passed += 1
             else:
                 failed += 1
@@ -154,7 +164,7 @@ def run_corpus(driver=None, cases_dir: Path = CASES_DIR) -> Report:
     finally:
         if hasattr(driver, "close"):
             driver.close()
-    return Report(passed, failed, failures)
+    return Report(passed, failed, failures, unclaimed)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -171,7 +181,8 @@ def main(argv: list[str] | None = None) -> int:
     report = run_corpus(driver)
     for name, detail in report.failures:
         print(f"FAIL {name}\n{detail}\n")
-    print(f"[{driver.name}] {report.passed} passed, {report.failed} failed")
+    note = f", {len(report.unclaimed)} unclaimed ({', '.join(sorted({u for _, u in report.unclaimed}))})" if report.unclaimed else ""
+    print(f"[{driver.name}] {report.passed} passed, {report.failed} failed{note}")
     return 0 if report.ok else 1
 
 

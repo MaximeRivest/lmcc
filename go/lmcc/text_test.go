@@ -28,16 +28,16 @@ func TestReadGrammars(t *testing.T) {
 		t.Error("integer grammar")
 	}
 	for _, bad := range []string{"+5", "1,000", "1_000", "1.0", "", "٣"} {
-		if err := try(func() { ReadInteger(bad, "t") }); err == nil || err.Code != "value-invalid" {
-			t.Errorf("integer %q should refuse value-invalid", bad)
+		if err := try(func() { ReadInteger(bad, "t") }); err == nil || err.Code != "parse-value" {
+			t.Errorf("integer %q should refuse parse-value", bad)
 		}
 	}
 	if ReadNumber("1e3", "t") != 1000 {
 		t.Error("number grammar")
 	}
 	for _, bad := range []string{".5", "5.", "NaN", "Infinity", "+1"} {
-		if err := try(func() { ReadNumber(bad, "t") }); err == nil || err.Code != "value-invalid" {
-			t.Errorf("number %q should refuse value-invalid", bad)
+		if err := try(func() { ReadNumber(bad, "t") }); err == nil || err.Code != "parse-value" {
+			t.Errorf("number %q should refuse parse-value", bad)
 		}
 	}
 	if !ReadBoolean("YES", "t") || ReadBoolean("no", "t") {

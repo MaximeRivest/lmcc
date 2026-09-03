@@ -37,7 +37,7 @@ def roundtrip(signature, example: dict, *, capabilities=None, expect_values=None
     assistant turn back, and compare to the example's outputs."""
     registry, adapter = _fixture()
     lowered = lmcc_dspy.lower(signature, registry=registry)
-    baked = adapter.bake(lowered.signature, capabilities or {}, registry=registry)
+    baked = adapter.bind(lowered.signature, capabilities or {}, registry=registry)
     inputs, history = lowered.split_inputs(example)
     outputs = {f.name: example[f.name] for f in lowered.signature.outputs if f.name in example}
     request = baked.render(inputs=inputs, demos=[{**inputs, **outputs}], history=history)
@@ -137,7 +137,7 @@ def test_pydantic_models_lower_to_schema_and_lift_back():
                          '{"name": "Z", "born": 3}\n[[ ## completed ## ]]')
     assert isinstance(values["book"], Book) and values["book"].author.born == 2
     assert values["others"] == []
-    assert values["maybe"] == {"name": "Z", "born": 3}   # Optional[Model]: json, not lifted (stated)
+    assert values["maybe"] == Author(name="Z", born=3)   # Optional[Model] lifts through the annotation
 
 
 class Color(enum.Enum):
@@ -190,9 +190,7 @@ def test_image_input_is_a_media_shape():
     registry, adapter = _fixture()
     lowered = lmcc_dspy.lower(Vision, registry=registry)
     assert shapes(lowered)["image"] == {"media": "image"}
-    baked = adapter.bake(lowered.signature, {"image_input": True}, registry=registry)
-    registry.register_host(dspy.Image, shape={"media": "image"},
-                           lower=lambda im: {"url": im.url})
+    baked = adapter.bind(lowered.signature, {"image_input": True}, registry=registry)
     req = baked.render(inputs={"image": dspy.Image(url="https://x/y.png"), "q": "?"})
     user = req.messages[-1]["content"]
     assert {"kind": "image", "url": "https://x/y.png"} in user
@@ -245,8 +243,8 @@ def test_tools_lower_to_the_tools_role_and_still_render():
     roles = {f.name: f.role for f in lowered.signature.fields}
     assert roles == {"question": "plain", "tools": "tools", "calls": "tools"}
     assert shapes(lowered)["tools"]["items"]["required"] == ["name", "description", "parameters"]
-    with pytest.raises(lmcc.LMCCError) as err:
-        adapter.bake(lowered.signature, {}, registry=registry)
+    with pytest.raises(lmcc.Refusal) as err:
+        adapter.bind(lowered.signature, {}, registry=registry)
     assert err.value.code == "role-ambiguous"   # two fields on one role: the kernel rule
 
     # with the output side renamed to plain, the tool declarations render as json
@@ -255,7 +253,7 @@ def test_tools_lower_to_the_tools_role_and_still_render():
                               "calls": (dspy.ToolCalls, dspy.OutputField())})
     lowered = lmcc_dspy.lower(only_in, registry=registry)
     lowered.signature.field_named("calls").role = "plain"
-    baked = adapter.bake(lowered.signature, {}, registry=registry)
+    baked = adapter.bind(lowered.signature, {}, registry=registry)
     req = baked.render(inputs={"question": "2+2?", "tools": [dspy.Tool(add)]})
     user = req.messages[-1]["content"][0]["text"]
     assert '"name": "add"' in user and '"description": "Add two numbers."' in user
@@ -312,9 +310,9 @@ def test_signature_operations_relower():
 
 def test_non_identifier_field_name_refuses_by_name():
     sig = dspy.Signature({"réponse": (str, dspy.OutputField()), "q": (str, dspy.InputField())})
-    with pytest.raises(lmcc.LMCCError) as err:
+    with pytest.raises(lmcc.Refusal) as err:
         lmcc_dspy.lower(sig)
-    assert err.value.code == "signature-malformed" and "réponse" in err.value.detail
+    assert err.value.code == "signature-malformed" and "réponse" in err.value.hint
 
 
 def test_unloweable_annotation_refuses_unmapped_type():
@@ -322,6 +320,6 @@ def test_unloweable_annotation_refuses_unmapped_type():
     # the one kind of type DSPy lets through that has no data form
     sig = dspy.Signature({"q": (str, dspy.InputField()),
                           "o": (typing.Callable[[int], int], dspy.OutputField())})
-    with pytest.raises(lmcc.LMCCError) as err:
+    with pytest.raises(lmcc.Refusal) as err:
         lmcc_dspy.lower(sig)
-    assert err.value.code == "unmapped-type" and "'o'" in err.value.detail
+    assert err.value.code == "unmapped-type" and "'o'" in err.value.hint

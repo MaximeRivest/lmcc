@@ -4,27 +4,22 @@
  "entry": {
   "name": "scalars_v1",
   "versions": {
-   "kernel": "0.1.0",
+   "kernel": "0.2.0",
    "vocab": {}
   },
-  "template": {
-   "messages": [
-    {
-     "role": "system",
-     "text": "{instruction}"
-    },
-    {
-     "role": "user",
-     "text": "{q}"
-    }
-   ]
-  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n{% endfor %}</done>"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
   "parse": {
-   "kind": "sections",
-   "open": "<{name}>",
-   "tail": "</done>"
-  },
-  "requires": []
+   "kind": "derived"
+  }
  },
  "signature": {
   "instructions": "Read.",
@@ -47,7 +42,7 @@
  },
  "response": "<i>\n+5\n</done>",
  "expect": {
-  "code": "value-invalid",
+  "code": "parse-value",
   "at": "parse"
  }
 }

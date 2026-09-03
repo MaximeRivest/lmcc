@@ -5,7 +5,8 @@ exactly three constructs, so every template stays diffable, printable, and
 serializable:
 
 - slots: ``{instruction}``, ``{format}`` (the lens's reply skeleton),
-  ``{field_name}``, and ``{f.attr}`` inside loops
+  ``{field_name}`` (an input's value, or an output's placeholder), and
+  ``{f.attr}`` inside loops
 - loops: ``{% for f in inputs %} ... {% endfor %}`` (also ``outputs``),
   iterating the *visible* fields of the baked plan, in signature order
 - escapes: ``{{`` renders ``{``, ``}}`` renders ``}``
@@ -13,9 +14,10 @@ serializable:
 A bare ``{`` or ``}`` outside these constructs is a syntax error (code
 ``template-syntax``) — strictness is what keeps templates analyzable.
 
-Loop variables expose: ``f.name``, ``f.desc`` (empty when absent),
-``f.schema`` (codec schema prose, or a mechanical hint), ``f.role``,
-``f.value`` (the spelled value; media fields emit a part instead of text).
+Loop variables expose: ``f.name``, ``f.desc`` (empty when absent), ``f.type``
+(empty when absent), ``f.schema`` (the format's describe, or a mechanical
+hint), ``f.role``, ``f.value`` (the written value — parts land at the
+slot; an output's value is its placeholder).
 """
 
 from __future__ import annotations
@@ -36,7 +38,7 @@ _TOKEN = re.compile(
 )
 
 LOOP_SOURCES = ("inputs", "outputs")
-LOOP_ATTRS = ("name", "desc", "schema", "role", "value")
+LOOP_ATTRS = ("name", "desc", "type", "schema", "role", "value")
 
 
 @dataclass
@@ -129,9 +131,7 @@ def validate_nodes(nodes: list[Node], *, known_fields: set[str],
                 covered.add(path)
                 continue
             if path in known_fields:
-                refuse("unknown-slot",
-                       f"{where}: {{{path}}} — only input fields may be used as "
-                       f"bare slots (outputs are parsed, not rendered)")
+                continue  # an output slot: renders its placeholder (kernel §2)
             refuse("unknown-slot",
                    f"{where}: {{{path}}} names no field in the signature")
         elif isinstance(node, Loop):
@@ -176,6 +176,8 @@ def _render_slot(node: Slot, env, out: list[dict], buf: list[str],
                 buf.append(f.desc or "")
             elif attr == "role":
                 buf.append(f.role)
+            elif attr == "type":
+                buf.append(f.type or "")
             elif attr == "schema":
                 buf.append(env.schema_of(f))
             elif attr == "value":
@@ -192,11 +194,16 @@ def _render_slot(node: Slot, env, out: list[dict], buf: list[str],
 
 
 def _emit_value(rendered: tuple[str, object], out: list[dict], buf: list[str]) -> None:
+    """Parts land at the slot in order; text parts join the running text."""
     kind, payload = rendered
     if kind == "text":
         buf.append(payload)
-    else:  # a media part: flush the text buffer, then append the part
+        return
+    for part in payload:
+        if part.get("kind") == "text":
+            buf.append(part.get("text", ""))
+            continue
         if buf:
             out.append({"kind": "text", "text": "".join(buf)})
             buf.clear()
-        out.append(payload)
+        out.append(part)

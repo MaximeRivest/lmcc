@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-const KernelVersion = "0.1.0"
+const KernelVersion = "0.2.0"
 
 func parseVersion(v any, what string) [3]int {
 	s, ok := v.(string)
@@ -38,7 +38,7 @@ func checkCompatible(kind string, theirs any, ours string) {
 		}
 	}
 	if !ok {
-		refusef("version-incompatible", "%s: entry needs %v, this implementation provides %s", kind, theirs, ours)
+		refusef("version-incompatible", "%s: artifact needs %v, this implementation provides %s", kind, theirs, ours)
 	}
 }
 
@@ -48,8 +48,7 @@ func checkVocabVersion(ref string, declared *Object, provided string) {
 	}
 }
 
-// Load reads an entry against the given registry — and only that
-// registry. A data-only entry loads against an empty one.
+// Load reads an artifact against the given registry only. Never runs a UDF.
 func Load(entry *Object, reg *Registry) (a *Adapter, err error) {
 	defer catch(&err)
 	if entry == nil {
@@ -73,31 +72,30 @@ func Load(entry *Object, reg *Registry) (a *Adapter, err error) {
 	if vocab == nil {
 		vocab = NewObject()
 	}
-	tpl := entry.Object("template")
-	if tpl == nil {
-		refuse("entry-malformed", "template must be an object")
+	rawTemplate, _ := entry.Get("template")
+	if o, isObj := rawTemplate.(*Object); isObj && o.Has("messages") {
+		refuse("entry-malformed", "template is a list in kernel 0.2 (the 0.1 {\"messages\": [...]} form is gone)")
 	}
-	rawMessages, ok := tpl.Get("messages")
-	list, isList := rawMessages.([]any)
-	if !ok || !isList {
-		refuse("entry-malformed", "template.messages must be a list")
+	list, isList := rawTemplate.([]any)
+	if !isList {
+		refuse("entry-malformed", "template must be a list")
 	}
-	var messages []*Object
+	var template []*Object
 	for _, m := range list {
 		mo, ok := m.(*Object)
 		if !ok {
-			refuse("entry-malformed", "template.messages entries must be objects")
+			refuse("entry-malformed", "template entries must be objects")
 		}
-		messages = append(messages, mo)
+		template = append(template, mo)
 	}
 	parse := entry.Object("parse")
 	if parse == nil {
 		refuse("entry-malformed", "entry.parse must be an object")
 	}
 	kind, _ := parse.Str("kind")
-	if kind != "sections" && kind != "derived" {
+	if kind != "derived" {
 		if !reg.hasLens(kind) {
-			refusef("unknown-parse-kind", "parse.kind %q is neither the kernel lens 'sections' nor a registered lens", kind)
+			refusef("unknown-parse-kind", "parse.kind %q is neither the kernel lens 'derived' nor a registered lens", kind)
 		}
 		checkVocabVersion("lens/"+kind, vocab, reg.lenses[kind].version)
 	}
@@ -109,8 +107,8 @@ func Load(entry *Object, reg *Registry) (a *Adapter, err error) {
 			if so == nil {
 				refusef("entry-malformed", "%s: must be an object", where)
 			}
-			if so.Has("kind") {
-				name, _ := so.Str("kind")
+			if so.Has("use") {
+				name, _ := so.Str("use")
 				if _, ok := reg.strategies[name]; !ok {
 					refusef("unknown-strategy", "%s: strategy %q is not registered", where, name)
 				}
@@ -119,104 +117,120 @@ func Load(entry *Object, reg *Registry) (a *Adapter, err error) {
 				if opts == nil {
 					opts = NewObject()
 				}
-				strategies.Set(role, Obj("kind", name, "options", opts))
+				strategies.Set(role, Obj("use", name, "options", opts))
 			} else {
 				strategies.Set(role, strategyFromJSON(so, where))
 			}
 		}
-	} else if entry.Has("strategies") && entry.Object("strategies") == nil {
-		if v, _ := entry.Get("strategies"); v != nil {
-			refuse("entry-malformed", "strategies must be an object")
-		}
 	}
-	codecs := NewObject()
-	if raw := entry.Object("codecs"); raw != nil {
-		for _, fname := range raw.Keys {
-			where := "codecs['" + fname + "']"
-			co := raw.Object(fname)
-			if co == nil || !co.Has("kind") {
-				refusef("entry-malformed", "%s: must be an object with 'kind'", where)
+	formats := NewObject()
+	if raw := entry.Object("formats"); raw != nil {
+		for _, key := range raw.Keys {
+			where := "formats['" + key + "']"
+			fo := raw.Object(key)
+			if fo == nil {
+				refusef("entry-malformed", "%s: must be an object", where)
 			}
-			name, _ := co.Str("kind")
-			if _, ok := reg.codecs[name]; !ok {
-				refusef("unknown-codec", "%s: codec %q is not registered", where, name)
+			switch {
+			case fo.Has("use"):
+				name, _ := fo.Str("use")
+				if _, ok := reg.formats[name]; !ok {
+					refusef("unknown-format", "%s: format %q is not registered", where, name)
+				}
+				checkVocabVersion("format/"+name, vocab, reg.formats[name].version)
+				opts := fo.Object("options")
+				if opts == nil {
+					opts = NewObject()
+				}
+				formats.Set(key, Obj("use", name, "options", opts))
+			case fo.Has("language"):
+				for _, req := range []string{"write", "sha256"} {
+					if !fo.Has(req) {
+						refusef("entry-malformed", "%s: a shipped format needs %q", where, req)
+					}
+				}
+				lang, _ := fo.Str("language")
+				if !reg.AllowUDF {
+					refusef("format-untrusted", "%s: the artifact ships a %s UDF and this runtime will not place code", where, lang)
+				}
+				formats.Set(key, admitUDF(fo, where))
+			default:
+				refusef("entry-malformed", "%s: a format entry is {use} or a shipped UDF", where)
 			}
-			checkVocabVersion("codec/"+name, vocab, reg.codecs[name].version)
-			opts := co.Object("options")
-			if opts == nil {
-				opts = NewObject()
-			}
-			codecs.Set(fname, Obj("kind", name, "options", opts))
 		}
 	}
 	name, _ := entry.Str("name")
-	a, err = NewAdapter(name, messages, parse, strategies, codecs)
+	a, err = NewAdapter(name, template, parse, strategies, formats)
 	if err != nil {
 		panic(err)
 	}
 	return a, nil
 }
 
-// Dump writes the artifact (schema/entry.schema.json).
+// Dump writes the artifact.
 func Dump(a *Adapter, reg *Registry) (entry *Object, err error) {
 	defer catch(&err)
 	vocab := NewObject()
 	strategies := NewObject()
 	for _, role := range a.Strategies.Keys {
-		v, _ := a.Strategies.Get(role)
-		switch b := v.(type) {
+		switch b := mustGet(a.Strategies, role).(type) {
 		case *Strategy:
 			strategies.Set(role, b.ToJSON())
 		case *Object:
-			name, _ := b.Str("kind")
+			name, _ := b.Str("use")
 			named, ok := reg.strategies[name]
 			if !ok {
 				refusef("unknown-strategy", "cannot dump: strategy %q is not registered (its version is part of the artifact)", name)
 			}
 			vocab.Set("strategy/"+name, named.version)
-			strategies.Set(role, bindingJSON(b))
+			strategies.Set(role, refJSON(b))
 		}
 	}
-	codecs := NewObject()
-	for _, fname := range a.Codecs.Keys {
-		b := a.Codecs.Object(fname)
-		name, _ := b.Str("kind")
-		named, ok := reg.codecs[name]
-		if !ok {
-			refusef("unknown-codec", "cannot dump: codec %q is not registered", name)
+	formats := NewObject()
+	for _, key := range a.Formats.Keys {
+		switch b := mustGet(a.Formats, key).(type) {
+		case *Object:
+			if b.Has("use") {
+				name, _ := b.Str("use")
+				named, ok := reg.formats[name]
+				if !ok {
+					refusef("unknown-format", "cannot dump: format %q is not registered", name)
+				}
+				vocab.Set("format/"+name, named.version)
+				formats.Set(key, refJSON(b))
+			} else {
+				formats.Set(key, DeepClone(b))
+			}
+		default:
+			refusef("entry-malformed", "cannot dump: format %q is runtime code with no shipped form; the Go kernel ships no UDFs", key)
 		}
-		vocab.Set("codec/"+name, named.version)
-		codecs.Set(fname, bindingJSON(b))
 	}
 	kind, _ := a.Parse.Str("kind")
-	if kind != "sections" && kind != "derived" {
+	if kind != "derived" {
 		named, ok := reg.lenses[kind]
 		if !ok {
 			refusef("unknown-parse-kind", "cannot dump: lens %q is not registered (its version is part of the artifact)", kind)
 		}
 		vocab.Set("lens/"+kind, named.version)
 	}
-	messages := make([]any, len(a.Messages))
-	for i, m := range a.Messages {
-		messages[i] = m.Clone()
+	template := make([]any, len(a.Template))
+	for i, m := range a.Template {
+		template[i] = m.Clone()
 	}
-	entry = Obj("name", a.Name,
-		"versions", Obj("kernel", KernelVersion, "vocab", vocab),
-		"template", Obj("messages", messages),
-		"parse", a.Parse.Clone())
+	entry = Obj("name", a.Name, "versions", Obj("kernel", KernelVersion, "vocab", vocab),
+		"template", template, "parse", a.Parse.Clone())
 	if strategies.Len() > 0 {
 		entry.Set("strategies", strategies)
 	}
-	if codecs.Len() > 0 {
-		entry.Set("codecs", codecs)
+	if formats.Len() > 0 {
+		entry.Set("formats", formats)
 	}
-	entry.Set("requires", []any{})
 	return entry, nil
 }
 
-func bindingJSON(b *Object) *Object {
-	kind, _ := b.Str("kind")
-	out := Obj("kind", kind)
+func refJSON(b *Object) *Object {
+	name, _ := b.Str("use")
+	out := Obj("use", name)
 	if opts := b.Object("options"); opts != nil && opts.Len() > 0 {
 		out.Set("options", DeepClone(opts))
 	}

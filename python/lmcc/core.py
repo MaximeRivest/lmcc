@@ -17,7 +17,9 @@ Imports nothing outside the standard library. That is a rule, not an accident.
 
 from __future__ import annotations
 
+import dataclasses
 import decimal
+import enum
 import math
 import re
 import typing
@@ -35,6 +37,7 @@ DIRECTIONS = ("input", "output")
 
 WHITESPACE = " \t\n\r\f\v"
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_ROLE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$")
 _INTEGER = re.compile(r"^-?[0-9]+$")
 _NUMBER = re.compile(r"^-?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?$")
 
@@ -87,14 +90,14 @@ def format_number(value: float) -> str:
 def read_integer(text: str, *, where: str) -> int:
     t = strip(text)
     if not _INTEGER.match(t):
-        refuse("value-invalid", f"{where}: {t!r} is not an integer")
+        refuse("parse-value", f"{where}: {t!r} is not an integer")
     return int(t)
 
 
 def read_number(text: str, *, where: str) -> float:
     t = strip(text)
     if not _NUMBER.match(t):
-        refuse("value-invalid", f"{where}: {t!r} is not a number")
+        refuse("parse-value", f"{where}: {t!r} is not a number")
     return float(t)
 
 
@@ -105,7 +108,7 @@ def read_boolean(text: str, *, where: str) -> bool:
         return True
     if low in ("false", "no"):
         return False
-    refuse("value-invalid", f"{where}: {t!r} is not a boolean")
+    refuse("parse-value", f"{where}: {t!r} is not a boolean")
 
 _SCALAR_SHAPES: dict[type, dict] = {
     str: {"type": "string"},
@@ -138,14 +141,17 @@ def field(annotation: object, *, role: str = "plain", desc: str | None = None) -
 
 @dataclass
 class Field:
-    """One lowered signature field. ``shape`` is always a JSON-Schema dict."""
+    """One lowered signature field. ``shape`` is always a JSON-Schema dict;
+    ``type`` is the type's name as the frontend spells it (formats resolve
+    by it first); ``annotation`` is the host type, never serialized."""
 
     name: str
     direction: str
     shape: dict
+    type: str | None = None
     role: str = "plain"
     desc: str | None = None
-    annotation: object | None = None  # kept for host lifting; never serialized
+    annotation: object | None = None
 
 
 @dataclass
@@ -192,9 +198,30 @@ def signature(
             if isinstance(spec, FieldSpec):
                 role, desc, ann = spec.role, spec.desc, spec.annotation
             shape = annotation_to_shape(ann, registry, field_name=name)
-            fields.append(Field(name, direction, shape, role=role, desc=desc,
+            fields.append(Field(name, direction, shape, type=typename(ann),
+                                role=role, desc=desc,
                                 annotation=None if isinstance(ann, dict) else ann))
     return _validated(SignatureCore(instructions, fields))
+
+
+def typename(ann: object) -> str | None:
+    """The type's name as this frontend spells it: ``str``, ``Person``,
+    ``list[Person]``, ``Optional[int]``. Raw shape dicts have no name."""
+    if isinstance(ann, dict) or ann is None:
+        return None
+    if isinstance(ann, type):
+        return ann.__name__
+    origin, args = typing.get_origin(ann), typing.get_args(ann)
+    if origin is typing.Literal:
+        return "Literal[" + ", ".join(repr(a) for a in args) + "]"
+    if origin is typing.Union or (origin is not None and origin.__name__ == "UnionType"):
+        names = [typename(a) for a in args if a is not type(None)]
+        if len(args) == len(names) + 1:
+            return "Optional[" + " | ".join(names) + "]" if len(names) == 1 else " | ".join(names + ["None"])
+        return " | ".join(names)
+    if origin is not None:
+        return f"{typename(origin)}[{', '.join(typename(a) or '?' for a in args)}]"
+    return getattr(ann, "__name__", None) or str(ann)
 
 
 def signature_from_dict(data: dict) -> SignatureCore:
@@ -206,7 +233,8 @@ def signature_from_dict(data: dict) -> SignatureCore:
         if not isinstance(f, dict):
             refuse("signature-malformed", "each field is an object")
         fields.append(Field(f.get("name"), f.get("direction"), f.get("shape"),
-                            role=f.get("role", "plain"), desc=f.get("desc")))
+                            type=f.get("type"), role=f.get("role", "plain"),
+                            desc=f.get("desc")))
     return _validated(SignatureCore(data.get("instructions", ""), fields))
 
 
@@ -226,9 +254,11 @@ def _validated(sig: SignatureCore) -> SignatureCore:
                    f"field {f.name!r}: direction {f.direction!r} is not input/output")
         if not isinstance(f.shape, dict):
             refuse("signature-malformed", f"field {f.name!r}: shape must be an object")
-        if not is_identifier(f.role):
+        if not isinstance(f.role, str) or not _ROLE.match(f.role):
             refuse("signature-malformed",
-                   f"field {f.name!r}: role {f.role!r} is not an identifier")
+                   f"field {f.name!r}: role {f.role!r} is not a (dotted) identifier")
+        if f.type is not None and not isinstance(f.type, str):
+            refuse("signature-malformed", f"field {f.name!r}: type must be a string")
         if f.desc is not None and not isinstance(f.desc, str):
             refuse("signature-malformed", f"field {f.name!r}: desc must be a string")
     return sig
@@ -239,6 +269,7 @@ def signature_to_dict(sig: SignatureCore) -> dict:
         "instructions": sig.instructions,
         "fields": [
             {"name": f.name, "direction": f.direction, "shape": f.shape,
+             **({"type": f.type} if f.type else {}),
              **({"role": f.role} if f.role != "plain" else {}),
              **({"desc": f.desc} if f.desc is not None else {})}
             for f in sig.fields
@@ -278,13 +309,29 @@ def annotation_to_shape(ann: object, registry=None, *, field_name: str = "?") ->
         return {"type": "object"}
     if ann is list:
         return {"type": "array"}
-    if registry is not None:
-        host = registry.host_for(ann)
-        if host is not None:
-            return dict(host.shape)
+    if origin is typing.Union or (origin is not None and getattr(origin, "__name__", "") == "UnionType"):
+        args = typing.get_args(ann)
+        return {"anyOf": [annotation_to_shape(a, registry, field_name=field_name)
+                          if a is not type(None) else {"type": "null"} for a in args]}
+    if isinstance(ann, type) and issubclass(ann, enum.Enum):
+        values = [m.value for m in ann]
+        shape = {"enum": values}
+        if all(isinstance(v, str) for v in values):
+            shape["type"] = "string"
+        elif all(isinstance(v, int) and not isinstance(v, bool) for v in values):
+            shape["type"] = "integer"
+        else:
+            refuse("unmapped-type", f"field {field_name!r}: enum {ann.__name__} mixes member kinds")
+        return shape
+    if isinstance(ann, type) and dataclasses.is_dataclass(ann):
+        # the language's own construct: lowered mechanically, still structured
+        hints = typing.get_type_hints(ann)
+        props = {f.name: annotation_to_shape(hints[f.name], registry, field_name=f"{field_name}.{f.name}")
+                 for f in dataclasses.fields(ann)}
+        return {"type": "object", "properties": props, "required": [f.name for f in dataclasses.fields(ann)]}
     refuse("unmapped-type",
            f"field {field_name!r}: cannot map annotation {ann!r} to a shape; "
-           f"register a host type for it or pass a JSON-Schema dict")
+           f"pass a JSON-Schema dict, or lower it in your frontend")
 
 
 _SCALAR_TYPES = ("string", "integer", "number", "boolean")
@@ -385,7 +432,7 @@ def spell_value(shape: dict, value: object, *, where: str) -> str:
         return "true" if value else "false"
     if isinstance(value, str):
         return value
-    refuse("no-codec",
+    refuse("no-format",
            f"{where}: value of type {type(value).__name__} has no codec "
            f"bound and is not a scalar — bind a codec for this field")
 
@@ -401,7 +448,7 @@ def read_value(shape: dict, text: str, *, where: str) -> object:
         for v in shape["enum"]:
             if str(v) == stripped:
                 return v
-        refuse("value-invalid", f"{where}: {stripped!r} is not one of {shape['enum']}")
+        refuse("parse-value", f"{where}: {stripped!r} is not one of {shape['enum']}")
     t = shape.get("type")
     if t == "integer":
         return read_integer(text, where=where)
@@ -418,6 +465,49 @@ def spell_scalar(f: Field, value: object) -> str:
 
 def parse_scalar(f: Field, text: str) -> object:
     return read_value(f.shape, text, where=f"field {f.name!r}")
+
+
+# ------------------------------------------------------------ parts, spans
+
+
+class Span:
+    """What a routing or the lens captured for one field: a list of parts.
+    ``text`` is the text parts, each stripped, joined by newlines (kernel
+    §6); ``of(kind)`` selects parts by kind."""
+
+    def __init__(self, parts: list[dict]):
+        self.parts = list(parts)
+
+    @classmethod
+    def of_text(cls, text: str) -> "Span":
+        return cls([text_part(text)])
+
+    @property
+    def text(self) -> str:
+        """Every part that carries text (text, thinking, ...), stripped,
+        joined by newlines (kernel §6)."""
+        return "\n".join(strip(p["text"]) for p in self.parts
+                         if isinstance(p.get("text"), str))
+
+    def of(self, kind: str) -> list[dict]:
+        return [p for p in self.parts if p.get("kind") == kind]
+
+    @property
+    def kinds(self) -> set[str]:
+        return {p.get("kind") for p in self.parts}
+
+    def __repr__(self) -> str:
+        return f"Span({self.parts!r})"
+
+
+def as_parts(written: object, *, where: str) -> list[dict]:
+    """A format's ``write`` returns text (one text part) or a part list."""
+    if isinstance(written, str):
+        return [text_part(written)]
+    if isinstance(written, list) and all(isinstance(p, dict) and "kind" in p for p in written):
+        return list(written)
+    refuse("format-write-error",
+           f"{where}: write must return text or a list of parts, got {type(written).__name__}")
 
 
 # ---------------------------------------------------------------- messages

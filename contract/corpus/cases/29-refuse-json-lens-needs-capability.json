@@ -1,27 +1,26 @@
 {
  "name": "refuse-json-lens-needs-capability",
  "kind": "refuse",
- "vocab": ["std"],
+ "vocab": [
+  "std"
+ ],
  "entry": {
   "name": "json_lens_v1",
   "versions": {
-   "kernel": "0.1.0",
+   "kernel": "0.2.0",
    "vocab": {
     "lens/json_object": "0.1.0"
    }
   },
-  "template": {
-   "messages": [
-    {
-     "role": "user",
-     "text": "{question}"
-    }
-   ]
-  },
+  "template": [
+   {
+    "role": "user",
+    "text": "{question}"
+   }
+  ],
   "parse": {
    "kind": "json_object"
-  },
-  "requires": []
+  }
  },
  "signature": {
   "instructions": "Answer.",
@@ -44,6 +43,6 @@
  },
  "expect": {
   "code": "capability-missing",
-  "at": "bake"
+  "at": "bind"
  }
 }

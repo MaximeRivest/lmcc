@@ -1,0 +1,63 @@
+{
+ "name": "refuse-load-format-not-self-contained",
+ "kind": "refuse",
+ "requires": [
+  "udf:python"
+ ],
+ "entry": {
+  "name": "udf_v1",
+  "versions": {
+   "kernel": "0.2.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n\nAnswer in exactly this form:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "parse": {
+   "kind": "derived"
+  },
+  "formats": {
+   "Person": {
+    "language": "python",
+    "deps": [],
+    "write": "def write(p, f):\n    return HELPER(p)",
+    "sha256": "8d68ac2f639deb671d61c8762f0111d381188bcf713b369a092a01744e475018",
+    "authored_by": "corpus",
+    "accepts": [
+     "Person"
+    ]
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Extract.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "who",
+    "direction": "output",
+    "shape": {
+     "type": "object"
+    },
+    "type": "Person"
+   }
+  ]
+ },
+ "expect": {
+  "code": "format-not-self-contained",
+  "at": "load"
+ }
+}

@@ -1,44 +1,210 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:lmcc:schema:case:0.1.0",
+  "$id": "urn:lmcc:schema:case:0.2.0",
   "title": "LMCC corpus case",
   "description": "One conformance case. The harness feeds these to any driver; the driver compares and answers {ok, detail}.",
   "type": "object",
-  "required": ["name", "kind", "entry", "expect"],
+  "required": [
+    "name",
+    "kind",
+    "entry",
+    "expect"
+  ],
   "properties": {
-    "name": { "type": "string", "pattern": "^[a-z0-9-]+$" },
-    "kind": { "enum": ["render", "parse", "roundtrip", "refuse"] },
-    "vocab": { "type": "array", "items": { "type": "string" } },
-    "entry": { "type": "object" },
-    "signature": { "type": "object" },
-    "capabilities": { "type": "object", "additionalProperties": { "type": "boolean" } },
-    "inputs": { "type": "object" },
-    "demos": { "type": "array", "items": { "type": "object" } },
-    "history": { "type": "array", "items": { "type": "object" } },
-    "response": {
-      "oneOf": [
-        { "type": "string" },
-        { "type": "object", "required": ["content"],
-          "properties": { "content": { "type": "array" } } }
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$"
+    },
+    "kind": {
+      "enum": [
+        "render",
+        "parse",
+        "roundtrip",
+        "refuse",
+        "plan"
       ]
     },
-    "expect": { "type": "object" }
+    "vocab": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "entry": {
+      "type": "object"
+    },
+    "signature": {
+      "type": "object"
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "boolean"
+      }
+    },
+    "inputs": {
+      "type": "object"
+    },
+    "demos": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "history": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "required": [
+            "content"
+          ],
+          "properties": {
+            "content": {
+              "type": "array"
+            }
+          }
+        }
+      ]
+    },
+    "expect": {
+      "type": "object"
+    },
+    "requires": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^udf:[a-z]+$"
+      },
+      "description": "placements the case needs (shipped UDF languages); a driver without them answers unclaimed"
+    }
   },
   "allOf": [
-    { "if": { "properties": { "kind": { "const": "render" } } },
-      "then": { "required": ["signature"],
-                "properties": { "expect": { "required": ["messages", "patch"] } } } },
-    { "if": { "properties": { "kind": { "const": "parse" } } },
-      "then": { "required": ["signature", "response"],
-                "properties": { "expect": { "required": ["values"] } } } },
-    { "if": { "properties": { "kind": { "const": "roundtrip" } } },
-      "then": { "properties": { "expect": { "required": ["entry"] } } } },
-    { "if": { "properties": { "kind": { "const": "refuse" } } },
-      "then": { "properties": { "expect": {
-                  "required": ["code", "at"],
-                  "properties": {
-                    "code": { "type": "string" },
-                    "at": { "enum": ["load", "signature", "bake", "render", "parse"] } } } } } }
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "render"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "signature"
+        ],
+        "properties": {
+          "expect": {
+            "required": [
+              "messages",
+              "patch"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "parse"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "signature",
+          "response"
+        ],
+        "properties": {
+          "expect": {
+            "required": [
+              "values"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "roundtrip"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "expect": {
+            "required": [
+              "entry"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "refuse"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "expect": {
+            "required": [
+              "code",
+              "at"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "at": {
+                "enum": [
+                  "load",
+                  "signature",
+                  "bind",
+                  "render",
+                  "parse"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "plan"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "signature"
+        ],
+        "properties": {
+          "expect": {
+            "required": [
+              "skeleton",
+              "prefix"
+            ]
+          }
+        }
+      }
+    }
   ],
   "additionalProperties": false
 }

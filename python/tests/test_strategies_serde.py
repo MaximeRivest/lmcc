@@ -1,166 +1,104 @@
-"""Strategies (visibility, routing, capabilities), serde, and sockets."""
+"""Strategies (kernel §6) and the artifact (serde)."""
 
 import pytest
 
 import lmcc
-import lmcc_std
-from lmcc import LMCCError
+from lmcc.strategy import Strategy
+
+XML = [lmcc.system("{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"),
+       lmcc.user("{q}")]
+SIG = lmcc.signature("Solve.", inputs={"q": str},
+                     outputs={"reasoning": lmcc.field(str, role="reasoning"), "answer": int})
+
+tags = Strategy(fragments={"system": "Think inside <think>…</think> before you answer."},
+                routings=[{"from": "text", "between": ["<think>", "</think>"], "to": "@role", "consume": True}],
+                visible=False)
+native = Strategy(requires=["native_reasoning"], visible=False,
+                  controls={"reasoning": {"effort": "medium"}},
+                  routings=[{"from": "channel:thinking", "to": "@role"}])
 
 
-@pytest.fixture
-def registry():
-    r = lmcc.Registry()
-    lmcc_std.install(r)
-    return r
+def test_tags_and_native_serve_one_role_without_touching_the_signature():
+    a = lmcc.adapter(messages=XML, strategies={"reasoning": tags})
+    plan = a.bind(SIG, {"instruct": True})
+    sys_text = plan.render(q="2+2").messages[0]["content"][0]["text"]
+    assert "<reasoning>" not in sys_text and "Think inside" in sys_text
+    assert plan.parse("<think>easy</think><answer>\n4\n</answer>") == {"answer": 4, "reasoning": "easy"}
 
-
-@pytest.fixture
-def sig():
-    return lmcc.signature(
-        "Answer.",
-        inputs={"question": str},
-        outputs={"reasoning": lmcc.field(str, role="reasoning"),
-                 "answer": str},
-    )
-
-
-def make_adapter(strategy, registry=None):
-    return lmcc.adapter(
-        template=lmcc.template([
-            lmcc.message("system", "{instruction}\n"
-                        "{% for f in outputs %}<{f.name}>\n{% endfor %}"),
-            lmcc.message("user", "{question}"),
-        ]),
-        parse={"kind": "sections", "open": "<{name}>"},
-        strategies={"reasoning": strategy},
-    )
-
-
-def test_reasoning_tags_hides_routes_and_strips(registry, sig):
-    baked = make_adapter("reasoning_tags").bake(
-        sig, {"instruct": True}, registry=registry)
-    # hidden: the reasoning section is not announced, the fragment is
-    system = baked.render(inputs={"question": "q"}).messages[0]["content"][0]["text"]
-    assert "<reasoning>" not in system
-    assert "<think>" in system
-    values = baked.parse(
-        "<answer>\nParis<think>capital of France</think> is correct.")
-    assert values["reasoning"] == "capital of France"
-    assert values["answer"] == "Paris is correct."
-
-
-def test_native_reasoning_reads_parts(registry, sig):
-    baked = make_adapter("native_reasoning").bake(
-        sig, {"native_reasoning": True}, registry=registry)
-    values = baked.parse({"content": [
-        {"kind": "thinking", "text": "let me think"},
-        {"kind": "text", "text": "<answer>\nParis"}]})
-    assert values == {"reasoning": "let me think", "answer": "Paris"}
-
-
-def test_capability_refusal_names_everything(registry, sig):
-    with pytest.raises(LMCCError) as err:
-        make_adapter("native_reasoning").bake(sig, {"instruct": True},
-                                              registry=registry)
+    b = lmcc.adapter(messages=XML, strategies={"reasoning": native})
+    with pytest.raises(lmcc.Refusal) as err:
+        b.bind(SIG, {"instruct": True})
     assert err.value.code == "capability-missing"
-    for needle in ("reasoning", "native_reasoning"):
-        assert needle in str(err.value)
+    plan = b.bind(SIG, {"native_reasoning": True})
+    assert plan.render(q="x").patch == {"reasoning": {"effort": "medium"}}
+    assert plan.parse({"content": [{"kind": "thinking", "text": "hm"}, {"kind": "text", "text": "<answer>\n4\n</answer>"}]}) == \
+        {"answer": 4, "reasoning": "hm"}
 
 
-def test_prefix_cot_stays_visible(registry, sig):
-    baked = make_adapter("prefix_cot").bake(
-        sig, {"instruct": True}, registry=registry)
-    system = baked.render(inputs={"question": "q"}).messages[0]["content"][0]["text"]
-    assert "<reasoning>" in system
-    assert "'reasoning' section" in system  # {field} resolved in fragment
-    values = baked.parse("<reasoning>\nsteps\n<answer>\nParis")
-    assert values == {"reasoning": "steps", "answer": "Paris"}
+def test_choose_picks_by_capability():
+    auto = Strategy(choose=[{"when": {"capability": "native_reasoning"}, "use": native}, {"else": tags}])
+    a = lmcc.adapter(messages=XML, strategies={"reasoning": auto})
+    assert a.bind(SIG, {}).describe()["routings"][0]["from"] == "text"
+    assert a.bind(SIG, {"native_reasoning": True}).describe()["routings"][0]["from"] == "channel:thinking"
+    no_else = Strategy(choose=[{"when": {"capability": "native_reasoning"}, "use": native}])
+    with pytest.raises(lmcc.Refusal) as err:
+        lmcc.adapter(messages=XML, strategies={"reasoning": no_else}).bind(SIG, {})
+    assert err.value.code == "capability-missing"
 
 
-def test_dump_load_roundtrip(registry, sig):
-    adp = make_adapter("reasoning_tags")
-    entry = adp.dump(registry=registry)
-    assert entry["versions"]["kernel"] == lmcc.KERNEL_VERSION
-    assert entry["versions"]["vocab"] == {"strategy/reasoning_tags": "0.1.0"}
-    again = lmcc.load(entry, registry=registry)
-    assert lmcc.dump(again, registry) == entry
-    # and the reloaded adapter behaves identically
-    baked = again.bake(sig, {"instruct": True}, registry=registry)
-    values = baked.parse("<answer>\nx<think>t</think>")
-    assert values == {"reasoning": "t", "answer": "x"}
+@pytest.mark.parametrize("data", [
+    {"routings": [{"from": "nowhere", "to": "@role"}]},
+    {"routings": [{"from": "text", "to": "@role"}]},                       # no extractor
+    {"routings": [{"from": "text", "between": ["<a>"], "to": "@role"}]},
+    {"routings": [{"from": "text", "pattern": "(?=x)", "to": "@role"}]},   # outside RE2
+    {"routings": [{"from": "channel:thinking", "consume": True, "to": "@role"}]},
+    {"routings": [{"from": "text", "between": ["a", "b"], "to": "answer"}]},
+    {"placement": {"@role": "nowhere"}},
+    {"visible": False},
+    {"when": {"nope": 1}},
+    {"choose": []},
+    {"choose": [{"else": {}}, {"when": {"capability": "x"}, "use": {}}]},
+    {"unknown": 1},
+])
+def test_malformed_strategies_refuse_at_construct(data):
+    with pytest.raises(lmcc.Refusal) as err:
+        Strategy.from_dict(data, where="s")
+    assert err.value.code == "entry-malformed"
 
 
-def test_load_refuses_unknown_names(registry):
-    entry = {"name": "x", "versions": {"kernel": lmcc.KERNEL_VERSION},
-             "template": {"messages": [{"role": "user", "text": "{q}"}]},
-             "parse": {"kind": "sections", "open": "<{name}>"},
-             "codecs": {"out": {"kind": "nope"}}}
-    with pytest.raises(LMCCError) as err:
-        lmcc.load(entry, registry=registry)
-    assert err.value.code == "unknown-codec"
-    assert "nope" in str(err.value)
-
-
-def test_load_refuses_version_mismatch(registry):
-    entry = {"name": "x", "versions": {"kernel": "9.0.0"},
-             "template": {"messages": []},
-             "parse": {"kind": "sections", "open": "<{name}>"}}
-    with pytest.raises(LMCCError) as err:
-        lmcc.load(entry, registry=registry)
-    assert err.value.code == "version-incompatible"
-
-
-def test_data_only_entry_loads_with_empty_registry():
-    entry = {"name": "bare", "versions": {"kernel": lmcc.KERNEL_VERSION},
-             "template": {"messages": [{"role": "user", "text": "{q}"}]},
-             "parse": {"kind": "sections", "open": "<{name}>"},
-             "strategies": {"reasoning": {
-                 "requires": [], "visible": False,
-                 "routings": [{"extract": {"kind": "between", "open": "<t>",
-                                           "close": "</t>"},
-                               "field": "@role", "join": " ", "strip": True}]}}}
-    adp = lmcc.load(entry, registry=lmcc.Registry())  # zero registrations
-    sig = lmcc.signature("x", inputs={"q": str},
-                        outputs={"reasoning": lmcc.field(str, role="reasoning"),
-                                 "a": str})
-    baked = adp.bake(sig, {}, registry=lmcc.Registry())
-    assert baked.parse("<a>\nyes<t>hm</t>") == {"reasoning": "hm", "a": "yes"}
-
-
-def test_double_covered_refuses(registry, sig):
-    visible_but_routed = lmcc.Strategy(
-        routings=[{"extract": {"kind": "between", "open": "<t>", "close": "</t>"},
-                   "field": "@role"}],
-        visible=True)
-    with pytest.raises(LMCCError) as err:
-        make_adapter(visible_but_routed).bake(sig, {}, registry=registry)
+def test_double_covered_and_role_ambiguous():
+    visible_and_routed = Strategy(routings=[{"from": "text", "between": ["<t>", "</t>"], "to": "@role"}])
+    with pytest.raises(lmcc.Refusal) as err:
+        lmcc.adapter(messages=XML, strategies={"reasoning": visible_and_routed}).bind(SIG, {})
     assert err.value.code == "field-double-covered"
+    twice = lmcc.signature("x", inputs={"q": str},
+                           outputs={"a": lmcc.field(str, role="reasoning"), "b": lmcc.field(str, role="reasoning")})
+    with pytest.raises(lmcc.Refusal) as err:
+        lmcc.adapter(messages=XML).bind(twice, {})
+    assert err.value.code == "role-ambiguous"
 
 
-def test_host_socket_lowers_and_lifts(registry):
-    class Temperature:  # a stand-in for any foreign type
-        def __init__(self, celsius):
-            self.celsius = celsius
-
-    registry.register_host(Temperature, shape={"type": "number"},
-                           lower=lambda t: t.celsius,
-                           lift=lambda v: Temperature(v))
-    sig = lmcc.signature("Convert.", inputs={"t": Temperature},
-                        outputs={"f": Temperature}, registry=registry)
-    adp = lmcc.adapter(template=lmcc.template([lmcc.message("user", "{t}")]),
-                      parse={"kind": "sections", "open": "<{name}>"})
-    baked = adp.bake(sig, {}, registry=registry)
-    txt = baked.render(inputs={"t": Temperature(21.5)})
-    assert txt.messages[0]["content"][0]["text"] == "21.5"
-    out = baked.parse("<f>\n70.7")
-    assert isinstance(out["f"], Temperature) and out["f"].celsius == 70.7
+def test_artifact_round_trips_and_loads_with_zero_ambient_state():
+    a = lmcc.adapter(messages=XML, strategies={"reasoning": Strategy(
+        choose=[{"when": {"capability": "native_reasoning"}, "use": native}, {"else": tags}])}, name="xml")
+    entry = a.dump(registry=lmcc.Registry())
+    assert entry["template"] == XML and entry["parse"] == {"kind": "derived"}
+    assert entry["strategies"]["reasoning"]["choose"][1] == {"else": tags.to_dict()}
+    assert "formats" not in entry and "codecs" not in entry
+    again = lmcc.load(entry, registry=lmcc.Registry())
+    assert again.dump(registry=lmcc.Registry()) == entry
+    assert again.bind(SIG, {}).parse("<think>a</think><answer>\n1\n</answer>") == {"answer": 1, "reasoning": "a"}
 
 
-def test_unmapped_type_refuses():
-    class Mystery:
-        pass
-
-    with pytest.raises(LMCCError) as err:
-        lmcc.signature("x", inputs={"m": Mystery}, outputs={})
-    assert err.value.code == "unmapped-type"
-    assert "Mystery" in str(err.value)
+@pytest.mark.parametrize("entry, code", [
+    ({"versions": {"kernel": "0.2.0"}, "template": {"messages": []}, "parse": {"kind": "derived"}}, "entry-malformed"),
+    ({"versions": {"kernel": "9.0.0"}, "template": [], "parse": {"kind": "derived"}}, "version-incompatible"),
+    ({"versions": {"kernel": "0.2.0"}, "template": [], "parse": {"kind": "nope"}}, "unknown-parse-kind"),
+    ({"versions": {"kernel": "0.2.0"}, "template": [], "parse": {"kind": "derived"}, "formats": {"X": {"use": "nope"}}}, "unknown-format"),
+    ({"versions": {"kernel": "0.2.0"}, "template": [], "parse": {"kind": "derived"}, "strategies": {"r": {"use": "nope"}}}, "unknown-strategy"),
+    ({"versions": {"kernel": "0.2.0"}, "template": [], "parse": {"kind": "derived"}, "formats": {"X": {"language": "python"}}}, "entry-malformed"),
+])
+def test_load_refuses_by_name(entry, code):
+    with pytest.raises(lmcc.Refusal) as err:
+        lmcc.load(entry, registry=lmcc.Registry())
+    assert err.value.code == code

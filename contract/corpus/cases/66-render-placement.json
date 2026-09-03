@@ -1,0 +1,114 @@
+{
+ "name": "render-placement",
+ "kind": "render",
+ "entry": {
+  "name": "place_v1",
+  "versions": {
+   "kernel": "0.2.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n\nAnswer in exactly this form:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "parse": {
+   "kind": "derived"
+  },
+  "strategies": {
+   "tools": {
+    "placement": {
+     "@role": "controls.tools"
+    }
+   },
+   "context": {
+    "placement": {
+     "@role": "message:system"
+    }
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Use tools.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "spec",
+    "direction": "input",
+    "shape": {
+     "media": "tool_spec"
+    },
+    "role": "tools"
+   },
+   {
+    "name": "ctx",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    },
+    "role": "context"
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "q": "2+2?",
+  "spec": {
+   "name": "add",
+   "schema": {
+    "type": "object"
+   }
+  },
+  "ctx": "Ann is 41."
+ },
+ "expect": {
+  "messages": [
+   {
+    "role": "system",
+    "content": [
+     {
+      "kind": "text",
+      "text": "Use tools.\n\nAnswer in exactly this form:\n<answer>\n...\n</answer>\nAnn is 41."
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "content": [
+     {
+      "kind": "text",
+      "text": "2+2?"
+     }
+    ]
+   }
+  ],
+  "patch": {
+   "tools": [
+    {
+     "kind": "tool_spec",
+     "name": "add",
+     "schema": {
+      "type": "object"
+     }
+    }
+   ]
+  }
+ }
+}

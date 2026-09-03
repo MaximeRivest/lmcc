@@ -4,14 +4,59 @@
  "entry": {
   "name": "sections_v1",
   "versions": {
-   "kernel": "0.1.0",
+   "kernel": "0.2.0",
    "vocab": {}
   },
-  "template": {
-   "messages": [
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n\nReply with EXACTLY these sections:\n{% for f in outputs %}<{f.name}>\n{f.value}\n{% endfor %}</done>"
+   },
+   {
+    "directive": "demos"
+   },
+   {
+    "directive": "history"
+   },
+   {
+    "role": "user",
+    "text": "{% for f in inputs %}== {f.name} ==\n{f.value}\n{% endfor %}"
+   }
+  ],
+  "parse": {
+   "kind": "derived"
+  },
+  "strategies": {
+   "reasoning": {
+    "visible": false,
+    "fragments": {
+     "system": "Think inside <think>...</think> tags."
+    },
+    "routings": [
+     {
+      "from": "text",
+      "between": [
+       "<think>",
+       "</think>"
+      ],
+      "to": "@role",
+      "consume": true
+     }
+    ]
+   }
+  }
+ },
+ "expect": {
+  "entry": {
+   "name": "sections_v1",
+   "versions": {
+    "kernel": "0.2.0",
+    "vocab": {}
+   },
+   "template": [
     {
      "role": "system",
-     "text": "{instruction}\n\nReply with EXACTLY these sections:\n{% for f in outputs %}<{f.name}>  {f.desc}\n{% endfor %}Close with </done>."
+     "text": "{instruction}\n\nReply with EXACTLY these sections:\n{% for f in outputs %}<{f.name}>\n{f.value}\n{% endfor %}</done>"
     },
     {
      "directive": "demos"
@@ -23,87 +68,29 @@
      "role": "user",
      "text": "{% for f in inputs %}== {f.name} ==\n{f.value}\n{% endfor %}"
     }
-   ]
-  },
-  "parse": {
-   "kind": "sections",
-   "open": "<{name}>",
-   "tail": "</done>"
-  },
-  "requires": [],
-  "strategies": {
-   "reasoning": {
-    "requires": [],
-    "visible": false,
-    "fragments": {
-     "system": "Think inside <think>...</think> tags."
-    },
-    "routings": [
-     {
-      "extract": {
-       "kind": "between",
-       "open": "<think>",
-       "close": "</think>"
-      },
-      "field": "@role",
-      "join": "\n",
-      "strip": true
-     }
-    ]
-   }
-  }
- },
- "expect": {
-  "entry": {
-   "name": "sections_v1",
-   "versions": {
-    "kernel": "0.1.0",
-    "vocab": {}
-   },
-   "template": {
-    "messages": [
-     {
-      "role": "system",
-      "text": "{instruction}\n\nReply with EXACTLY these sections:\n{% for f in outputs %}<{f.name}>  {f.desc}\n{% endfor %}Close with </done>."
-     },
-     {
-      "directive": "demos"
-     },
-     {
-      "directive": "history"
-     },
-     {
-      "role": "user",
-      "text": "{% for f in inputs %}== {f.name} ==\n{f.value}\n{% endfor %}"
-     }
-    ]
-   },
+   ],
    "parse": {
-    "kind": "sections",
-    "open": "<{name}>",
-    "tail": "</done>"
+    "kind": "derived"
    },
    "strategies": {
     "reasoning": {
+     "visible": false,
      "fragments": {
       "system": "Think inside <think>...</think> tags."
      },
      "routings": [
       {
-       "extract": {
-        "kind": "between",
-        "open": "<think>",
-        "close": "</think>"
-       },
-       "field": "@role",
-       "join": "\n",
-       "strip": true
+       "from": "text",
+       "between": [
+        "<think>",
+        "</think>"
+       ],
+       "to": "@role",
+       "consume": true
       }
-     ],
-     "visible": false
+     ]
     }
-   },
-   "requires": []
+   }
   }
  }
 }

@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:lmcc:schema:entry:0.1.0",
+  "$id": "urn:lmcc:schema:entry:0.2.0",
   "title": "LMCC adapter entry",
-  "description": "The artifact: one adapter as plain data. Codec and strategy OPTION internals are owned by their vocabulary specs and deliberately left loose here.",
+  "description": "The artifact (kernel.md §2, §5, §6): a template, a parse rule, strategies by role, formats by type — never a field name.",
   "type": "object",
   "required": [
     "versions",
@@ -20,64 +20,58 @@
       ],
       "properties": {
         "kernel": {
-          "$ref": "#/$defs/semver"
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
         },
         "vocab": {
           "type": "object",
           "additionalProperties": {
-            "$ref": "#/$defs/semver"
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+$"
           }
         }
       }
     },
     "template": {
-      "type": "object",
-      "required": [
-        "messages"
-      ],
-      "properties": {
-        "messages": {
-          "type": "array",
-          "items": {
-            "oneOf": [
-              {
-                "type": "object",
-                "required": [
-                  "role",
-                  "text"
-                ],
-                "properties": {
-                  "role": {
-                    "enum": [
-                      "system",
-                      "user",
-                      "assistant"
-                    ]
-                  },
-                  "text": {
-                    "type": "string"
-                  }
-                },
-                "additionalProperties": false
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "role",
+              "text"
+            ],
+            "properties": {
+              "role": {
+                "enum": [
+                  "system",
+                  "user",
+                  "assistant"
+                ]
               },
-              {
-                "type": "object",
-                "required": [
-                  "directive"
-                ],
-                "properties": {
-                  "directive": {
-                    "enum": [
-                      "demos",
-                      "history"
-                    ]
-                  }
-                },
-                "additionalProperties": false
+              "text": {
+                "type": "string"
               }
-            ]
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "directive"
+            ],
+            "properties": {
+              "directive": {
+                "enum": [
+                  "demos",
+                  "history"
+                ]
+              }
+            },
+            "additionalProperties": false
           }
-        }
+        ]
       }
     },
     "parse": {
@@ -90,91 +84,33 @@
           "type": "string",
           "minLength": 1
         }
-      },
-      "allOf": [
-        {
-          "if": {
-            "properties": {
-              "kind": {
-                "const": "sections"
-              }
-            }
-          },
-          "then": {
-            "required": [
-              "open"
-            ],
-            "properties": {
-              "open": {
-                "type": "string",
-                "pattern": ".*\\{name\\}.*"
-              },
-              "close": {
-                "type": "string"
-              },
-              "tail": {
-                "type": "string"
-              }
-            }
-          }
-        }
-      ]
+      }
     },
     "strategies": {
       "type": "object",
+      "propertyNames": {
+        "pattern": "^[A-Za-z_][A-Za-z0-9_.]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/strategy"
+      }
+    },
+    "formats": {
+      "type": "object",
+      "description": "keys: a type name as the frontend spells it, or a structural key (object, list[*], list[object], string, integer, number, boolean, enum, media:<kind>, media:*, *)",
       "additionalProperties": {
         "oneOf": [
           {
-            "type": "object",
-            "required": [
-              "kind"
-            ],
-            "properties": {
-              "kind": {
-                "type": "string"
-              },
-              "options": {
-                "type": "object"
-              }
-            },
-            "additionalProperties": false
+            "$ref": "#/$defs/reference"
           },
           {
-            "$ref": "#/$defs/inline_strategy"
+            "$ref": "#/$defs/shipped"
           }
         ]
       }
-    },
-    "codecs": {
-      "description": "Codec bindings by field name, plus the optional '@structured' default for every structured or uninterpreted shape (kernel.md §1, §7). Name bindings win.",
-      "type": "object",
-      "propertyNames": {
-        "pattern": "^([A-Za-z_][A-Za-z0-9_]*|@structured)$"
-      },
-      "additionalProperties": {
-        "type": "object",
-        "required": [
-          "kind"
-        ],
-        "properties": {
-          "kind": {
-            "type": "string"
-          },
-          "options": {
-            "type": "object"
-          }
-        },
-        "additionalProperties": false
-      }
-    },
-    "requires": {
-      "type": "array",
-      "description": "Declared non-data requirements (authored code sidecars). Empty in kernel 0.1; the declaration mechanism is reserved.",
-      "items": {
-        "type": "object"
-      }
     }
   },
+  "additionalProperties": false,
   "$defs": {
     "semver": {
       "type": "string",
@@ -206,10 +142,45 @@
       },
       "additionalProperties": false
     },
-    "inline_strategy": {
+    "routing": {
+      "type": "object",
+      "required": [
+        "from",
+        "to"
+      ],
+      "properties": {
+        "from": {
+          "type": "string",
+          "pattern": "^(text|channel:[a-z_]+)$"
+        },
+        "between": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "pattern": {
+          "type": "string"
+        },
+        "line_prefixed": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string",
+          "pattern": "^@role(\\.[A-Za-z_][A-Za-z0-9_]*)?$"
+        },
+        "consume": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "plain_strategy": {
       "type": "object",
       "properties": {
-        "predicate": {
+        "when": {
           "$ref": "#/$defs/predicate"
         },
         "requires": {
@@ -217,6 +188,9 @@
           "items": {
             "type": "string"
           }
+        },
+        "visible": {
+          "type": "boolean"
         },
         "fragments": {
           "type": "object",
@@ -227,59 +201,181 @@
         "controls": {
           "type": "object"
         },
+        "placement": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^@role(\\.[A-Za-z_][A-Za-z0-9_]*)?$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^(controls\\.[A-Za-z_][A-Za-z0-9_.]*|message:(system|user|assistant))$"
+          }
+        },
         "routings": {
           "type": "array",
           "items": {
             "type": "object",
             "required": [
-              "extract",
-              "field"
+              "from",
+              "to"
             ],
             "properties": {
-              "extract": {
-                "type": "object",
-                "required": [
-                  "kind"
-                ],
-                "properties": {
-                  "kind": {
-                    "enum": [
-                      "between",
-                      "pattern",
-                      "line_prefixed",
-                      "parts"
-                    ]
-                  }
-                }
+              "from": {
+                "type": "string",
+                "pattern": "^(text|channel:[a-z_]+)$"
               },
-              "field": {
+              "between": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "pattern": {
                 "type": "string"
               },
-              "join": {
+              "line_prefixed": {
                 "type": "string"
               },
-              "strip": {
+              "to": {
+                "type": "string",
+                "pattern": "^@role(\\.[A-Za-z_][A-Za-z0-9_]*)?$"
+              },
+              "consume": {
                 "type": "boolean"
-              },
-              "coerce": {
-                "type": "object",
-                "required": [
-                  "kind"
-                ],
-                "properties": {
-                  "kind": {
-                    "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "strategy": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/plain_strategy"
+        },
+        {
+          "type": "object",
+          "required": [
+            "choose"
+          ],
+          "properties": {
+            "choose": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "required": [
+                      "when",
+                      "use"
+                    ],
+                    "properties": {
+                      "when": {
+                        "$ref": "#/$defs/predicate"
+                      },
+                      "use": {
+                        "$ref": "#/$defs/strategy"
+                      }
+                    },
+                    "additionalProperties": false
                   },
-                  "options": {
-                    "type": "object"
+                  {
+                    "type": "object",
+                    "required": [
+                      "else"
+                    ],
+                    "properties": {
+                      "else": {
+                        "$ref": "#/$defs/strategy"
+                      }
+                    },
+                    "additionalProperties": false
                   }
-                }
+                ]
               }
             }
+          },
+          "additionalProperties": false
+        },
+        {
+          "$ref": "#/$defs/reference"
+        }
+      ]
+    },
+    "reference": {
+      "type": "object",
+      "required": [
+        "use"
+      ],
+      "properties": {
+        "use": {
+          "type": "string",
+          "minLength": 1
+        },
+        "options": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    },
+    "shipped": {
+      "type": "object",
+      "required": [
+        "language",
+        "write",
+        "sha256"
+      ],
+      "properties": {
+        "language": {
+          "type": "string"
+        },
+        "deps": {
+          "type": "array",
+          "items": {
+            "type": "string"
           }
         },
-        "visible": {
+        "write": {
+          "type": "string"
+        },
+        "read": {
+          "type": "string"
+        },
+        "describe": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "authored_by": {
+          "type": "string"
+        },
+        "accepts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "emits": {
+          "enum": [
+            "text",
+            "parts"
+          ]
+        },
+        "round_trip": {
           "type": "boolean"
+        },
+        "reads": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "additionalProperties": false

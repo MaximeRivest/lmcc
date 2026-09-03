@@ -8,7 +8,8 @@ import pathlib
 import lmcc
 import lmcc_std
 
-STDLIB = {"__future__", "dataclasses", "decimal", "json", "math", "re", "typing"}
+STDLIB = {"__future__", "builtins", "dataclasses", "decimal", "dis", "enum", "hashlib", "inspect",
+          "json", "math", "re", "textwrap", "types", "typing"}
 
 
 def test_kernel_imports_stdlib_only():
@@ -35,14 +36,13 @@ def _baked():
         outputs={"reasoning": lmcc.field(str, role="reasoning"),
                  "answer": lmcc.field(str, desc="short answer")})
     adp = lmcc.adapter(
-        template=lmcc.template([
-            lmcc.message("system", "{instruction}\n{% for f in outputs %}"
+        messages=[
+            lmcc.system("{instruction}\n{% for f in outputs %}"
                         "<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"),
-            lmcc.message("user", "{q}"),
-        ]),
-        parse={"kind": "derived"},
+            lmcc.user("{q}"),
+        ],
         strategies={"reasoning": "reasoning_tags"})
-    return adp.bake(sig, {"instruct": True}, registry=registry), registry
+    return adp.bind(sig, {"instruct": True}, registry=registry), registry
 
 
 def test_plan_describe_is_plain_data():
@@ -67,7 +67,7 @@ def test_registry_describe_is_plain_data():
     _, registry = _baked()
     d = registry.describe()
     json.dumps(d)
-    assert d["codecs"]["json"] == "0.1.0"
-    assert d["lenses"]["sections"] == "kernel"
+    assert d["formats"]["json"] == "0.1.0"
+    assert d["lenses"]["derived"] == "kernel"
     assert d["lenses"]["json_object"] == "0.1.0"
     assert "reasoning_tags" in d["strategies"]

@@ -1,0 +1,89 @@
+{
+ "name": "refuse-bind-format-span-mismatch",
+ "kind": "refuse",
+ "requires": [
+  "udf:python"
+ ],
+ "entry": {
+  "name": "span_v1",
+  "versions": {
+   "kernel": "0.2.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n\nAnswer in exactly this form:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "parse": {
+   "kind": "derived"
+  },
+  "strategies": {
+   "reasoning": {
+    "visible": false,
+    "routings": [
+     {
+      "from": "channel:thinking",
+      "to": "@role"
+     }
+    ]
+   }
+  },
+  "formats": {
+   "Thought": {
+    "language": "python",
+    "deps": [],
+    "write": "def write(v, f):\n    return v",
+    "read": "def read(span, f):\n    return span.text",
+    "sha256": "4d8a6cc4ae6cddb11b3878cb6e17f5948d3b871483f18524385c5b29146b288b",
+    "authored_by": "corpus",
+    "accepts": [
+     "Thought"
+    ],
+    "reads": [
+     "text"
+    ]
+   }
+  }
+ },
+ "signature": {
+  "instructions": "x",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "reasoning",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    },
+    "type": "Thought",
+    "role": "reasoning"
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "capabilities": {
+  "native_reasoning": true
+ },
+ "expect": {
+  "code": "format-span-mismatch",
+  "at": "bind"
+ }
+}

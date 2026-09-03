@@ -1,0 +1,130 @@
+{
+ "name": "plan-skeleton-prefix",
+ "kind": "plan",
+ "entry": {
+  "name": "sub_v1",
+  "versions": {
+   "kernel": "0.2.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "directive": "demos"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "parse": {
+   "kind": "derived"
+  },
+  "strategies": {
+   "work": {
+    "visible": false,
+    "routings": [
+     {
+      "from": "text",
+      "between": [
+       "<w>",
+       "</w>"
+      ],
+      "to": "@role",
+      "consume": true
+     },
+     {
+      "from": "text",
+      "between": [
+       "<n>",
+       "</n>"
+      ],
+      "to": "@role.notes",
+      "consume": true
+     }
+    ]
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Do.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "work",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    },
+    "role": "work"
+   },
+   {
+    "name": "notes",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    },
+    "role": "work.notes"
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "demos": [
+  {
+   "q": "d",
+   "answer": "y"
+  }
+ ],
+ "expect": {
+  "skeleton": {
+   "prefill": "<answer>\n",
+   "stops": [
+    "</answer>"
+   ]
+  },
+  "prefix": [
+   {
+    "role": "system",
+    "content": [
+     {
+      "kind": "text",
+      "text": "Do.\n<answer>\n...\n</answer>\n"
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "content": [
+     {
+      "kind": "text",
+      "text": "d"
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "content": [
+     {
+      "kind": "text",
+      "text": "<answer>\ny\n</answer>"
+     }
+    ]
+   }
+  ]
+ }
+}

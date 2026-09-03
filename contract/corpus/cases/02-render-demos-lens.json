@@ -4,33 +4,28 @@
  "entry": {
   "name": "sections_v1",
   "versions": {
-   "kernel": "0.1.0",
+   "kernel": "0.2.0",
    "vocab": {}
   },
-  "template": {
-   "messages": [
-    {
-     "role": "system",
-     "text": "{instruction}\n\nReply with EXACTLY these sections:\n{% for f in outputs %}<{f.name}>  {f.desc}\n{% endfor %}Close with </done>."
-    },
-    {
-     "directive": "demos"
-    },
-    {
-     "directive": "history"
-    },
-    {
-     "role": "user",
-     "text": "{% for f in inputs %}== {f.name} ==\n{f.value}\n{% endfor %}"
-    }
-   ]
-  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n\nReply with EXACTLY these sections:\n{% for f in outputs %}<{f.name}>\n{f.value}\n{% endfor %}</done>"
+   },
+   {
+    "directive": "demos"
+   },
+   {
+    "directive": "history"
+   },
+   {
+    "role": "user",
+    "text": "{% for f in inputs %}== {f.name} ==\n{f.value}\n{% endfor %}"
+   }
+  ],
   "parse": {
-   "kind": "sections",
-   "open": "<{name}>",
-   "tail": "</done>"
-  },
-  "requires": []
+   "kind": "derived"
+  }
  },
  "signature": {
   "instructions": "Answer the question.",
@@ -76,7 +71,7 @@
     "content": [
      {
       "kind": "text",
-      "text": "Answer the question.\n\nReply with EXACTLY these sections:\n<answer>  short answer\n<score>  \nClose with </done>."
+      "text": "Answer the question.\n\nReply with EXACTLY these sections:\n<answer>\nshort answer\n<score>\n(integer)\n</done>"
      }
     ]
    },

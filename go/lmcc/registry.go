@@ -2,62 +2,116 @@ package lmcc
 
 import (
 	"reflect"
-	"sort"
 )
 
-// Codec spells one plain value (kernel §7). Vocabulary packages
-// implement this; the kernel ships none.
-type Codec interface {
-	RenderSchema(shape *Object) string
-	RenderValue(value any, shape *Object) (string, error)
-	ParseValue(text string, shape *Object) (any, error)
-}
-
-type CodecFactory func(options *Object) (Codec, error)
+type FormatFactory func(options *Object) (Format, error)
 type StrategyFactory func(options *Object) (*Strategy, error)
 type LensFactory func(spec *Object) (Lens, error)
-type Coercion func(value any, options *Object) (any, error)
 
 type named[T any] struct {
 	factory T
 	version string
 }
 
-// HostEntry binds a native Go type: its neutral shape, how a value lowers
-// to plain data and lifts back, and optionally its default codec.
-type HostEntry struct {
-	Type  reflect.Type
-	Shape *Object
-	Lower func(any) any
-	Lift  func(any) any
-	Codec *Object // {"kind": ..., "options": {...}} or nil
+type typeBinding struct {
+	t      reflect.Type
+	format Format  // a Format, or
+	use    *Object // {"use": name, "options": {...}}
+	shape  *Object // an optional neutral shape for the type (frontend lowering)
 }
 
-// Registry is the set of sockets. Explicit, never ambient: load resolves
-// names only through the registry it is handed.
+// Registry is the set of sockets (kernel §5, §6): named formats,
+// per-runtime type bindings, strategies, lenses. AllowUDF says whether
+// this runtime will place shipped code; the Go kernel ships no placer
+// for any language, so an allowed UDF still refuses `udf-unplaceable`
+// after its hash is verified.
 type Registry struct {
-	codecs     map[string]named[CodecFactory]
+	formats    map[string]named[FormatFactory]
+	bindings   []typeBinding
 	strategies map[string]named[StrategyFactory]
 	lenses     map[string]named[LensFactory]
-	coercions  map[string]Coercion
-	hosts      []HostEntry
+	AllowUDF   bool
 }
 
 func NewRegistry() *Registry {
 	return &Registry{
-		codecs:     map[string]named[CodecFactory]{},
+		formats:    map[string]named[FormatFactory]{},
 		strategies: map[string]named[StrategyFactory]{},
 		lenses:     map[string]named[LensFactory]{},
-		coercions:  map[string]Coercion{},
 	}
 }
 
-func (r *Registry) RegisterCodec(name string, f CodecFactory, version string, existOK bool) (err error) {
+func (r *Registry) RegisterFormat(name string, f FormatFactory, version string, existOK bool) (err error) {
 	defer catch(&err)
-	if _, dup := r.codecs[name]; dup && !existOK {
-		refusef("already-registered", "codec %q is already registered", name)
+	if _, dup := r.formats[name]; dup && !existOK {
+		refusef("already-registered", "format %q is already registered", name)
 	}
-	r.codecs[name] = named[CodecFactory]{f, version}
+	r.formats[name] = named[FormatFactory]{f, version}
+	return nil
+}
+
+func (r *Registry) namedFormat(name string, options *Object) Format {
+	entry, ok := r.formats[name]
+	if !ok {
+		refusef("unknown-format", "format %q is not registered — install the package that provides it, or ship the format with the artifact", name)
+	}
+	if options == nil {
+		options = NewObject()
+	}
+	f, err := entry.factory(options)
+	if err != nil {
+		if e, ok := err.(*Error); ok {
+			panic(e)
+		}
+		refusef("entry-malformed", "format %q: %v", name, err)
+	}
+	return &namedWrap{Format: f, name: name}
+}
+
+type namedWrap struct {
+	Format
+	name string
+}
+
+func (w *namedWrap) Name() string { return w.name }
+
+// BindFormat binds a Go type to a Format — the `lmcc.format(T, ...)`
+// surface. Per runtime, never serialized. `shape` may give the type's
+// neutral shape for the struct frontend.
+func (r *Registry) BindFormat(t reflect.Type, f Format, shape *Object) {
+	r.bindings = append(r.bindings, typeBinding{t: t, format: f, shape: shape})
+}
+
+// BindFormatByName binds a Go type to a named format with options.
+func (r *Registry) BindFormatByName(t reflect.Type, name string, options *Object, shape *Object) {
+	if options == nil {
+		options = NewObject()
+	}
+	r.bindings = append(r.bindings, typeBinding{t: t, use: Obj("use", name, "options", options), shape: shape})
+}
+
+func (r *Registry) typeBinding(t reflect.Type) Format {
+	if t == nil {
+		return nil
+	}
+	for _, b := range r.bindings {
+		if t == b.t || (b.t.Kind() == reflect.Interface && t.Implements(b.t)) {
+			if b.format != nil {
+				return b.format
+			}
+			name, _ := b.use.Str("use")
+			return r.namedFormat(name, b.use.Object("options"))
+		}
+	}
+	return nil
+}
+
+func (r *Registry) shapeFor(t reflect.Type) *Object {
+	for _, b := range r.bindings {
+		if t == b.t && b.shape != nil {
+			return b.shape
+		}
+	}
 	return nil
 }
 
@@ -68,68 +122,6 @@ func (r *Registry) RegisterStrategy(name string, f StrategyFactory, version stri
 	}
 	r.strategies[name] = named[StrategyFactory]{f, version}
 	return nil
-}
-
-func (r *Registry) RegisterLens(name string, f LensFactory, version string, existOK bool) (err error) {
-	defer catch(&err)
-	if name == "sections" || name == "derived" {
-		refusef("already-registered", "lens %q is kernel grammar and cannot be replaced", name)
-	}
-	if _, dup := r.lenses[name]; dup && !existOK {
-		refusef("already-registered", "lens %q is already registered", name)
-	}
-	r.lenses[name] = named[LensFactory]{f, version}
-	return nil
-}
-
-func (r *Registry) RegisterCoercion(name string, fn Coercion, existOK bool) (err error) {
-	defer catch(&err)
-	if _, dup := r.coercions[name]; dup && !existOK {
-		refusef("already-registered", "coercion %q is already registered", name)
-	}
-	r.coercions[name] = fn
-	return nil
-}
-
-// RegisterHost binds a native type once per runtime. Never serialized.
-func (r *Registry) RegisterHost(t reflect.Type, shape *Object, lower, lift func(any) any, codec *Object) (err error) {
-	defer catch(&err)
-	if codec != nil && !codec.Has("kind") {
-		refusef("entry-malformed", "host %v: codec binding needs a 'kind'", t)
-	}
-	r.hosts = append(r.hosts, HostEntry{t, shape, lower, lift, codec})
-	return nil
-}
-
-func (r *Registry) hostFor(t reflect.Type) *HostEntry {
-	if t == nil {
-		return nil
-	}
-	for i := range r.hosts {
-		h := &r.hosts[i]
-		if t == h.Type || (h.Type.Kind() == reflect.Interface && t.Implements(h.Type)) {
-			return h
-		}
-	}
-	return nil
-}
-
-func (r *Registry) codec(name string, options *Object) Codec {
-	entry, ok := r.codecs[name]
-	if !ok {
-		refusef("unknown-codec", "codec %q is not registered — install the package that provides it, or bind another codec", name)
-	}
-	if options == nil {
-		options = NewObject()
-	}
-	c, err := entry.factory(options)
-	if err != nil {
-		if e, ok := err.(*Error); ok {
-			panic(e)
-		}
-		refusef("entry-malformed", "codec %q: %v", name, err)
-	}
-	return c
 }
 
 func (r *Registry) strategy(name string, options *Object) *Strategy {
@@ -150,14 +142,23 @@ func (r *Registry) strategy(name string, options *Object) *Strategy {
 	return s
 }
 
+func (r *Registry) RegisterLens(name string, f LensFactory, version string, existOK bool) (err error) {
+	defer catch(&err)
+	if name == "derived" {
+		refuse("already-registered", "lens 'derived' is kernel grammar and cannot be replaced")
+	}
+	if _, dup := r.lenses[name]; dup && !existOK {
+		refusef("already-registered", "lens %q is already registered", name)
+	}
+	r.lenses[name] = named[LensFactory]{f, version}
+	return nil
+}
+
 func (r *Registry) lens(spec *Object) Lens {
 	kind, _ := spec.Str("kind")
-	if kind == "sections" {
-		return NewSectionsLens(spec)
-	}
 	entry, ok := r.lenses[kind]
 	if !ok {
-		refusef("unknown-parse-kind", "parse kind %q is neither the kernel lens 'sections' nor a registered lens — install the package that provides it", kind)
+		refusef("unknown-parse-kind", "parse kind %q is neither the kernel lens 'derived' nor a registered lens — install the package that provides it", kind)
 	}
 	l, err := entry.factory(spec)
 	if err != nil {
@@ -173,33 +174,29 @@ func (r *Registry) hasLens(kind string) bool { _, ok := r.lenses[kind]; return o
 
 // Describe: everything registered, as plain data.
 func (r *Registry) Describe() *Object {
-	codecs, strategies, lenses := NewObject(), NewObject(), NewObject()
-	for _, n := range sortedKeys(r.codecs) {
-		codecs.Set(n, r.codecs[n].version)
+	formats, strategies, lenses := NewObject(), NewObject(), NewObject()
+	for _, n := range sortedKeys(r.formats) {
+		formats.Set(n, r.formats[n].version)
+	}
+	bindings := []any{}
+	for _, b := range r.bindings {
+		name := "(inline)"
+		if b.use != nil {
+			name, _ = b.use.Str("use")
+		} else if b.format != nil && b.format.Name() != "" {
+			name = b.format.Name()
+		}
+		bindings = append(bindings, Obj("type", TypeName(b.t), "format", name))
 	}
 	for _, n := range sortedKeys(r.strategies) {
 		strategies.Set(n, r.strategies[n].version)
 	}
-	lenses.Set("sections", "kernel")
 	lenses.Set("derived", "kernel")
 	for _, n := range sortedKeys(r.lenses) {
 		lenses.Set(n, r.lenses[n].version)
 	}
-	coercions := []any{}
-	names := make([]string, 0, len(r.coercions))
-	for n := range r.coercions {
-		names = append(names, n)
-	}
-	sort.Strings(names)
-	for _, n := range names {
-		coercions = append(coercions, n)
-	}
-	hosts := []any{}
-	for _, h := range r.hosts {
-		hosts = append(hosts, Obj("type", h.Type.String(), "shape", h.Shape.Clone(), "codec", h.Codec))
-	}
-	return Obj("codecs", codecs, "strategies", strategies, "lenses", lenses,
-		"coercions", coercions, "hosts", hosts)
+	return Obj("formats", formats, "type_bindings", bindings, "strategies", strategies,
+		"lenses", lenses, "allow_udf", r.AllowUDF)
 }
 
 func sortedKeys[T any](m map[string]T) []string {
@@ -207,73 +204,19 @@ func sortedKeys[T any](m map[string]T) []string {
 	for k := range m {
 		keys = append(keys, k)
 	}
-	sort.Strings(keys)
+	sortStrings(keys)
 	return keys
 }
 
-func elemType(t reflect.Type) reflect.Type {
-	if t != nil && t.Kind() == reflect.Slice {
-		return t.Elem()
-	}
-	return nil
-}
-
-func (r *Registry) lowerValue(t reflect.Type, value any) any {
-	if item := elemType(t); item != nil {
-		if list, ok := value.([]any); ok {
-			out := make([]any, len(list))
-			for i, v := range list {
-				out[i] = r.lowerValue(item, v)
-			}
-			return out
-		}
-		// a native Go slice: walk it reflectively
-		rv := reflect.ValueOf(value)
-		if rv.IsValid() && rv.Kind() == reflect.Slice {
-			out := make([]any, rv.Len())
-			for i := 0; i < rv.Len(); i++ {
-				out[i] = r.lowerValue(item, rv.Index(i).Interface())
-			}
-			return out
+func sortStrings(a []string) {
+	for i := 1; i < len(a); i++ {
+		for j := i; j > 0 && a[j] < a[j-1]; j-- {
+			a[j], a[j-1] = a[j-1], a[j]
 		}
 	}
-	if h := r.hostFor(t); h != nil && h.Lower != nil {
-		return h.Lower(value)
-	}
-	return nativeToPlain(value)
 }
 
-func (r *Registry) liftValue(t reflect.Type, value any) any {
-	if item := elemType(t); item != nil {
-		if list, ok := value.([]any); ok {
-			out := make([]any, len(list))
-			for i, v := range list {
-				out[i] = r.liftValue(item, v)
-			}
-			return out
-		}
-	}
-	if h := r.hostFor(t); h != nil && h.Lift != nil {
-		return h.Lift(value)
-	}
-	return value
-}
-
-func (r *Registry) defaultCodecFor(t reflect.Type) *Object {
-	h := r.hostFor(t)
-	if h == nil {
-		if item := elemType(t); item != nil {
-			h = r.hostFor(item)
-		}
-	}
-	if h == nil {
-		return nil
-	}
-	return h.Codec
-}
-
-// nativeToPlain folds Go's own scalar kinds onto the kernel's value set
-// so callers may pass int, float32, etc. from Go code.
+// nativeToPlain folds Go's own scalar kinds onto the kernel's value set.
 func nativeToPlain(v any) any {
 	switch x := v.(type) {
 	case int:

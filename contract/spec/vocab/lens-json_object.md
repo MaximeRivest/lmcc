@@ -22,10 +22,10 @@ the provider enforces it. Therefore, normatively:
 
 Without the capability, do not ask a model for JSON prose — use an
 invertible marker template and put JSON *inside* typed fields via
-codecs.
+formats.
 
 A lens owns the *document form* only. Field values still go through the
-field's codec or the kernel scalar rules — this lens hands each of them a
+field's format or the kernel scalar rules — this lens hands each of them a
 raw string, exactly like `sections` does. Routings (e.g. `<think>`
 stripping) run before the lens, so strategies compose unchanged.
 
@@ -43,7 +43,7 @@ stripping) run before the lens, so strategies compose unchanged.
      appears in the document (outer whitespace trimmed) — no
      re-serialization, so digits, spacing, and member order are the
      model's own.
-   So `{"rows": [1, 2]}` feeds a `json` codec the text `[1, 2]` and
+   So `{"rows": [1, 2]}` feeds a `json` format the text `[1, 2]` and
    `{"score": 9}` feeds the kernel integer rule `9` unchanged.
 3. **Unknown members are ignored** (models add chatter keys). A field's
    key appearing **twice** in the document refuses `parse-ambiguous`
@@ -55,12 +55,12 @@ stripping) run before the lens, so strategies compose unchanged.
 For each `(name, spelled_text)` in visible-output order:
 
 - if `spelled_text` parses as JSON **and the result is not a string**,
-  embed the parsed value (so a `json`-codec field embeds as native JSON,
+  embed the parsed value (so a `json`-format field embeds as native JSON,
   and `9` / `true` embed as number / boolean);
 - otherwise embed `spelled_text` as a JSON string.
 
 The document is the object in the indented JSON layout of
-`codec-json.md` (two spaces), members in field order.
+`format-json.md` (two spaces), members in field order.
 
 The non-string guard makes write∘read the identity on raw text: a spelled
 string that happens to look like a quoted JSON string (e.g. `"hi"` with
@@ -71,8 +71,8 @@ placeholder texts, so the prompt shows the object shape itself —
 `{"answer": "short answer", "score": "(integer)"}` — pinned by corpus
 case 28.
 Whitespace inside embedded non-string values is **not** preserved
-byte-for-byte across write∘read (write re-indents); codecs must therefore
-be whitespace-insensitive on parse, which `codec/json` is.
+byte-for-byte across write∘read (write re-indents); formats must therefore
+be whitespace-insensitive on read, which `format/json` is.
 
 ## Corpus
 

@@ -1,37 +1,36 @@
 {
  "name": "std-json-lens-format",
  "kind": "render",
- "vocab": ["std"],
+ "vocab": [
+  "std"
+ ],
  "entry": {
   "name": "format_json_v1",
   "versions": {
-   "kernel": "0.1.0",
+   "kernel": "0.2.0",
    "vocab": {
     "lens/json_object": "0.1.0",
-    "codec/json": "0.1.0"
+    "format/json": "0.1.0"
    }
   },
-  "template": {
-   "messages": [
-    {
-     "role": "system",
-     "text": "{instruction}\n\nAnswer like this:\n{format}"
-    },
-    {
-     "role": "user",
-     "text": "{question}"
-    }
-   ]
-  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n\nAnswer like this:\n{format}"
+   },
+   {
+    "role": "user",
+    "text": "{question}"
+   }
+  ],
   "parse": {
    "kind": "json_object"
   },
-  "codecs": {
-   "payload": {
-    "kind": "json"
+  "formats": {
+   "list[*]": {
+    "use": "json"
    }
-  },
-  "requires": []
+  }
  },
  "signature": {
   "instructions": "Answer.",

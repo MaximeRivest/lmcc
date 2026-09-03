@@ -15,7 +15,7 @@ var tokenRE = regexp.MustCompile(
 		`|(\{%[ \t\n\r\f\v]*endfor[ \t\n\r\f\v]*%\})` +
 		`|(\{([A-Za-z_][A-Za-z0-9_.]*)\})`)
 
-var loopAttrs = []string{"name", "desc", "schema", "role", "value"}
+var loopAttrs = []string{"name", "desc", "type", "schema", "role", "value"}
 
 type node interface{ isNode() }
 
@@ -115,7 +115,7 @@ func validateNodes(nodes []node, known, inputs map[string]bool, where, loopVar s
 				continue
 			}
 			if known[path] {
-				refusef("unknown-slot", "%s: {%s} — only input fields may be used as bare slots (outputs are parsed, not rendered)", where, path)
+				continue // an output slot: renders its placeholder (kernel §2)
 			}
 			refusef("unknown-slot", "%s: {%s} names no field in the signature", where, path)
 		case loopNode:
@@ -145,7 +145,7 @@ type renderEnv interface {
 	loopFields(source string) []*Field
 	fieldNamed(name string) *Field
 	schemaOf(f *Field) string
-	valueOf(f *Field) (kind string, text string, part *Object)
+	valueOf(f *Field) (kind string, text string, parts []any)
 }
 
 type renderBuf struct {
@@ -193,6 +193,8 @@ func renderSlot(s slotNode, env renderEnv, b *renderBuf, loopCtx map[string]*Fie
 					}
 				case "role":
 					b.buf.WriteString(f.Role)
+				case "type":
+					b.buf.WriteString(f.Type)
 				case "schema":
 					b.buf.WriteString(env.schemaOf(f))
 				case "value":
@@ -213,13 +215,21 @@ func renderSlot(s slotNode, env renderEnv, b *renderBuf, loopCtx map[string]*Fie
 	emitValue(env.valueOf(env.fieldNamed(s.path)))(b)
 }
 
-func emitValue(kind, text string, part *Object) func(*renderBuf) {
+func emitValue(kind, text string, parts []any) func(*renderBuf) {
 	return func(b *renderBuf) {
 		if kind == "text" {
 			b.buf.WriteString(text)
 			return
 		}
-		b.flushText()
-		b.out = append(b.out, part)
+		for _, p := range parts {
+			po, _ := p.(*Object)
+			if k, _ := po.Str("kind"); k == "text" {
+				t, _ := po.Str("text")
+				b.buf.WriteString(t)
+				continue
+			}
+			b.flushText()
+			b.out = append(b.out, p)
+		}
 	}
 }

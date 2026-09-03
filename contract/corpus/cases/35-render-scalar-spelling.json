@@ -4,30 +4,25 @@
  "entry": {
   "name": "scalars_v1",
   "versions": {
-   "kernel": "0.1.0",
+   "kernel": "0.2.0",
    "vocab": {}
   },
-  "template": {
-   "messages": [
-    {
-     "role": "system",
-     "text": "{instruction}"
-    },
-    {
-     "directive": "demos"
-    },
-    {
-     "role": "user",
-     "text": "x={x} flag={flag} count={count} level={level}"
-    }
-   ]
-  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n{% endfor %}</done>"
+   },
+   {
+    "directive": "demos"
+   },
+   {
+    "role": "user",
+    "text": "x={x} flag={flag} count={count} level={level}"
+   }
+  ],
   "parse": {
-   "kind": "sections",
-   "open": "<{name}>",
-   "tail": "</done>"
-  },
-  "requires": []
+   "kind": "derived"
+  }
  },
  "signature": {
   "instructions": "Spell.",
@@ -159,7 +154,7 @@
     "content": [
      {
       "kind": "text",
-      "text": "Spell."
+      "text": "Spell.\n<a>\n(number)\n<b>\n(number)\n<c>\n(number)\n<d>\n(number)\n<e>\n(number)\n<f>\n(number)\n<g>\n(number)\n<h>\n(number)\n<i>\n(integer)\n</done>"
      }
     ]
    },

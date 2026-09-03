@@ -1,55 +1,29 @@
 """The sockets: where everything with an opinion plugs in.
 
-The kernel ships zero codecs, zero strategies, zero host types. This module
-defines the sockets they plug into:
+The kernel ships no formats beyond its scalar/media defaults and no
+strategies. This module defines what a runtime registers:
 
-- **codecs**: named factories ``factory(options) -> Codec`` with a version.
-- **strategies**: named factories ``factory(options) -> Strategy``.
-- **lenses**: named factories ``factory(parse_spec) -> Lens``. The kernel
-  lens ``sections`` is grammar (always available, never registered);
-  every other lens kind is vocabulary and plugs in here.
-- **coercions**: named functions used by routings.
-- **hosts**: your language's types ⇄ plain data (the native face).
+- **named formats**: ``factory(options) -> Format`` under a name the
+  artifact can reference (``{"use": "json"}``), with a version;
+- **type bindings**: a host type → a Format (or a named format), per
+  runtime, never serialized — the ``lmcc.format(Person, ...)`` surface;
+- **strategies**: named factories ``factory(options) -> Strategy``;
+- **lenses**: named factories ``factory(parse_spec) -> Lens``
+  (``derived`` is kernel grammar, never registered).
 
-Registries are explicit objects. ``default_registry`` exists for
-convenience, but nothing in the kernel reads it implicitly during
-``load`` — you always know which registry resolved a name.
+``allow_udf`` decides whether this runtime will place shipped Python
+UDFs from artifacts. Registries are explicit objects; nothing reads
+``default_registry`` implicitly during ``load``.
 """
 
 from __future__ import annotations
 
-import typing
 from dataclasses import dataclass
 
+from . import core
 from .errors import refuse
-from .parse import Lens, SectionsLens
-
-
-class Codec:
-    """The codec protocol. Vocabulary packages subclass this.
-
-    A codec spells one plain-data value into token text and reads it back.
-    It never sees host types and never decides *where* it renders — the
-    template owns position; the codec owns spelling.
-    """
-
-    def render_schema(self, shape: dict) -> str:
-        """What the model is told about the expected form. Optional."""
-        return ""
-
-    def render_value(self, value: object, shape: dict) -> str:
-        raise NotImplementedError
-
-    def parse_value(self, text: str, shape: dict) -> object:
-        raise NotImplementedError
-
-
-@dataclass
-class HostEntry:
-    shape: dict
-    lower: object  # callable(host_value) -> plain value
-    lift: object | None = None  # callable(plain value) -> host value
-    codec: dict | None = None  # default spelling: {"kind": ..., "options": {}}
+from .formats import Format, make
+from .parse import Lens
 
 
 @dataclass
@@ -59,28 +33,56 @@ class _Named:
 
 
 class Registry:
-    def __init__(self) -> None:
-        self.codecs: dict[str, _Named] = {}
+    def __init__(self, *, allow_udf: bool = False) -> None:
+        self.formats: dict[str, _Named] = {}
+        self.type_bindings: list[tuple[object, Format | dict]] = []
         self.strategies: dict[str, _Named] = {}
         self.lenses: dict[str, _Named] = {}
-        self.coercions: dict[str, object] = {}
-        self.hosts: list[tuple[type, HostEntry]] = []
+        self.allow_udf = allow_udf
 
-    # ------------------------------------------------------------- codecs
+    # ------------------------------------------------------------ formats
 
-    def register_codec(self, name: str, factory, *, version: str = "0.1.0",
-                       exist_ok: bool = False) -> None:
-        if name in self.codecs and not exist_ok:
-            refuse("already-registered", f"codec {name!r} is already registered")
-        self.codecs[name] = _Named(factory, version)
+    def register_format(self, name: str, factory, *, version: str = "0.1.0",
+                        exist_ok: bool = False) -> None:
+        if name in self.formats and not exist_ok:
+            refuse("already-registered", f"format {name!r} is already registered")
+        self.formats[name] = _Named(factory, version)
 
-    def codec(self, name: str, options: dict) -> Codec:
-        entry = self.codecs.get(name)
+    def named_format(self, name: str, options: dict | None) -> Format:
+        entry = self.formats.get(name)
         if entry is None:
-            refuse("unknown-codec",
-                   f"codec {name!r} is not registered — install the package "
-                   f"that provides it, or bind another codec")
-        return entry.factory(options or {})
+            refuse("unknown-format",
+                   f"format {name!r} is not registered — install the package that "
+                   f"provides it, or ship the format with the artifact")
+        fmt = entry.factory(options or {})
+        fmt.name = name
+        return fmt
+
+    def format(self, host_type, *, write=None, read=None, describe=None,
+               use: str | None = None, options: dict | None = None, **facts) -> Format:
+        """Bind a host type to a format, per runtime — ``lmcc.format(Person,
+        write=..., read=...)`` or ``lmcc.format(pd.DataFrame, use="table",
+        options={...})``. Never serialized; ``ship`` does that on request."""
+        if use is not None:
+            binding: Format | dict = {"use": use, "options": options or {}}
+        else:
+            if write is None:
+                refuse("entry-malformed", "a format needs at least write")
+            binding = make(write=write, read=read, describe=describe, **facts)
+        self.type_bindings.append((host_type, binding))
+        return binding if isinstance(binding, Format) else self.named_format(use, options)
+
+    def type_binding(self, annotation: object) -> Format | None:
+        if annotation is None:
+            return None
+        for host_type, binding in self.type_bindings:
+            if annotation is host_type or annotation == host_type or (
+                    isinstance(annotation, type) and isinstance(host_type, type)
+                    and issubclass(annotation, host_type)):
+                if isinstance(binding, dict):
+                    return self.named_format(binding["use"], binding.get("options"))
+                return binding
+        return None
 
     # ---------------------------------------------------------- strategies
 
@@ -90,123 +92,49 @@ class Registry:
             refuse("already-registered", f"strategy {name!r} is already registered")
         self.strategies[name] = _Named(factory, version)
 
-    def strategy(self, name: str, options: dict):
+    def strategy(self, name: str, options: dict | None):
         entry = self.strategies.get(name)
         if entry is None:
             refuse("unknown-strategy",
-                   f"strategy {name!r} is not registered — install the package "
-                   f"that provides it, or inline the strategy as data")
+                   f"strategy {name!r} is not registered — install the package that "
+                   f"provides it, or inline the strategy as data")
         return entry.factory(options or {})
 
     # -------------------------------------------------------------- lenses
 
     def register_lens(self, name: str, factory, *, version: str = "0.1.0",
                       exist_ok: bool = False) -> None:
-        if name == "sections":
-            refuse("already-registered",
-                   "lens 'sections' is kernel grammar and cannot be replaced")
+        if name == "derived":
+            refuse("already-registered", "lens 'derived' is kernel grammar and cannot be replaced")
         if name in self.lenses and not exist_ok:
             refuse("already-registered", f"lens {name!r} is already registered")
         self.lenses[name] = _Named(factory, version)
 
     def lens(self, spec: dict) -> Lens:
         kind = spec.get("kind")
-        if kind == "sections":
-            return SectionsLens(spec)
         entry = self.lenses.get(kind)
         if entry is None:
             refuse("unknown-parse-kind",
-                   f"parse kind {kind!r} is neither the kernel lens "
-                   f"'sections' nor a registered lens — install the package "
-                   f"that provides it")
+                   f"parse kind {kind!r} is neither the kernel lens 'derived' nor a "
+                   f"registered lens — install the package that provides it")
         return entry.factory(spec)
-
-    # ----------------------------------------------------------- coercions
-
-    def register_coercion(self, name: str, fn, *, exist_ok: bool = False) -> None:
-        if name in self.coercions and not exist_ok:
-            refuse("already-registered", f"coercion {name!r} is already registered")
-        self.coercions[name] = fn
-
-    # --------------------------------------------------------------- hosts
-
-    def register_host(self, host_type: type, *, shape: dict, lower, lift=None,
-                      codec: str | dict | None = None) -> None:
-        """Bind a native type: its neutral shape, how a value lowers to
-        plain data (and lifts back), and optionally its default codec —
-        the renderer that spells it for the model when the entry binds
-        none. Host bindings are per-runtime code and are never
-        serialized; only shapes and codec names travel in artifacts."""
-        if isinstance(codec, str):
-            codec = {"kind": codec, "options": {}}
-        elif isinstance(codec, dict) and "kind" not in codec:
-            refuse("entry-malformed",
-                   f"host {host_type!r}: codec binding needs a 'kind'")
-        self.hosts.append((host_type, HostEntry(shape, lower, lift, codec)))
-
-    def host_for(self, annotation: object) -> HostEntry | None:
-        for host_type, entry in self.hosts:
-            if annotation is host_type or (
-                    isinstance(annotation, type) and isinstance(host_type, type)
-                    and issubclass(annotation, host_type)):
-                return entry
-        return None
-
-    @staticmethod
-    def _item_annotation(annotation: object) -> object | None:
-        """The element annotation of ``list[X]``, else None."""
-        if typing.get_origin(annotation) in (list, typing.List):
-            args = typing.get_args(annotation)
-            if args:
-                return args[0]
-        return None
 
     # ------------------------------------------------------------ describe
 
     def describe(self) -> dict:
-        """Everything registered here, as plain data: one call answers
-        "what vocabulary does this runtime speak?"""
         return {
-            "codecs": {n: e.version for n, e in sorted(self.codecs.items())},
-            "strategies": {n: e.version
-                           for n, e in sorted(self.strategies.items())},
-            "lenses": {"sections": "kernel", "derived": "kernel",
-                       **{n: e.version
-                          for n, e in sorted(self.lenses.items())}},
-            "coercions": sorted(self.coercions),
-            "hosts": [{"type": getattr(t, "__name__", str(t)),
-                       "shape": dict(e.shape),
-                       "codec": e.codec}
-                      for t, e in self.hosts],
+            "formats": {n: e.version for n, e in sorted(self.formats.items())},
+            "type_bindings": [
+                {"type": core.typename(t), "format": (b["use"] if isinstance(b, dict)
+                                                     else b.name or "(inline)")}
+                for t, b in self.type_bindings],
+            "strategies": {n: e.version for n, e in sorted(self.strategies.items())},
+            "lenses": {"derived": "kernel",
+                       **{n: e.version for n, e in sorted(self.lenses.items())}},
+            "allow_udf": self.allow_udf,
         }
-
-    def lower_value(self, annotation: object, value: object) -> object:
-        item = self._item_annotation(annotation)
-        if item is not None and isinstance(value, list):
-            return [self.lower_value(item, v) for v in value]
-        entry = self.host_for(annotation) if annotation is not None else None
-        if entry is not None:
-            return entry.lower(value)
-        return value
-
-    def lift_value(self, annotation: object, value: object) -> object:
-        item = self._item_annotation(annotation)
-        if item is not None and isinstance(value, list):
-            return [self.lift_value(item, v) for v in value]
-        entry = self.host_for(annotation) if annotation is not None else None
-        if entry is not None and entry.lift is not None:
-            return entry.lift(value)
-        return value
-
-    def default_codec_for(self, annotation: object) -> dict | None:
-        """The registered type's default codec binding, looking through
-        ``list[X]`` to the element type."""
-        entry = self.host_for(annotation) if annotation is not None else None
-        if entry is None:
-            item = self._item_annotation(annotation)
-            if item is not None:
-                entry = self.host_for(item)
-        return entry.codec if entry is not None else None
 
 
 default_registry = Registry()
+
+__all__ = ["Registry", "default_registry", "Format"]

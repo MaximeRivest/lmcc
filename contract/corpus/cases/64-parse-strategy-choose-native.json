@@ -1,0 +1,119 @@
+{
+ "name": "parse-strategy-choose-native",
+ "kind": "parse",
+ "entry": {
+  "name": "choose_v1",
+  "versions": {
+   "kernel": "0.2.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n\nAnswer in exactly this form:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "parse": {
+   "kind": "derived"
+  },
+  "strategies": {
+   "reasoning": {
+    "choose": [
+     {
+      "when": {
+       "capability": "native_reasoning"
+      },
+      "use": {
+       "requires": [
+        "native_reasoning"
+       ],
+       "visible": false,
+       "controls": {
+        "reasoning": {
+         "effort": "medium"
+        }
+       },
+       "routings": [
+        {
+         "from": "channel:thinking",
+         "to": "@role"
+        }
+       ]
+      }
+     },
+     {
+      "else": {
+       "visible": false,
+       "fragments": {
+        "system": "Think inside <think>...</think> before you answer."
+       },
+       "routings": [
+        {
+         "from": "text",
+         "between": [
+          "<think>",
+          "</think>"
+         ],
+         "to": "@role",
+         "consume": true
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Solve.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "reasoning",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    },
+    "role": "reasoning"
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "integer"
+    }
+   }
+  ]
+ },
+ "capabilities": {
+  "native_reasoning": true
+ },
+ "response": {
+  "content": [
+   {
+    "kind": "thinking",
+    "text": "  four  "
+   },
+   {
+    "kind": "text",
+    "text": "<answer>\n4\n</answer>"
+   }
+  ]
+ },
+ "expect": {
+  "values": {
+   "answer": 4,
+   "reasoning": "four"
+  }
+ }
+}

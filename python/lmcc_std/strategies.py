@@ -36,9 +36,8 @@ def reasoning_tags(options: dict) -> Strategy:
         requires=["instruct"],
         fragments={"system": f"After every sentence of output, add your "
                              f"thinking inside {open_tag}...{close_tag} tags."},
-        routings=[{"extract": {"kind": "between", "open": open_tag,
-                               "close": close_tag},
-                   "field": "@role", "join": "\n", "strip": True}],
+        routings=[{"from": "text", "between": [open_tag, close_tag],
+                   "to": "@role", "consume": True}],
         visible=False,
     )
 
@@ -46,8 +45,7 @@ def reasoning_tags(options: dict) -> Strategy:
 def native_reasoning(options: dict) -> Strategy:
     return Strategy(
         requires=["native_reasoning"],
-        routings=[{"extract": {"kind": "parts", "part": "thinking"},
-                   "field": "@role", "join": "\n"}],
+        routings=[{"from": "channel:thinking", "to": "@role"}],
         visible=False,
     )
 

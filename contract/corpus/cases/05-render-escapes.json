@@ -4,23 +4,22 @@
  "entry": {
   "name": "sections_v1",
   "versions": {
-   "kernel": "0.1.0",
+   "kernel": "0.2.0",
    "vocab": {}
   },
-  "template": {
-   "messages": [
-    {
-     "role": "user",
-     "text": "literal {{braces}} and {question}"
-    }
-   ]
-  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n{% endfor %}</done>"
+   },
+   {
+    "role": "user",
+    "text": "literal {{braces}} and {question}"
+   }
+  ],
   "parse": {
-   "kind": "sections",
-   "open": "<{name}>",
-   "tail": "</done>"
-  },
-  "requires": []
+   "kind": "derived"
+  }
  },
  "signature": {
   "instructions": "Answer the question.",
@@ -54,6 +53,15 @@
  },
  "expect": {
   "messages": [
+   {
+    "role": "system",
+    "content": [
+     {
+      "kind": "text",
+      "text": "Answer the question.\n<answer>\nshort answer\n<score>\n(integer)\n</done>"
+     }
+    ]
+   },
    {
     "role": "user",
     "content": [

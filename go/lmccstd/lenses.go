@@ -109,4 +109,6 @@ func (l *JSONObjectLens) Join(spelled []lmcc.Spelled) string {
 
 func (l *JSONObjectLens) Format(placeholders []lmcc.Spelled) string { return l.Join(placeholders) }
 
+func (l *JSONObjectLens) Skeleton() *lmcc.Object { return lmcc.NewObject() }
+
 func refuse(code, detail string) { panic(&lmcc.Error{Code: code, Detail: detail}) }

@@ -1,7 +1,7 @@
 """lmcc_dspy — the DSPy signature frontend.
 
 Lowers any ``dspy.Signature`` to an LMCC ``SignatureCore`` (kernel §1)
-and ships one LMCC-idiomatic entry shaped like DSPy's chat dialect.
+and ships one LMCC-idiomatic adapter shaped like DSPy's chat dialect.
 The claim this package makes, and ``tests/dspy/test_catalog.py`` checks
 against a real DSPy, is:
 
@@ -11,10 +11,12 @@ against a real DSPy, is:
    type-undefined marker, and field *defaults* (program-side values a
    caller supplies; never shown to a model). Anything else the frontend
    cannot carry refuses ``unmapped-type`` naming the field.
-2. **Always renderable.** Every lowered signature bakes, renders and
-   parses with :func:`adapter` — structured and uninterpreted shapes go
-   through ``@structured: json`` (D-20), ``Optional[X]`` is nullable
-   (D-21), ``dspy.History`` becomes history field turns (D-22).
+2. **Always renderable.** Every lowered signature binds, renders and
+   parses with :func:`adapter`: structured and uninterpreted shapes go
+   through the ``*`` → ``json`` format (kernel §5), ``Optional[X]`` is
+   nullable, ``dspy.History`` becomes history field turns, and the DSPy
+   types that are not plain data (``Image``, ``Audio``, ``Tool``,
+   ``Code``) get runtime type bindings — per language, never serialized.
 
 What is *not* claimed: DSPy's prompt bytes (LMCC renders its own way),
 lenient parsing (``json_repair``; LMCC refuses instead), and native
@@ -37,23 +39,16 @@ from lmcc.errors import refuse
 
 VERSION = "0.1.0"
 
-# DSPy field-level extras that carry no prompt meaning (see module doc).
-_DROPPED = ("prefix", "format", "parser", "__dspy_field_type",
-            "__dspy_is_type_undefined", "constraints")
-
 
 class Lowered:
-    """The result of :func:`lower`: the signature, plus what the frontend
-    needed to move out of it — the name of a ``dspy.History`` input, if
-    any, which renders as history turns rather than as a field."""
+    """The result of :func:`lower`: the signature, plus the name of a
+    ``dspy.History`` input, if any (rendered as history turns)."""
 
     def __init__(self, signature: core.SignatureCore, history_field: str | None):
         self.signature = signature
         self.history_field = history_field
 
     def split_inputs(self, values: dict) -> tuple[dict, list[dict]]:
-        """Separate a DSPy-style inputs dict into (field inputs, history
-        turns) for :meth:`Baked.render`."""
         values = dict(values)
         turns: list[dict] = []
         if self.history_field and self.history_field in values:
@@ -64,14 +59,14 @@ class Lowered:
 
 
 def lower(signature, *, registry: lmcc.Registry | None = None) -> Lowered:
-    """Lower a ``dspy.Signature`` class (or a signature string) to a
-    SignatureCore. ``registry`` receives host bindings for every pydantic
-    model and Enum met, so values lift back to native types on parse."""
+    """Lower a ``dspy.Signature`` class (or a signature string). ``registry``
+    receives the runtime type bindings DSPy's own types need."""
     import dspy
     from dspy.adapters.types import History
 
     sig = dspy.ensure_signature(signature)
     registry = registry if registry is not None else lmcc.default_registry
+    bind_dspy_types(registry)
     fields: list[core.Field] = []
     history_field: str | None = None
     for name, info in sig.fields.items():
@@ -90,19 +85,24 @@ def lower(signature, *, registry: lmcc.Registry | None = None) -> Lowered:
         desc = extra.get("desc")
         if desc == f"${{{name}}}" or desc == "":
             desc = None
-        shape, role = _shape_and_role(ann, info, name, registry)
-        fields.append(core.Field(name, direction, shape, role=role, desc=desc,
-                                 annotation=ann))
+        shape, role = _shape_and_role(ann, info, name)
+        fields.append(core.Field(name, direction, shape, type=_typename(ann), role=role,
+                                 desc=desc, annotation=ann))
     lowered = core._validated(core.SignatureCore(sig.instructions, fields))
     return Lowered(lowered, history_field)
+
+
+def _typename(ann) -> str:
+    import dspy
+    if isinstance(ann, type) and issubclass(ann, getattr(dspy, "Code", ())):
+        return "Code"
+    return core.typename(ann) or "?"
 
 
 # ------------------------------------------------------------------ shapes
 
 
-def _shape_and_role(ann, info, name: str, registry: lmcc.Registry) -> tuple[dict, str]:
-    """Map one annotation to (shape, role). Roles follow spec/vocab/roles.md;
-    media types become parts; everything else is pydantic's JSON schema."""
+def _shape_and_role(ann, info, name: str) -> tuple[dict, str]:
     import dspy
     from dspy.adapters.types import Audio, Image
     from dspy.adapters.types.tool import Tool, ToolCalls
@@ -114,8 +114,6 @@ def _shape_and_role(ann, info, name: str, registry: lmcc.Registry) -> tuple[dict
     if ann is dspy.Reasoning:
         return {"type": "string"}, "reasoning"
     if base is Tool:
-        # a Tool wraps a callable; what a model sees is its declaration
-        _register_tool(Tool, registry)
         shape = _TOOL_SHAPE if ann is Tool else {"type": "array", "items": _TOOL_SHAPE}
         return dict(shape), "tools"
     if ann is ToolCalls:
@@ -131,28 +129,15 @@ def _shape_and_role(ann, info, name: str, registry: lmcc.Registry) -> tuple[dict
         t = getattr(dspy, media_name, None)
         if t is not None and ann is t:
             return {"media": media_name.lower()}, role
-
     code_t = getattr(dspy, "Code", None)
     if code_t is not None and isinstance(ann, type) and issubclass(ann, code_t):
-        # dspy.Code dumps to and validates from a bare string; the language
-        # lives on the (parametrized) class and travels as a shape keyword
         shape = {"type": "string", "format": "code"}
         lang = getattr(ann, "language", None)
         if isinstance(lang, str) and lang:
             shape["language"] = lang
-        if registry.host_for(ann) is None:
-            registry.register_host(ann, shape=dict(shape),
-                                   lower=lambda v: v.model_dump(mode="json") if isinstance(v, code_t) else v,
-                                   lift=lambda v, _c=ann: _c.model_validate(v) if isinstance(v, str) else v)
         return shape, role
     if isinstance(ann, type) and issubclass(ann, enum.Enum):
-        _register_enum(ann, registry)
-        return _enum_shape(ann), role
-    if isinstance(ann, type) and issubclass(ann, pydantic.BaseModel):
-        _register_model(ann, registry)
-    if origin is list and isinstance(base, type) and issubclass(base, pydantic.BaseModel):
-        _register_model(base, registry)
-
+        return core.annotation_to_shape(ann, None, field_name=name), role
     try:
         annotated = typing.Annotated[(ann, *info.metadata)] if info.metadata else ann
         shape = pydantic.TypeAdapter(annotated).json_schema()
@@ -171,57 +156,56 @@ _TOOL_SHAPE = {
 }
 
 
-def _register_tool(cls, registry: lmcc.Registry) -> None:
-    """A dspy.Tool lowers to its declaration (the function-calling shape);
-    the callable itself never travels — it is host code."""
-    if registry.host_for(cls) is None:
-        registry.register_host(
-            cls, shape=dict(_TOOL_SHAPE),
-            lower=lambda t: {"name": t.name, "description": t.desc or "",
-                             "parameters": {"type": "object", "properties": dict(t.args or {})}})
+# --------------------------------------------- runtime bindings for dspy types
 
 
-def _enum_shape(cls) -> dict:
-    values = [m.value for m in cls]
-    shape: dict = {"enum": values}
-    if all(isinstance(v, str) for v in values):
-        shape["type"] = "string"
-    elif all(isinstance(v, int) and not isinstance(v, bool) for v in values):
-        shape["type"] = "integer"
-    else:
-        refuse("unmapped-type",
-               f"enum {cls.__name__}: members must all be strings or all integers")
-    return shape
+def _tool_declaration(t) -> dict:
+    return {"name": t.name, "description": t.desc or "",
+            "parameters": {"type": "object", "properties": dict(t.args or {})}}
 
 
-def _register_enum(cls, registry: lmcc.Registry) -> None:
-    if registry.host_for(cls) is None:
-        registry.register_host(cls, shape=_enum_shape(cls),
-                               lower=lambda v: v.value if isinstance(v, cls) else v,
-                               lift=lambda v: cls(v))
+def bind_dspy_types(registry: lmcc.Registry) -> None:
+    """Formats for the DSPy types that are not plain data (kernel §5,
+    step 3 — per runtime, never serialized). Idempotent."""
+    import dspy
+    from dspy.adapters.types import Audio, Image
+    from dspy.adapters.types.tool import Tool
+
+    if getattr(registry, "_lmcc_dspy_bound", False):
+        return
+    registry._lmcc_dspy_bound = True
+    from lmcc_std import jsontext
+
+    registry.format(Image, write=lambda im: [{"kind": "image", "url": im.url}],
+                    accepts=("media:image",), emits="parts", direction="in")
+    registry.format(Audio, write=lambda au: [{"kind": "audio", "url": getattr(au, "url", None)}],
+                    accepts=("media:audio",), emits="parts", direction="in")
+    registry.format(Tool, write=lambda t: jsontext.dumps(_tool_declaration(t), indent=None),
+                    accepts=("Tool", "object"), direction="in")
+    registry.format(list[Tool],
+                    write=lambda ts: jsontext.dumps([_tool_declaration(t) for t in ts], indent=None),
+                    accepts=("list[Tool]", "list[object]"), direction="in")
+    code_t = getattr(dspy, "Code", None)
+    if code_t is not None:
+        registry.format(code_t,
+                        write=lambda c: c.model_dump(mode="json") if isinstance(c, code_t) else c,
+                        read=lambda span, f: f.annotation.model_validate(span.text),
+                        accepts=("Code", "string"))
 
 
-def _register_model(cls, registry: lmcc.Registry) -> None:
-    if registry.host_for(cls) is None:
-        registry.register_host(
-            cls, shape=cls.model_json_schema(),
-            lower=lambda v: v.model_dump(mode="json") if isinstance(v, cls) else v,
-            lift=lambda v: cls.model_validate(v) if isinstance(v, dict) else v)
-
-
-# ----------------------------------------------------------------- entry
+# ----------------------------------------------------------------- adapter
 
 
 def entry() -> dict:
-    """The DSPy-shaped LMCC entry: `[[ ## name ## ]]` sections (corpus 21),
-    a field description block, the lens's own skeleton, and `json` for
-    every structured or uninterpreted shape. Idiomatic LMCC — one
-    description renders the prompt, writes the demos and history, and
-    derives nothing by hand."""
+    """The DSPy-shaped LMCC artifact: `[[ ## name ## ]]` markers as a derived
+    pattern (corpus 21), a field description block, and `json` for every
+    structured or uninterpreted shape (`*`, consulted after the kernel's
+    scalar defaults). Idiomatic LMCC — one description renders the prompt,
+    writes the demos and history, and derives the parser."""
     return {
         "name": "dspy_chat",
-        "versions": {"kernel": lmcc.KERNEL_VERSION, "vocab": {"codec/json": "0.1.0"}},
-        "template": {"messages": [
+        "versions": {"kernel": lmcc.KERNEL_VERSION, "vocab": {"format/json": "0.1.0"}},
+        "template": [
             {"role": "system", "text":
                 "Your input fields are:\n"
                 "{% for f in inputs %}- {f.name}: {f.desc} {f.schema}\n{% endfor %}"
@@ -230,7 +214,8 @@ def entry() -> dict:
                 "\nAll interactions will be structured in the following way, "
                 "with the appropriate values filled in.\n\n"
                 "{% for f in inputs %}[[ ## {f.name} ## ]]\n{{{f.name}}}\n\n{% endfor %}"
-                "{format}\n\n"
+                "{% for f in outputs %}[[ ## {f.name} ## ]]\n{f.value}\n\n{% endfor %}"
+                "[[ ## completed ## ]]\n\n"
                 "In adhering to this structure, your objective is: {instruction}"},
             {"directive": "demos"},
             {"directive": "history"},
@@ -238,17 +223,17 @@ def entry() -> dict:
                 "{% for f in inputs %}[[ ## {f.name} ## ]]\n{f.value}\n\n{% endfor %}"
                 "Respond with the corresponding output fields, then end with the "
                 "marker for `[[ ## completed ## ]]`."},
-        ]},
-        "parse": {"kind": "sections", "open": "[[ ## {name} ## ]]",
-                  "tail": "[[ ## completed ## ]]"},
-        "codecs": {"@structured": {"kind": "json", "options": {"indent": None}}},
-        "requires": [],
+        ],
+        "parse": {"kind": "derived"},
+        "formats": {"*": {"use": "json", "options": {"indent": None}}},
     }
 
 
 def adapter(registry: lmcc.Registry | None = None):
-    """Load :func:`entry` against a registry that has ``lmcc_std``."""
+    """Load :func:`entry` against a registry with ``lmcc_std`` and the
+    DSPy type bindings installed."""
     import lmcc_std
     registry = registry if registry is not None else lmcc.default_registry
     lmcc_std.install(registry)
+    bind_dspy_types(registry)
     return lmcc.load(entry(), registry=registry)
