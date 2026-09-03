@@ -1,6 +1,6 @@
 """Named refusals.
 
-Every failure in a15 carries a stable machine-readable code and a message
+Every failure in lmcc carries a stable machine-readable code and a message
 that names the exact offender (the field, the codec, the missing fact).
 The codes are part of the contract: `contract/spec/errors.md` lists them,
 and the corpus asserts them. Silent wrong behavior is the one bug this
@@ -10,7 +10,7 @@ library refuses to have.
 from __future__ import annotations
 
 
-class A15Error(Exception):
+class LMCCError(Exception):
     """A refusal with a stable code.
 
     Attributes:
@@ -27,4 +27,4 @@ class A15Error(Exception):
 
 
 def refuse(code: str, detail: str, *, partial: dict | None = None) -> None:
-    raise A15Error(code, detail, partial=partial)
+    raise LMCCError(code, detail, partial=partial)

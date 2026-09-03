@@ -6,7 +6,7 @@ repairing a program benefits from a machine-readable next action —
 act on without parsing English.
 
 **Design sketch.**
-- `A15Error` gains an optional `fix: dict | None`, e.g.
+- `LMCCError` gains an optional `fix: dict | None`, e.g.
   `{"action": "bind-codec", "field": "rows"}` or
   `{"action": "declare-capability", "fact": "native_structured_output"}`.
 - A closed action vocabulary (spec'd like everything else); prose

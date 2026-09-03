@@ -49,7 +49,7 @@ def field(annotation: object, *, role: str = "plain", desc: str | None = None) -
     """Annotate a signature entry with a role and/or description.
 
     Example:
-        >>> a15.signature("...", outputs={"reasoning": a15.field(str, role="reasoning")})
+        >>> lmcc.signature("...", outputs={"reasoning": lmcc.field(str, role="reasoning")})
     """
     return FieldSpec(annotation, role=role, desc=desc)
 

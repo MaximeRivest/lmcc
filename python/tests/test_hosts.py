@@ -10,8 +10,8 @@ import dataclasses
 
 import pytest
 
-import a15
-import a15_std
+import lmcc
+import lmcc_std
 
 
 @dataclasses.dataclass
@@ -28,8 +28,8 @@ class FakeImage:
 
 
 def _registry():
-    registry = a15.Registry()
-    a15_std.install(registry)
+    registry = lmcc.Registry()
+    lmcc_std.install(registry)
     registry.register_host(
         Person,
         shape={"type": "object",
@@ -49,19 +49,19 @@ def _registry():
 
 
 def _adapter():
-    return a15.adapter(
-        template=a15.template([
-            a15.message("system", "{instruction}\n\nAnswer in exactly this "
+    return lmcc.adapter(
+        template=lmcc.template([
+            lmcc.message("system", "{instruction}\n\nAnswer in exactly this "
                         "form:\n{% for f in outputs %}<{f.name}>\n{f.value}\n"
                         "</{f.name}>\n{% endfor %}"),
-            a15.message("user", "{photo}\n{text}"),
+            lmcc.message("user", "{photo}\n{text}"),
         ]),
         parse={"kind": "derived"})
 
 
 def test_native_type_hints_end_to_end():
     registry = _registry()
-    sig = a15.signature(
+    sig = lmcc.signature(
         "Extract every person you can see or read.",
         inputs={"photo": FakeImage, "text": str},
         outputs={"people": list[Person]},
@@ -82,14 +82,14 @@ def test_native_type_hints_end_to_end():
 def test_registered_renderer_spells_the_type():
     """No codec bound in the entry: the type's registered default renders."""
     registry = _registry()
-    sig = a15.signature("List people.", inputs={"text": str},
+    sig = lmcc.signature("List people.", inputs={"text": str},
                         outputs={"people": list[Person]}, registry=registry)
-    adp = a15.adapter(
-        template=a15.template([
-            a15.message("system", "{% for f in outputs %}<{f.name}>\n{f.value}"
+    adp = lmcc.adapter(
+        template=lmcc.template([
+            lmcc.message("system", "{% for f in outputs %}<{f.name}>\n{f.value}"
                         "\n</{f.name}>\n{% endfor %}"),
-            a15.directive("demos"),
-            a15.message("user", "{text}"),
+            lmcc.directive("demos"),
+            lmcc.message("user", "{text}"),
         ]),
         parse={"kind": "derived"})
     baked = adp.bake(sig, {}, registry=registry)
@@ -102,16 +102,16 @@ def test_registered_renderer_spells_the_type():
 
 def test_entry_binding_beats_host_default():
     registry = _registry()
-    sig = a15.signature("List people.", inputs={"text": str},
+    sig = lmcc.signature("List people.", inputs={"text": str},
                         outputs={"people": list[Person]}, registry=registry)
-    adp = a15.adapter(
-        template=a15.template([
-            a15.message("system", "{% for f in outputs %}<{f.name}>\n{f.value}"
+    adp = lmcc.adapter(
+        template=lmcc.template([
+            lmcc.message("system", "{% for f in outputs %}<{f.name}>\n{f.value}"
                         "\n</{f.name}>\n{% endfor %}"),
-            a15.message("user", "{text}"),
+            lmcc.message("user", "{text}"),
         ]),
         parse={"kind": "derived"},
-        codecs={"people": a15.codec("table", columns=["name", "age"])})
+        codecs={"people": lmcc.codec("table", columns=["name", "age"])})
     baked = adp.bake(sig, {}, registry=registry)
     assert baked.codecs["people"].kind == "table"
 
@@ -119,8 +119,8 @@ def test_entry_binding_beats_host_default():
 def test_unregistered_native_type_refuses_by_name():
     class Mystery:
         pass
-    with pytest.raises(a15.A15Error) as err:
-        a15.signature("x", inputs={"thing": Mystery}, outputs={"answer": str},
+    with pytest.raises(lmcc.LMCCError) as err:
+        lmcc.signature("x", inputs={"thing": Mystery}, outputs={"answer": str},
                       registry=_registry())
     assert err.value.code == "unmapped-type"
     assert "thing" in err.value.detail

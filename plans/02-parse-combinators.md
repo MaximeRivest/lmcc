@@ -14,7 +14,7 @@ the research calls "level 1" (adapter-parse-dsl.md).
 - Entries may declare a pipeline as the parse spec or as a per-field
   recovery step *after* the lens refuses — refusal stays the default;
   recovery is opt-in, visible data.
-- Vocabulary, not kernel: ships in `a15_std` behind a socket, versioned
+- Vocabulary, not kernel: ships in `lmcc_std` behind a socket, versioned
   `combinator/<name>`.
 
 **Guard.** Census before vocabulary freeze: harvest real-world custom

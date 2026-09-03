@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import re
 
-from a15.registry import Codec
+from lmcc.registry import Codec
 
 VERSION = "0.1.0"
 

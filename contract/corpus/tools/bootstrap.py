@@ -20,10 +20,10 @@ CASES = ROOT / "contract" / "corpus" / "cases"
 sys.path.insert(0, str(ROOT / "python"))
 sys.path.insert(0, str(ROOT / "contract" / "harness"))
 
-import a15  # noqa: E402
-import a15_std  # noqa: E402
+import lmcc  # noqa: E402
+import lmcc_std  # noqa: E402
 
-KV = a15.KERNEL_VERSION
+KV = lmcc.KERNEL_VERSION
 
 SECTIONS_ENTRY = {
     "name": "sections_v1",
@@ -73,15 +73,15 @@ def fill_expect(case: dict) -> dict:
     """Compute expect for non-refusal kinds by running the reference."""
     from runner import PythonDriver
 
-    a15_mod = a15
-    registry = a15_mod.Registry()
+    lmcc_mod = lmcc
+    registry = lmcc_mod.Registry()
     if "std" in case.get("vocab", []):
-        a15_std.install(registry)
-    adapter = a15_mod.load(case["entry"], registry=registry)
+        lmcc_std.install(registry)
+    adapter = lmcc_mod.load(case["entry"], registry=registry)
     if case["kind"] == "roundtrip":
-        case["expect"] = {"entry": a15_mod.dump(adapter, registry)}
+        case["expect"] = {"entry": lmcc_mod.dump(adapter, registry)}
         return case
-    sig = a15_mod.signature_from_dict(case["signature"])
+    sig = lmcc_mod.signature_from_dict(case["signature"])
     baked = adapter.bake(sig, case.get("capabilities", {}), registry=registry)
     if case["kind"] == "render":
         result = baked.render(inputs=case.get("inputs", {}),

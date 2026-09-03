@@ -1,24 +1,24 @@
-# a15 — agent operating manual
+# LMCC — agent operating manual
 
 You are an agent working in this repository. This file is your cockpit:
 the map, the physics, the controls, and the protocol. Read it first;
 verify it second (`./check`); trust it only after it runs green.
 
-**One sentence.** a15 owns typed signature ⇄ messages: how a declared
-I/O contract renders into a prompt and how the reply becomes typed
-values again — as inspectable, versioned, cross-language data.
+**One sentence.** LMCC is the language model calling convention: it maps
+a declared I/O contract to messages and maps the reply back to typed
+values, as inspectable, versioned, cross-language data.
 
 ## The tower (read bottom-up; authority flows up)
 
 ```
   L5  programs            your code: signatures + values in, values out
-  L4  vocabulary packs    python/a15_std (+ anyone's): codecs, strategies,
+  L4  vocabulary packs    python/lmcc_std (+ anyone's): codecs, strategies,
                           lenses, hosts — plugged into sockets, zero privilege
   L3  the plan            bake(entry × signature × capabilities) → Baked
                           all refusals fire HERE, before any money is spent
   L2  the entry           the artifact: template + parse + strategies +
                           codecs, pure data (schema/entry.schema.json)
-  L1  kernel mechanics    python/a15/ — core (shapes, scalars, messages),
+  L1  kernel mechanics    python/lmcc/ — core (shapes, scalars, messages),
                           template (3 constructs), parse (lens + extract
                           algebra), plan (bake/render/parse), serde, registry
   L0  the contract        contract/ — spec (meaning), schema (form),
@@ -71,7 +71,7 @@ a decision, derive from these before inventing anything:
 - `registry.describe()` → every registered codec/strategy/lens/coercion/
   host with versions. One call answers "what vocabulary exists here?"
 - `adapter.dump()` → the artifact. Diff two of them to see any change.
-- Every `A15Error` has `.code` (stable, in `spec/errors.md`), `.detail`
+- Every `LMCCError` has `.code` (stable, in `spec/errors.md`), `.detail`
   (names the offender), and `.partial` (what parsing recovered).
 - `render(...)` is pure: preview exact bytes without spending anything.
 

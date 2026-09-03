@@ -2,33 +2,33 @@
 
 import pytest
 
-import a15
-import a15_std
-from a15_std.lenses import JsonObjectLens
+import lmcc
+import lmcc_std
+from lmcc_std.lenses import JsonObjectLens
 
 
 def _sig():
-    return a15.signature(
+    return lmcc.signature(
         "Answer.",
         inputs={"question": str},
-        outputs={"answer": str, "score": int, "payload": a15.field(
+        outputs={"answer": str, "score": int, "payload": lmcc.field(
             {"type": "array"}, desc="items")})
 
 
 def _adapter(parse):
-    return a15.adapter(
-        template=a15.template([
-            a15.message("system", "{instruction}"),
-            a15.directive("demos"),
-            a15.message("user", "{question}"),
+    return lmcc.adapter(
+        template=lmcc.template([
+            lmcc.message("system", "{instruction}"),
+            lmcc.directive("demos"),
+            lmcc.message("user", "{question}"),
         ]),
         parse=parse,
         codecs={"payload": "json"})
 
 
 def _registry():
-    registry = a15.Registry()
-    a15_std.install(registry)
+    registry = lmcc.Registry()
+    lmcc_std.install(registry)
     return registry
 
 
@@ -94,7 +94,7 @@ def test_json_lens_reads_fence_and_native_values():
 def test_json_lens_missing_key_refuses_with_partial():
     baked = _adapter({"kind": "json_object"}).bake(_sig(), SO,
                                                    registry=_registry())
-    with pytest.raises(a15.A15Error) as err:
+    with pytest.raises(lmcc.LMCCError) as err:
         baked.parse('{"answer": "Paris"}')
     assert err.value.code == "parse-missing-fields"
     assert err.value.partial == {"answer": "Paris"}
@@ -103,7 +103,7 @@ def test_json_lens_missing_key_refuses_with_partial():
 def test_json_lens_malformed_refuses():
     baked = _adapter({"kind": "json_object"}).bake(_sig(), SO,
                                                    registry=_registry())
-    with pytest.raises(a15.A15Error) as err:
+    with pytest.raises(lmcc.LMCCError) as err:
         baked.parse("no json here")
     assert err.value.code == "lens-parse-error"
 
@@ -121,20 +121,20 @@ def test_join_embed_rule_is_raw_text_identity():
 
 
 def _format_adapter(parse):
-    return a15.adapter(
-        template=a15.template([
-            a15.message("system", "{instruction}\n\nAnswer like this:\n{format}"),
-            a15.message("user", "{question}"),
+    return lmcc.adapter(
+        template=lmcc.template([
+            lmcc.message("system", "{instruction}\n\nAnswer like this:\n{format}"),
+            lmcc.message("user", "{question}"),
         ]),
         parse=parse,
         codecs={"payload": "json"})
 
 
 def _format_sig():
-    return a15.signature(
+    return lmcc.signature(
         "Answer.",
         inputs={"question": str},
-        outputs={"answer": a15.field(str, desc="short answer"), "score": int})
+        outputs={"answer": lmcc.field(str, desc="short answer"), "score": int})
 
 
 def test_format_slot_sections():
@@ -156,14 +156,14 @@ def test_format_slot_json_lens():
 
 def test_format_skeleton_tracks_hidden_fields():
     """A routed (hidden) field must vanish from the skeleton too."""
-    sig = a15.signature(
+    sig = lmcc.signature(
         "Answer.", inputs={"question": str},
-        outputs={"reasoning": a15.field(str, role="reasoning"),
-                 "answer": a15.field(str, desc="short answer")})
-    adp = a15.adapter(
-        template=a15.template([
-            a15.message("system", "{instruction}\n{format}"),
-            a15.message("user", "{question}"),
+        outputs={"reasoning": lmcc.field(str, role="reasoning"),
+                 "answer": lmcc.field(str, desc="short answer")})
+    adp = lmcc.adapter(
+        template=lmcc.template([
+            lmcc.message("system", "{instruction}\n{format}"),
+            lmcc.message("user", "{question}"),
         ]),
         parse={"kind": "sections", "open": "<{name}>"},
         strategies={"reasoning": "reasoning_tags"})
@@ -177,13 +177,13 @@ def test_format_skeleton_tracks_hidden_fields():
 
 
 def test_bake_unknown_lens_refuses():
-    adp = a15.adapter(
-        template=a15.template([a15.message("user", "{question}")]),
+    adp = lmcc.adapter(
+        template=lmcc.template([lmcc.message("user", "{question}")]),
         parse={"kind": "json_object"})
-    sig = a15.signature("x", inputs={"question": str},
+    sig = lmcc.signature("x", inputs={"question": str},
                         outputs={"answer": str})
-    with pytest.raises(a15.A15Error) as err:
-        adp.bake(sig, SO, registry=a15.Registry())  # std not installed
+    with pytest.raises(lmcc.LMCCError) as err:
+        adp.bake(sig, SO, registry=lmcc.Registry())  # std not installed
     assert err.value.code == "unknown-parse-kind"
 
 
@@ -191,7 +191,7 @@ def test_json_lens_is_a_gated_mode():
     """No declared native_structured_output => refuse; with it => the
     request carries response_format with the signature's schema."""
     adp = _adapter({"kind": "json_object"})
-    with pytest.raises(a15.A15Error) as err:
+    with pytest.raises(lmcc.LMCCError) as err:
         adp.bake(_sig(), {}, registry=_registry())
     assert err.value.code == "capability-missing"
     baked = adp.bake(_sig(), SO, registry=_registry())
@@ -202,24 +202,24 @@ def test_json_lens_is_a_gated_mode():
 
 
 def test_load_unknown_lens_refuses():
-    entry = {"versions": {"kernel": a15.KERNEL_VERSION},
+    entry = {"versions": {"kernel": lmcc.KERNEL_VERSION},
              "template": {"messages": [{"role": "user", "text": "hi"}]},
              "parse": {"kind": "json_object"}}
-    with pytest.raises(a15.A15Error) as err:
-        a15.load(entry, registry=a15.Registry())
+    with pytest.raises(lmcc.LMCCError) as err:
+        lmcc.load(entry, registry=lmcc.Registry())
     assert err.value.code == "unknown-parse-kind"
 
 
 def test_dump_records_lens_version():
     registry = _registry()
     adp = _adapter({"kind": "json_object"})
-    entry = a15.dump(adp, registry)
+    entry = lmcc.dump(adp, registry)
     assert entry["versions"]["vocab"]["lens/json_object"] == "0.1.0"
-    assert a15.load(entry, registry=registry).parse == {"kind": "json_object"}
+    assert lmcc.load(entry, registry=registry).parse == {"kind": "json_object"}
 
 
 def test_sections_lens_cannot_be_replaced():
-    registry = a15.Registry()
-    with pytest.raises(a15.A15Error) as err:
+    registry = lmcc.Registry()
+    with pytest.raises(lmcc.LMCCError) as err:
         registry.register_lens("sections", JsonObjectLens)
     assert err.value.code == "already-registered"

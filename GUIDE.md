@@ -1,7 +1,7 @@
-# Using a15 — the kernel guide
+# Using LMCC — the kernel guide
 
-This guide uses **only the kernel**: `import a15`, nothing else. No
-`a15_std`, no packs. Everything here runs against an empty registry —
+This guide uses **only the kernel**: `import lmcc`, nothing else. No
+`lmcc_std`, no packs. Everything here runs against an empty registry —
 except the last sections, where you register *your own* vocabulary
 through the sockets, which is the point of them.
 
@@ -15,19 +15,19 @@ You describe a typed contract (the **signature**) and a conversation
 shape (the **adapter**). The kernel turns them into exact messages, and
 turns the model's reply back into typed values. One description does
 both directions — the parts that could disagree are derived from each
-other, so they cannot. When something cannot be done honestly, a15
+other, so they cannot. When something cannot be done honestly, lmcc
 refuses with a named error **before** any model is called. It never
 guesses.
 
 ## 2. The signature: what goes in, what comes out
 
 ```python
-import a15
+import lmcc
 
-sig = a15.signature(
+sig = lmcc.signature(
     "Extract the book facts from the sentence.",
     inputs={"text": str},
-    outputs={"title": a15.field(str, desc="the book title"),
+    outputs={"title": lmcc.field(str, desc="the book title"),
              "year": int,
              "confident": bool},
 )
@@ -36,7 +36,7 @@ sig = a15.signature(
 Values in `inputs`/`outputs` are your language's own type hints. The
 kernel maps `str`, `int`, `float`, `bool`, `list[...]`,
 `typing.Literal[...]` mechanically; you may also pass a raw JSON-Schema
-dict. `a15.field(...)` adds a description or a role. Anything the
+dict. `lmcc.field(...)` adds a description or a role. Anything the
 kernel cannot map refuses by name (`unmapped-type`) — see §8 for how
 native types plug in.
 
@@ -47,13 +47,13 @@ spec (data), and optional bindings. The template language has exactly
 three constructs — slots, loops, escapes — nothing else, ever:
 
 ```python
-adapter = a15.adapter(
-    template=a15.template([
-        a15.message("system",
+adapter = lmcc.adapter(
+    template=lmcc.template([
+        lmcc.message("system",
             "{instruction}\n\nAnswer in exactly this form:\n"
             "{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"),
-        a15.directive("demos"),
-        a15.message("user", "{text}"),
+        lmcc.directive("demos"),
+        lmcc.message("user", "{text}"),
     ]),
     parse={"kind": "derived"},
 )
@@ -118,7 +118,7 @@ exact offender, and carries whatever was recovered:
 try:
     baked.parse("<title>\nDune\n</title>")
     raise AssertionError("should have refused")
-except a15.A15Error as err:
+except lmcc.LMCCError as err:
     assert err.code == "parse-missing-fields"
     assert err.partial == {"title": "Dune"}     # what was recovered
 
@@ -126,22 +126,22 @@ try:
     baked.parse("I quote <title> here.\n<title>\nDune\n</title>\n"
                 "<year>\n1965\n</year>\n<confident>\nyes\n</confident>")
     raise AssertionError("should have refused")
-except a15.A15Error as err:
+except lmcc.LMCCError as err:
     assert err.code == "parse-ambiguous"        # never guesses which one
 ```
 
 Non-invertible templates refuse at bake, naming the defect:
 
 ```python
-bad = a15.adapter(
-    template=a15.template([
-        a15.message("system", "{% for f in outputs %}{f.value}\n{% endfor %}"),
-        a15.message("user", "{text}")]),
+bad = lmcc.adapter(
+    template=lmcc.template([
+        lmcc.message("system", "{% for f in outputs %}{f.value}\n{% endfor %}"),
+        lmcc.message("user", "{text}")]),
     parse={"kind": "derived"})
 try:
     bad.bake(sig, {})
     raise AssertionError("should have refused")
-except a15.A15Error as err:
+except lmcc.LMCCError as err:
     assert err.code == "not-lensable"           # no anchor before the hole
 ```
 
@@ -153,10 +153,10 @@ and XML style are spellings, not features. The reserved `{format}` slot
 asks the lens to render its own skeleton:
 
 ```python
-dspy_style = a15.adapter(
-    template=a15.template([
-        a15.message("system", "{instruction}\nAnswer like this:\n{format}"),
-        a15.message("user", "{text}")]),
+dspy_style = lmcc.adapter(
+    template=lmcc.template([
+        lmcc.message("system", "{instruction}\nAnswer like this:\n{format}"),
+        lmcc.message("user", "{text}")]),
     parse={"kind": "sections", "open": "[[ ## {name} ## ]]",
            "tail": "[[ ## completed ## ]]"})
 
@@ -174,7 +174,7 @@ fragments, request controls, and routings that recover the value from
 wherever it actually arrives. No registration needed for inline ones:
 
 ```python
-think_aloud = a15.Strategy(
+think_aloud = lmcc.Strategy(
     predicate={"not": {"capability": "native_reasoning"}},
     fragments={"system": "Wrap every thought in <think>...</think>."},
     routings=[{"extract": {"kind": "between",
@@ -182,18 +182,18 @@ think_aloud = a15.Strategy(
                "field": "@role", "strip": True, "join": "\n"}],
     visible=False)          # the field leaves the token stream entirely
 
-cot_sig = a15.signature(
+cot_sig = lmcc.signature(
     "Answer the question.",
     inputs={"question": str},
-    outputs={"reasoning": a15.field(str, role="reasoning"),
+    outputs={"reasoning": lmcc.field(str, role="reasoning"),
              "answer": str})
 
-cot = a15.adapter(
-    template=a15.template([
-        a15.message("system",
+cot = lmcc.adapter(
+    template=lmcc.template([
+        lmcc.message("system",
             "{instruction}\n\nAnswer in exactly this form:\n"
             "{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"),
-        a15.message("user", "{question}"),
+        lmcc.message("user", "{question}"),
     ]),
     parse={"kind": "derived"},
     strategies={"reasoning": think_aloud})
@@ -225,19 +225,19 @@ artifacts stay cross-language.
 class Photo:                       # stands in for PIL.Image
     def __init__(self, b64): self.b64 = b64
 
-registry = a15.Registry()
+registry = lmcc.Registry()
 registry.register_host(Photo, shape={"media": "image"},
                        lower=lambda p: {"data": p.b64, "mime": "image/png"})
 
-vision_sig = a15.signature(
+vision_sig = lmcc.signature(
     "Describe the photo.",
     inputs={"photo": Photo}, outputs={"caption": str}, registry=registry)
 
-vision = a15.adapter(
-    template=a15.template([
-        a15.message("system", "{instruction}\n"
+vision = lmcc.adapter(
+    template=lmcc.template([
+        lmcc.message("system", "{instruction}\n"
             "{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"),
-        a15.message("user", "{photo}"),
+        lmcc.message("user", "{photo}"),
     ]),
     parse={"kind": "derived"})
 
@@ -256,12 +256,12 @@ refuses at bake — that line is the contract's mechanics/vocabulary
 boundary:
 
 ```python
-rows_sig = a15.signature("List them.", inputs={"text": str},
+rows_sig = lmcc.signature("List them.", inputs={"text": str},
                          outputs={"rows": list[int]})
 try:
     adapter.bake(rows_sig, {})
     raise AssertionError("should have refused")
-except a15.A15Error as err:
+except lmcc.LMCCError as err:
     assert err.code == "no-codec"
 ```
 
@@ -269,7 +269,7 @@ A codec is ~10 lines against the socket. It owns one value's spelling,
 both directions; the template owns position; the lens owns layout:
 
 ```python
-class CommaList(a15.Codec):
+class CommaList(lmcc.Codec):
     def render_schema(self, shape): return "comma-separated integers"
     def render_value(self, value, shape): return ", ".join(map(str, value))
     def parse_value(self, text, shape):
@@ -278,11 +278,11 @@ class CommaList(a15.Codec):
 registry.register_codec("comma_list", lambda options: CommaList(),
                         version="0.1.0")
 
-lists = a15.adapter(
-    template=a15.template([
-        a15.message("system", "{instruction}\n"
+lists = lmcc.adapter(
+    template=lmcc.template([
+        lmcc.message("system", "{instruction}\n"
             "{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"),
-        a15.message("user", "{text}"),
+        lmcc.message("user", "{text}"),
     ]),
     parse={"kind": "derived"},
     codecs={"rows": "comma_list"})
@@ -308,7 +308,7 @@ import json
 
 entry = cot.dump()                       # inline strategy travels inside
 wire = json.dumps(entry)                 # it is just JSON
-again = a15.load(json.loads(wire), registry=a15.Registry())
+again = lmcc.load(json.loads(wire), registry=lmcc.Registry())
 rebaked = again.bake(cot_sig, {})
 assert rebaked.parse("<think>hm</think><answer>\nParis\n</answer>"
                      ) == {"reasoning": "hm", "answer": "Paris"}
@@ -340,6 +340,6 @@ print(registry.describe())               # what this runtime speaks
 - `contract/spec/errors.md` — every refusal code, and when it fires
 - `contract/spec/vocab/` — how shared vocabulary (codecs, strategies,
   lenses, roles, capabilities) is specified and certified
-- `a15_std` — the standard pack: the *exemplar* of everything §7–§9
+- `lmcc_std` — the standard pack: the *exemplar* of everything §7–§9
   showed you how to build yourself
 - `AGENTS.md` — the repo's cockpit: verify loop, work queue, decisions

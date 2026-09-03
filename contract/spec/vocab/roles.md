@@ -16,7 +16,7 @@ limited to what any wire protocol can carry today:
   a plain instruct model. Native channels are an optimization a strategy
   may claim behind a capability predicate, never a requirement for the
   role to exist.
-- The single place a15 touches part names is the `parts` extractor inside
+- The single place lmcc touches part names is the `parts` extractor inside
   a strategy routing (`extract: {kind: "parts", part: "thinking"}`) —
   per strategy, as data, only when a native transport is actually used.
 

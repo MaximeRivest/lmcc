@@ -1,12 +1,12 @@
-# The a15 kernel — normative specification
+# The LMCC kernel — normative specification
 
 **Version 0.1.0** (kernel). Status: reference-proven — the Python
-implementation in `python/a15` and this document were built together; where
+implementation in `python/lmcc` and this document were built together; where
 they disagree, fix the corpus first, then both.
 
-**One sentence.** a15 owns typed signature ⇄ messages: how a declared I/O
-contract renders into a prompt, and how the model's reply becomes typed
-values again — as inspectable, shareable, versioned data.
+**One sentence.** LMCC is the language model calling convention: it maps a
+declared I/O contract to model messages and maps the reply back to typed
+values, as inspectable, shareable, versioned data.
 
 **What the kernel is.** Mechanics only: the template engine, the lens, the
 bake/render/parse pipeline, serde, the sockets, and the refusal taxonomy.
@@ -161,7 +161,7 @@ this one lens, not new lens kinds (pinned by corpus cases 20–21):
 | DSPy chat adapter | `{"open": "[[ ## {name} ## ]]", "tail": "[[ ## completed ## ]]"}` |
 
 JSON is **not** a marker dialect — it is a different document form, so it
-is a different lens: `lens/json_object`, vocabulary provided by `a15_std`
+is a different lens: `lens/json_object`, vocabulary provided by `lmcc_std`
 (see `spec/vocab/lens-json_object.md`).
 
 ## 5. The extract algebra (kernel grammar)

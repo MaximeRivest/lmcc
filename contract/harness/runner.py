@@ -24,33 +24,33 @@ CASES_DIR = Path(__file__).resolve().parent.parent / "corpus" / "cases"
 
 
 class PythonDriver:
-    """Runs cases against the reference `a15` + `a15_std` packages."""
+    """Runs cases against the reference `lmcc` + `lmcc_std` packages."""
 
     name = "python-reference"
 
     def __init__(self):
-        import a15  # noqa: F401 — fail loudly here if not importable
-        self.a15 = a15
+        import lmcc  # noqa: F401 — fail loudly here if not importable
+        self.lmcc = lmcc
 
     def _registry(self, case: dict):
-        registry = self.a15.Registry()
+        registry = self.lmcc.Registry()
         if "std" in case.get("vocab", []):
-            import a15_std
-            a15_std.install(registry)
+            import lmcc_std
+            lmcc_std.install(registry)
         return registry
 
     def run(self, case: dict) -> dict:
         """Returns {"ok": bool, "detail": str} for one case."""
-        a15 = self.a15
+        lmcc = self.lmcc
         expect = case["expect"]
         kind = case["kind"]
         registry = self._registry(case)
         try:
-            adapter = a15.load(case["entry"], registry=registry)
+            adapter = lmcc.load(case["entry"], registry=registry)
             if kind == "roundtrip":
-                dumped = a15.dump(adapter, registry)
+                dumped = lmcc.dump(adapter, registry)
                 return _compare(expect["entry"], dumped, "entry")
-            sig = a15.signature_from_dict(case["signature"])
+            sig = lmcc.signature_from_dict(case["signature"])
             baked = adapter.bake(sig, case.get("capabilities", {}),
                                  registry=registry)
             if kind == "render":
@@ -71,7 +71,7 @@ class PythonDriver:
                         "detail": f"expected refusal {expect['code']!r}, "
                                   f"but nothing refused"}
             return {"ok": False, "detail": f"unknown case kind {kind!r}"}
-        except a15.A15Error as err:
+        except lmcc.LMCCError as err:
             if kind == "refuse" and err.code == expect["code"]:
                 return {"ok": True, "detail": ""}
             return {"ok": False,

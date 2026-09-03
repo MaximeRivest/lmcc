@@ -1,6 +1,6 @@
 # Lens: `json_object` — version 0.1.0
 
-Provided by `a15_std`. The reply is **one JSON object**; each visible
+Provided by `lmcc_std`. The reply is **one JSON object**; each visible
 output field is a member keyed by field name (the JSON-adapter style).
 
 Spec: `{ "kind": "json_object" }`. No options in 0.1.0.

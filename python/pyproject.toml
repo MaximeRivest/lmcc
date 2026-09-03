@@ -3,11 +3,11 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "a15"
+name = "lmcc"
 version = "0.1.0"
-description = "The adapter kernel: typed signature <-> messages, as data"
+description = "The language model calling convention: typed signatures to messages and replies to typed values"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 
 [tool.setuptools]
-packages = ["a15", "a15_std"]
+packages = ["lmcc", "lmcc_std"]

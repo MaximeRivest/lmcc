@@ -15,7 +15,7 @@ by the model's declared facts, never by editing the program.
 
 from __future__ import annotations
 
-from a15.strategy import Strategy
+from lmcc.strategy import Strategy
 
 VERSION = "0.1.0"
 

@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import json
 
-from a15.errors import refuse
-from a15.parse import Lens
+from lmcc.errors import refuse
+from lmcc.parse import Lens
 
 VERSION = "0.1.0"
 

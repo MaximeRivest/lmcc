@@ -4,25 +4,25 @@ parsed out of sections)."""
 
 import pytest
 
-import a15
-import a15_std
-from a15 import A15Error
+import lmcc
+import lmcc_std
+from lmcc import LMCCError
 
 
 @pytest.fixture
 def registry():
-    r = a15.Registry()
-    a15_std.install(r)
+    r = lmcc.Registry()
+    lmcc_std.install(r)
     return r
 
 
 def build(sig, codecs, registry):
-    adp = a15.adapter(
-        template=a15.template([
-            a15.message("system", "{instruction}\n"
+    adp = lmcc.adapter(
+        template=lmcc.template([
+            lmcc.message("system", "{instruction}\n"
                         "{% for f in outputs %}<{f.name}>  {f.schema}\n{% endfor %}"),
-            a15.directive("demos"),
-            a15.message("user", "{q}"),
+            lmcc.directive("demos"),
+            lmcc.message("user", "{q}"),
         ]),
         parse={"kind": "sections", "open": "<{name}>"},
         codecs=codecs)
@@ -30,7 +30,7 @@ def build(sig, codecs, registry):
 
 
 def test_json_codec_roundtrip(registry):
-    sig = a15.signature("Extract.", inputs={"q": str},
+    sig = lmcc.signature("Extract.", inputs={"q": str},
                         outputs={"items": list[str]})
     baked = build(sig, {"items": "json"}, registry)
     system = baked.render(inputs={"q": "x"}).messages[0]["content"][0]["text"]
@@ -43,8 +43,8 @@ def test_table_codec_roundtrip_with_escaping(registry):
     shape = {"type": "array", "items": {"type": "object", "properties": {
         "name": {"type": "string"}, "score": {"type": "integer"},
         "note": {"type": "string"}}}}
-    sig = a15.signature("Rank.", inputs={"q": str}, outputs={"rows": shape})
-    baked = build(sig, {"rows": a15.codec(
+    sig = lmcc.signature("Rank.", inputs={"q": str}, outputs={"rows": shape})
+    baked = build(sig, {"rows": lmcc.codec(
         "table", columns=["name", "score", "note"])}, registry)
 
     demo_rows = [{"name": "a|b", "score": 3, "note": None}]
@@ -62,17 +62,17 @@ def test_table_codec_roundtrip_with_escaping(registry):
 
 def test_table_codec_bad_row_refuses_naming_field(registry):
     shape = {"type": "array", "items": {"type": "object"}}
-    sig = a15.signature("x", inputs={"q": str}, outputs={"rows": shape})
-    baked = build(sig, {"rows": a15.codec("table", columns=["a", "b"])}, registry)
-    with pytest.raises(A15Error) as err:
+    sig = lmcc.signature("x", inputs={"q": str}, outputs={"rows": shape})
+    baked = build(sig, {"rows": lmcc.codec("table", columns=["a", "b"])}, registry)
+    with pytest.raises(LMCCError) as err:
         baked.parse("<rows>\n| only-one-cell |")
     assert err.value.code == "codec-parse-error"
     assert "'rows'" in str(err.value)
 
 
 def test_scaled_number(registry):
-    sig = a15.signature("x", inputs={"q": str}, outputs={"confidence": float})
-    baked = build(sig, {"confidence": a15.codec(
+    sig = lmcc.signature("x", inputs={"q": str}, outputs={"confidence": float})
+    baked = build(sig, {"confidence": lmcc.codec(
         "scaled_number", scale=100, suffix="%", round=0)}, registry)
     demo = {"q": "?", "confidence": 0.78}
     reply = baked.render(inputs={"q": "?"}, demos=[demo]) \
@@ -82,14 +82,14 @@ def test_scaled_number(registry):
 
 
 def test_explain_names_every_decision(registry):
-    sig = a15.signature(
+    sig = lmcc.signature(
         "Answer.", inputs={"q": str},
-        outputs={"reasoning": a15.field(str, role="reasoning"), "answer": str})
-    adp = a15.adapter(
-        template=a15.template([
-            a15.message("system", "{instruction}\n"
+        outputs={"reasoning": lmcc.field(str, role="reasoning"), "answer": str})
+    adp = lmcc.adapter(
+        template=lmcc.template([
+            lmcc.message("system", "{instruction}\n"
                         "{% for f in outputs %}<{f.name}>\n{% endfor %}"),
-            a15.message("user", "{q}")]),
+            lmcc.message("user", "{q}")]),
         parse={"kind": "sections", "open": "<{name}>"},
         strategies={"reasoning": "reasoning_tags"})
     baked = adp.bake(sig, {"instruct": True}, registry=registry)

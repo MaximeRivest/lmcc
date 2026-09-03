@@ -2,34 +2,34 @@
 
 import pytest
 
-import a15
-import a15_std
-from a15 import A15Error
+import lmcc
+import lmcc_std
+from lmcc import LMCCError
 
 
 @pytest.fixture
 def registry():
-    r = a15.Registry()
-    a15_std.install(r)
+    r = lmcc.Registry()
+    lmcc_std.install(r)
     return r
 
 
 @pytest.fixture
 def sig():
-    return a15.signature(
+    return lmcc.signature(
         "Answer.",
         inputs={"question": str},
-        outputs={"reasoning": a15.field(str, role="reasoning"),
+        outputs={"reasoning": lmcc.field(str, role="reasoning"),
                  "answer": str},
     )
 
 
 def make_adapter(strategy, registry=None):
-    return a15.adapter(
-        template=a15.template([
-            a15.message("system", "{instruction}\n"
+    return lmcc.adapter(
+        template=lmcc.template([
+            lmcc.message("system", "{instruction}\n"
                         "{% for f in outputs %}<{f.name}>\n{% endfor %}"),
-            a15.message("user", "{question}"),
+            lmcc.message("user", "{question}"),
         ]),
         parse={"kind": "sections", "open": "<{name}>"},
         strategies={"reasoning": strategy},
@@ -59,7 +59,7 @@ def test_native_reasoning_reads_parts(registry, sig):
 
 
 def test_capability_refusal_names_everything(registry, sig):
-    with pytest.raises(A15Error) as err:
+    with pytest.raises(LMCCError) as err:
         make_adapter("native_reasoning").bake(sig, {"instruct": True},
                                               registry=registry)
     assert err.value.code == "capability-missing"
@@ -80,10 +80,10 @@ def test_prefix_cot_stays_visible(registry, sig):
 def test_dump_load_roundtrip(registry, sig):
     adp = make_adapter("reasoning_tags")
     entry = adp.dump(registry=registry)
-    assert entry["versions"]["kernel"] == a15.KERNEL_VERSION
+    assert entry["versions"]["kernel"] == lmcc.KERNEL_VERSION
     assert entry["versions"]["vocab"] == {"strategy/reasoning_tags": "0.1.0"}
-    again = a15.load(entry, registry=registry)
-    assert a15.dump(again, registry) == entry
+    again = lmcc.load(entry, registry=registry)
+    assert lmcc.dump(again, registry) == entry
     # and the reloaded adapter behaves identically
     baked = again.bake(sig, {"instruct": True}, registry=registry)
     values = baked.parse("<answer>\nx<think>t</think>")
@@ -91,12 +91,12 @@ def test_dump_load_roundtrip(registry, sig):
 
 
 def test_load_refuses_unknown_names(registry):
-    entry = {"name": "x", "versions": {"kernel": a15.KERNEL_VERSION},
+    entry = {"name": "x", "versions": {"kernel": lmcc.KERNEL_VERSION},
              "template": {"messages": [{"role": "user", "text": "{q}"}]},
              "parse": {"kind": "sections", "open": "<{name}>"},
              "codecs": {"out": {"kind": "nope"}}}
-    with pytest.raises(A15Error) as err:
-        a15.load(entry, registry=registry)
+    with pytest.raises(LMCCError) as err:
+        lmcc.load(entry, registry=registry)
     assert err.value.code == "unknown-codec"
     assert "nope" in str(err.value)
 
@@ -105,13 +105,13 @@ def test_load_refuses_version_mismatch(registry):
     entry = {"name": "x", "versions": {"kernel": "9.0.0"},
              "template": {"messages": []},
              "parse": {"kind": "sections", "open": "<{name}>"}}
-    with pytest.raises(A15Error) as err:
-        a15.load(entry, registry=registry)
+    with pytest.raises(LMCCError) as err:
+        lmcc.load(entry, registry=registry)
     assert err.value.code == "version-incompatible"
 
 
 def test_data_only_entry_loads_with_empty_registry():
-    entry = {"name": "bare", "versions": {"kernel": a15.KERNEL_VERSION},
+    entry = {"name": "bare", "versions": {"kernel": lmcc.KERNEL_VERSION},
              "template": {"messages": [{"role": "user", "text": "{q}"}]},
              "parse": {"kind": "sections", "open": "<{name}>"},
              "strategies": {"reasoning": {
@@ -119,20 +119,20 @@ def test_data_only_entry_loads_with_empty_registry():
                  "routings": [{"extract": {"kind": "between", "open": "<t>",
                                            "close": "</t>"},
                                "field": "@role", "join": " ", "strip": True}]}}}
-    adp = a15.load(entry, registry=a15.Registry())  # zero registrations
-    sig = a15.signature("x", inputs={"q": str},
-                        outputs={"reasoning": a15.field(str, role="reasoning"),
+    adp = lmcc.load(entry, registry=lmcc.Registry())  # zero registrations
+    sig = lmcc.signature("x", inputs={"q": str},
+                        outputs={"reasoning": lmcc.field(str, role="reasoning"),
                                  "a": str})
-    baked = adp.bake(sig, {}, registry=a15.Registry())
+    baked = adp.bake(sig, {}, registry=lmcc.Registry())
     assert baked.parse("<a>\nyes<t>hm</t>") == {"reasoning": "hm", "a": "yes"}
 
 
 def test_double_covered_refuses(registry, sig):
-    visible_but_routed = a15.Strategy(
+    visible_but_routed = lmcc.Strategy(
         routings=[{"extract": {"kind": "between", "open": "<t>", "close": "</t>"},
                    "field": "@role"}],
         visible=True)
-    with pytest.raises(A15Error) as err:
+    with pytest.raises(LMCCError) as err:
         make_adapter(visible_but_routed).bake(sig, {}, registry=registry)
     assert err.value.code == "field-double-covered"
 
@@ -145,9 +145,9 @@ def test_host_socket_lowers_and_lifts(registry):
     registry.register_host(Temperature, shape={"type": "number"},
                            lower=lambda t: t.celsius,
                            lift=lambda v: Temperature(v))
-    sig = a15.signature("Convert.", inputs={"t": Temperature},
+    sig = lmcc.signature("Convert.", inputs={"t": Temperature},
                         outputs={"f": Temperature}, registry=registry)
-    adp = a15.adapter(template=a15.template([a15.message("user", "{t}")]),
+    adp = lmcc.adapter(template=lmcc.template([lmcc.message("user", "{t}")]),
                       parse={"kind": "sections", "open": "<{name}>"})
     baked = adp.bake(sig, {}, registry=registry)
     txt = baked.render(inputs={"t": Temperature(21.5)})
@@ -160,7 +160,7 @@ def test_unmapped_type_refuses():
     class Mystery:
         pass
 
-    with pytest.raises(A15Error) as err:
-        a15.signature("x", inputs={"m": Mystery}, outputs={})
+    with pytest.raises(LMCCError) as err:
+        lmcc.signature("x", inputs={"m": Mystery}, outputs={})
     assert err.value.code == "unmapped-type"
     assert "Mystery" in str(err.value)

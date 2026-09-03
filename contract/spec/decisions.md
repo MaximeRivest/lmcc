@@ -12,7 +12,7 @@ no vocabulary lenses in the kernel — everything with an opinion plugs
 into sockets from packages. Precedent: serde ships without serde_json.
 Reason: perfect symmetry (your codec and `json` have the same standing)
 and a kernel that can freeze for years while vocabulary compounds.
-Cost: hello-world needs a pack install (`a15_std`).
+Cost: hello-world needs a pack install (`lmcc_std`).
 
 **D-02 · The corpus is the authority; authored bytes rule.** Cases 01–19
 were seeded from the reference once, human-reviewed, then frozen; every
@@ -23,7 +23,7 @@ Cost: changing behavior means editing cases deliberately, like law.
 
 **D-03 · Roles are intents; parts are transports.** A role names a
 conversational function (reasoning, citing); a wire part names a
-transport (thinking channel). Roles form an open, a15-owned vocabulary
+transport (thinking channel). Roles form an open, lmcc-owned vocabulary
 aligned with — but never limited by — any provider's part kinds.
 See `vocab/roles.md`. Cost: a small mapping table to maintain.
 
@@ -83,3 +83,14 @@ docs themselves. Proof it was needed: the first run caught
 `control-conflict` raised in the kernel but absent from `errors.md`.
 Cost: adding vocabulary or codes now touches the index/table too —
 which is the point.
+
+**D-12 · The project and public package are named LMCC.** LMCC expands to
+**Language Model Calling Convention**. LMCC maps a typed signature and
+values onto model messages and maps the reply back into typed values.
+`lm15` owns the model-neutral request and response shapes below that seam.
+Reason: the name states the exact category, pairs with `lm15`, and does
+not limit the contract to large or text-only models. Cost: this is a clean
+pre-release rename from `a15`: Python imports become `lmcc` and `lmcc_std`,
+and `A15Error` becomes `LMCCError`. No compatibility aliases remain.
+Historical conversation keys keep the former name because changing those
+keys would break durable links.

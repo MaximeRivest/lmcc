@@ -1,15 +1,14 @@
-# a15 — the adapter kernel
+# LMCC — the language model calling convention
 
-a15 owns one seam of the LLM stack: **typed signature ⇄ messages**. It
-turns a declared I/O contract into a prompt, and a model's reply back into
-typed values — and it makes the *how* of that conversation a first-class,
-inspectable, shareable, versioned artifact.
+LMCC makes a language model callable like a typed function. It turns a
+declared I/O contract into lm15-shaped messages and request controls. It
+then turns the model reply back into typed values. LMCC never sends the
+request; any model client can do that.
 
 The knowledge of how to talk to models — which layouts, spellings, and
-reasoning formats actually work per model family — is folklore today: it
-lives in prompt strings and dies in codebases. a15's job is to make that
-knowledge accumulate and travel. Everything in this repo is derivable from
-that sentence; anything that isn't gets cut.
+reasoning formats work per model family — is folklore today. It lives in
+prompt strings and dies in codebases. LMCC makes that knowledge an
+inspectable, shareable, versioned artifact that can accumulate and travel.
 
 ## The shape of the thing
 
@@ -20,9 +19,9 @@ contract/          the authority (no code)
   corpus/          fixture cases — byte-exact, the real source of truth
   harness/         runs any implementation against the corpus
 python/
-  a15/             the kernel: mechanics only (template engine, lens,
+  lmcc/             the kernel: mechanics only (template engine, lens,
                    bake/render/parse, serde, sockets, refusals)
-  a15_std/         the standard vocabulary pack — a separate package,
+  lmcc_std/         the standard vocabulary pack — a separate package,
                    registered through the same sockets as yours
   tests/           kernel tests + the corpus, as pytest
 ```
@@ -35,23 +34,23 @@ lab's codec has. (Precedent: serde ships without serde_json.)
 ## Quickstart
 
 ```python
-import a15, a15_std
-a15_std.install()
+import lmcc, lmcc_std
+lmcc_std.install()
 
-sig = a15.signature(
+sig = lmcc.signature(
     "Answer the question.",
     inputs={"question": str},
-    outputs={"reasoning": a15.field(str, role="reasoning"),
+    outputs={"reasoning": lmcc.field(str, role="reasoning"),
              "answer": str, "score": int},
 )
 
-adapter = a15.adapter(
-    template=a15.template([
-        a15.message("system",
+adapter = lmcc.adapter(
+    template=lmcc.template([
+        lmcc.message("system",
             "{instruction}\n\nAnswer in exactly this form:\n"
             "{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"),
-        a15.directive("demos"),
-        a15.message("user",
+        lmcc.directive("demos"),
+        lmcc.message("user",
             "{% for f in inputs %}== {f.name} ==\n{f.value}\n{% endfor %}"),
     ]),
     parse={"kind": "derived"},   # the parser is deduced from the template
@@ -67,7 +66,7 @@ values = baked.parse("<answer>\nRayleigh<think>blue scatters</think> scattering.
 # {'reasoning': 'blue scatters', 'answer': 'Rayleigh scattering.', 'score': 9}
 
 entry = adapter.dump()        # the artifact: pure data, versioned
-adapter2 = a15.load(entry)    # loads with zero ambient state
+adapter2 = lmcc.load(entry)    # loads with zero ambient state
 ```
 
 Same signature, same program: bind `"native_reasoning"` instead and the
@@ -127,6 +126,13 @@ test suite — the guide cannot drift from the kernel.
 cd python && PYTHONPATH=. pytest tests/            # kernel + corpus
 PYTHONPATH=python python contract/harness/runner.py  # harness alone
 ```
+
+## Rename
+
+The project previously used the working name `a15`. The public Python
+packages are now `lmcc` and `lmcc_std`. The refusal type is `LMCCError`.
+There are no legacy import aliases because this is a pre-release contract.
+Historical conversation links keep the old name so those links still work.
 
 ## Status (0.1.0) — deliberate gaps
 

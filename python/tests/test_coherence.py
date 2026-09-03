@@ -11,10 +11,10 @@ import json
 import pathlib
 import re
 
-import a15
-import a15_std
+import lmcc
+import lmcc_std
 
-ROOT = pathlib.Path(a15.__file__).resolve().parent.parent.parent
+ROOT = pathlib.Path(lmcc.__file__).resolve().parent.parent.parent
 SPEC = ROOT / "contract" / "spec"
 CASES = ROOT / "contract" / "corpus" / "cases"
 
@@ -26,7 +26,7 @@ def _documented_codes() -> set[str]:
 
 def _raised_codes() -> set[str]:
     codes: set[str] = set()
-    for pkg in ("a15", "a15_std"):
+    for pkg in ("lmcc", "lmcc_std"):
         for py in sorted((ROOT / "python" / pkg).glob("*.py")):
             tree = ast.parse(py.read_text())
             for node in ast.walk(tree):
@@ -69,8 +69,8 @@ def test_corpus_case_names_match_filenames():
 def test_vocab_index_is_complete_and_spec_files_exist():
     """Every registered std entry has a row in the vocab index; every
     row's spec file exists. The index cannot silently rot."""
-    registry = a15.Registry()
-    a15_std.install(registry)
+    registry = lmcc.Registry()
+    lmcc_std.install(registry)
     index = (SPEC / "vocab" / "README.md").read_text()
     for name in registry.codecs:
         assert f"`codec/{name}`" in index, f"codec/{name} missing from index"
@@ -89,8 +89,8 @@ def test_capability_facts_used_by_std_are_in_the_vocabulary():
     vocab = set(re.findall(r"^\| `([a-z_]+)` \|",
                            (SPEC / "vocab" / "capabilities.md").read_text(),
                            re.MULTILINE))
-    registry = a15.Registry()
-    a15_std.install(registry)
+    registry = lmcc.Registry()
+    lmcc_std.install(registry)
     for name, entry in registry.strategies.items():
         strategy = entry.factory({})
         for fact in strategy.requires:

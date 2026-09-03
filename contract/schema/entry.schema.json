@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://a15.dev/schema/entry.schema.json",
-  "title": "a15 adapter entry",
+  "$id": "urn:lmcc:schema:entry:0.1.0",
+  "title": "LMCC adapter entry",
   "description": "The artifact: one adapter as plain data. Codec and strategy OPTION internals are owned by their vocabulary specs and deliberately left loose here.",
   "type": "object",
   "required": ["versions", "template", "parse"],

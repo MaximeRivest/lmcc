@@ -5,8 +5,8 @@ layout, spellings, strategies — and applies to any *what*. The two meet at
 ``adapter.bake(signature, capabilities)``, which produces a Baked plan.
 
 Construction surfaces:
-- ``a15.adapter(template=..., parse=..., strategies=..., codecs=...)``
-- ``a15.load(entry_dict, registry=...)`` from serialized data (serde.py)
+- ``lmcc.adapter(template=..., parse=..., strategies=..., codecs=...)``
+- ``lmcc.load(entry_dict, registry=...)`` from serialized data (serde.py)
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ def template(messages: list[dict]) -> dict:
 
 
 def codec(kind: str, **options) -> dict:
-    """A codec binding by name: ``a15.codec("table", columns=[...])``."""
+    """A codec binding by name: ``lmcc.codec("table", columns=[...])``."""
     return {"kind": kind, "options": options}
 
 
@@ -130,7 +130,7 @@ def adapter(*, template: dict, parse: dict, strategies: dict | None = None,
             c_bindings[fname] = CodecBinding(value["kind"], value.get("options", {}))
         else:
             refuse("entry-malformed",
-                   f"codecs[{fname!r}]: expected a codec name or a15.codec(...)")
+                   f"codecs[{fname!r}]: expected a codec name or lmcc.codec(...)")
     adp = Adapter(template=template, parse=parse, strategies=s_bindings,
                   codecs=c_bindings, name=name)
     _validate_parse_spec(parse)

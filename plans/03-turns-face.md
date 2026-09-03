@@ -2,8 +2,8 @@
 
 **Motivation.** A tool exchange spans two calls: the model asks; we run
 the tool; the next prompt must *show* the call and its result. Carrying
-is orchestration (outside a15); **spelling is the adapter's** — it
-varies by LM family, not by program. Today a15 has no home for it.
+is orchestration (outside lmcc); **spelling is the adapter's** — it
+varies by LM family, not by program. Today lmcc has no home for it.
 (Proven once in dspy-greenfield; port the design, not the code.)
 
 **Design sketch.**
