@@ -1,4 +1,4 @@
-# Plan 07 — DSPy signature parity
+# Plan 07 — DSPy signature parity  ✅ done (D-19 … D-23)
 
 **Goal (ratified).** Write, save, and render **any** DSPy signature in
 LMCC; render and parse it the LMCC way, not DSPy's way. Two checked
@@ -80,6 +80,9 @@ bytes need not match DSPy's adapters.
 - [x] Decisions B–G ratified and logged (`decisions.md`).
 - [x] Kernel spec amended for each; corpus cases for each (lowered
       data, so the Go kernel proves them without DSPy).
-- [ ] `python/lmcc_dspy` lowers every catalog row or refuses by name;
-      `tests/test_dspy_catalog.py` covers every row of the table.
-- [ ] Rows marked plan 04 stay listed as *not claimed* until plan 04.
+- [x] `python/lmcc_dspy` lowers every catalog row or refuses by name;
+      `tests/dspy/test_catalog.py` covers every row of the table (16
+      rows, real DSPy 3.3.1, `./check` step 6).
+- [x] Rows marked plan 04 stay listed as *not claimed* until plan 04:
+      tools/citations lower to their roles and render as plain fields;
+      native channels wait for strategies.

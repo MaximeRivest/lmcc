@@ -216,3 +216,24 @@ this particular example" placeholder was rejected because it puts text
 in the model's mouth that no lens can read back. Cost: the `fields`
 wrapper is one more shape in the history list; flat dicts refuse.
 Pinned by corpus 53–54.
+
+**D-23 · The DSPy frontend is a total lowering; what it drops is what
+DSPy drops.** `python/lmcc_dspy` lowers any `dspy.Signature` to a
+SignatureCore, carrying instructions, order, names, `desc`/`description`,
+pydantic JSON schemas whole (constraints, `$defs`, `anyOf`), `Literal`
+and `Enum` as enums, `Optional[X]` as nullable, media types as parts,
+`Reasoning`/`Tool`/`ToolCalls`/`Citations` as roles, `dspy.Code` as a
+string shape carrying its language, and `dspy.History` as history field
+turns. It drops only `prefix`/`format`/`parser` (deprecated upstream:
+"has no effect"), the type-undefined marker, and field defaults
+(program-side values, never shown to a model); anything else it cannot
+carry refuses `unmapped-type` by field. A `dspy.Tool` lowers to its
+*declaration* (name, description, parameters) because the callable is
+host code. Reason: the ratified goal is to write, save and render any
+DSPy signature in LMCC and render/parse it LMCC's way — so the guarantee
+is about information, checked by a catalog against a real DSPy
+(`tests/dspy/test_catalog.py`, one row per feature, each rendered and
+round-tripped through the DSPy-shaped entry), not about DSPy's prompt
+bytes. Cost: `./check` builds a DSPy venv with uv on first run (network
+once); `Optional[Model]` lifts to a dict, not a model (only bare model
+types get host bindings); DSPy's lenient parsing is not reproduced.

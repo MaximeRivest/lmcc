@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# The DSPy frontend's gate: the feature catalog against a real DSPy.
+# Builds python/.venv-dspy with uv on first run (network needed once);
+# fails loudly if DSPy cannot be imported — never skips.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+VENV=.venv-dspy
+if command -v uv >/dev/null 2>&1; then UV=uv; else UV="nix run nixpkgs#uv --"; fi
+if [ ! -x "$VENV/bin/python" ]; then
+  echo "creating $VENV (dspy + pytest) ..."
+  $UV venv -q "$VENV" --python 3.12
+  $UV pip install -q --python "$VENV/bin/python" "dspy>=3.0" pytest
+fi
+"$VENV/bin/python" -c 'import dspy, pydantic; print("dspy", dspy.__version__, "pydantic", pydantic.__version__)'
+PYTHONPATH=. "$VENV/bin/python" -m pytest -q tests/dspy

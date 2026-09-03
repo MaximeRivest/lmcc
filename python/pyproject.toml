@@ -9,5 +9,8 @@ description = "The language model calling convention: typed signatures to messag
 requires-python = ">=3.10"
 license = { text = "MIT" }
 
+[project.optional-dependencies]
+dspy = ["dspy>=3.0", "pydantic>=2"]
+
 [tool.setuptools]
-packages = ["lmcc", "lmcc_std"]
+packages = ["lmcc", "lmcc_std", "lmcc_dspy"]

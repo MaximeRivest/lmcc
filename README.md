@@ -23,7 +23,9 @@ python/
                    lens, bake/render/parse, serde, sockets, refusals)
   lmcc_std/         the standard vocabulary pack — a separate package,
                    registered through the same sockets as yours
-  tests/           kernel tests + the corpus, as pytest
+  lmcc_dspy/        the DSPy frontend: any dspy.Signature → SignatureCore
+  tests/           kernel tests + the corpus, as pytest; tests/dspy is
+                   the DSPy catalog (needs dspy; ./check builds a venv)
 go/
   lmcc/, lmccstd/  an independent Go implementation of both, stdlib only
   cmd/lmcc-conform the corpus driver the harness runs it through
@@ -110,7 +112,12 @@ thinking channel. That swap costing one word is the point of the library.
 8. **Signatures are neutral data; syntaxes are frontends.** Python type
    hints, Go struct tags, JSON Schema, or any signature DSL lower to
    the same `SignatureCore` (`schema/signature.schema.json`). The kernel
-   never sees the syntax you wrote.
+   never sees the syntax you wrote. `python/lmcc_dspy` lowers **any
+   `dspy.Signature`** — pydantic models, `Optional`, `Literal`, enums,
+   images, `History`, `Reasoning`, tools — and a 16-row catalog run
+   against a real DSPy proves each one bakes, renders and parses
+   (`plans/07-dspy-parity.md`). LMCC renders its own way; it does not
+   imitate DSPy's prompt bytes.
 
 ## What "portable" means here, exactly
 

@@ -5,6 +5,7 @@
 # 4) README quickstart runs verbatim
 # 5) the Go implementation: its own checks, then the corpus through the
 #    language-neutral harness — cross-language conformance, byte-exact
+# 6) the DSPy frontend catalog against a real DSPy (venv built on first run)
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -14,7 +15,7 @@ run_py() {  # run python with repo layout on the path
   (cd python && PYTHONPATH=. python "$@")
 }
 
-step "1/5 unit + corpus tests (python)"
+step "1/6 unit + corpus tests (python)"
 if pytest --version >/dev/null 2>&1; then
   (cd python && PYTHONPATH=. pytest -q tests/)
 elif python -c 'import pytest' 2>/dev/null; then
@@ -23,10 +24,10 @@ else
   (cd python && PYTHONPATH=. nix run nixpkgs#python3Packages.pytest -- -q tests/)
 fi
 
-step "2/5 conformance harness, python reference (corpus is the authority)"
+step "2/6 conformance harness, python reference (corpus is the authority)"
 run_py ../contract/harness/runner.py
 
-step "3/5 schema validation (entries, signatures, cases)"
+step "3/6 schema validation (entries, signatures, cases)"
 VALIDATE='
 import json, glob, jsonschema
 entry = json.load(open("contract/schema/entry.schema.json"))
@@ -52,7 +53,7 @@ else
     -c python3 -c "$VALIDATE"
 fi
 
-step "4/5 README quickstart, verbatim"
+step "4/6 README quickstart, verbatim"
 run_py - <<'EOF'
 import re, pathlib
 text = pathlib.Path('../README.md').read_text()
@@ -61,7 +62,7 @@ exec(compile(code, 'README-quickstart', 'exec'))
 print('README quickstart runs verbatim')
 EOF
 
-step "5/5 go implementation: own checks, then the corpus via the harness"
+step "5/6 go implementation: own checks, then the corpus via the harness"
 if command -v go >/dev/null 2>&1; then
   (cd go && ./check)
 else
@@ -69,5 +70,8 @@ else
   (cd go && nix shell nixpkgs#go -c ./check)
 fi
 run_py ../contract/harness/runner.py --driver ../go/bin/lmcc-conform
+
+step "6/6 dspy frontend: feature catalog against a real DSPy"
+python/lmcc_dspy/check
 
 printf '\nALL GREEN\n'

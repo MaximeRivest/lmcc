@@ -15,6 +15,8 @@ values, as inspectable, versioned, cross-language data.
   L4  vocabulary packs    python/lmcc_std, go/lmccstd (+ anyone's): codecs,
                           strategies, lenses, hosts — plugged into sockets,
                           zero privilege
+      frontends           python/lmcc_dspy (DSPy signatures → SignatureCore),
+                          Go struct tags; any syntax lowers, none is the contract
   L3  the plan            bake(entry × signature × capabilities) → Baked
                           all refusals fire HERE, before any money is spent
   L2  the entry           the artifact: template + parse + strategies +
@@ -64,6 +66,8 @@ a decision, derive from these before inventing anything:
 | entries never contain signatures | `schema/entry.schema.json` |
 | duplicated anchors, closes, tails, and JSON keys refuse, never guess | corpus cases 32, 39, 46 |
 | signatures and cases are schema-valid data | `./check` step 3 (`schema/signature.schema.json`, `schema/case.schema.json`); corpus 43 |
+| any DSPy signature lowers (losing only DSPy's declared no-ops), bakes, renders and parses | `./check` step 6 (`tests/dspy/test_catalog.py` against real DSPy); D-23 |
+| the kernel's shape set is closed: uninterpreted shapes need a codec; `@structured` gives one per entry | corpus 48–50; D-19, D-20 |
 | plans and registries are JSON-serializable data | `tests/test_agent_surface.py` |
 | docs cannot drift from code: every raised error code is in `spec/errors.md`, every registered vocab entry is indexed with a real spec file, case files match their declared names, std predicates only name declared facts, plans carry acceptance criteria | `tests/test_coherence.py` |
 
@@ -116,7 +120,8 @@ Checklists:
 
 ```
 ./check     # python tests + harness + schemas + README-verbatim
-            # + go/check + the Go binary through the harness; green = holds
+            # + go/check + the Go binary through the harness
+            # + the DSPy catalog against a real DSPy; green = holds
 ```
 
 Run it before you start (baseline), after every meaningful change, and

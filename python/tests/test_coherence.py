@@ -26,7 +26,7 @@ def _documented_codes() -> set[str]:
 
 def _raised_codes() -> set[str]:
     codes: set[str] = set()
-    for pkg in ("lmcc", "lmcc_std"):
+    for pkg in ("lmcc", "lmcc_std", "lmcc_dspy"):
         for py in sorted((ROOT / "python" / pkg).glob("*.py")):
             tree = ast.parse(py.read_text())
             for node in ast.walk(tree):
