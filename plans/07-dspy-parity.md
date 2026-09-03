@@ -25,7 +25,7 @@ outcome (rule 3).
    and **fails loudly, never skips**, when the step is requested but
    the shell is missing.
 
-## Inventory (from `dspy/signatures/field.py`, `signature.py`, `adapters/`)
+## Inventory (upstream `stanfordnlp/dspy` main @ 59ce7601, 2026-08-31)
 
 | DSPy holds | SignatureCore today | status | needs |
 |---|---|---|---|
@@ -33,8 +33,10 @@ outcome (rule 3).
 | field order, input/output | ordered `fields`, `direction` | ✅ | — |
 | name (Python identifier) | ASCII identifier | ✅ (Unicode names refuse `signature-malformed`, stated) | — |
 | `desc` / pydantic `description` | `desc` | ✅ | — |
-| `prefix` (e.g. `"Reasoning: Let's think…"`) | — | ❌ not carried. Modern ChatAdapter/JSONAdapter ignore it; legacy programs set it | **A**: optional `label` on Field, `{f.label}` in loops (defaults to name) |
-| `format` / `parser` callables | — | code; not data | **H**: refuse (`signature-malformed`, names the attribute); the frontend accepts `codecs=` to bind a registered codec instead |
+| `prefix`, `format`, `parser` | — | ✅ **deprecated upstream (#9394): "has no effect in DSPy"**; still stored in `json_schema_extra` and in `dump_state` for round-trip only | dropped by the lowering, stated in its spec — dropping what DSPy itself ignores loses nothing DSPy would have shown a model. (Decisions A and H withdrawn.) |
+| `IS_TYPE_UNDEFINED` marker (field declared without a type → `str`) | — | no prompt effect (only `Predict` coercion, `predict.py:208`) | not carried, stated |
+| duplicate input/output names | `signature-malformed` | ✅ parity (#9432 rejects them too) | — |
+| `append_instructions` (#9923), `dump_state`/`load_state` (instructions + per-field desc) | plain-data edits; SignatureCore *is* that state | ✅ | — |
 | pydantic constraints (`ge`, `min_length`, …) | JSON-Schema keywords carried untouched in `shape` | ✅ carried, ⚠ not shown: the mechanical `{f.schema}` hint ignores them; DSPy prints `Constraints: …` | small: hint rule lists constraint keywords (kernel §3), corpus case |
 | `str`, `int`, `float`, `bool` | scalars | ✅ | — |
 | `list[X]`, `dict`, nested generics | array/object shapes | ⚠ a codec must be bound **by field name in the entry**, but adapters are signature-independent, so no DSPy-generic adapter can exist | **B**: shape-keyed default bindings in entries (`"codecs": {"@structured": {"kind": "json"}}`) with name bindings winning |
@@ -53,9 +55,20 @@ outcome (rule 3).
 | string syntax `"q, ctx: list[str] -> a"` | — | frontend parses, or lowers a built `dspy.Signature` | ✅ trivial |
 | `with_instructions`, `append`, `insert`, `delete`, `equals` | plain-data edits | ✅ trivial | — |
 
+## DSPy adapters (the differential check needs them)
+
+| DSPy adapter | LMCC document form | status |
+|---|---|---|
+| `ChatAdapter` (`[[ ## name ## ]]`) | `sections`, DSPy dialect (corpus 21) | ✅ |
+| `JSONAdapter` | `lens/json_object` (mode, gated) | ✅ |
+| `XMLAdapter` (reworked upstream) | `sections` with close markers (corpus 20) covers plain fields; upstream now **escapes `<`/`&` in string outputs and nests structured outputs as XML** | ⚠ needs a vocabulary `lens/xml` with escaping and nesting — note this is DSPy's answer to the collision problem D-15 refuses on; as a *different document form* it belongs in vocabulary, not the kernel |
+| `BAMLAdapter` | — | ❌ a schema-rendering style; vocabulary later |
+| `TwoStepAdapter` | — | out of scope: two calls composed, a program not an adapter |
+| parsing: `json_repair` + `ast.literal_eval` fallback + pydantic validation | refuse (`value-invalid`, `codec-parse-error`) | by design different: LMCC never guesses; recovery is plan 02 (combinators) and plan 06 (fix hints), declared as data |
+| native tool-call history replay (#9823/#9824) | — | plan 04 + decision D |
+
 ## Decisions required before code (each: spec → corpus → both kernels)
 
-- **A** `label` attribute and `{f.label}`.
 - **B** shape-keyed default codec bindings in entries — the largest gap;
   without it LMCC cannot express a DSPy-style "one adapter for every
   signature" at all when signatures have structured fields.
@@ -64,11 +77,10 @@ outcome (rule 3).
 - **E** host type families.
 - **F** incomplete demos: refuse (current) or placeholder text declared
   in the entry.
-- **H** `format`/`parser`: refuse.
 
 ## Acceptance criteria
 
-- [ ] Decisions A–F, H ratified and logged (`decisions.md`).
+- [ ] Decisions B–F ratified and logged (`decisions.md`).
 - [ ] Kernel spec amended for each; corpus cases for each (lowered
       data, so the Go kernel proves them without DSPy).
 - [ ] `python/lmcc_dspy` lowers every catalog row or refuses by name;
