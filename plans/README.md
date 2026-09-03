@@ -15,3 +15,4 @@ Protocol per plan: spec → corpus (hand-authored bytes) → code →
 | `04-tools-citations-strategies.md` | strategy vocabularies for the reserved roles | M |
 | `05-second-implementation.md` | ✅ Go kernel; harness passes byte-exact (46/46) | L |
 | `06-structured-fix-hints.md` | refusals carry a machine-actionable `fix` payload | S |
+| `07-dspy-parity.md` | total lowering of DSPy signatures, catalog + differential check | L |
