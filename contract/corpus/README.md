@@ -1,5 +1,11 @@
 # The corpus
 
+**D-31 migration boundary.** These cases pin the existing 0.2 contract.
+Passing its regex cases does not prove full RE2 equivalence. Future execution
+extensions need separately declared requirements and scoped conformance cases
+(see `../spec/portability.md`). Do not rewrite legacy expectations or count
+unsupported extensions as passes.
+
 These cases are the authority. If an implementation disagrees with a case,
 the implementation is wrong; changing a case is a contract change and gets
 reviewed like one.

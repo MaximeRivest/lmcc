@@ -1,5 +1,9 @@
 # lmcc in Go
 
+**Version scope.** These examples use kernel 0.2. The [next-version portability design](../contract/spec/portability.md)
+makes execution extensions explicit and optional. Its requirements and binding
+API are not implemented yet. Do not infer general regex portability from these examples.
+
 `go/lmcc` is an independent implementation of the LMCC kernel
 ([contract/spec/kernel.md](../contract/spec/kernel.md)). It was written
 from the contract, not ported from Python. It passes the same corpus,

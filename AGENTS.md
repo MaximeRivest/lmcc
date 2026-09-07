@@ -36,6 +36,16 @@ normative form.
 L0 outranks everything. If code and corpus disagree, the code is wrong.
 If spec and corpus disagree, fix the corpus first, deliberately, then both.
 
+## Portability direction (D-31)
+
+Read `contract/spec/portability.md` and `plans/10-declared-extensions.md`
+before proposing execution backends. Keep a small exact core; declare optional
+extension contracts and versions. Hosts bind compatible implementations or
+refuse before model I/O. Do not confuse host support with model capabilities.
+Do not build a regex engine merely to satisfy the superseded universal mandate.
+Kernel 0.2 schemas and corpus remain unchanged until a versioned migration.
+The custom matcher on `batch/01` is experimental and unmerged, not a chosen backend.
+
 ## The three generative rules
 
 Every design answer in this repo derives from three rules. When you face
@@ -63,7 +73,7 @@ a decision, derive from these before inventing anything:
 |---|---|
 | corpus is byte-exact authority | `contract/harness/runner.py` (82 cases; 6 need `udf:python`) |
 | the contract is portable: an independent Go kernel passes every claimable case byte-exactly, and both kernels raise the same refusal-code set (minus the declared placement-only code) | `./check` step 5 (`runner.py --driver go/bin/lmcc-conform`), `tests/test_coherence.py` |
-| text primitives are portable: ASCII strip, explicit integer/number grammars, ECMAScript number spelling, RE2 regex (kernel §7a, §5) | corpus 35–37, 40–42, 44, 45; `tests/test_text_rules.py`; `go/lmcc/text_test.go` |
+| text primitives are portable: ASCII strip, explicit integer/number grammars, ECMAScript number spelling, legacy regex cases (kernel §7a, §5; full RE2 equivalence is not established; D-31 moves future regex support to declared extensions) | corpus 35–37, 40–42, 44, 45; `tests/test_text_rules.py`; `go/lmcc/text_test.go` |
 | `split(join(x)) == x` for marker-free, trimmed `x`; `join` refuses collisions (`value-collides`) | `tests/test_kernel.py`, `test_text_rules.py`; corpus 38 |
 | the artifact never names a field: strategies by role, formats by type/structural key | `schema/entry.schema.json`; corpus 55 |
 | resolution order: artifact type → structural key → runtime binding → kernel default → `*` → `no-format` | `tests/test_formats.py`; corpus 48–50, 55–56 |

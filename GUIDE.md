@@ -337,6 +337,18 @@ print(registry.describe())
 
 `render` is pure, so previewing exact prompt bytes costs nothing.
 
+## Portability and execution requirements
+
+Portability means identical behavior within a declared feature set, not support
+for every extension on every host. The next-version design keeps a small core
+and makes execution extensions explicit. The host binds compatible support or
+refuses before sending a model request. A frontend must not silently translate
+a pattern into a different dialect.
+
+The current 0.2 API has not changed. Its `pattern` routing remains legacy syntax;
+there is no new extension selector to use yet. Read
+[the portability design](contract/spec/portability.md) before choosing a backend.
+
 ## 12. Where to go next
 
 - `contract/spec/kernel.md` — the normative rules behind everything here

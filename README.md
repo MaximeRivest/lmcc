@@ -314,6 +314,23 @@ format is byte-exact where both runtimes ship the name; a shipped UDF
 runs where its language can be placed and is declared *unclaimed* where
 it cannot. That boundary is the contract's, not an accident.
 
+## Portability: shared meaning, declared support
+
+Implementations need not use the same execution engine. They must preserve
+meaning for every contract they claim to support.
+
+The next-version design separates a small mandatory core from named, versioned
+extensions. An artifact declares its requirements. The host supplies compatible
+implementations or refuses before sending the model request. Regex execution
+belongs to this optional layer; LMCC does not require every host to build a
+regex engine. Model capabilities and host execution support remain separate.
+
+This is a design direction, not a released extension API. Kernel 0.2 still
+uses bare `pattern` strings and its existing refusal rules. The new declaration
+schema, host bindings, and migration remain to be specified. See
+[the portability design](contract/spec/portability.md) and
+[plan 10](plans/10-declared-extensions.md).
+
 ## 12. What lmcc refuses to be
 
 - **Not a client.** It lays out and reads. You send.

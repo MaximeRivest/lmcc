@@ -4,6 +4,11 @@
 two implementations (`python/lmcc`, `go/lmcc`) against the corpus. Where
 this document and the corpus disagree, fix the corpus first, then both.
 
+**Next-version direction (D-31).** See `portability.md`: a small mandatory
+core and explicitly declared, versioned execution extensions. Regex execution
+will be optional, not a requirement to build an engine in every kernel.
+This document's 0.2 syntax and cases remain the legacy contract until migration.
+
 **One sentence.** When a program calls a function in another language, a
 calling convention says where each argument goes, how the result comes
 back, and how each type crosses. A model is another language; LMCC is its
@@ -287,8 +292,12 @@ must match what the format `emits` (`format-placement-mismatch`).
 - **Enum** — the stripped text equals a member's spelling.
 - **Null** — nullable shapes only: written `null`, read `null` exactly.
 - **Rounding** — half-to-even in binary64: `roundeven(x·10ⁿ)/10ⁿ`.
-- **Regex** — RE2 syntax; lookaround, backreferences, named groups,
-  atomic/possessive constructs refuse `entry-malformed`.
+- **Legacy 0.2 regex requirement** — RE2 syntax; lookaround, backreferences,
+  named groups, atomic/possessive constructs refuse `entry-malformed`.
+  The independent audit found matching gaps beyond the existing cases;
+  passing them does not prove full RE2 equivalence. D-31 supersedes this
+  universal requirement for the next version: see `portability.md`.
+  No new regex syntax or backend is selected by that amendment.
 
 ### 7b. Kernel default formats
 

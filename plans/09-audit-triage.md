@@ -1,5 +1,14 @@
 # Plan 09 — audit triage: 114 findings from the clean-room TypeScript implementation and the docs review
 
+**D-31 update:** regex execution is a declared optional extension in the next
+version, not a mandatory engine in every kernel. Plan 10 gates the extension
+contract, migration, and backend choice. Existing 0.2 evidence stays historical.
+Regex prescriptions below record the original audit plan, not current implementation authority.
+Pause E6 and the regex portion of Batch 1 pending plan 10. Cases 91–95 and
+the custom matcher on `batch/01` remain experimental and unmerged. Other safety
+fixes may proceed separately; do not discard their evidence. D-29 DOTALL is a
+legacy-compatible profile choice, not a default for every future extension.
+
 ## Motivation
 
 The clean-room audit tests whether the published contract supports an independent implementation without reading another kernel.
@@ -394,7 +403,7 @@ Do not infer acceptance from an external driver that omits required traces.
   Author malformed-part refusals 86–88, overflow cases 89–90, and regex cases 91–95.
   Cover additional malformed variants and finite-number boundaries in both unit suites.
   Require full refusal equality, stable raw deltas, and every scalar/part split.
-  Fix Python regex semantics and both lint implementations; test TS without narrowing D-14.
+  Regex work is gated by D-31 and plan 10; do not implement the old universal D-14 mandate.
 - [ ] **Batch 2 — remaining defects and harness enforcement; cases 96–110; Python and Go kernels, packs, and drivers.**
   Cases 96–98 pin placement-aware prefix and vocabulary skeleton; 99 pins placed bare slots.
   Cases 100–101 pin control overlap; 102–103 pin rounded-demo refusal and ordinary rounded input spelling.

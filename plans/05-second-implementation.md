@@ -1,5 +1,9 @@
 # Plan 05 — a second implementation (Go)  ✅ done
 
+**D-31 update:** regex execution is a declared optional extension in the next
+version, not a mandatory engine in every kernel. Plan 10 gates the extension
+contract, migration, and backend choice. Existing 0.2 evidence stays historical.
+
 **Motivation.** "Cross-language" is a hope until a second kernel passes
 the harness byte-exactly. This plan is the proof — and the forcing
 function that flushes every accidental Python-ism out of the spec.

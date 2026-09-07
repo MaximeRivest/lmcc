@@ -430,3 +430,30 @@ harness gains an explicit trusted pack-loader map; an artifact name
 never triggers an import. Batches 1–6 of plan 09 implement these under
 the accretion protocol; each batch that changes a rule appends its own
 entry.
+
+
+**D-31 · Portability is a small shared core plus declared execution extensions.**
+Ratified by the maintainer after reviewing the SQL comparison and the Batch 1
+matcher expansion. Identical extraction across claimed implementations remains
+mandatory. Universal RE2 support and a custom dependency-free matcher do not.
+Artifacts declare named, versioned semantic requirements; hosts bind compatible
+implementations or refuse before a usable plan and before model I/O. Frontends
+may translate only when meaning is preserved. Host extension support stays
+separate from model capability facts. Mature libraries are legitimate backends;
+a library name or shared ancestry alone does not prove equivalent behavior.
+
+This supersedes D-14's universal regex mandate and the corresponding implementation
+instruction in D-29 and plan 09. DOTALL can belong to an explicitly named
+legacy-compatible contract; it is not imposed on every extension. The unmerged
+Batch 1 matcher is an experiment, not the selected architecture. Preserve its
+findings and separate non-regex safety fixes from the backend decision.
+
+Costs: more explicit compatibility metadata, hosts that support fewer artifacts,
+and possible library or service dependencies. Benefits: a small implementable
+core and no mandatory ownership of a regex engine. Silent dialect substitution
+remains forbidden. `spec/portability.md` states the boundary; plan 10 gates the
+core inventory, extension schema, discovery, binding, failures, and migration.
+No identifier, backend, wire format, or new refusal code is approved here.
+The existing 0.2 schemas, corpus bytes, and refusal stages remain unchanged until
+that versioned migration. Historical decisions remain as history, not current
+instructions to implement the superseded mandate.

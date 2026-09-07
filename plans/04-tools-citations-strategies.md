@@ -1,5 +1,9 @@
 # Plan 04 — strategy vocabularies for `tools` and `citations`
 
+**D-31 update:** regex execution is a declared optional extension in the next
+version, not a mandatory engine in every kernel. Plan 10 gates the extension
+contract, migration, and backend choice. Existing 0.2 evidence stays historical.
+
 **Motivation.** `roles.md` reserves `tools`, `citations`, `citable`;
 the mechanics (hide, route, fragments, predicate) already serve any
 role — but no shipped strategies exist, so the roles are names without
@@ -10,7 +14,7 @@ conduct.
   - `native_fc`: predicate `native_function_calling`; controls carry
     tool declarations; routing reads `parts {part: "tool_call"}`.
   - `cli_text`: fragment teaches a CLI spelling (`!call name {json}`);
-    RE2 routing reads it; predicate `instruct`.
+    a declared pattern extension reads it; predicate `instruct` remains a model fact.
   - `xml_blocks`: same shape, XML spelling.
 - `citations` role:
   - `native_citations`: routing over citation parts.

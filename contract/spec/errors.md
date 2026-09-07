@@ -1,5 +1,10 @@
 # Refusal codes (normative)
 
+**Version scope:** this table specifies existing 0.2 refusals. D-31
+(`portability.md`) requires explicit unsupported-extension refusals in the next
+version; their codes, stages, and fixes must be specified before implementation.
+Do not reinterpret malformed syntax as missing host support.
+
 Every refusal is a `Refusal` with a stable `code`, a `hint` naming the
 exact offender and what to do, a `fix` (below) for every refusal that
 fires before render, and for parse refusals a `partial` with what was

@@ -1,5 +1,9 @@
 # Reference index
 
+**Version scope.** These examples use kernel 0.2. The [next-version portability design](../../contract/spec/portability.md)
+makes execution extensions explicit and optional. Its requirements and binding
+API are not implemented yet. Do not infer general regex portability from these examples.
+
 An index, not prose. Each line points to the normative text. The
 contract (`contract/`) outranks this page; if they differ, the contract
 is right and this page is wrong.

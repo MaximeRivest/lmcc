@@ -1,5 +1,9 @@
 # Plan 01 — streaming parse (sans-I/O)  ✅ done (D-26)
 
+**D-31 update:** regex execution is a declared optional extension in the next
+version, not a mandatory engine in every kernel. Plan 10 gates the extension
+contract, migration, and backend choice. Existing 0.2 evidence stays historical.
+
 **Motivation.** UIs and pipelines need raw values as they arrive. The
 lens previously read full replies only.
 
