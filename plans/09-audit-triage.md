@@ -389,12 +389,16 @@ Ratify the policy gates before the affected batch. Do not move an unresolved gat
 Every batch follows the accretion protocol, tests both kernels, and ends with `./check` green.
 Do not infer acceptance from an external driver that omits required traces.
 
-- [ ] **Batch 1 — response safety and portable text; cases 83–95; Python and Go kernels and drivers.**
+- [x] **Batch 1 — response safety and portable text; cases 83–95; Python and Go kernels and drivers.**
   Ratify R1. Author adjacent-part cases 83–85 before changing normalization.
   Author malformed-part refusals 86–88, overflow cases 89–90, and regex cases 91–95.
   Cover additional malformed variants and finite-number boundaries in both unit suites.
   Require full refusal equality, stable raw deltas, and every scalar/part split.
   Fix Python regex semantics and both lint implementations; test TS without narrowing D-14.
+  Implementation check: Python 95/95; Go 89/95 and six unclaimed; 39 matching stream traces.
+  TS passes new cases 83–85 and 89–91; it fails 86–88 and 92–95.
+  D-30 records the larger Python matcher, Unicode data, and remaining implementation limits.
+  Parent review remains required; this check does not accept the batch.
 - [ ] **Batch 2 — remaining defects and harness enforcement; cases 96–110; Python and Go kernels, packs, and drivers.**
   Cases 96–98 pin placement-aware prefix and vocabulary skeleton; 99 pins placed bare slots.
   Cases 100–101 pin control overlap; 102–103 pin rounded-demo refusal and ordinary rounded input spelling.
