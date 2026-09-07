@@ -1,0 +1,44 @@
+{
+ "name": "refuse-part-nonstring-text",
+ "kind": "refuse",
+ "entry": {
+  "name": "response_parts",
+  "versions": {
+   "kernel": "0.2.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "<answer>{answer}</answer>"
+   }
+  ],
+  "parse": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "",
+  "fields": [
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "response": {
+  "content": [
+   {
+    "kind": "text",
+    "text": 4
+   }
+  ]
+ },
+ "expect": {
+  "code": "response-malformed",
+  "at": "parse"
+ }
+}

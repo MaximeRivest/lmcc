@@ -98,7 +98,10 @@ def read_number(text: str, *, where: str) -> float:
     t = strip(text)
     if not _NUMBER.match(t):
         refuse("parse-value", f"{where}: {t!r} is not a number")
-    return float(t)
+    value = float(t)
+    if not math.isfinite(value):
+        refuse("parse-value", f"{where}: {t!r} is not a finite number")
+    return value
 
 
 def read_boolean(text: str, *, where: str) -> bool:
@@ -585,12 +588,40 @@ def merge_text_parts(parts: list[dict]) -> list[dict]:
     return out
 
 
+def validate_response_part(part: object) -> None:
+    """The shared batch and part-delta boundary; no text coercion."""
+    if not isinstance(part, dict) or not isinstance(part.get("kind"), str):
+        refuse("response-malformed", "response part must be an object with a string 'kind'")
+    if "text" in part and not isinstance(part["text"], str):
+        refuse("response-malformed", "a response part's 'text' must be text")
+
+
+def normalize_response_parts(parts: list[dict]) -> list[dict]:
+    """Coalesce text runs as §8 does, without copying growing text."""
+    out: list[dict] = []
+    texts: list[str] = []
+    for part in parts:
+        validate_response_part(part)
+        has_text = isinstance(part.get("text"), str)
+        if has_text and texts and out[-1].get("kind") == part.get("kind"):
+            texts.append(part["text"])
+            out[-1].update({k: v for k, v in part.items() if k not in ("kind", "text")})
+            continue
+        if texts:
+            out[-1]["text"] = "".join(texts)
+        out.append(dict(part))
+        texts = [part["text"]] if has_text else []
+    if texts:
+        out[-1]["text"] = "".join(texts)
+    return out
+
+
 def response_text_and_parts(response: object) -> tuple[str, list[dict]]:
     """Accept a bare string or an lm15-shaped response dict."""
     if isinstance(response, str):
         return response, []
     if isinstance(response, dict) and isinstance(response.get("content"), list):
-        parts = response["content"]
+        parts = normalize_response_parts(response["content"])
         text = "".join(p.get("text", "") for p in parts if p.get("kind") == "text")
         return text, parts
     refuse("response-malformed",

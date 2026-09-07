@@ -4,10 +4,10 @@
 version, not a mandatory engine in every kernel. Plan 10 gates the extension
 contract, migration, and backend choice. Existing 0.2 evidence stays historical.
 Regex prescriptions below record the original audit plan, not current implementation authority.
-Pause E6 and the regex portion of Batch 1 pending plan 10. Cases 91–95 and
-the custom matcher on `batch/01` remain experimental and unmerged. Other safety
-fixes may proceed separately; do not discard their evidence. D-29 DOTALL is a
-legacy-compatible profile choice, not a default for every future extension.
+The custom regex engine and experimental cases 91–95 have been withdrawn and
+are archived, not active requirements. The three non-regex safety fixes and
+cases 83–90 are merged and stay separate from any future backend choice.
+D-29 DOTALL is a legacy-compatible profile choice, not a default for every future extension.
 
 ## Motivation
 
@@ -398,12 +398,12 @@ Ratify the policy gates before the affected batch. Do not move an unresolved gat
 Every batch follows the accretion protocol, tests both kernels, and ends with `./check` green.
 Do not infer acceptance from an external driver that omits required traces.
 
-- [ ] **Batch 1 — response safety and portable text; cases 83–95; Python and Go kernels and drivers.**
-  Ratify R1. Author adjacent-part cases 83–85 before changing normalization.
-  Author malformed-part refusals 86–88, overflow cases 89–90, and regex cases 91–95.
-  Cover additional malformed variants and finite-number boundaries in both unit suites.
-  Require full refusal equality, stable raw deltas, and every scalar/part split.
-  Regex work is gated by D-31 and plan 10; do not implement the old universal D-14 mandate.
+- [x] **Batch 1 — safety fixes merged; regex work withdrawn (D-31).**
+  Cases 83–85 cover adjacent parts; 86–88 cover malformed parts; 89–90 cover overflow.
+  Both kernels carry the repairs with every-split replay and unit coverage.
+  Cases 91–95 and the custom matcher are archived, not active requirements.
+  Regex work resumes only under plan 10: choose a declared pattern contract
+  and evaluate mature libraries; do not implement the old universal D-14 mandate.
 - [ ] **Batch 2 — remaining defects and harness enforcement; cases 96–110; Python and Go kernels, packs, and drivers.**
   Cases 96–98 pin placement-aware prefix and vocabulary skeleton; 99 pins placed bare slots.
   Cases 100–101 pin control overlap; 102–103 pin rounded-demo refusal and ordinary rounded input spelling.

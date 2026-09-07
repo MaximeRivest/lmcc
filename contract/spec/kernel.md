@@ -263,6 +263,16 @@ instead of a slot; fragments append to the named message (created if
 absent, system first); controls merge into the patch (`control-conflict`).
 A field both visible and routed is `field-double-covered`.
 
+Batch parse normalizes response parts before routing by the same logical-part
+rule as streaming (§8): adjacent same-kind text-bearing parts coalesce,
+including empty text; a kind change or a part without text ends the run.
+Every response part is an object with a string `kind`; `text`, when present,
+is a string. Otherwise batch parse and part-delta `feed` refuse
+`response-malformed`, without a `fix`. A bare string is valid as a text
+response or text delta, but not as an element of a response part list.
+Metadata keys accumulate within a run; the last supplied value of each key
+wins. Normalization does not change the caller's parts.
+
 Routings run **before** the lens. `from: text` scans the reply text —
 `between` (plain scan), `line_prefixed` (lines split on `\n`), `pattern`
 (RE2, group 1, empty matches discarded) — each match becomes a text
@@ -285,6 +295,7 @@ must match what the format `emits` (`format-placement-mismatch`).
 - **Integer text** — `-?[0-9]+`; else `parse-value`. Written in decimal.
   Implementations carry at least int64.
 - **Number text** — `-?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?`; binary64.
+  A number read whose binary64 result is not finite refuses `parse-value`.
   Written with the ECMAScript `Number::toString` algorithm (`3`, `0.5`,
   `1e-7`, `1e+21`); non-finite refuses `value-invalid`.
 - **Booleans** — read `true|yes` / `false|no` after ASCII case-folding;

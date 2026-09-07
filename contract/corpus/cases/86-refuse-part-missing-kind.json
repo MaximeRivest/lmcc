@@ -1,0 +1,43 @@
+{
+ "name": "refuse-part-missing-kind",
+ "kind": "refuse",
+ "entry": {
+  "name": "response_parts",
+  "versions": {
+   "kernel": "0.2.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "<answer>{answer}</answer>"
+   }
+  ],
+  "parse": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "",
+  "fields": [
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "response": {
+  "content": [
+   {
+    "text": "<answer>ok</answer>"
+   }
+  ]
+ },
+ "expect": {
+  "code": "response-malformed",
+  "at": "parse"
+ }
+}

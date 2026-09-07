@@ -294,7 +294,7 @@ loads it lays out the same bytes.
 contract/          the authority (no code)
   spec/            kernel.md (the convention), errors.md, vocab/ specs
   schema/          entry, signature, case — JSON Schema
-  corpus/          82 byte-exact cases — the real source of truth
+  corpus/          90 byte-exact cases — the real source of truth
   harness/         runs any implementation against the corpus
 python/
   lmcc/            the reference kernel, stdlib only

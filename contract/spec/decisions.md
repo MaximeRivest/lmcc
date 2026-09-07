@@ -431,6 +431,73 @@ never triggers an import. Batches 1–6 of plan 09 implement these under
 the accretion protocol; each batch that changes a rule appends its own
 entry.
 
+**D-30 · Batch 1: response safety and portable text (plan 09).**
+Cases 83–95 were hand-authored after the spec sentences, before kernel
+changes. No earlier case expectation changed. The batch implements the
+R1 and E7 choices from D-29 and repairs B5, E3, and E6.
+
+- Batch parse now coalesces adjacent same-kind text-bearing parts before
+  routing, including empty text. A kind change or a textless part ends
+  the run. Metadata keys accumulate; the last supplied value wins.
+  Neither kernel changes the caller's parts. **Compatibility cost:**
+  old batch `fo` + `ur` becomes `four`, not `fo\nur`. This deliberately
+  corrects D-26's claim that all old batch values remain unchanged.
+  The serialized entry stays at 0.2.0; this repairs its broken refinement
+  law, not its data shape. Both reducers keep their event timing.
+  All 30 saved pre-repair traces, including cases 83–85, remain identical.
+- Batch and feed share each kernel's response-part validator. Every
+  part needs a string `kind` and, when present, string `text`.
+  Invalid parts refuse `response-malformed`, with no fix. Shared hints
+  preserve full batch/feed refusal equality. **Boundary cost:** a bare
+  string is a valid text delta but an invalid part-list element.
+  The drivers preserve that distinction. They check a string element
+  through the batch list boundary before feed can reinterpret it.
+  Other malformed elements reach feed directly. Replay never converts
+  malformed data into a valid part or skips a bad element.
+- A binary64 read that overflows refuses `parse-value`. Python now checks
+  finiteness; Go already did. Both suites pin the positive and negative
+  finite endpoints. Standard format wrappers report overflow as
+  `format-read-error`, not a leaked kernel error. **Cost:** Python callers
+  can no longer receive infinity from grammar-valid decimal text.
+- Pattern admission and matching use RE2 meanings, with DOTALL as the
+  default. Go checks the parsed syntax tree instead of linting substrings.
+  This admits quoted literals, POSIX classes, and quantified Unicode
+  properties without admitting named groups or non-RE2 operators.
+  Python lowers Perl/POSIX classes, Unicode categories/scripts, complements,
+  quotes, octal/hex escapes, boundaries, and `i/m/s/U` flags into scalar
+  matching instructions. ASCII word boundaries stay separate from Unicode
+  simple folding. **Implementation cost:** simple translation into Python
+  `re` was insufficient. For `(a*)+` against `aa`, its last empty loop
+  iteration overwrote the capture with empty text; RE2 captures `aa`.
+  Python therefore uses an ordered Thompson matcher for all pattern
+  routings, not host response matching. This adds syntax/matcher code and
+  trades the host's compiled matcher speed for explicit capture priority
+  and linear search work. Patterns still buffer until EOF, as before.
+- **Unicode cost:** Python bundles 129,560 bytes of Unicode 15.0.0 category,
+  script, and simple-fold data from Go's standard-library tables.
+  `go/lmcc/generate_re2_unicode.go` reproduces it. A version test requires
+  review when Go upgrades Unicode. Python needs no external regex package
+  or Go executable at runtime. The data is not vocabulary and grants no
+  artifact code privilege. Compiled-pattern and property caches are bounded.
+- **Limits, not new dialect rules:** named groups remain the only LMCC
+  exclusion from RE2. Neither kernel implements RE2's byte escape `\C`;
+  the existing Go scalar-text engine rejects it. This remains an inherited
+  implementation gap, not a newly permitted exclusion from D-14.
+  Recursive syntax construction still depends on host stack limits;
+  this batch does not prove agreement at resource ceilings. The 1,018-pattern,
+  seven-text differential check found no remaining difference in its tested
+  domain. It supplements the authored cases; it does not define expectations
+  or prove the whole RE2 language. Parent review must assess the larger
+  Python matcher change rather than treating 95 green cases as that proof.
+
+Validation: `./check` passes Python 95/95 and Go 89/95, with six declared
+UDF cases unclaimed. All 95 cases pass schema validation; Go compares
+39 stream traces. The unchanged TypeScript driver passes new cases
+83–85 and 89–91. It fails 86–88 on batch/feed hint equality, 92–94 on
+regex admission, and 95 on DOTALL. It reports no compared traces.
+Parent review remains required; these results do not accept the batch.
+
+
 
 **D-31 · Portability is a small shared core plus declared execution extensions.**
 Ratified by the maintainer after reviewing the SQL comparison and the Batch 1
@@ -457,3 +524,23 @@ No identifier, backend, wire format, or new refusal code is approved here.
 The existing 0.2 schemas, corpus bytes, and refusal stages remain unchanged until
 that versioned migration. Historical decisions remain as history, not current
 instructions to implement the superseded mandate.
+
+
+**D-32 · Withdraw the custom regex engine; retain the safety fixes.**
+The maintainer rejected mandatory ownership of a regex engine and authorized
+removing the experiment. Reverse the regex implementation from bf822da,
+including its Unicode tables, generator, integration changes, and tests.
+Withdraw experimental corpus cases 91–95 before merging this branch.
+Preserve their bytes and differential-review evidence outside the active corpus
+for future library evaluation. Existing cases 01–82 are unchanged.
+
+D-30 remains the historical record of the experiment, not approval of its
+backend. Its regex support and completion claims no longer describe this branch.
+Cases 83–90, response normalization, response validation, overflow refusal,
+and their regression tests remain. Legacy regex behavior is restored with its
+known limits; this is not a claim those limits are fixed. Backend and extension
+contract selection must precede new regex implementation work.
+
+Cost: the regex findings remain unresolved. Benefit: the branch no longer
+carries an unapproved custom engine. The three safety fixes remain isolated
+and reviewable without accepting that engine.

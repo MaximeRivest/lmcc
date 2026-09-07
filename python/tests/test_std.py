@@ -62,6 +62,17 @@ def test_table_format_escaping_and_coercion():
     assert err.value.code == "format-read-error"
 
 
+@pytest.mark.parametrize("text", ["1e400", "-1e400"])
+def test_scaled_number_overflow_is_format_read_error(text):
+    sig = lmcc.signature("", outputs={"n": float})
+    plan = lmcc.adapter(messages=[lmcc.system("<n>{n}</n>")],
+                        formats={"number": "scaled_number"}).bind(sig, registry=_registry())
+    with pytest.raises(lmcc.Refusal) as err:
+        plan.parse("<n>" + text + "</n>")
+    assert err.value.code == "format-read-error"
+    assert err.value.fix is None
+
+
 def test_scaled_number_rounding_and_spelling():
     sig = lmcc.signature("x", inputs={"text": str}, outputs={"p": float})
     plan = lmcc.adapter(messages=PATTERN, formats={"number": lmcc.use("scaled_number", scale=100, suffix="%", round=1)}

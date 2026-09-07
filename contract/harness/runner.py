@@ -118,9 +118,9 @@ def _stream_chunkings(response: object) -> list[list[object]]:
         return [[response], list(response)] + [[response[:i], response[i:]]
                                                for i in range(len(response) + 1)]
     parts = response.get("content", [])
-    out: list[list[object]] = [[dict(p) for p in parts]]
+    out: list[list[object]] = [list(parts)]
     for pi, part in enumerate(parts):
-        text = part.get("text")
+        text = part.get("text") if isinstance(part, dict) else None
         if not isinstance(text, str):
             continue
         characters = []
@@ -130,14 +130,20 @@ def _stream_chunkings(response: object) -> list[list[object]]:
             characters.append(delta)
         if not characters:
             characters = [dict(part)]
-        out.append([*[dict(p) for p in parts[:pi]], *characters,
-                    *[dict(p) for p in parts[pi + 1:]]])
+        out.append([*parts[:pi], *characters, *parts[pi + 1:]])
         for i in range(len(text) + 1):
             left, right = dict(part), dict(part)
             left["text"], right["text"] = text[:i], text[i:]
-            out.append([*[dict(p) for p in parts[:pi]], left, right,
-                        *[dict(p) for p in parts[pi + 1:]]])
+            out.append([*parts[:pi], left, right, *parts[pi + 1:]])
     return out
+
+
+def _feed_chunk(plan, stream, response, chunk):
+    # A string in a part list is not a text delta. Check its list boundary
+    # before feed can reinterpret it. Other malformed deltas reach feed.
+    if not isinstance(response, str) and isinstance(chunk, str):
+        plan.parse({"content": [chunk]})
+    return stream.feed(chunk)
 
 
 def _delta_text(events: list[dict]) -> dict[str, str]:
@@ -156,7 +162,7 @@ def _check_stream_success(plan, response: object, batch_values: dict) -> dict:
         events = []
         try:
             for chunk in chunks:
-                events.extend(stream.feed(chunk))
+                events.extend(_feed_chunk(plan, stream, response, chunk))
             result = stream.finish()
             events.extend(result.events)
         except Exception as exc:  # noqa: BLE001 — conformance detail
@@ -178,7 +184,7 @@ def _check_stream_refusal(plan, response: object, batch_error) -> dict:
         stream = plan.stream()
         try:
             for chunk in chunks:
-                stream.feed(chunk)
+                _feed_chunk(plan, stream, response, chunk)
             stream.finish()
         except lmcc.Refusal as err:
             if err.describe() == expected:
@@ -197,11 +203,11 @@ def _trace_chunking(response: object) -> list[object]:
         return list(response)
     out: list[object] = []
     for part in response.get("content", []):
-        text = part.get("text")
+        text = part.get("text") if isinstance(part, dict) else None
         if isinstance(text, str) and text:
             out.extend({**part, "text": character} for character in text)
         else:
-            out.append(dict(part))
+            out.append(part)
     return out
 
 
@@ -221,7 +227,7 @@ def _stream_trace(plan, response: object) -> list:
     trace: list = []
     try:
         for chunk in _trace_chunking(response):
-            trace.append([_event_digest(e) for e in stream.feed(chunk)])
+            trace.append([_event_digest(e) for e in _feed_chunk(plan, stream, response, chunk)])
         trace.append([_event_digest(e) for e in stream.finish().events])
     except lmcc.Refusal as err:
         trace.append({"refusal": err.code})

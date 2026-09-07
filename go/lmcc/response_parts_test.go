@@ -1,0 +1,59 @@
+package lmcc
+
+import "testing"
+
+func TestMalformedResponseParts(t *testing.T) {
+	parts := []any{nil, int64(7), []any{}, "bare", NewObject(), Obj("kind", nil),
+		Obj("kind", int64(7)), Obj("kind", "text", "text", nil), Obj("kind", "thinking", "text", int64(7))}
+	for _, part := range parts {
+		var batch error
+		func() {
+			defer catch(&batch)
+			ResponseTextAndParts(Obj("content", []any{part}))
+		}()
+		e, ok := AsError(batch)
+		if !ok || e.Code != "response-malformed" || e.Fix != nil {
+			t.Fatalf("part %v: %v", part, batch)
+		}
+		if _, text := part.(string); !text {
+			s := &Stream{}
+			_, err := s.Feed(part)
+			feed, ok := AsError(err)
+			if !ok || !Equal(feed.Describe(), e.Describe()) {
+				t.Fatalf("feed differs: %v", err)
+			}
+		}
+	}
+}
+
+func TestLogicalPartsMetadataBoundariesAndInputOwnership(t *testing.T) {
+	parts := []any{
+		Obj("kind", "thinking", "text", "fo", "id", int64(1), "keep", true),
+		Obj("kind", "thinking", "text", "", "id", int64(2)),
+		Obj("kind", "thinking", "text", "ur"),
+		Obj("kind", "thinking", "id", int64(3)),
+		Obj("kind", "thinking", "text", "b"),
+		TextPart("<answer>ok</answer>"),
+	}
+	before := MarshalJSON(parts, -1)
+	want := []any{
+		Obj("kind", "thinking", "text", "four", "id", int64(2), "keep", true),
+		Obj("kind", "thinking", "id", int64(3)),
+		Obj("kind", "thinking", "text", "b"),
+		TextPart("<answer>ok</answer>"),
+	}
+	text, got := ResponseTextAndParts(Obj("content", parts))
+	if text != "<answer>ok</answer>" || !Equal(got, want) {
+		t.Fatalf("normalization: %s", MarshalJSON(got, -1))
+	}
+	s := &Stream{}
+	for _, part := range parts {
+		s.append(part)
+	}
+	if !Equal(s.materializedParts(), want) {
+		t.Fatalf("stream differs: %s", MarshalJSON(s.materializedParts(), -1))
+	}
+	if MarshalJSON(parts, -1) != before {
+		t.Fatal("normalization changed caller parts")
+	}
+}

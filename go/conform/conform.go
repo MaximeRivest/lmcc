@@ -215,6 +215,7 @@ func traceChunking(response any) []any {
 		for _, raw := range r.List("content") {
 			part, ok := raw.(*lmcc.Object)
 			if !ok {
+				out = append(out, lmcc.DeepClone(raw))
 				continue
 			}
 			if text, ok := part.Str("text"); ok && text != "" {
@@ -230,6 +231,18 @@ func traceChunking(response any) []any {
 		return out
 	}
 	return nil
+}
+
+// A string in a part list is not a text delta. Check the list boundary
+// before Feed can reinterpret it; other malformed deltas reach Feed.
+func feedChunk(plan *lmcc.Plan, stream *lmcc.Stream, response, chunk any) ([]any, error) {
+	_, textResponse := response.(string)
+	_, textChunk := chunk.(string)
+	if !textResponse && textChunk {
+		_, err := plan.Parse(lmcc.Obj("content", []any{chunk}))
+		return nil, err
+	}
+	return stream.Feed(chunk)
 }
 
 func eventDigests(events []any) []any {
@@ -255,7 +268,7 @@ func streamTrace(plan *lmcc.Plan, response any) []any {
 	stream := plan.Stream()
 	trace := []any{}
 	for _, chunk := range traceChunking(response) {
-		events, err := stream.Feed(chunk)
+		events, err := feedChunk(plan, stream, response, chunk)
 		if err != nil {
 			if e, ok := lmcc.AsError(err); ok {
 				return append(trace, lmcc.Obj("refusal", e.Code))
@@ -379,7 +392,7 @@ func checkStreamSuccess(plan *lmcc.Plan, response any, batch *lmcc.Object) outco
 		stream := plan.Stream()
 		var events []any
 		for _, chunk := range chunks {
-			got, err := stream.Feed(chunk)
+			got, err := feedChunk(plan, stream, response, chunk)
 			if err != nil {
 				return outcome{ok: false, detail: fmt.Sprintf("stream split %d feed: %v", i, err)}
 			}
@@ -408,7 +421,7 @@ func checkStreamRefusal(plan *lmcc.Plan, response any, batch *lmcc.Error) error 
 		stream := plan.Stream()
 		var err error
 		for _, chunk := range chunks {
-			if _, err = stream.Feed(chunk); err != nil {
+			if _, err = feedChunk(plan, stream, response, chunk); err != nil {
 				break
 			}
 		}
