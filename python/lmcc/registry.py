@@ -21,9 +21,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from . import core
-from .errors import refuse
+from .errors import Refusal, refuse
 from .formats import Format, make
 from .parse import Lens
+from .strategy import Strategy
 
 
 @dataclass
@@ -48,14 +49,28 @@ class Registry:
             refuse("already-registered", f"format {name!r} is already registered")
         self.formats[name] = _Named(factory, version)
 
-    def named_format(self, name: str, options: dict | None) -> Format:
+    def named_format(self, name: str, options: dict | None, *,
+                     where: str | None = None) -> Format:
+        """Resolve a ``{"use": name, "options"}`` reference. A factory that
+        fails is a defect of the artifact (kernel §5): ``entry-malformed``
+        at ``where`` (the reference's path), never a host exception."""
         entry = self.formats.get(name)
         if entry is None:
             refuse("unknown-format",
                    f"format {name!r} is not registered — install the package that "
                    f"provides it, or ship the format with the artifact",
                    fix={"action": "install-vocabulary", "kind": "format", "name": name})
-        fmt = entry.factory(options or {})
+        where = where or f"format {name!r}"
+        try:
+            fmt = entry.factory(options or {})
+        except Refusal:
+            raise
+        except Exception as exc:  # noqa: BLE001 — the socket owns this boundary
+            refuse("entry-malformed", f"{where}: format {name!r} rejects its options: {exc}",
+                   fix={"action": "edit-entry", "path": where})
+        if not isinstance(fmt, Format):
+            refuse("entry-malformed", f"{where}: format {name!r} returned {type(fmt).__name__}, not a Format",
+                   fix={"action": "edit-entry", "path": where})
         fmt.name = name
         return fmt
 
@@ -94,14 +109,37 @@ class Registry:
             refuse("already-registered", f"strategy {name!r} is already registered")
         self.strategies[name] = _Named(factory, version)
 
-    def strategy(self, name: str, options: dict | None):
+    def strategy(self, name: str, options: dict | None, *, where: str | None = None):
+        """Resolve a ``{"use": name, "options"}`` reference. What the factory
+        returns is checked by the kernel's own rules exactly as inline data
+        (kernel §6): a pack has no privilege. A failing factory or a
+        malformed result is ``entry-malformed`` at ``where``."""
         entry = self.strategies.get(name)
         if entry is None:
             refuse("unknown-strategy",
                    f"strategy {name!r} is not registered — install the package that "
                    f"provides it, or inline the strategy as data",
                    fix={"action": "install-vocabulary", "kind": "strategy", "name": name})
-        return entry.factory(options or {})
+        where = where or f"strategy {name!r}"
+        try:
+            strategy = entry.factory(options or {})
+        except Refusal:
+            raise
+        except Exception as exc:  # noqa: BLE001 — the socket owns this boundary
+            refuse("entry-malformed", f"{where}: strategy {name!r} rejects its options: {exc}",
+                   fix={"action": "edit-entry", "path": where})
+        if not isinstance(strategy, Strategy):
+            refuse("entry-malformed",
+                   f"{where}: strategy {name!r} returned {type(strategy).__name__}, not a Strategy",
+                   fix={"action": "edit-entry", "path": where})
+        try:
+            strategy.validate(where=where)
+        except Refusal as r:
+            if r.code != "entry-malformed":
+                raise
+            refuse("entry-malformed", f"{where}: strategy {name!r} built malformed data — {r.hint}",
+                   fix={"action": "edit-entry", "path": where})
+        return strategy
 
     # -------------------------------------------------------------- lenses
 

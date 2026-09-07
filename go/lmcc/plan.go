@@ -719,7 +719,7 @@ func (p *Plan) materialize(binding any, key string) Format {
 	case *Object:
 		if b.Has("use") {
 			name, _ := b.Str("use")
-			return p.Registry.namedFormat(name, b.Object("options"))
+			return p.Registry.namedFormat(name, b.Object("options"), "formats['"+key+"']")
 		}
 		return admitUDF(b, "formats['"+key+"']")
 	}
@@ -803,7 +803,7 @@ func Bind(a *Adapter, sig *Signature, capabilities *Object, reg *Registry) (p *P
 			strategy, name = x, "(inline)"
 		case *Object:
 			name, _ = x.Str("use")
-			strategy = reg.strategy(name, x.Object("options"))
+			strategy = reg.strategy(name, x.Object("options"), "strategies['"+f.Role+"']")
 		}
 		strategy = strategy.selectFor(capabilities, f.Role, name).bound(f.Name)
 		p.resolved = append(p.resolved, resolvedRole{f.Role, name, f, strategy})

@@ -97,7 +97,9 @@ def load(entry: dict, *, registry=None) -> Adapter:
                        fix={"action": "install-vocabulary", "kind": "strategy", "name": str(name)})
             _check_vocab_version(f"strategy/{name}", vocab_versions,
                                  registry.strategies[name].version)
-            strategies[role] = {"use": name, "options": dict(s.get("options", {}))}
+            options = dict(s.get("options", {}))
+            registry.strategy(name, options, where=where)  # resolve at load (§6)
+            strategies[role] = {"use": name, "options": options}
         else:
             strategies[role] = Strategy.from_dict(s, where=where)
 
@@ -114,7 +116,9 @@ def load(entry: dict, *, registry=None) -> Adapter:
                        fix={"action": "install-vocabulary", "kind": "format", "name": str(name)})
             _check_vocab_version(f"format/{name}", vocab_versions,
                                  registry.formats[name].version)
-            formats[key] = {"use": name, "options": dict(f.get("options", {}))}
+            options = dict(f.get("options", {}))
+            registry.named_format(name, options, where=where)  # resolve at load (§5)
+            formats[key] = {"use": name, "options": options}
         elif "language" in f:
             for req in ("write", "sha256"):
                 if req not in f:

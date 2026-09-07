@@ -204,7 +204,11 @@ cannot spell is `value-invalid`, text they cannot read is `parse-value`.
 **Artifact entries** under `formats`, keyed by type name or structural
 key, are either a **reference** `{"use": name, "options"?}` to a named
 format the runtime registers (vocabulary: `format-json.md` …, versioned
-as `format/<name>`), or a **shipped UDF**:
+as `format/<name>`), or a **shipped UDF**. A reference is resolved at
+load: the factory runs on `options`, and a factory that fails refuses
+`entry-malformed` naming the reference's path — a pack has no
+privilege, and a bad option is a defect of the artifact, never a bind
+surprise or a host exception:
 
 ```json
 {"language": "python", "deps": [], "write": "def write(v, f): …",
@@ -235,7 +239,12 @@ Predicate = {capability} | {not} | {all} | {any}
 ```
 
 Strategies are keyed by role in the artifact, as data, or referenced
-`{"use": name, "options"?}` (vocabulary, `strategy/<name>`). At bind, in
+`{"use": name, "options"?}` (vocabulary, `strategy/<name>`). A reference
+is resolved at load, and what the factory returns is checked by the
+kernel's own rules exactly as inline data (an empty `between`
+delimiter, a bad predicate, an unrecoverable hidden field): a failing
+factory or malformed result refuses `entry-malformed` naming the
+reference's path. At bind, in
 signature order: `choose` picks the first alternative whose `when`
 holds (`capability-missing` if none and no `else`); `when`/`requires`
 are checked against the declared capabilities (`capability-missing`

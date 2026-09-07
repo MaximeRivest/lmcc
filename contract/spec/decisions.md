@@ -373,3 +373,29 @@ duplicate the parse corpus at every scalar; (3) a `between` routing with
 both delimiters empty makes batch loop forever in both kernels (schema
 allows it); the reducer breaks out instead of hanging, the batch bug is
 left for its own fix. Memory stays proportional to the reply (D-26 (3)).
+
+**D-28 · Vocabulary references resolve at load; a pack has no privilege.**
+A `{"use": name, "options"}` reference (format or strategy) is resolved
+when the artifact loads: the factory runs on the options, a failing
+factory refuses `entry-malformed` at the reference's path, and what a
+strategy factory returns is validated by the kernel's own rules exactly
+as inline data. Reason: D-27 (3) recorded a hang — `reasoning_tags` with
+`{"open": "", "close": ""}` built a `between` routing with empty
+delimiters that the kernel refuses when written inline but accepted
+from the pack, and batch parse looped forever in both kernels (corpus
+81). Looking for the class rather than the instance found a second
+member: `table` without `columns` raised a bare `ValueError` in Python
+and refused at bind in Go with a fix path naming the format's name
+instead of the artifact key (corpus 82) — two kernels, three behaviors,
+no case. The tower says packs plug into sockets with zero privilege;
+letting a factory's output skip validation was a privilege. Resolving
+at load rather than bind keeps `errors.md` true (`entry-malformed`
+fires at construct/load) and makes artifact validity independent of
+any signature. Costs: (1) factories run at load and again at bind —
+they are pure and cheap, and storing the built object would complicate
+dump; (2) the fix path names the reference (`strategies['reasoning']`),
+not the offending option, because the kernel cannot know which option
+produced the bad data — the hint carries the pack's message; (3) in Go
+a factory that panics with a non-`Error` is still a driver panic, not a
+refusal: returning `error` is the factory contract, and a panic is a
+bug to surface, not data to absorb.

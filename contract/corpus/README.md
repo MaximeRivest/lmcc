@@ -40,6 +40,13 @@ streaming linear: a later anchor beginning inside an earlier anchor's
 occurrence yields an empty capture (§4). It exposed a Go batch panic on
 the negative slice, fixed to match; the reference already read it so.
 
+**Vocabulary references (D-28).** Cases 81–82 were hand-authored after a
+pack-built strategy with empty `between` delimiters hung batch parse in
+both kernels: a reference's factory now runs at load, its failure is
+`entry-malformed` at the reference's path, and a strategy it returns is
+validated like inline data. Case 82 pins the same rule for a format
+whose options the pack rejects.
+
 **Streaming refinement (plan 01).** No streaming fixtures duplicate the
 parse corpus. Both harness drivers replay every parse response whole,
 one Unicode scalar at a time, at every scalar split, and at every split

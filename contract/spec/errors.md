@@ -15,7 +15,7 @@ parameters, is breaking.
 | `unknown-parse-kind` | construct/load/bind | `install-vocabulary`, `edit-entry` | `parse.kind` is neither `derived` nor a registered lens (`edit-entry` when it is not even a name) |
 | `unknown-format` | load/dump | `install-vocabulary` | a `{"use": name}` format reference names nothing registered |
 | `unknown-strategy` | load/dump | `install-vocabulary` | a `{"use": name}` strategy reference names nothing registered |
-| `entry-malformed` | construct/load | `edit-entry` | structural problem; hint names the path (includes a routing with no source, a `pattern` regex outside the RE2 dialect, a bad predicate) |
+| `entry-malformed` | construct/load | `edit-entry` | structural problem; hint names the path (includes a routing with no source, a `pattern` regex outside the RE2 dialect, a bad predicate, and a vocabulary reference whose factory rejects its `options` or returns malformed data) |
 | `signature-malformed` | signature | `edit-signature` | field name not an ASCII identifier, duplicate name, bad direction, shape not an object |
 | `version-incompatible` | load | `match-version` | artifact needs a version this implementation cannot honor |
 | `already-registered` | registration | — | duplicate name without `exist_ok` |

@@ -119,6 +119,7 @@ func Load(entry *Object, reg *Registry) (a *Adapter, err error) {
 				if opts == nil {
 					opts = NewObject()
 				}
+				reg.strategy(name, opts, where) // resolve at load (kernel §6)
 				strategies.Set(role, Obj("use", name, "options", opts))
 			} else {
 				strategies.Set(role, strategyFromJSON(so, where))
@@ -144,6 +145,7 @@ func Load(entry *Object, reg *Registry) (a *Adapter, err error) {
 				if opts == nil {
 					opts = NewObject()
 				}
+				reg.namedFormat(name, opts, where) // resolve at load (kernel §5)
 				formats.Set(key, Obj("use", name, "options", opts))
 			case fo.Has("language"):
 				for _, req := range []string{"write", "sha256"} {

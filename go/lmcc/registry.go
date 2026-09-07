@@ -50,7 +50,10 @@ func (r *Registry) RegisterFormat(name string, f FormatFactory, version string, 
 	return nil
 }
 
-func (r *Registry) namedFormat(name string, options *Object) Format {
+// namedFormat resolves a {"use": name, "options"} reference. A factory
+// that fails is a defect of the artifact (kernel §5): entry-malformed at
+// where, the reference's path — never a host error.
+func (r *Registry) namedFormat(name string, options *Object, where string) Format {
 	entry, ok := r.formats[name]
 	if !ok {
 		refuseFixf("unknown-format", fixInstall("format", name), "format %q is not registered — install the package that provides it, or ship the format with the artifact", name)
@@ -58,12 +61,18 @@ func (r *Registry) namedFormat(name string, options *Object) Format {
 	if options == nil {
 		options = NewObject()
 	}
+	if where == "" {
+		where = "format '" + name + "'"
+	}
 	f, err := entry.factory(options)
 	if err != nil {
 		if e, ok := err.(*Error); ok {
 			panic(e)
 		}
-		refuseFixf("entry-malformed", fixEditEntry("formats['"+name+"']"), "format %q: %v", name, err)
+		refuseFixf("entry-malformed", fixEditEntry(where), "%s: format %q rejects its options: %v", where, name, err)
+	}
+	if f == nil {
+		refuseFixf("entry-malformed", fixEditEntry(where), "%s: format %q returned no format", where, name)
 	}
 	return &namedWrap{Format: f, name: name}
 }
@@ -100,7 +109,7 @@ func (r *Registry) typeBinding(t reflect.Type) Format {
 				return b.format
 			}
 			name, _ := b.use.Str("use")
-			return r.namedFormat(name, b.use.Object("options"))
+			return r.namedFormat(name, b.use.Object("options"), "") // runtime binding, not an artifact path
 		}
 	}
 	return nil
@@ -124,7 +133,11 @@ func (r *Registry) RegisterStrategy(name string, f StrategyFactory, version stri
 	return nil
 }
 
-func (r *Registry) strategy(name string, options *Object) *Strategy {
+// strategy resolves a {"use": name, "options"} reference. What the
+// factory returns is checked by the kernel's own rules exactly as inline
+// data (kernel §6): a pack has no privilege. A failing factory or a
+// malformed result is entry-malformed at where, the reference's path.
+func (r *Registry) strategy(name string, options *Object, where string) *Strategy {
 	entry, ok := r.strategies[name]
 	if !ok {
 		refuseFixf("unknown-strategy", fixInstall("strategy", name), "strategy %q is not registered — install the package that provides it, or inline the strategy as data", name)
@@ -132,13 +145,30 @@ func (r *Registry) strategy(name string, options *Object) *Strategy {
 	if options == nil {
 		options = NewObject()
 	}
+	if where == "" {
+		where = "strategy '" + name + "'"
+	}
 	s, err := entry.factory(options)
 	if err != nil {
 		if e, ok := err.(*Error); ok {
 			panic(e)
 		}
-		refuseFixf("entry-malformed", fixEditEntry("strategies['"+name+"']"), "strategy %q: %v", name, err)
+		refuseFixf("entry-malformed", fixEditEntry(where), "%s: strategy %q rejects its options: %v", where, name, err)
 	}
+	if s == nil {
+		refuseFixf("entry-malformed", fixEditEntry(where), "%s: strategy %q returned no strategy", where, name)
+	}
+	func() {
+		defer func() {
+			if rec := recover(); rec != nil {
+				if e, ok := rec.(*Error); ok && e.Code == "entry-malformed" {
+					refuseFixf("entry-malformed", fixEditEntry(where), "%s: strategy %q built malformed data — %s", where, name, e.Detail)
+				}
+				panic(rec)
+			}
+		}()
+		s.validate(where)
+	}()
 	return s
 }
 

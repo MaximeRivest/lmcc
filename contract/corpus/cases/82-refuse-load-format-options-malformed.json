@@ -1,0 +1,67 @@
+{
+ "name": "refuse-load-format-options-malformed",
+ "kind": "refuse",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "table_no_columns_v1",
+  "versions": {
+   "kernel": "0.2.0",
+   "vocab": {
+    "format/table": "0.1.0"
+   }
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n\nAnswer in exactly this form:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "parse": {
+   "kind": "derived"
+  },
+  "formats": {
+   "list[object]": {
+    "use": "table",
+    "options": {
+     "delimiter": ";"
+    }
+   }
+  }
+ },
+ "signature": {
+  "instructions": "List them.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "rows",
+    "direction": "output",
+    "shape": {
+     "type": "array",
+     "items": {
+      "type": "object"
+     }
+    }
+   }
+  ]
+ },
+ "expect": {
+  "code": "entry-malformed",
+  "fix": {
+   "action": "edit-entry",
+   "path": "formats['list[object]']"
+  },
+  "at": "load"
+ }
+}

@@ -579,7 +579,7 @@ def _resolve_format(plan: Plan, f: core.Field) -> _FormatChoice:
 
     def materialize(binding, key) -> _formats.Format:
         if isinstance(binding, dict) and "use" in binding:
-            return reg.named_format(binding["use"], binding.get("options"))
+            return reg.named_format(binding["use"], binding.get("options"), where=f"formats[{key!r}]")
         if isinstance(binding, dict):  # a shipped dict kept raw (allow_udf path already loaded)
             return _formats.load_udf(binding, where=f"formats[{key!r}]")
         return binding
@@ -647,7 +647,7 @@ def bind(adapter: Adapter, sig: core.SignatureCore, capabilities: dict, registry
             strategy, name = binding, "(inline)"
         else:
             name = binding["use"]
-            strategy = registry.strategy(name, binding.get("options"))
+            strategy = registry.strategy(name, binding.get("options"), where=f"strategies[{f.role!r}]")
         strategy = strategy.select(capabilities, role=f.role, name=name).bound(f.name)
         plan.resolved.append(_Resolved(f.role, f, strategy, name))
 
