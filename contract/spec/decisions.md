@@ -399,3 +399,34 @@ produced the bad data — the hint carries the pack's message; (3) in Go
 a factory that panics with a non-`Error` is still a driver panic, not a
 refusal: returning `error` is the factory contract, and a panic is a
 bug to surface, not data to absorb.
+
+**D-29 · Plan 09 policy gates, ratified as recommended.** The clean-room
+TypeScript implementation (branch `ts/cleanroom`, written from
+`contract/` alone) and the documentation review produced 114 findings;
+plan 09 classified them and named the questions only the maintainer
+could answer. Ratified 2026-09-07, each with the cost taken: (E7) `.`
+in a `pattern` routing matches a newline, as both kernels do today —
+greedy patterns can consume later sections; LF, CR, U+2028 and U+2029
+get cases. (R1) Batch parse coalesces adjacent same-kind text-bearing
+parts before routing, exactly as the reducer does — existing batch
+values that joined such parts with `\n` change; it is the only reading
+under which §8's refinement law holds. (R2) Capability fact names stay
+closed (D-06); an unknown name refuses before bind, and case 78, which
+predicated on an undeclared `prefill`, is repaired deliberately —
+vocabulary control over convenience. (H2/H3) Stream event timing is
+pinned by small hand-authored trace fixtures in the corpus, not by the
+reference kernel's trace (revising D-27 (2)) — fixtures cost
+maintenance; the reference regains no authority. (C1/B3) A non-placing
+host refuses `format-untrusted` before verifying a hash; the hash
+construction is specified as bytes; admission-before-placement is
+proposed as a later versioned change. (E5) The portable integer domain
+is int64, both endpoints pinned; larger host integers are an extension
+a host may offer, never a portable claim. (F25) History parts are
+validated at render (`value-invalid`), never normalized. (D5)
+Non-boolean capability values are caller misuse outside conformance;
+the case schema already forbids them. (E10) Lone surrogates refuse at
+transport decoding; the kernel domain is Unicode scalars. (DOC-7) The
+harness gains an explicit trusted pack-loader map; an artifact name
+never triggers an import. Batches 1–6 of plan 09 implement these under
+the accretion protocol; each batch that changes a rule appends its own
+entry.

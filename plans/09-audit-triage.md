@@ -39,6 +39,8 @@ All proposed case bytes still need author review. Case ranges below reserve work
 
 ## Bin 4 — maintainer decisions first
 
+**Ratified 2026-09-07, all as recommended (D-29).**
+
 ### E7, DOC-1 — Does a dot match a newline?
 
 Python and Go capture `a\nb`; TS finds no match (`P3b:E7-dotall`).
