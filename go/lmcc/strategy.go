@@ -2,6 +2,7 @@ package lmcc
 
 import (
 	"regexp"
+	"regexp/syntax"
 	"strconv"
 	"strings"
 )
@@ -29,8 +30,6 @@ var (
 	toRE          = regexp.MustCompile(`^@role(\.[A-Za-z_][A-Za-z0-9_]*)?$`)
 	placementRE   = regexp.MustCompile(`^(controls\.[A-Za-z_][A-Za-z0-9_.]*|message:(system|user|assistant))$`)
 	fromRE        = regexp.MustCompile(`^(text|channel:[a-z_]+)$`)
-	nonRE2        = regexp.MustCompile(`\(\?[=!>]|\(\?P?<|\\[1-9]|\\k<|[*+?}]\+`)
-	escapes       = regexp.MustCompile(`\\[^1-9k]`)
 )
 
 func NewStrategy() *Strategy {
@@ -233,12 +232,20 @@ func validateRouting(r *Object, where string) {
 }
 
 func checkRE2(re, where string) {
-	if hit := nonRE2.FindString(escapes.ReplaceAllString(re, "")); hit != "" {
-		refuseFixf("entry-malformed", fixEditEntry(where), "%s: regex %q uses %q, which is outside the portable RE2 dialect (no lookaround, backreferences, named groups, atomic or possessive constructs)", where, re, hit)
-	}
-	if _, err := regexp.Compile("(?s)" + re); err != nil {
+	parsed, err := syntax.Parse("(?s)"+re, syntax.Perl)
+	if err != nil {
 		refuseFixf("entry-malformed", fixEditEntry(where), "%s: regex %q does not compile: %v", where, re, err)
 	}
+	var checkNames func(*syntax.Regexp)
+	checkNames = func(node *syntax.Regexp) {
+		if node.Name != "" {
+			refuseFixf("entry-malformed", fixEditEntry(where), "%s: regex %q uses a named group, outside the portable RE2 dialect", where, re)
+		}
+		for _, child := range node.Sub {
+			checkNames(child)
+		}
+	}
+	checkNames(parsed)
 }
 
 func validatePredicate(p any, where string) {

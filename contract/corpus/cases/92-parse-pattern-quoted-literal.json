@@ -1,0 +1,59 @@
+{
+ "name": "parse-pattern-quoted-literal",
+ "kind": "parse",
+ "entry": {
+  "name": "pattern_text",
+  "versions": {
+   "kernel": "0.2.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{% for f in outputs %}<{f.name}>{f.value}</{f.name}>\n{% endfor %}"
+   }
+  ],
+  "parse": {
+   "kind": "derived"
+  },
+  "strategies": {
+   "reasoning": {
+    "visible": false,
+    "routings": [
+     {
+      "from": "text",
+      "pattern": "THINK:(\\Q.+\\E) END",
+      "to": "@role"
+     }
+    ]
+   }
+  }
+ },
+ "signature": {
+  "instructions": "",
+  "fields": [
+   {
+    "name": "reasoning",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    },
+    "role": "reasoning"
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "integer"
+    }
+   }
+  ]
+ },
+ "response": "THINK:.+ END\n<answer>4</answer>",
+ "expect": {
+  "values": {
+   "reasoning": ".+",
+   "answer": 4
+  }
+ }
+}
