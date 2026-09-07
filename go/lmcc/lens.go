@@ -1,7 +1,6 @@
 package lmcc
 
 import (
-	"regexp"
 	"sort"
 	"strings"
 )
@@ -18,7 +17,7 @@ type textSpan struct {
 	capture    string
 }
 
-func textSpans(text string, r *Object) []textSpan {
+func textSpans(text string, r *Object, pattern PatternBinding) []textSpan {
 	var spans []textSpan
 	switch {
 	case r.Has("between"):
@@ -50,26 +49,13 @@ func textSpans(text string, r *Object) []textSpan {
 		}
 	default:
 		re, _ := r.Str("pattern")
-		pattern := regexp.MustCompile("(?s)" + re)
-		for _, m := range pattern.FindAllStringSubmatchIndex(text, -1) {
-			if m[1] == m[0] {
-				continue
-			}
-			cap := text[m[0]:m[1]]
-			if pattern.NumSubexp() > 0 {
-				cap = ""
-				if m[2] >= 0 {
-					cap = text[m[2]:m[3]]
-				}
-			}
-			spans = append(spans, textSpan{m[0], m[1], cap})
-		}
+		spans = pattern.Spans(re, text)
 	}
 	return spans
 }
 
 // applyRoutings runs all routings; returns (remaining text, {field: Span}).
-func applyRoutings(text string, parts []any, routings []routing) (string, *Object) {
+func applyRoutings(text string, parts []any, routings []routing, pattern PatternBinding) (string, *Object) {
 	found := NewObject()
 	for _, r := range routings {
 		from, _ := r.spec.Str("from")
@@ -84,7 +70,7 @@ func applyRoutings(text string, parts []any, routings []routing) (string, *Objec
 				}
 			}
 		} else {
-			spans := textSpans(text, r.spec)
+			spans := textSpans(text, r.spec, pattern)
 			for _, s := range spans {
 				span.Parts = append(span.Parts, TextPart(s.capture))
 			}

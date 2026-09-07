@@ -319,17 +319,17 @@ it cannot. That boundary is the contract's, not an accident.
 Implementations need not use the same execution engine. They must preserve
 meaning for every contract they claim to support.
 
-The next-version design separates a small mandatory core from named, versioned
-extensions. An artifact declares its requirements. The host supplies compatible
-implementations or refuses before sending the model request. Regex execution
-belongs to this optional layer; LMCC does not require every host to build a
-regex engine. Model capabilities and host execution support remain separate.
-
-This is a design direction, not a released extension API. Kernel 0.2 still
-uses bare `pattern` strings and its existing refusal rules. The new declaration
-schema, host bindings, and migration remain to be specified. See
-[the portability design](contract/spec/portability.md) and
-[plan 10](plans/10-declared-extensions.md).
+Kernel 0.3 separates a small mandatory core from named, versioned
+**extensions**. An artifact declares what it needs
+(`"extensions": {"pattern/legacy-re2": "0.1.0"}`); the host binds a
+compatible implementation or refuses — by name, with a fix — before any
+model request. Regex execution is the first such extension: no host has
+to build a regex engine to be conformant, and a "core only" claim is a
+complete one. `registry.describe()["extensions"]` says what a host binds;
+`plan.describe()["extensions"]` says what a plan resolved. Model
+capabilities and host execution support stay separate vocabularies. See
+[portability](contract/spec/portability.md), kernel §10, and
+[the extension index](contract/spec/extensions/README.md).
 
 ## 12. What lmcc refuses to be
 

@@ -1,0 +1,81 @@
+{
+ "name": "roundtrip-extensions",
+ "kind": "roundtrip",
+ "requires": [
+  "pattern/legacy-re2"
+ ],
+ "entry": {
+  "name": "derived_v1",
+  "versions": {
+   "kernel": "0.3.0",
+   "vocab": {}
+  },
+  "extensions": {
+   "pattern/legacy-re2": "0.1.0"
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n\nAnswer in exactly this form:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "parse": {
+   "kind": "derived"
+  },
+  "strategies": {
+   "reasoning": {
+    "visible": false,
+    "routings": [
+     {
+      "from": "text",
+      "pattern": "Thought: ([^\\n]+)",
+      "to": "@role",
+      "consume": true
+     }
+    ]
+   }
+  }
+ },
+ "expect": {
+  "entry": {
+   "name": "derived_v1",
+   "versions": {
+    "kernel": "0.3.0",
+    "vocab": {}
+   },
+   "extensions": {
+    "pattern/legacy-re2": "0.1.0"
+   },
+   "template": [
+    {
+     "role": "system",
+     "text": "{instruction}\n\nAnswer in exactly this form:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+    },
+    {
+     "role": "user",
+     "text": "{q}"
+    }
+   ],
+   "parse": {
+    "kind": "derived"
+   },
+   "strategies": {
+    "reasoning": {
+     "visible": false,
+     "routings": [
+      {
+       "from": "text",
+       "pattern": "Thought: ([^\\n]+)",
+       "to": "@role",
+       "consume": true
+      }
+     ]
+    }
+   }
+  }
+ }
+}

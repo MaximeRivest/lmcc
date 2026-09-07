@@ -36,15 +36,19 @@ normative form.
 L0 outranks everything. If code and corpus disagree, the code is wrong.
 If spec and corpus disagree, fix the corpus first, deliberately, then both.
 
-## Portability direction (D-31)
+## Portability: core + declared extensions (D-31, D-33)
 
-Read `contract/spec/portability.md` and `plans/10-declared-extensions.md`
-before proposing execution backends. Keep a small exact core; declare optional
-extension contracts and versions. Hosts bind compatible implementations or
-refuse before model I/O. Do not confuse host support with model capabilities.
-Do not build a regex engine merely to satisfy the superseded universal mandate.
-Kernel 0.2 schemas and corpus remain unchanged until a versioned migration.
-The custom matcher on `batch/01` is experimental and unmerged, not a chosen backend.
+Read `contract/spec/portability.md` (the boundary and the core inventory),
+kernel §10 (the mechanism) and `contract/spec/extensions/README.md` (the
+index) before touching anything outside the core. The core is exact and
+mandatory; everything else is a named, versioned extension the artifact
+declares (`entry.extensions`) and the host binds (`Registry.extensions`)
+or refuses — `extension-undeclared` / `extension-unsupported` /
+`version-incompatible`, each with a fix, before any plan. Host support and
+model capabilities are separate vocabularies; never overload one for the
+other. Regex is not core: `pattern/legacy-re2` is the migration bridge
+(what 0.2 did, limits stated), not a rigorously specified dialect. Do not
+build a regex engine to be conformant; `plans/10` lists what is still open.
 
 ## The three generative rules
 
@@ -71,9 +75,10 @@ a decision, derive from these before inventing anything:
 
 | invariant | enforced by |
 |---|---|
-| corpus is byte-exact authority | `contract/harness/runner.py` (90 cases; 6 need `udf:python`) |
+| corpus is byte-exact authority | `contract/harness/runner.py` (95 cases; 6 need `udf:python`, 4 need `pattern/legacy-re2`) |
 | the contract is portable: an independent Go kernel passes every claimable case byte-exactly, and both kernels raise the same refusal-code set (minus the declared placement-only code) | `./check` step 5 (`runner.py --driver go/bin/lmcc-conform`), `tests/test_coherence.py` |
-| text primitives are portable: ASCII strip, explicit integer/number grammars, ECMAScript number spelling, legacy regex cases (kernel §7a, §5; full RE2 equivalence is not established; D-31 moves future regex support to declared extensions) | corpus 35–37, 40–42, 44, 45; `tests/test_text_rules.py`; `go/lmcc/text_test.go` |
+| text primitives are portable: ASCII strip, explicit integer/number grammars, ECMAScript number spelling (kernel §7a) | corpus 35–37, 44, 45; `tests/test_text_rules.py`; `go/lmcc/text_test.go` |
+| the core needs no regex: a `pattern` routing requires a declared `pattern/*` extension; a core-only host refuses before model I/O; both kernels bind the same natives at the same versions; every native has an indexed spec | corpus 40, 42, 91–95; `tests/test_extensions.py`; `go/lmcc/extensions_test.go`; `tests/test_coherence.py` |
 | `split(join(x)) == x` for marker-free, trimmed `x`; `join` refuses collisions (`value-collides`) | `tests/test_kernel.py`, `test_text_rules.py`; corpus 38 |
 | the artifact never names a field: strategies by role, formats by type/structural key | `schema/entry.schema.json`; corpus 55 |
 | resolution order: artifact type → structural key → runtime binding → kernel default → `*` → `no-format` | `tests/test_formats.py`; corpus 48–50, 55–56 |
@@ -152,8 +157,15 @@ Checklists:
   (`core.strip`, `read_integer`, `format_number` / `lmcc.Strip`,
   `ReadInteger`, `FormatNumber`), never the host language's own
   `strip`/`int`/`float`/`repr`. That is where cross-language drift hides.
-- **a case that ships a UDF**: declare `"requires": ["udf:python"]`; a
-  driver without that placement answers `unclaimed`, never a false pass.
+- **a case that needs anything beyond the core**: declare it in
+  `requires` (`udf:python`, `pattern/legacy-re2`); drivers bind exactly
+  that, so a forgotten requirement refuses; a driver lacking it answers
+  `unclaimed`, never a false pass.
+- **new extension**: spec file in `contract/spec/extensions/` pinning
+  every observable outcome and its limits → row in the index → corpus
+  cases that `requires` it → a binding in each kernel that claims it
+  (`native_extensions()` / `NativeExtensions()`; the coherence test keeps
+  the two lists identical) → one decision entry.
 
 ## Verify — one command
 

@@ -5,6 +5,8 @@ import pytest
 import lmcc
 from lmcc.parse import Lens
 
+LEGACY = {"pattern/legacy-re2": "0.1.0"}
+
 
 def tagged(*, outputs=None, strategies=None, formats=None):
     sig = lmcc.signature("Answer.", inputs={"q": str}, outputs=outputs or {"answer": str})
@@ -76,7 +78,8 @@ def routed_plan(routing):
                          outputs={"reasoning": lmcc.field(str, role="reasoning"), "answer": str})
     adapter = lmcc.adapter(messages=[
         lmcc.system("{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"),
-        lmcc.user("{q}")], strategies={"reasoning": strategy})
+        lmcc.user("{q}")], strategies={"reasoning": strategy},
+        extensions=LEGACY if "pattern" in routing else None)
     return adapter.bind(sig)
 
 
@@ -274,7 +277,8 @@ def fuzz_plan(template, routings=None, outputs=None):
             visible=False, routings=[{**r, "to": "@role"} for r in routings])}
     sig = lmcc.signature("x", inputs={"q": str}, outputs=outputs)
     adapter = lmcc.adapter(messages=[lmcc.system(template), lmcc.user("{q}")],
-                           strategies=strategies)
+                           strategies=strategies,
+                           extensions=LEGACY if any("pattern" in r for r in routings or []) else None)
     return adapter.bind(sig)
 
 

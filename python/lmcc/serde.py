@@ -11,12 +11,13 @@ Two rules with no exceptions:
 
 from __future__ import annotations
 
+from . import extensions as _extensions
 from . import formats as _formats
 from .adapter import Adapter, adapter as make_adapter
 from .errors import refuse
 from .strategy import Strategy
 
-KERNEL_VERSION = "0.2.0"
+KERNEL_VERSION = "0.3.0"
 
 
 def _parse_version(version: object, *, what: str) -> tuple[int, int, int]:
@@ -30,7 +31,7 @@ def _parse_version(version: object, *, what: str) -> tuple[int, int, int]:
     return tuple(int(p) for p in parts)  # type: ignore[return-value]
 
 
-def _check_compatible(kind: str, theirs: str, ours: str) -> None:
+def check_compatible(kind: str, theirs: str, ours: str) -> None:
     t, o = _parse_version(theirs, what=kind), _parse_version(ours, what=kind)
     ok = t[0] == o[0] and (t[1] <= o[1] if t[0] > 0 else t[1] == o[1])
     if not ok:
@@ -41,7 +42,7 @@ def _check_compatible(kind: str, theirs: str, ours: str) -> None:
 
 def _check_vocab_version(ref: str, declared: dict, provided: str) -> None:
     if ref in declared:
-        _check_compatible(ref, declared[ref], provided)
+        check_compatible(ref, declared[ref], provided)
 
 
 # ---------------------------------------------------------------------- load
@@ -60,7 +61,7 @@ def load(entry: dict, *, registry=None) -> Adapter:
     versions = entry["versions"]
     if not isinstance(versions, dict):
         refuse("entry-malformed", "versions must be an object", fix={"action": "edit-entry", "path": "versions"})
-    _check_compatible("kernel", versions.get("kernel", "0.0.0"), KERNEL_VERSION)
+    check_compatible("kernel", versions.get("kernel", "0.0.0"), KERNEL_VERSION)
     vocab_versions = versions.get("vocab", {}) or {}
 
     template = entry["template"]
@@ -135,8 +136,11 @@ def load(entry: dict, *, registry=None) -> Adapter:
             refuse("entry-malformed", f"{where}: a format entry is {{use}} or a shipped UDF",
                    fix={"action": "edit-entry", "path": where})
 
-    return make_adapter(messages=template, parse=parse_spec, strategies=strategies,
-                        formats=formats, name=entry.get("name", "adapter"))
+    adp = make_adapter(messages=template, parse=parse_spec, strategies=strategies,
+                        formats=formats, name=entry.get("name", "adapter"),
+                        extensions=entry.get("extensions"))
+    _extensions.resolve(adp, registry)   # kernel §10: refuse here, before any plan
+    return adp
 
 
 # ---------------------------------------------------------------------- dump
@@ -187,6 +191,10 @@ def dump(adp: Adapter, registry) -> dict:
         "template": [dict(m) for m in adp.template],
         "parse": dict(adp.parse),
     }
+    if adp.extensions:
+        entry = {**{k: v for k, v in entry.items() if k in ("name", "versions")},
+                 "extensions": dict(adp.extensions),
+                 **{k: v for k, v in entry.items() if k not in ("name", "versions")}}
     if strategies:
         entry["strategies"] = strategies
     if formats:

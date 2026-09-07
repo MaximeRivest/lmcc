@@ -12,8 +12,11 @@ strategies. This module defines what a runtime registers:
   (``derived`` is kernel grammar, never registered).
 
 ``allow_udf`` decides whether this runtime will place shipped Python
-UDFs from artifacts. Registries are explicit objects; nothing reads
-``default_registry`` implicitly during ``load``.
+UDFs from artifacts. ``extensions`` are the execution contracts this
+runtime binds (kernel §10): by default the kernel's native ones, or
+exactly the names you pass (``()`` for a core-only host). Registries are
+explicit objects; nothing reads ``default_registry`` implicitly during
+``load``.
 """
 
 from __future__ import annotations
@@ -22,6 +25,7 @@ from dataclasses import dataclass
 
 from . import core
 from .errors import Refusal, refuse
+from .extensions import ExtensionBinding, native_extensions
 from .formats import Format, make
 from .parse import Lens
 from .strategy import Strategy
@@ -34,12 +38,29 @@ class _Named:
 
 
 class Registry:
-    def __init__(self, *, allow_udf: bool = False) -> None:
+    def __init__(self, *, allow_udf: bool = False,
+                 extensions: "list[str] | tuple[str, ...] | None" = None) -> None:
         self.formats: dict[str, _Named] = {}
         self.type_bindings: list[tuple[object, Format | dict]] = []
         self.strategies: dict[str, _Named] = {}
         self.lenses: dict[str, _Named] = {}
         self.allow_udf = allow_udf
+        self.extensions: dict[str, ExtensionBinding] = {}
+        natives = {b.extension: b for b in native_extensions()}
+        for name in (natives if extensions is None else extensions):
+            if name not in natives:
+                raise ValueError(f"no native binding for extension {name!r}; "
+                                 f"use register_extension(...) with your own")
+            self.extensions[name] = natives[name]
+
+    # --------------------------------------------------------- extensions
+
+    def register_extension(self, binding: ExtensionBinding, *, exist_ok: bool = False) -> None:
+        """Bind an implementation of ``binding.extension`` in this runtime.
+        A table entry: nothing runs, nothing starts."""
+        if binding.extension in self.extensions and not exist_ok:
+            refuse("already-registered", f"extension {binding.extension!r} is already bound")
+        self.extensions[binding.extension] = binding
 
     # ------------------------------------------------------------ formats
 
@@ -174,6 +195,7 @@ class Registry:
             "lenses": {"derived": "kernel",
                        **{n: e.version for n, e in sorted(self.lenses.items())}},
             "allow_udf": self.allow_udf,
+            "extensions": {n: b.describe() for n, b in sorted(self.extensions.items())},
         }
 
 

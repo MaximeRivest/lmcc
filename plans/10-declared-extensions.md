@@ -22,21 +22,38 @@ Keep the existing 0.2 contract readable and its cases unchanged until migration.
 Version the requirements, discovery, bindings, and refusal behavior deliberately.
 This plan gates regex-related work in plan 09; its other safety fixes remain useful.
 
+## Status
+
+**Phase 1 — the mechanism — landed as kernel 0.3 (D-33).** The contract
+now has a declaration (`entry.extensions`), a binding table
+(`Registry.extensions`), discovery (`registry.describe()["extensions"]`),
+inspection (`plan.describe()["extensions"]`), three refusals with fixes,
+scoped harness claims, and one extension (`pattern/legacy-re2`, the
+migration bridge). **Phase 2 — a rigorously specified pattern dialect
+with library evidence — is open** and is the only regex work left.
+
 ## Acceptance criteria
 
-- [ ] Enumerate mandatory core operations and their conformance cases.
-- [ ] Specify named extension identity, version compatibility, and artifact requirements.
-- [ ] Specify host support discovery independently of model capabilities.
-- [ ] Specify binding inspection, trust admission, unsupported requirements, and exact fix actions.
-- [ ] Define routing-pattern syntax and all observable matching semantics, with Unicode and capture cases.
-- [ ] Compare mature libraries with those cases; record limits, dependencies, and rejected alternatives.
-- [ ] Author cases first for supported, missing, mismatched-version, and incompatible bindings.
-- [ ] Test that a core-only host refuses an extension-dependent artifact before model I/O.
-- [ ] Test identical extraction and streaming results across two claimed implementations.
-- [ ] Specify the migration of legacy bare `pattern` strings without silently changing their meaning.
-- [ ] Add schemas and harness support for scoped claims; never count missing extensions as passes.
-- [ ] Implement the ratified design in Python and Go; test TypeScript independently.
-- [ ] Update docs, plans, versions, and decisions; run `./check` before completion.
+Phase 1 (done, kernel 0.3):
+
+- [x] Enumerate mandatory core operations and their conformance cases (`spec/portability.md`).
+- [x] Specify named extension identity, version compatibility, and artifact requirements (kernel §10, `spec/extensions/README.md`, `schema/entry.schema.json`).
+- [x] Specify host support discovery independently of model capabilities (`Registry.extensions`, `describe()`).
+- [x] Specify binding inspection, unsupported requirements, and exact fix actions (`plan.describe()["extensions"]`; `extension-undeclared` → `declare-extension`, `extension-unsupported` → `bind-extension`, `version-incompatible` → `match-version`).
+- [x] Author cases first for supported, missing, mismatched-version, and incompatible bindings (cases 40, 42, 91–95).
+- [x] Test that a core-only host refuses an extension-dependent artifact before model I/O (case 92; `tests/test_extensions.py`; `go/lmcc/extensions_test.go`).
+- [x] Test identical extraction and streaming results across two claimed implementations (harness: Go passes 40 and 42 byte-exactly with matching stream traces).
+- [x] Specify the migration of legacy bare `pattern` strings without silently changing their meaning (kernel §10: undeclared refuses; `pattern/legacy-re2` is defined as 0.2's behavior).
+- [x] Add schemas and harness support for scoped claims; never count missing extensions as passes (`requires` generalized; drivers bind exactly what is listed).
+- [x] Implement in Python and Go; update docs, plans, versions, decisions; `./check` green.
+
+Phase 2 (open):
+
+- [ ] Define routing-pattern syntax and all observable matching semantics, with Unicode and capture cases, as a new contract `pattern/<name>` — not by tightening `legacy-re2`.
+- [ ] Compare mature libraries (Go `regexp`, Python `re`/`regex`, RE2 bindings, Rust `regex`) against those cases; record limits, dependencies, and rejected alternatives; pick bindings per kernel by evidence.
+- [ ] Test the TypeScript clean-room implementation independently against 0.3 (it currently targets 0.2 and will refuse `version-incompatible`; its regex gaps become a *claim* question, not a defect).
+- [ ] Decide whether `udf:<language>` placement joins the extension mechanism (`udf/<language>`) in a later version; today it stays a separate `requires` form because unifying it would change existing refusal codes without a corpus reason.
+- [ ] Decide whether trust admission for bindings that start services needs a declaration beyond the binding label.
 
 ## Trade-offs
 

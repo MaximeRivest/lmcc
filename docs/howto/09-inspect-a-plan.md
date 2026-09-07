@@ -90,7 +90,7 @@ assert d["streaming"] == {
     "mode": "incremental", "lens": {"mode": "incremental"},
     "routings": [{"field": "reasoning", "from": "text", "mode": "incremental"}],
     "field_done": "finish"}
-assert d["versions"] == {"kernel": "0.2.0",
+assert d["versions"] == {"kernel": "0.3.0",
                          "vocab": {"format/json": "0.1.0", "strategy/reasoning_tags": "0.1.0"}}
 assert d["capabilities"] == {"instruct": True}
 ```
@@ -116,11 +116,15 @@ assert registry.describe() == {
     "type_bindings": [],
     "strategies": {"native_reasoning": "0.1.0", "prefix_cot": "0.1.0", "reasoning_tags": "0.1.0"},
     "lenses": {"derived": "kernel", "json_object": "0.1.0"},
-    "allow_udf": False}
+    "allow_udf": False,
+    "extensions": {"pattern/legacy-re2": {"version": "0.1.0", "binding": "python:re"}}}
 ```
 
 `type_bindings` lists runtime `registry.format(T, ...)` calls. They are
-never in the artifact; two runtimes may differ here.
+never in the artifact; two runtimes may differ here. `extensions` is
+what this host binds beyond the core (kernel §10) — a fact about the
+process, kept apart from the model's capabilities; an artifact that
+declares one this list lacks refuses `extension-unsupported` at load.
 
 ## 8. Two more views
 

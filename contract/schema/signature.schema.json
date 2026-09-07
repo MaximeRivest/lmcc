@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:lmcc:schema:signature:0.2.0",
+  "$id": "urn:lmcc:schema:signature:0.3.0",
   "title": "LMCC signature (SignatureCore)",
   "description": "The frontend-neutral typed contract every language lowers to: instructions plus ordered fields. Uniqueness of field names is enforced by implementations (signature-malformed), not expressible here.",
   "type": "object",
@@ -61,7 +61,7 @@
       "additionalProperties": false
     },
     "shape": {
-      "description": "JSON Schema; the kernel interprets only type/enum/items/media and the two nullable spellings (kernel.md §1) and carries every other keyword untouched.",
+      "description": "JSON Schema; the kernel interprets only type/enum/items/media and the two nullable spellings (kernel.md \u00a71) and carries every other keyword untouched.",
       "type": "object",
       "properties": {
         "type": {

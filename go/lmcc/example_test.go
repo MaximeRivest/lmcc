@@ -44,7 +44,7 @@ func Example() {
 		},
 		lmcc.Obj("kind", "derived"),
 		lmcc.Obj("reasoning", tags),
-		nil)
+		nil, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -94,7 +94,7 @@ func Example() {
 	native.Requires = []string{"native_reasoning"}
 	native.Visible = false
 	native.Routings = []*lmcc.Object{lmcc.Obj("from", "channel:thinking", "to", "@role")}
-	strict, err := lmcc.NewAdapter("qa-native", adapter.Template, adapter.Parse, lmcc.Obj("reasoning", native), nil)
+	strict, err := lmcc.NewAdapter("qa-native", adapter.Template, adapter.Parse, lmcc.Obj("reasoning", native), nil, nil)
 	if err != nil {
 		panic(err)
 	}

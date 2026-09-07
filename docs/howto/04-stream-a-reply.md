@@ -124,7 +124,8 @@ except lmcc.Refusal as r:
 ```python
 regex = lmcc.Strategy(visible=False, routings=[
     {"from": "text", "pattern": "THOUGHT: ([^\\n]*)\\n", "to": "@role", "consume": True}])
-p3 = solve.bind(lmcc.adapter(messages=adapter.template, strategies={"reasoning": regex}))
+p3 = solve.bind(lmcc.adapter(messages=adapter.template, strategies={"reasoning": regex},
+                             extensions={"pattern/legacy-re2": "0.1.0"}))
 assert p3.describe()["streaming"] == {
     "mode": "buffered",
     "lens": {"mode": "buffered", "reason": "a consuming pattern routing can revise lens text"},
@@ -136,7 +137,13 @@ assert s.feed("THOUGHT: hm\n<answer>\n4\n</answer>") == []
 assert s.finish().values == {"answer": 4, "reasoning": "hm"}
 ```
 
-Note: both kernels compile `pattern` so that `.` matches a newline too.
+A `pattern` routing is not core: the adapter must declare which
+dialect the string is in (`extensions`, kernel §10). `pattern/legacy-re2`
+is the host's own regex engine with `.` matching newlines and group 1 as
+the capture — exactly what kernel 0.2 did. Without the declaration, bind
+refuses `extension-undeclared`; on a host that binds no regex at all it
+refuses `extension-unsupported`. Both fire before anything is sent, and
+`p3.describe()["extensions"]` shows what resolved.
 
 ## What can refuse here
 

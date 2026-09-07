@@ -178,6 +178,32 @@ def test_vocab_index_is_complete_and_spec_files_exist():
             f"index row {entry} points at missing spec file {spec_file}")
 
 
+def test_extension_index_is_complete_and_both_kernels_bind_the_same_natives():
+    """Every extension the Python kernel binds natively has an index row
+    with a real spec file (kernel §10, spec/extensions/README.md); the Go
+    kernel's native list names the same contracts at the same versions,
+    so a "core + these" claim means one thing in both."""
+    index = (SPEC / "extensions" / "README.md").read_text()
+    rows = {name: (version, spec_file) for name, version, spec_file in re.findall(
+        r"^\| `[a-z_]+` \| [^|]+ \| `([a-z0-9_/-]+)` \| ([0-9.]+) \| `([a-z0-9_.-]+\.md)` \|",
+        index, re.MULTILINE)}
+    assert rows, "the extension index has rows"
+    for version, spec_file in rows.values():
+        assert (SPEC / "extensions" / spec_file).exists(), f"missing spec file {spec_file}"
+        assert f"version {version}" in (SPEC / "extensions" / spec_file).read_text()
+    python = {b.extension: b.version for b in lmcc.native_extensions()}
+    for name, version in python.items():
+        assert name in rows and rows[name][0] == version, f"{name} {version} is not indexed"
+    go = {}
+    for go_file in (ROOT / "go" / "lmcc").glob("*.go"):
+        text = go_file.read_text()
+        for name, version in re.findall(
+                r'Extension\(\) string \{ return "([a-z0-9_/-]+)" \}\nfunc \(\*\w+\) Version\(\) string +\{ return "([0-9.]+)" \}',
+                text):
+            go[name] = version
+    assert go == python, f"native extensions differ: go={go} python={python}"
+
+
 def test_capability_facts_used_by_std_are_in_the_vocabulary():
     """Std strategies/lenses may only name declared capability facts."""
     vocab = set(re.findall(r"^\| `([a-z_]+)` \|",

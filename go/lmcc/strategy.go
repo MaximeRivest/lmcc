@@ -29,8 +29,6 @@ var (
 	toRE          = regexp.MustCompile(`^@role(\.[A-Za-z_][A-Za-z0-9_]*)?$`)
 	placementRE   = regexp.MustCompile(`^(controls\.[A-Za-z_][A-Za-z0-9_.]*|message:(system|user|assistant))$`)
 	fromRE        = regexp.MustCompile(`^(text|channel:[a-z_]+)$`)
-	nonRE2        = regexp.MustCompile(`\(\?[=!>]|\(\?P?<|\\[1-9]|\\k<|[*+?}]\+`)
-	escapes       = regexp.MustCompile(`\\[^1-9k]`)
 )
 
 func NewStrategy() *Strategy {
@@ -221,7 +219,6 @@ func validateRouting(r *Object, where string) {
 			if !ok || re == "" {
 				refuseFixf("entry-malformed", fixEditEntry(where), "%s: pattern is a non-empty string", where)
 			}
-			checkRE2(re, where)
 		case "line_prefixed":
 			if p, ok := r.Str("line_prefixed"); !ok || p == "" {
 				refuseFixf("entry-malformed", fixEditEntry(where), "%s: line_prefixed is a non-empty string", where)
@@ -229,15 +226,6 @@ func validateRouting(r *Object, where string) {
 		}
 	} else if len(kinds) > 0 || r.Bool("consume", false) {
 		refuseFixf("entry-malformed", fixEditEntry(where), "%s: a channel routing takes no text extractor and no consume", where)
-	}
-}
-
-func checkRE2(re, where string) {
-	if hit := nonRE2.FindString(escapes.ReplaceAllString(re, "")); hit != "" {
-		refuseFixf("entry-malformed", fixEditEntry(where), "%s: regex %q uses %q, which is outside the portable RE2 dialect (no lookaround, backreferences, named groups, atomic or possessive constructs)", where, re, hit)
-	}
-	if _, err := regexp.Compile("(?s)" + re); err != nil {
-		refuseFixf("entry-malformed", fixEditEntry(where), "%s: regex %q does not compile: %v", where, re, err)
 	}
 }
 

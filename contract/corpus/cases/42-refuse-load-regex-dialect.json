@@ -1,11 +1,17 @@
 {
  "name": "refuse-load-regex-dialect",
  "kind": "refuse",
+ "requires": [
+  "pattern/legacy-re2"
+ ],
  "entry": {
   "name": "derived_v1",
   "versions": {
-   "kernel": "0.2.0",
+   "kernel": "0.3.0",
    "vocab": {}
+  },
+  "extensions": {
+   "pattern/legacy-re2": "0.1.0"
   },
   "template": [
    {

@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:lmcc:schema:entry:0.2.0",
+  "$id": "urn:lmcc:schema:entry:0.3.0",
   "title": "LMCC adapter entry",
-  "description": "The artifact (kernel.md §2, §5, §6): a template, a parse rule, strategies by role, formats by type — never a field name.",
+  "description": "The artifact (kernel.md \u00a72, \u00a75, \u00a76): a template, a parse rule, strategies by role, formats by type \u2014 never a field name.",
   "type": "object",
   "required": [
     "versions",
@@ -30,6 +30,16 @@
             "pattern": "^\\d+\\.\\d+\\.\\d+$"
           }
         }
+      }
+    },
+    "extensions": {
+      "type": "object",
+      "description": "declared execution extensions (kernel \u00a710): '<family>/<name>' -> the version this artifact needs; at most one per family",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]*/[a-z][a-z0-9_-]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/semver"
       }
     },
     "template": {

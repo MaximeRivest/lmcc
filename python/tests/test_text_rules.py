@@ -9,6 +9,7 @@ import pytest
 import lmcc
 from lmcc import core
 from lmcc.parse import DerivedLens, _text_spans
+from lmcc.extensions import LegacyRE2
 from lmcc.strategy import validate_routing
 from lmcc_std import jsontext
 
@@ -103,7 +104,7 @@ def test_python_frontend_validates_too():
 
 def _run(text, routing):
     from lmcc.parse import apply_routings
-    rest, found = apply_routings(text, [], [("f", routing)])
+    rest, found = apply_routings(text, [], [("f", routing)], LegacyRE2())
     return rest, [p["text"] for p in found["f"].parts]
 
 
@@ -133,15 +134,18 @@ def test_span_text_strips_and_joins_every_text_bearing_part():
 @pytest.mark.parametrize("regex", [
     "(?=a)b", "(?!a)b", "(?<=a)b", "(?<!a)b", "(a)\\1", "(?>a)", "a++", "a{2}+",
     "(?P<x>a)", "(?<x>a)"])
-def test_regex_outside_re2_refuses(regex):
+def test_regex_outside_legacy_re2_refuses(regex):
+    """Admission belongs to the bound pattern/* extension (kernel §10 rule 6),
+    not to routing construction: the same regex is structurally fine."""
+    validate_routing({"from": "text", "pattern": regex, "to": "@role"}, where="t")
     with pytest.raises(lmcc.Refusal) as err:
-        validate_routing({"from": "text", "pattern": regex, "to": "@role"}, where="t")
-    assert err.value.code == "entry-malformed"
+        LegacyRE2().admit(regex, where="t")
+    assert err.value.code == "entry-malformed" and err.value.fix == {"action": "edit-entry", "path": "t"}
 
 
 @pytest.mark.parametrize("regex", ["\\(?=a\\)", "(?:a)", "(?i)a", "a\\+\\+", "[+]+"])
-def test_re2_lint_has_no_false_positives(regex):
-    validate_routing({"from": "text", "pattern": regex, "to": "@role"}, where="t")
+def test_legacy_re2_lint_has_no_false_positives(regex):
+    LegacyRE2().admit(regex, where="t")
 
 
 # ---------------------------------------------------------- invertibility

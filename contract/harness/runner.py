@@ -46,17 +46,35 @@ class PythonDriver:
         self.lmcc = lmcc
 
     def _registry(self, case: dict):
-        registry = self.lmcc.Registry(allow_udf="udf:python" in case.get("requires", []))
+        """Exactly what the case requires (kernel §9): a core-only registry
+        plus the listed UDF placement and extensions — never more, so a
+        case that forgets a requirement refuses instead of passing."""
+        requires = case.get("requires", [])
+        extensions = [r for r in requires if not r.startswith("udf:")]
+        registry = self.lmcc.Registry(allow_udf="udf:python" in requires, extensions=extensions)
         if "std" in case.get("vocab", []):
             import lmcc_std
             lmcc_std.install(registry)
         return registry
+
+    def _unclaimed(self, case: dict) -> str | None:
+        native = {b.extension for b in self.lmcc.native_extensions()}
+        for r in case.get("requires", []):
+            if r.startswith("udf:"):
+                if r != "udf:python":
+                    return r
+            elif r not in native:
+                return r
+        return None
 
     def run(self, case: dict) -> dict:
         """Returns {"ok": bool, "detail": str} for one case."""
         lmcc = self.lmcc
         expect = case["expect"]
         kind = case["kind"]
+        unclaimed = self._unclaimed(case)
+        if unclaimed:
+            return {"ok": True, "detail": "", "unclaimed": unclaimed}
         registry = self._registry(case)
         try:
             adapter = lmcc.load(case["entry"], registry=registry)

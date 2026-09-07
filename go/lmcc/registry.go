@@ -30,15 +30,40 @@ type Registry struct {
 	bindings   []typeBinding
 	strategies map[string]named[StrategyFactory]
 	lenses     map[string]named[LensFactory]
+	extensions map[string]ExtensionBinding // kernel §10: what this runtime binds
 	AllowUDF   bool
 }
 
+// NewRegistry binds the kernel's native extensions (what this runtime can
+// honestly claim with its standard library). NewCoreRegistry binds none.
 func NewRegistry() *Registry {
+	r := NewCoreRegistry()
+	for _, b := range NativeExtensions() {
+		r.extensions[b.Extension()] = b
+	}
+	return r
+}
+
+// NewCoreRegistry is a core-only host: it refuses every artifact that
+// declares an extension, before model I/O.
+func NewCoreRegistry() *Registry {
 	return &Registry{
 		formats:    map[string]named[FormatFactory]{},
 		strategies: map[string]named[StrategyFactory]{},
 		lenses:     map[string]named[LensFactory]{},
+		extensions: map[string]ExtensionBinding{},
 	}
+}
+
+// RegisterExtension binds an implementation of b.Extension() in this
+// runtime. A table entry: nothing runs, nothing starts.
+func (r *Registry) RegisterExtension(b ExtensionBinding, existOK bool) (err error) {
+	defer catch(&err)
+	if _, dup := r.extensions[b.Extension()]; dup && !existOK {
+		refusef("already-registered", "extension %q is already bound", b.Extension())
+	}
+	r.extensions[b.Extension()] = b
+	return nil
 }
 
 func (r *Registry) RegisterFormat(name string, f FormatFactory, version string, existOK bool) (err error) {
@@ -225,8 +250,13 @@ func (r *Registry) Describe() *Object {
 	for _, n := range sortedKeys(r.lenses) {
 		lenses.Set(n, r.lenses[n].version)
 	}
+	extensions := NewObject()
+	for _, n := range sortedKeys(r.extensions) {
+		b := r.extensions[n]
+		extensions.Set(n, Obj("version", b.Version(), "binding", b.Binding()))
+	}
 	return Obj("formats", formats, "type_bindings", bindings, "strategies", strategies,
-		"lenses", lenses, "allow_udf", r.AllowUDF)
+		"lenses", lenses, "allow_udf", r.AllowUDF, "extensions", extensions)
 }
 
 func sortedKeys[T any](m map[string]T) []string {

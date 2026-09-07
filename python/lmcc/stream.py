@@ -206,8 +206,9 @@ class _LinePrefixed:
 class _Pattern:
     """A regex needs the whole text: later bytes can change any match."""
 
-    def __init__(self, routing: dict):
+    def __init__(self, routing: dict, pattern):
         self.routing = routing
+        self.pattern = pattern
         self.consume = bool(routing.get("consume"))
         self.pieces: list[str] = []
         self.captures: list[str] = []
@@ -217,7 +218,7 @@ class _Pattern:
         if not final:
             return "" if self.consume else delta
         text = "".join(self.pieces)
-        spans = _text_spans(text, self.routing)
+        spans = _text_spans(text, self.routing, self.pattern)
         self.captures = [core.strip(cap) for _, _, cap in spans]
         if not self.consume:
             return ""
@@ -498,7 +499,7 @@ class Stream:
             elif "line_prefixed" in routing:
                 stage = _LinePrefixed(routing)
             else:
-                stage = _Pattern(routing)
+                stage = _Pattern(routing, plan.pattern_binding())
             self._stages.append((field, stage))
             self._by_field.setdefault(field, []).append(stage)
         self._counted: dict[str, int] = {}   # captures already turned into deltas

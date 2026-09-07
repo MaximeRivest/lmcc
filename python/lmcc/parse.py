@@ -22,8 +22,10 @@ from .errors import refuse
 # ---------------------------------------------------------------- routings
 
 
-def _text_spans(text: str, routing: dict) -> list[tuple[int, int, str]]:
-    """(start, end, capture) for one text extractor — kernel §6 scans."""
+def _text_spans(text: str, routing: dict, pattern=None) -> list[tuple[int, int, str]]:
+    """(start, end, capture) for one text extractor: the kernel §6 plain
+    scans, or the bound ``pattern/*`` extension for a ``pattern`` routing
+    (kernel §10; bind guarantees one is bound when any routing needs it)."""
     spans: list[tuple[int, int, str]] = []
     if "between" in routing:
         open_, close = routing["between"]
@@ -45,17 +47,12 @@ def _text_spans(text: str, routing: dict) -> list[tuple[int, int, str]]:
                 spans.append((pos, pos + len(line), line[len(prefix):]))
             pos += len(line) + 1
     else:
-        pattern = re.compile(routing["pattern"], re.DOTALL)
-        for m in pattern.finditer(text):
-            if m.end() == m.start():
-                continue
-            cap = m.group(1) if pattern.groups else m.group(0)
-            spans.append((m.start(), m.end(), cap if cap is not None else ""))
+        spans = pattern.spans(routing["pattern"], text)
     return spans
 
 
-def apply_routings(text: str, parts: list[dict], routings: list[tuple[str, dict]]
-                   ) -> tuple[str, dict[str, core.Span]]:
+def apply_routings(text: str, parts: list[dict], routings: list[tuple[str, dict]],
+                   pattern=None) -> tuple[str, dict[str, core.Span]]:
     """Run all routings; return (remaining text, {field: Span})."""
     found: dict[str, core.Span] = {}
     for field_name, r in routings:
@@ -63,7 +60,7 @@ def apply_routings(text: str, parts: list[dict], routings: list[tuple[str, dict]
             kind = r["from"].split(":", 1)[1]
             span = core.Span([p for p in parts if p.get("kind") == kind])
         else:
-            spans = _text_spans(text, r)
+            spans = _text_spans(text, r, pattern)
             span = core.Span([core.text_part(cap) for _, _, cap in spans])
             if r.get("consume") and spans:
                 pieces, pos = [], 0

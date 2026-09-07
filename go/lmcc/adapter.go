@@ -10,13 +10,19 @@ type Adapter struct {
 	Parse      *Object
 	Strategies *Object // role -> *Strategy | {"use","options"}
 	Formats    *Object // type/structural key -> {"use","options"} | shipped *Object | Format
+	Extensions *Object // "<family>/<name>" -> version needed (kernel §10)
 	compiled   [][]node
 }
 
 // NewAdapter builds an adapter from data; template syntax is validated here.
-func NewAdapter(name string, template []*Object, parse *Object, strategies, formats *Object) (a *Adapter, err error) {
+// Extensions may be nil; declaring them is checked against the registry at Bind.
+func NewAdapter(name string, template []*Object, parse *Object, strategies, formats, extensions *Object) (a *Adapter, err error) {
 	defer catch(&err)
-	a = &Adapter{Name: name, Parse: parse, Strategies: strategies, Formats: formats}
+	var ext any
+	if extensions != nil {
+		ext = extensions
+	}
+	a = &Adapter{Name: name, Parse: parse, Strategies: strategies, Formats: formats, Extensions: validateExtensions(ext)}
 	if a.Name == "" {
 		a.Name = "adapter"
 	}

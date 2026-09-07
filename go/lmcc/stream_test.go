@@ -16,7 +16,7 @@ func streamPlan(t *testing.T, outputs ...*Field) *Plan {
 	validateSignature(sig)
 	adapter, err := NewAdapter("stream", []*Object{
 		Obj("role", "system", "text", "{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"),
-		Obj("role", "user", "text", "{q}")}, nil, nil, nil)
+		Obj("role", "user", "text", "{q}")}, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestStreamChannelPartDeltasCoalesce(t *testing.T) {
 	strategy.Routings = []*Object{Obj("from", "channel:thinking", "to", "@role")}
 	adapter, err := NewAdapter("parts", []*Object{
 		Obj("role", "system", "text", "{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"),
-		Obj("role", "user", "text", "{q}")}, nil, Obj("reasoning", strategy), nil)
+		Obj("role", "user", "text", "{q}")}, nil, Obj("reasoning", strategy), nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,7 +217,7 @@ func TestVocabularyLensOptionalStreamFace(t *testing.T) {
 		{Name: "q", Direction: "input", Shape: Obj("type", "string"), Role: "plain"},
 		{Name: "a", Direction: "output", Shape: Obj("type", "string"), Role: "plain"},
 		{Name: "b", Direction: "output", Shape: Obj("type", "string"), Role: "plain"}}}
-	adapter, err := NewAdapter("pipe", []*Object{Obj("role", "user", "text", "{q}")}, Obj("kind", "pipe"), nil, nil)
+	adapter, err := NewAdapter("pipe", []*Object{Obj("role", "user", "text", "{q}")}, Obj("kind", "pipe"), nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,7 +245,7 @@ func TestVocabularyLensOptionalStreamFace(t *testing.T) {
 	if err := reg.RegisterLens("bad_pipe", func(*Object) (Lens, error) { return missingPipeLens{}, nil }, "0.1.0", false); err != nil {
 		t.Fatal(err)
 	}
-	badAdapter, err := NewAdapter("bad", []*Object{Obj("role", "user", "text", "{q}")}, Obj("kind", "bad_pipe"), nil, nil)
+	badAdapter, err := NewAdapter("bad", []*Object{Obj("role", "user", "text", "{q}")}, Obj("kind", "bad_pipe"), nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -285,9 +285,15 @@ func fuzzStreamPlan(t *testing.T, tmpl string, routings []*Object, outputs ...*F
 	fields = append(fields, outputs...)
 	sig := &Signature{Instructions: "x", Fields: fields}
 	validateSignature(sig)
+	var extensions *Object
+	for _, r := range routings {
+		if r.Has("pattern") {
+			extensions = Obj("pattern/legacy-re2", "0.1.0")
+		}
+	}
 	adapter, err := NewAdapter("fuzz", []*Object{
 		Obj("role", "system", "text", tmpl),
-		Obj("role", "user", "text", "{q}")}, nil, strategies, nil)
+		Obj("role", "user", "text", "{q}")}, nil, strategies, nil, extensions)
 	if err != nil {
 		t.Fatal(err)
 	}

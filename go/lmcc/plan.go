@@ -41,6 +41,7 @@ type Plan struct {
 	formats        map[string]formatChoice
 	Lens           Lens
 	lensKind       string
+	extensions     map[string]resolvedExtension // kernel §10
 }
 
 // ------------------------------------------------------------------ spell
@@ -359,7 +360,7 @@ func (p *Plan) Skeleton() *Object { return p.Lens.Skeleton() }
 
 func (p *Plan) parseWithSpans(response any) (values *Object, spans map[string]Span) {
 	text, parts := ResponseTextAndParts(response)
-	text, routed := applyRoutings(text, parts, p.routings)
+	text, routed := applyRoutings(text, parts, p.routings, p.patternBinding())
 	names := make([]string, len(p.VisibleOutputs))
 	for i, f := range p.VisibleOutputs {
 		names[i] = f.Name
@@ -442,6 +443,10 @@ func (p *Plan) Describe() *Object {
 	for _, r := range p.resolved {
 		strategies.Set(r.role, r.name)
 	}
+	extensions := NewObject()
+	for _, n := range sortedKeys(p.extensions) {
+		extensions.Set(n, p.extensions[n].describe())
+	}
 	routings := []any{}
 	for _, r := range p.routings {
 		o := Obj("field", r.field)
@@ -470,7 +475,7 @@ func (p *Plan) Describe() *Object {
 	}
 	return Obj("adapter", p.Adapter.Name, "lens", lens, "capabilities", p.Capabilities.Clone(),
 		"inputs", inputs, "outputs", outputs, "hidden", hidden, "strategies", strategies,
-		"routings", routings, "placements", placements, "fragments", p.Fragments.Clone(),
+		"extensions", extensions, "routings", routings, "placements", placements, "fragments", p.Fragments.Clone(),
 		"patch", DeepClone(p.PatchData), "skeleton", p.Skeleton(),
 		"streaming", p.DescribeStreaming(),
 		"versions", Obj("kernel", KernelVersion, "vocab", vocab))
@@ -774,6 +779,7 @@ func Bind(a *Adapter, sig *Signature, capabilities *Object, reg *Registry) (p *P
 	p = &Plan{Adapter: a, Signature: sig, Capabilities: capabilities, Registry: reg,
 		Fragments: NewObject(), PatchData: NewObject(), formats: map[string]formatChoice{}}
 	p.lensKind, _ = a.Parse.Str("kind")
+	p.extensions = resolveExtensions(a, reg) // kernel §10, before anything else
 
 	// 1. strategies per role, in signature order.
 	byRole := map[string]*Field{}

@@ -544,3 +544,66 @@ contract selection must precede new regex implementation work.
 Cost: the regex findings remain unresolved. Benefit: the branch no longer
 carries an unapproved custom engine. The three safety fixes remain isolated
 and reviewable without accepting that engine.
+
+
+**D-33 · Kernel 0.3: extensions are declared on the artifact, bound by the
+host, and refused by name; regex leaves the core.** Implements D-31's
+direction as a mechanism (kernel §10, `portability.md`, `extensions/`).
+
+- **Declaration.** A top-level `entry.extensions = {"<family>/<name>":
+  version}`, must-understand, at most one contract per family. The model
+  is JSON Schema's `$vocabulary`: the *keyword* (`pattern`) is interpreted
+  by the declared contract. Rejected: reusing `versions.vocab` (those pin
+  *referenced* entries and are optional — a loader ignores a missing pin;
+  an extension must be understood or refused); a per-routing `dialect`
+  field (a second copy of one fact, rule 1); overloading `requires`
+  (already means capability facts on strategies and placements on cases).
+- **Binding.** `Registry.extensions`: name → an `ExtensionBinding` with a
+  version and a label (`python:re`, `go:regexp`). `Registry()` /
+  `NewRegistry()` bind the kernel's natives — what the runtime's standard
+  library can honestly do; `Registry(extensions=())` / `NewCoreRegistry()`
+  bind nothing and are the core-only host. Discovery is
+  `registry.describe()["extensions"]`, kept apart from model capabilities.
+  A binding is a table entry: nothing runs, nothing starts.
+- **Refusals.** `extension-undeclared` (fix `declare-extension {family,
+  path}`) when a construct needs a family the artifact does not declare;
+  `extension-unsupported` (fix `bind-extension {name, needs}`) when the
+  host binds none; `version-incompatible` (existing, `match-version`)
+  when versions disagree; `entry-malformed` at `extensions` for shape and
+  ambiguity. Order: shape → one per family → support → version →
+  undeclared use → admission. Rejected: folding "undeclared" into
+  `entry-malformed` — the repair is adding a declaration, not editing the
+  routing, and a fix names the real next action. Refusals fire at load
+  and again at bind for adapters built in code; admission of each
+  `pattern` string is the binding's job (kernel §10 rule 6), no longer
+  the routing validator's — so a routing is structurally valid without a
+  registry, and dialect errors carry the same code and path as before.
+- **The first extension** is `pattern/legacy-re2` 0.1.0, defined as what
+  kernel 0.2 required (RE2 subset, DOTALL, group 1, empty matches
+  dropped) executed by the host engine, with its unspecified region
+  stated in the spec. It is the migration bridge; the rigorous dialect
+  plan 10 owes is a *different* contract, so this one never silently
+  changes meaning.
+- **Version 0.3.0**, not an additive 0.2.x: a bare `pattern` that loaded
+  under 0.2 refuses under 0.3, and semver while major = 0 makes that a
+  minor bump. Every corpus case's `kernel` pin moved; no expectation
+  changed meaning. Migration is two edits (kernel §10).
+- **Harness.** `requires` generalizes to `udf:<lang>` and
+  `<family>/<name>`; a driver binds *exactly* what a case lists, so a case
+  that forgets a requirement refuses instead of passing by accident, and a
+  driver lacking one answers `unclaimed`. The Go claim is therefore "core
+  + `pattern/legacy-re2`", byte-exact, with matching stream traces.
+- **Not done, deliberately.** `udf:python` stays a placement, not an
+  extension: unifying it would change the meaning of existing refusal
+  codes without a corpus reason (portability.md notes it as follow-up).
+  No new pattern dialect, no library comparison, no TypeScript update
+  (it targets 0.2 and now refuses `version-incompatible`; plan 10 phase
+  2). No migration tool: the two edits are documented, not automated.
+
+Costs: 95 case files touched for a version string; artifacts using
+`pattern` carry one more block; a routing's dialect error is found at
+load/bind rather than at `Strategy` construction; `NewAdapter` grew a
+parameter. Benefits: the core provably needs no regex engine (a core-only
+registry passes every case that does not `requires` one); every
+difference between hosts is a named contract or a named refusal; a
+conformance claim is a list, not an adjective.

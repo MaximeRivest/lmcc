@@ -1,97 +1,112 @@
 # Portability — a shared core and declared extensions
 
-**Status:** ratified design direction, not an implemented artifact version.
-D-31 supersedes the universal regex requirement in D-14 and the corresponding
-implementation mandate in D-29 and plan 09. Kernel 0.2 artifacts, schemas,
-refusal stages, and corpus cases remain unchanged until a versioned migration.
+**Status:** normative from kernel 0.3 (D-31 ratified the direction, D-33
+the mechanism). The mechanism itself is kernel §10; this file states the
+boundary — what is core, what is extension, and what a conformance claim
+means — and inventories the core against its evidence.
 
 ## Shared meaning, independent execution
 
-LMCC defines transformations, not one execution engine. Implementations may
-use different algorithms and libraries. An admitted artifact must retain the
-same meaning on every host that claims its required contract.
+LMCC defines transformations, not one execution engine. Implementations
+may use different algorithms and libraries. An admitted artifact must
+retain the same meaning on every host that claims its required
+contracts.
 
-Portability is a claim about a supported feature set and its pinned versions,
-not a claim that every host implements every extension. A smaller implementation
-must refuse unsupported requirements rather than substitute approximate behavior.
+Portability is a claim about a supported feature set and its pinned
+versions, not a claim that every host implements every extension. A
+smaller implementation refuses unsupported requirements before any plan
+exists rather than substitute approximate behavior.
 
-## Mandatory core
+## The mandatory core
 
-Keep the mandatory core small: typed signatures, the template grammar,
-derived parsing, parts and spans, scalar text rules, strategy mechanics,
-binding, inspection, and stable refusals. Exact core behavior remains mandatory.
-Literal `between` and `line_prefixed` extraction need no general regex engine.
-The next version must enumerate the core requirements and their fixtures.
+Exact and mandatory for every implementation. No general regex engine is
+needed to implement it: `between` and `line_prefixed` are plain scans.
 
-General regex execution is not a mandatory kernel implementation requirement.
-A host need not build or bundle a regex engine to implement the core.
-This changes the next version's requirements; it does not silently remove
-`pattern` support from existing 0.2 conformance claims.
+| core operation | kernel | evidence (corpus) |
+|---|---|---|
+| signature validity, shape table, nullable and enum forms | §1 | 43, 48–52 |
+| template constructs: slots, loops, escapes, syntax refusal | §2 | 01, 05, 47, 79 |
+| demos, history, field turns, media parts | §3, §7b | 02–04, 53, 54 |
+| derived lens: anchors, closes, tails, bare slots, ambiguity, collisions | §4 | 20, 21, 27, 30–33, 38, 39, 69, 70, 80 |
+| scalar text rules: strip, integer and number grammars, spelling, overflow | §7a | 35–37, 44, 51, 52, 89, 90 |
+| format resolution order and bind-time format refusals | §5 | 14, 48–50, 55, 56, 67, 68 |
+| vocabulary references, factory failures, version pins, unknown names | §5, §6, §9 | 09, 13, 24, 26, 77, 81, 82 |
+| shipped-format admission (never run at load); placement refusals | §5 | 57–62 (`udf:python`) |
+| strategies: predicates, `choose`, `requires`, fragments, controls, placement, visibility | §6 | 10, 34, 63–66, 73–76, 78 |
+| literal routings: `between`, `line_prefixed`, `channel:`, sub-roles | §6 | 07, 41, 64, 71 |
+| response part validation and coalescing | §6, §8 | 83–88 |
+| streaming refinement, event timing, linear per-feed work | §8 | every parse case, replayed at every split, trace-compared |
+| plan faces: skeleton, prefix | §3 | 72 |
+| data-only load with an empty registry; roundtrip | §5, §9 | 08 |
+| extension mechanics: declare, bind, refuse, roundtrip | §10 | 91–95 |
 
-## Optional execution contracts
+The standard vocabulary (`format/json`, `format/table`,
+`format/scaled_number`, the reasoning strategies, `lens/json_object`) is
+**not** core: it is claimable separately, by the same rule as extensions
+(`vocab/README.md`; cases 15–19, 22, 23, 25, 28, 29, 45, 46).
 
-An artifact using an extension declares a named, versioned semantic contract.
-For routing patterns, that contract must define syntax, flags, Unicode rules,
-match selection, capture priority, empty matches, consumption, and failures.
-A library name alone does not establish those semantics. Two libraries with
-RE2 ancestry still need independent conformance evidence.
+## Extensions
 
-The artifact declares what behavior it requires. The host binds a compatible
-implementation: a mature library, a local executor, or a declared remote service.
-Location, packaging, isolation, and credentials do not redefine the operation.
-Code-bearing formats follow the same identity-versus-binding distinction;
-this document does not replace their execution or admission specification.
+Everything else is a named, versioned contract (`extensions/README.md`).
+For a routing pattern the contract must define syntax, flags, Unicode
+rules, match selection, capture priority, empty matches, consumption,
+and failures — or state, as `pattern/legacy-re2` does, exactly where it
+leaves behavior unspecified. A library name alone establishes nothing;
+two libraries with RE2 ancestry still need independent evidence.
 
-Use mature execution libraries when they satisfy the contract. A custom engine
-is not forbidden, but implementing one is not required by LMCC conformance.
-No default choice of library, transport, or extension identifier is ratified here.
+The artifact declares what it requires. The host binds a compatible
+implementation — a standard library, a mature package, a local executor,
+a declared remote service. Location, packaging, isolation and credentials
+do not redefine the operation and never appear in the artifact. Binding
+is a table entry; it runs nothing and starts nothing.
 
-## Binding and capability discovery
+Use mature libraries when they satisfy the contract. A custom engine is
+not forbidden; building one is not required by conformance.
 
-Hosts expose supported extension contracts and versions separately from model
-capabilities. A model's `native_reasoning` fact says nothing about the host's
-regex library. Do not overload the model capability vocabulary for host support.
+## Discovery and binding
 
-Resolve required extensions before returning a usable bound plan and before
-sending a model request. Unknown versions, unsupported semantics, or incompatible
-bindings refuse explicitly. Never fall back to a host's default regex dialect.
-Existing 0.2 load refusals remain at load; this principle does not move them.
-New refusal codes, stages, and fix actions require specs and corpus cases first.
+Hosts expose bound extensions and versions
+(`registry.describe()["extensions"]`) separately from model capabilities.
+A model's `native_reasoning` fact says nothing about the host's regex
+library, and the capability vocabulary is never overloaded to say so.
 
-Loading declarations does not authorize running shipped code or starting services.
-The host controls execution permission. An artifact name never triggers an import
-or an unapproved remote call.
+Required extensions resolve at load, and again at bind for adapters
+built in code — always before a usable plan and before any model
+request. Unknown contracts, incompatible versions, and undeclared uses
+refuse by name with a fix (kernel §10, `errors.md`). There is no
+fallback to a host's default dialect.
 
-Plans must expose required contracts, resolved versions, and selected bindings
-without exposing secrets. The exact serialized fields remain to be specified.
+Plans expose required contracts, resolved versions and binding labels
+(`plan.describe()["extensions"]`), without secrets.
 
 ## Frontends and conformance
 
-Frontends lower into the shared description and declare any required extensions.
-They may translate an operation only when the translation preserves its meaning.
-Unsupported translation refuses; it must not silently change extraction.
+Frontends lower into the shared description and declare the extensions
+their lowering needs. They may translate an operation only when meaning
+is preserved; otherwise they refuse.
 
-Claims name the core version, extension versions, and execution limitations.
-Each claimed extension passes its own byte-exact cases. Missing extensions are
-reported separately; they are not passes. A caller can check compatibility before
-using the plan. No implementation is advertised as universally complete.
+A conformance claim names the core version and each extension passed.
+Each claimed extension passes its own byte-exact cases. Missing
+extensions are reported as `unclaimed`, never as passes. No
+implementation is advertised as universally complete.
 
-Existing `requires: ["udf:python"]` cases remain placement-specific. They do not
-yet define a general extension-requirements schema or discovery protocol.
+`udf:<language>` on a case remains a placement requirement for shipped
+code, handled by the existing admission refusals; it is listed in the
+same `requires` array as extensions because a driver treats both the
+same way (bind exactly these, or answer `unclaimed`).
 
 ## Migration and costs
 
-Do not relabel bare 0.2 `pattern` strings with new semantics. Define a versioned
-migration with explicit requirements, legacy behavior, and unsupported-host tests.
-Old corpus bytes remain evidence for the version they describe.
+Kernel 0.2 artifacts refuse `version-incompatible` under 0.3, as any
+minor change while major = 0 does. Migrating one is two edits (kernel
+§10): the kernel version, and — only if it uses `pattern` — declaring
+`pattern/legacy-re2` 0.1.0, whose contract is by definition what 0.2
+did. Bare `pattern` strings are never relabeled: an undeclared one
+refuses.
 
-D-29's DOTALL choice can inform an explicitly named legacy-compatible pattern
-contract. It is not a global default for every future pattern extension.
-The experimental Batch 1 Python matcher is unmerged and is not the chosen backend.
-Keep its findings as evidence; do not import it merely to satisfy the old mandate.
+Costs: artifacts carry compatibility information; a host may support
+fewer artifacts; deployment may need a library or a service. In return
+the core stays small and independently implementable, and every
+difference between two hosts is either a named contract or a refusal.
 
-Costs: artifacts carry more compatibility information; hosts can support fewer
-artifacts; deployment may need extra libraries or services. In return, the core
-stays small and independently implementable. Silent semantic drift remains forbidden.
-
-See `../../plans/10-declared-extensions.md` for the specification and corpus gates.
+See `../../plans/10-declared-extensions.md` for what remains open.

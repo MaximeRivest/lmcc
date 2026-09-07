@@ -1,8 +1,8 @@
 # Reference index
 
-**Version scope.** These examples use kernel 0.2. The [next-version portability design](../../contract/spec/portability.md)
-makes execution extensions explicit and optional. Its requirements and binding
-API are not implemented yet. Do not infer general regex portability from these examples.
+**Version scope.** Kernel 0.3. The core needs no regex; a `pattern`
+routing declares its dialect as an extension (kernel §10,
+[portability](../../contract/spec/portability.md)) and the host binds or refuses.
 
 An index, not prose. Each line points to the normative text. The
 contract (`contract/`) outranks this page; if they differ, the contract
@@ -69,10 +69,11 @@ Registry and artifact (kernel §5, §6, §9):
 
 | name | what | section |
 |---|---|---|
-| `Registry` | `Registry(allow_udf=)`: `register_format`, `register_strategy`, `register_lens`, `format`, `describe` | §5, §6 |
+| `Registry` | `Registry(allow_udf=, extensions=)`: `register_format`, `register_strategy`, `register_lens`, `register_extension`, `format`, `describe` — `extensions=()` is a core-only host | §5, §6, §10 |
+| `native_extensions()`, `ExtensionBinding`, `PatternBinding` | what this runtime binds by default; the protocol a host implements to bind its own | §10 |
 | `default_registry` | the registry `lmcc.format` and `Fn.bind` use when none is given | §5 |
 | `dump`, `load` | the artifact ([entry.schema.json](../../contract/schema/entry.schema.json)); `load` never runs a UDF | §5, §9 |
-| `KERNEL_VERSION` | `"0.2.0"` | §9 |
+| `KERNEL_VERSION` | `"0.3.0"` | §9 |
 
 Refusals:
 
@@ -121,7 +122,8 @@ User guide: [go/README.md](../../go/README.md). Full listing:
 | `SignatureOf(instructions, inputs, outputs, reg)` | lower from `*Object` entries of types, samples, shapes, or `Spec` | §1 |
 | `SignatureFromJSON`, `SignatureToJSON` | the plain-data form | §1 |
 | `Signature`, `Field`, `Spec` | the lowered form; `Inputs()`, `Outputs()`, `FieldNamed()` | §1 |
-| `NewAdapter(name, template, parse, strategies, formats)` | build from data; template syntax validated | §2 |
+| `NewAdapter(name, template, parse, strategies, formats, extensions)` | build from data; template syntax and the extension declaration validated | §2, §10 |
+| `NewRegistry()`, `NewCoreRegistry()`, `RegisterExtension(b, existOK)`, `NativeExtensions()` | what this host binds beyond the core; core-only binds nothing | §10 |
 | `Adapter` | `.Bind(sig, caps, reg)`, `.Dump(reg)` | §2 |
 | `Bind(adapter, sig, caps, reg)` | every refusal fires here | §3 |
 | `Plan` | `Render`, `Parse`, `Stream`, `Describe`, `DescribeStreaming`, `Explain`, `Skeleton`, `Prefix` | §3 |

@@ -1,8 +1,8 @@
 # lmcc in Go
 
-**Version scope.** These examples use kernel 0.2. The [next-version portability design](../contract/spec/portability.md)
-makes execution extensions explicit and optional. Its requirements and binding
-API are not implemented yet. Do not infer general regex portability from these examples.
+**Version scope.** Kernel 0.3. The core needs no regex; a `pattern`
+routing declares its dialect as an extension (kernel §10,
+[portability](../contract/spec/portability.md)) and the host binds or refuses.
 
 `go/lmcc` is an independent implementation of the LMCC kernel
 ([contract/spec/kernel.md](../contract/spec/kernel.md)). It was written
@@ -73,7 +73,8 @@ adapter, err := lmcc.NewAdapter("qa",
 	},
 	lmcc.Obj("kind", "derived"),   // parse rule: the template is the parser
 	lmcc.Obj("reasoning", tags),   // strategies by role
-	nil)                           // formats by type
+	nil,                           // formats by type
+	nil)                           // extensions declared (kernel §10); none: core only
 ```
 
 `NewAdapter` validates template syntax. `lmcc.Load(entry, reg)` builds
@@ -162,9 +163,11 @@ cd go && go build -o bin/lmcc-conform ./cmd/lmcc-conform
 cd ../python && PYTHONPATH=. python ../contract/harness/runner.py --driver ../go/bin/lmcc-conform
 ```
 
-At kernel 0.2 (82 cases) this prints `76 passed, 0 failed, 6 unclaimed
-(udf:python), 26 stream traces match the reference kernel`. The root
-`./check` runs this as step 5.
+At kernel 0.3 (95 cases) this prints `89 passed, 0 failed, 6 unclaimed
+(udf:python), 34 stream traces match the reference kernel`. The root
+`./check` runs this as step 5. The driver binds exactly what each case
+`requires`: `NewCoreRegistry()` plus the listed extensions, so the Go
+kernel's claim is "core + `pattern/legacy-re2`", nothing more.
 
 ## What "unclaimed" means
 

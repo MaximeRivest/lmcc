@@ -52,7 +52,7 @@ func TestStructTagsLowerToSignatureCore(t *testing.T) {
 	adapter, err := NewAdapter("v", []*Object{
 		Obj("role", "system", "text", "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"),
 		Obj("role", "user", "text", "{question}{photo}")},
-		Obj("kind", "derived"), nil, Obj("[]string", Obj("use", "csv", "options", NewObject())))
+		Obj("kind", "derived"), nil, Obj("[]string", Obj("use", "csv", "options", NewObject())), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestRenderRefusalsCarryNoFix(t *testing.T) {
 	}
 	adp, err := NewAdapter("x", []*Object{
 		Obj("role", "system", "text", "{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"),
-		Obj("role", "user", "text", "{q}")}, nil, nil, nil)
+		Obj("role", "user", "text", "{q}")}, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

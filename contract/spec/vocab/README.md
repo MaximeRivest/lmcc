@@ -14,12 +14,12 @@ must pass their cases byte-exactly; unclaimed names refuse at load
 (`unknown-format` / `unknown-strategy` / `unknown-parse-kind`) — never
 silently.
 
-**Next-version execution extensions (D-31).** The same scoped-conformance
-principle will apply to routing-pattern engines. Artifacts declare semantic
-requirements; hosts expose compatible bindings or refuse. Regex is not a
-universal kernel implementation obligation. See `../portability.md` for the
-boundary and migration gates. No extension identifiers or serialized fields
-are defined yet. Existing 0.2 names and refusal stages remain unchanged.
+**Extensions are the same principle for host behavior** (kernel §10,
+`../extensions/README.md`): a routing `pattern` dialect is a named,
+versioned contract the artifact declares in `extensions` and the host
+binds or refuses. Vocabulary entries are *referenced* (`{"use": name}`)
+and pinned in `versions.vocab`; extensions govern a *construct* and are
+must-understand. Regex is not a kernel obligation.
 
 Role names are themselves vocabulary — the function each name means and
 its alignment with the wire layer's part kinds live in `roles.md`.

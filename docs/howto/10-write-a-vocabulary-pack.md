@@ -74,7 +74,7 @@ case = {
     "name": "mypack-csv-scratchpad", "kind": "parse", "vocab": ["mypack"],
     "entry": {
         "name": "notes_v1",
-        "versions": {"kernel": "0.2.0", "vocab": {"format/csv": "0.1.0", "strategy/scratchpad": "0.1.0"}},
+        "versions": {"kernel": "0.3.0", "vocab": {"format/csv": "0.1.0", "strategy/scratchpad": "0.1.0"}},
         "template": [
             {"role": "system", "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"},
             {"role": "user", "text": "{text}"}],

@@ -7,7 +7,7 @@
  "entry": {
   "name": "typed_v1",
   "versions": {
-   "kernel": "0.2.0",
+   "kernel": "0.3.0",
    "vocab": {
     "format/json": "0.1.0"
    }

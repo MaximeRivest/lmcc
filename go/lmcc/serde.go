@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-const KernelVersion = "0.2.0"
+const KernelVersion = "0.3.0"
 
 func parseVersion(v any, what string) [3]int {
 	s, ok := v.(string)
@@ -164,10 +164,18 @@ func Load(entry *Object, reg *Registry) (a *Adapter, err error) {
 		}
 	}
 	name, _ := entry.Str("name")
-	a, err = NewAdapter(name, template, parse, strategies, formats)
+	var extensions *Object
+	if entry.Has("extensions") {
+		extensions = entry.Object("extensions")
+		if extensions == nil {
+			refuseFix("entry-malformed", fixEditEntry("extensions"), "extensions must be an object of '<family>/<name>': version")
+		}
+	}
+	a, err = NewAdapter(name, template, parse, strategies, formats, extensions)
 	if err != nil {
 		panic(err)
 	}
+	resolveExtensions(a, reg) // kernel §10: refuse here, before any plan
 	return a, nil
 }
 
@@ -221,8 +229,12 @@ func Dump(a *Adapter, reg *Registry) (entry *Object, err error) {
 	for i, m := range a.Template {
 		template[i] = m.Clone()
 	}
-	entry = Obj("name", a.Name, "versions", Obj("kernel", KernelVersion, "vocab", vocab),
-		"template", template, "parse", a.Parse.Clone())
+	entry = Obj("name", a.Name, "versions", Obj("kernel", KernelVersion, "vocab", vocab))
+	if a.Extensions != nil && a.Extensions.Len() > 0 {
+		entry.Set("extensions", a.Extensions.Clone())
+	}
+	entry.Set("template", template)
+	entry.Set("parse", a.Parse.Clone())
 	if strategies.Len() > 0 {
 		entry.Set("strategies", strategies)
 	}

@@ -274,14 +274,15 @@ func (s *lineStage) feed(delta string, final bool) string {
 
 // patternStage: a regex needs the whole text; later bytes can change any match.
 type patternStage struct {
+	pattern  PatternBinding
 	spec     *Object
 	consume  bool
 	pieces   strings.Builder
 	captures []string
 }
 
-func newPatternStage(r *Object) *patternStage {
-	return &patternStage{spec: r, consume: r.Bool("consume", false)}
+func newPatternStage(r *Object, pattern PatternBinding) *patternStage {
+	return &patternStage{pattern: pattern, spec: r, consume: r.Bool("consume", false)}
 }
 
 func (s *patternStage) captured() []string { return s.captures }
@@ -295,7 +296,7 @@ func (s *patternStage) feed(delta string, final bool) string {
 		return delta
 	}
 	text := s.pieces.String()
-	spans := textSpans(text, s.spec)
+	spans := textSpans(text, s.spec, s.pattern)
 	s.captures = make([]string, 0, len(spans))
 	for _, span := range spans {
 		s.captures = append(s.captures, Strip(span.capture))
@@ -695,7 +696,7 @@ func (p *Plan) Stream() *Stream {
 		case route.spec.Has("line_prefixed"):
 			st.text = newLineStage(route.spec)
 		default:
-			st.text = newPatternStage(route.spec)
+			st.text = newPatternStage(route.spec, p.patternBinding())
 		}
 		s.stages = append(s.stages, st)
 		s.byField[route.field] = append(s.byField[route.field], st)

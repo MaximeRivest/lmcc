@@ -1,0 +1,76 @@
+{
+ "name": "refuse-load-extension-unsupported",
+ "kind": "refuse",
+ "entry": {
+  "name": "derived_v1",
+  "versions": {
+   "kernel": "0.3.0",
+   "vocab": {}
+  },
+  "extensions": {
+   "pattern/legacy-re2": "0.1.0"
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n\nAnswer in exactly this form:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "parse": {
+   "kind": "derived"
+  },
+  "strategies": {
+   "reasoning": {
+    "visible": false,
+    "routings": [
+     {
+      "from": "text",
+      "pattern": "Thought: ([^\\n]+)",
+      "to": "@role",
+      "consume": true
+     }
+    ]
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Answer.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "reasoning",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    },
+    "role": "reasoning"
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "expect": {
+  "code": "extension-unsupported",
+  "fix": {
+   "action": "bind-extension",
+   "name": "pattern/legacy-re2",
+   "needs": "0.1.0"
+  },
+  "at": "load"
+ }
+}

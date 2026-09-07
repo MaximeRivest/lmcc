@@ -1,13 +1,16 @@
 # The LMCC kernel — normative specification
 
-**Version 0.2.0** (kernel). Status: the v3 design (`plans/08`), built with
+**Version 0.3.0** (kernel). Status: the v3 design (`plans/08`), built with
 two implementations (`python/lmcc`, `go/lmcc`) against the corpus. Where
 this document and the corpus disagree, fix the corpus first, then both.
 
-**Next-version direction (D-31).** See `portability.md`: a small mandatory
-core and explicitly declared, versioned execution extensions. Regex execution
-will be optional, not a requirement to build an engine in every kernel.
-This document's 0.2 syntax and cases remain the legacy contract until migration.
+**What 0.3 changes (D-33).** The kernel is a small mandatory core; any
+behavior outside it is a named, versioned **extension** the artifact
+declares and the host binds or refuses (§10, `portability.md`). The one
+extension so far is the routing `pattern` dialect: a 0.3 artifact that
+uses `pattern` must declare `extensions: {"pattern/<name>": version}`.
+A 0.2 artifact refuses `version-incompatible` as before; migrating it is
+two edits, spelled out in §10. No case expectation changed meaning.
 
 **One sentence.** When a program calls a function in another language, a
 calling convention says where each argument goes, how the result comes
@@ -275,8 +278,10 @@ wins. Normalization does not change the caller's parts.
 
 Routings run **before** the lens. `from: text` scans the reply text —
 `between` (plain scan), `line_prefixed` (lines split on `\n`), `pattern`
-(RE2, group 1, empty matches discarded) — each match becomes a text
-part; `consume` removes the matches from the text the lens sees.
+(the artifact's declared `pattern/*` extension, §10: it defines the
+syntax, what a match is, and what is captured) — each match becomes a
+text part; `consume` removes the matches from the text the lens sees.
+`between` and `line_prefixed` are core: plain scans, no regex engine.
 `from: channel:<kind>` collects the response parts of that kind. The
 collected parts are the field's **span**; the field's format reads it.
 `span.text` is the stripped text parts joined by `\n`.
@@ -303,12 +308,9 @@ must match what the format `emits` (`format-placement-mismatch`).
 - **Enum** — the stripped text equals a member's spelling.
 - **Null** — nullable shapes only: written `null`, read `null` exactly.
 - **Rounding** — half-to-even in binary64: `roundeven(x·10ⁿ)/10ⁿ`.
-- **Legacy 0.2 regex requirement** — RE2 syntax; lookaround, backreferences,
-  named groups, atomic/possessive constructs refuse `entry-malformed`.
-  The independent audit found matching gaps beyond the existing cases;
-  passing them does not prove full RE2 equivalence. D-31 supersedes this
-  universal requirement for the next version: see `portability.md`.
-  No new regex syntax or backend is selected by that amendment.
+- **Regex** — none in the core. A `pattern` routing's syntax and matching
+  are the declared `pattern/*` extension's (§10); the kernel never
+  interprets the string itself.
 
 ### 7b. Kernel default formats
 
@@ -428,10 +430,15 @@ refuse `version-incompatible` naming both sides; unknown names refuse
 The corpus (`corpus/cases/*.json`, `schema/case.schema.json`) is the
 authority: an implementation is conformant when the harness passes every
 case byte-exactly — rendered text and parts, parsed values, refusal
-codes and their fixes. Case kinds: `render`, `parse`, `roundtrip`, `refuse`. A case may
-declare `requires: ["udf:python"]`; a driver that cannot place that
-language answers `{"ok": true, "unclaimed": "udf:python"}` and the
-harness counts it apart — declared, never silent.
+codes and their fixes. Case kinds: `render`, `parse`, `roundtrip`, `refuse`. A case
+declares in `requires` everything beyond the core it needs: a UDF
+placement (`udf:python`) or an extension (`pattern/legacy-re2`). A
+driver builds its registry with exactly those and nothing more, so a
+case that forgets a requirement refuses instead of passing by accident;
+a driver that lacks one answers `{"ok": true, "unclaimed": "<it>"}` and
+the harness counts it apart — declared, never silent, never a pass.
+A conformance claim therefore names the core version and each
+extension it passes; "core only" is a complete, honest claim.
 
 **The driver protocol.** `runner.py --driver CMD` starts one process and
 streams JSON Lines: one case per line in, one `{"ok", "detail"?,
@@ -442,8 +449,68 @@ one-scalar event log — a list per feed of `[kind, field]` or
 `[kind, field, text]` digests, then the EOF list or `{"refusal": code}`;
 the harness compares it with the reference kernel's.
 
-## Deliberate gaps (0.2)
+## 10. Extensions: declared, bound, or refused
+
+The core is everything above except regex execution. An **extension**
+is a named, versioned semantic contract for behavior the core does not
+define; `spec/extensions/README.md` indexes them, one spec file each.
+An extension name is `<family>/<name>` (`pattern/legacy-re2`): the
+family is the construct it governs, the name the contract. The artifact
+declares what it needs; the host binds an implementation or refuses.
+
+```
+entry.extensions = { "<family>/<name>": "MAJOR.MINOR.PATCH", … }
+```
+
+**Declaration rules**, checked at load (and again at bind for adapters
+built in code — a refusal fires before any plan exists):
+
+1. every key is a well-formed name and every value a semver string, else
+   `entry-malformed` at `extensions`;
+2. at most one extension per family, else `entry-malformed` at
+   `extensions` — the construct's meaning would be ambiguous;
+3. every declared extension is one the host binds, else
+   `extension-unsupported` naming it (fix `bind-extension`);
+4. the bound version is compatible with the declared one by the §9
+   rule, else `version-incompatible` (fix `match-version`, entry
+   `<family>/<name>`);
+5. every construct that needs a family — today, a routing carrying
+   `pattern` — has that family declared, else `extension-undeclared`
+   naming the construct's path (fix `declare-extension`); a routing the
+   artifact reaches through a named strategy counts, at the same path;
+6. after that, the binding admits each construct it governs: a `pattern`
+   the dialect rejects refuses `entry-malformed` at the routing's path,
+   exactly as a malformed `between` does.
+
+Declaring an extension the artifact does not use is allowed; it only
+narrows where the artifact runs. `dump` writes `extensions` back
+verbatim.
+
+**Host side.** A registry carries **extension bindings**: for each
+extension name, the version it implements and a binding label
+(`python:re`, `go:regexp`, a library, a service — never a secret).
+`registry.describe()["extensions"]` is the discovery surface, separate
+from model capabilities: `native_reasoning` is a fact about the model,
+`pattern/legacy-re2` is a fact about this process. A kernel may bind the
+extensions its own runtime can honestly implement by default; a
+**core-only** registry is always constructible and refuses every
+extension-dependent artifact before model I/O. Binding never runs
+artifact code and never starts anything; it is a table entry.
+
+`plan.describe()["extensions"]` lists, per required extension, the
+declared version, the bound version, and the binding label — what
+resolved, inspectable before spending.
+
+**Migration from 0.2.** Set `versions.kernel` to `0.3.0`. If the
+artifact has any `pattern` routing, add
+`"extensions": {"pattern/legacy-re2": "0.1.0"}` — that contract is,
+by definition, what 0.2 did (`spec/extensions/pattern-legacy-re2.md`),
+so the meaning is preserved exactly; nothing is relabeled silently
+because nothing is assumed: an undeclared `pattern` refuses.
+
+## Deliberate gaps (0.3)
 
 The `grammar` face of `skeleton()`, parse combinators (plan 02), turns
-(plan 03), and tools/citations strategy vocabularies (plan 04). Each
-lands as a versioned addition.
+(plan 03), tools/citations strategy vocabularies (plan 04), and a
+rigorously specified pattern dialect with library evidence (plan 10,
+remaining items). Each lands as a versioned addition.

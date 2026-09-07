@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:lmcc:schema:fix:0.2.0",
+  "$id": "urn:lmcc:schema:fix:0.3.0",
   "title": "LMCC refusal fix",
   "description": "The machine-actionable next step a refusal carries (spec/errors.md, Fix actions). Closed: one branch per action, exact parameter sets.",
   "type": "object",
@@ -101,6 +101,24 @@
         "key": {"type": "string"}
       },
       "required": ["action", "field", "key"],
+      "additionalProperties": false
+    },
+    {
+      "properties": {
+        "action": {"const": "declare-extension"},
+        "family": {"type": "string"},
+        "path": {"type": "string"}
+      },
+      "required": ["action", "family", "path"],
+      "additionalProperties": false
+    },
+    {
+      "properties": {
+        "action": {"const": "bind-extension"},
+        "name": {"type": "string"},
+        "needs": {"type": "string"}
+      },
+      "required": ["action", "name", "needs"],
       "additionalProperties": false
     }
   ]

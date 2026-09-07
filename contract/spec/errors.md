@@ -1,9 +1,9 @@
 # Refusal codes (normative)
 
-**Version scope:** this table specifies existing 0.2 refusals. D-31
-(`portability.md`) requires explicit unsupported-extension refusals in the next
-version; their codes, stages, and fixes must be specified before implementation.
-Do not reinterpret malformed syntax as missing host support.
+**Version scope:** kernel 0.3. The extension refusals (`extension-undeclared`,
+`extension-unsupported`; kernel §10) are distinct from malformed syntax: an
+artifact that is internally inconsistent is malformed or undeclared, a host
+that lacks a contract is unsupported. Never reinterpret one as the other.
 
 Every refusal is a `Refusal` with a stable `code`, a `hint` naming the
 exact offender and what to do, a `fix` (below) for every refusal that
@@ -22,7 +22,9 @@ parameters, is breaking.
 | `unknown-strategy` | load/dump | `install-vocabulary` | a `{"use": name}` strategy reference names nothing registered |
 | `entry-malformed` | construct/load | `edit-entry` | structural problem; hint names the path (includes a routing with no source, a `pattern` regex outside the RE2 dialect, a bad predicate, and a vocabulary reference whose factory rejects its `options` or returns malformed data) |
 | `signature-malformed` | signature | `edit-signature` | field name not an ASCII identifier, duplicate name, bad direction, shape not an object |
-| `version-incompatible` | load | `match-version` | artifact needs a version this implementation cannot honor |
+| `version-incompatible` | load/bind | `match-version` | artifact needs a kernel, vocabulary, or extension version this implementation cannot honor |
+| `extension-undeclared` | load/bind | `declare-extension` | a construct needs an extension family the artifact does not declare (a routing carries `pattern` and no `pattern/*` is in `extensions`); hint names the construct's path |
+| `extension-unsupported` | load/bind | `bind-extension` | the artifact declares an extension this host binds no implementation of |
 | `already-registered` | registration | — | duplicate name without `exist_ok` |
 | `capability-missing` | bind | `declare-capability`, `satisfy-predicate` | a strategy's `when`/`requires`, a `choose` with no matching branch, or a lens's requirement fails against the declared facts |
 | `not-lensable` | bind | `edit-template` | the template cannot be read backwards; hint names the defect |
@@ -83,7 +85,9 @@ guess: the refusal is still the contract.
 | action | parameters | do this |
 |---|---|---|
 | `install-vocabulary` | `kind` (`format` \| `strategy` \| `lens`), `name` | register `name` in the registry (install the pack that provides it), or replace the reference with inline data / a shipped format |
-| `match-version` | `entry` (`kernel` or `<kind>/<name>`), `needs`, `provides` | run this artifact on a runtime that provides `needs`, or re-dump it from one that provides `provides` |
+| `match-version` | `entry` (`kernel`, `<kind>/<name>`, or `<family>/<name>`), `needs`, `provides` | run this artifact on a runtime that provides `needs`, or re-dump it from one that provides `provides` |
+| `declare-extension` | `family`, `path` | add an entry of family `family` to the artifact's `extensions` (the contract that governs the construct at `path`), or rewrite the construct in core terms (`between`, `line_prefixed`) |
+| `bind-extension` | `name`, `needs` | bind an implementation of extension `name` compatible with `needs` in this runtime (Python: `Registry(extensions=[...])` or `register_extension`; Go: `NewRegistry()` or `RegisterExtension`), or run the artifact where one is bound, or rewrite the construct in core terms |
 | `place-udf` | `language`, `path` | allow and place code of `language` in this runtime (Python: `Registry(allow_udf=True)`), or bind a runtime format for that type instead |
 | `reship-udf` | `path` | correct the shipped source (self-contained; deps declared), then `ship` it again — the hash is recomputed |
 | `edit-entry` | `path` | correct the artifact at `path` |
@@ -98,6 +102,6 @@ guess: the refusal is still the contract.
 `template[i]`, `parse`, `versions`, `strategies['role']` (then
 `.choose[i]`, `.when`, `.routings[i]`, `.fragments`, `.placement`,
 `.controls['key']`, `.visible`), `formats['key']` (then `.write`,
-`.read`, `.describe`). Parameters marked `?` are optional; every other
-parameter is present. Parameter values are strings, except
+`.read`, `.describe`), `extensions`. Parameters marked `?` are optional;
+every other parameter is present. Parameter values are strings, except
 `predicate`, which is an object.

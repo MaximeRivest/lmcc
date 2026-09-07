@@ -15,6 +15,7 @@ from dataclasses import dataclass, field as dc_field
 from . import core, formats as _formats
 from .adapter import Adapter
 from .errors import Refusal, refuse
+from . import extensions as _extensions
 from .parse import DerivedLens, Lens, apply_routings
 from .serde import KERNEL_VERSION
 from .strategy import Strategy
@@ -97,6 +98,14 @@ class Plan:
     patch: dict = dc_field(default_factory=dict)
     formats: dict[str, _FormatChoice] = dc_field(default_factory=dict)
     lens: Lens | None = None
+    extensions: dict = dc_field(default_factory=dict)   # name -> extensions.Resolved (kernel §10)
+
+    def pattern_binding(self):
+        """The bound ``pattern/*`` binding, or None when the artifact declares none."""
+        for r in self.extensions.values():
+            if r.binding.family == "pattern":
+                return r.binding
+        return None
 
     # ---------------------------------------------------------- formats
 
@@ -288,7 +297,7 @@ class Plan:
         raw deltas equal the batch captures without inventing another parser.
         """
         text, parts = core.response_text_and_parts(response)
-        text, routed = apply_routings(text, parts, self.routings)
+        text, routed = apply_routings(text, parts, self.routings, self.pattern_binding())
         try:
             raw = self.lens.split(text, [f.name for f in self.visible_outputs])
         except Refusal:
@@ -331,6 +340,7 @@ class Plan:
             "hidden": [f.name for f in self.signature.fields
                        if f not in self.visible_inputs and f not in self.visible_outputs],
             "strategies": {r.role: r.name for r in self.resolved},
+            "extensions": {n: r.describe() for n, r in sorted(self.extensions.items())},
             "routings": [{"field": name, **r} for name, r in self.routings],
             "placements": [{"field": name, "at": place} for name, place in self.placements],
             "fragments": dict(self.fragments),
@@ -623,6 +633,7 @@ def _resolve_format(plan: Plan, f: core.Field) -> _FormatChoice:
 
 def bind(adapter: Adapter, sig: core.SignatureCore, capabilities: dict, registry) -> Plan:
     plan = Plan(adapter=adapter, signature=sig, capabilities=capabilities, registry=registry)
+    plan.extensions = _extensions.resolve(adapter, registry)   # kernel §10, before anything else
 
     # 1. strategies per role, in signature order.
     by_role: dict[str, core.Field] = {}

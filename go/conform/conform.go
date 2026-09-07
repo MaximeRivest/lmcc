@@ -69,19 +69,32 @@ func RunCaseOutcome(c *lmcc.Object) (out Outcome) {
 			out = Outcome{Detail: fmt.Sprintf("driver panic: %v", r)}
 		}
 	}()
+	// Bind exactly what the case requires (kernel §9): a core-only registry
+	// plus the listed extensions — never more, so a case that forgets a
+	// requirement refuses instead of passing. This driver places no UDF
+	// language; anything it lacks is unclaimed, never a false pass.
+	native := map[string]lmcc.ExtensionBinding{}
+	for _, b := range lmcc.NativeExtensions() {
+		native[b.Extension()] = b
+	}
+	reg := lmcc.NewCoreRegistry()
 	for _, req := range c.List("requires") {
-		if s, _ := req.(string); strings.HasPrefix(s, "udf:") {
+		s, _ := req.(string)
+		b, ok := native[s]
+		if strings.HasPrefix(s, "udf:") || !ok {
 			return Outcome{OK: true, Unclaimed: s}
 		}
+		if err := reg.RegisterExtension(b, false); err != nil {
+			return Outcome{Detail: "bind extension: " + err.Error()}
+		}
 	}
-	ok, detail, trace := runCaseInner(c)
+	ok, detail, trace := runCaseInner(c, reg)
 	return Outcome{OK: ok, Detail: detail, StreamTrace: trace}
 }
 
-func runCaseInner(c *lmcc.Object) (bool, string, any) {
+func runCaseInner(c *lmcc.Object, reg *lmcc.Registry) (bool, string, any) {
 	kind, _ := c.Str("kind")
 	expect := c.Object("expect")
-	reg := lmcc.NewRegistry()
 	for _, v := range c.List("vocab") {
 		if v == "std" {
 			if err := lmccstd.Install(reg); err != nil {
