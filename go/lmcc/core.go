@@ -616,6 +616,52 @@ func MergeTextParts(parts []any) []any {
 	return out
 }
 
+// normalizeResponseParts coalesces text runs as §8 does, without copying growing text.
+func normalizeResponseParts(parts []any) []any {
+	out := []any{}
+	var texts strings.Builder
+	hasRun := false
+	flush := func() {
+		if hasRun {
+			out[len(out)-1].(*Object).Set("text", texts.String())
+		}
+		texts.Reset()
+	}
+	for _, raw := range parts {
+		part, ok := raw.(*Object)
+		if !ok {
+			flush()
+			hasRun = false
+			out = append(out, raw)
+			continue
+		}
+		text, hasText := part.Str("text")
+		kind, _ := part.Str("kind")
+		if hasRun && hasText {
+			previous := out[len(out)-1].(*Object)
+			pk, _ := previous.Str("kind")
+			if pk == kind {
+				texts.WriteString(text)
+				for _, key := range part.Keys {
+					if key != "kind" && key != "text" {
+						value, _ := part.Get(key)
+						previous.Set(key, DeepClone(value))
+					}
+				}
+				continue
+			}
+		}
+		flush()
+		out = append(out, part.Clone())
+		hasRun = hasText
+		if hasText {
+			texts.WriteString(text)
+		}
+	}
+	flush()
+	return out
+}
+
 // ResponseTextAndParts accepts a bare string or an lm15-shaped response.
 func ResponseTextAndParts(response any) (string, []any) {
 	switch r := response.(type) {
@@ -624,6 +670,7 @@ func ResponseTextAndParts(response any) (string, []any) {
 	case *Object:
 		if parts, ok := r.Get("content"); ok {
 			if list, ok := parts.([]any); ok {
+				list = normalizeResponseParts(list)
 				var b strings.Builder
 				for _, p := range list {
 					if po, ok := p.(*Object); ok {

@@ -258,6 +258,12 @@ instead of a slot; fragments append to the named message (created if
 absent, system first); controls merge into the patch (`control-conflict`).
 A field both visible and routed is `field-double-covered`.
 
+Batch parse normalizes response parts before routing by the same logical-part
+rule as streaming (§8): adjacent same-kind text-bearing parts coalesce,
+including empty text; a kind change or a part without text ends the run.
+Metadata keys accumulate within a run; the last supplied value of each key
+wins. Normalization does not change the caller's parts.
+
 Routings run **before** the lens. `from: text` scans the reply text —
 `between` (plain scan), `line_prefixed` (lines split on `\n`), `pattern`
 (RE2, group 1, empty matches discarded) — each match becomes a text
