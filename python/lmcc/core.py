@@ -98,7 +98,10 @@ def read_number(text: str, *, where: str) -> float:
     t = strip(text)
     if not _NUMBER.match(t):
         refuse("parse-value", f"{where}: {t!r} is not a number")
-    return float(t)
+    value = float(t)
+    if not math.isfinite(value):
+        refuse("parse-value", f"{where}: {t!r} is not a finite number")
+    return value
 
 
 def read_boolean(text: str, *, where: str) -> bool:

@@ -35,7 +35,11 @@ func TestReadGrammars(t *testing.T) {
 	if ReadNumber("1e3", "t") != 1000 {
 		t.Error("number grammar")
 	}
-	for _, bad := range []string{".5", "5.", "NaN", "Infinity", "+1"} {
+	if ReadNumber("1.7976931348623157e308", "t") != math.MaxFloat64 ||
+		ReadNumber("-1.7976931348623157e308", "t") != -math.MaxFloat64 {
+		t.Error("finite binary64 endpoints")
+	}
+	for _, bad := range []string{".5", "5.", "NaN", "Infinity", "+1", "1e400", "-1e400"} {
 		if err := try(func() { ReadNumber(bad, "t") }); err == nil || err.Code != "parse-value" {
 			t.Errorf("number %q should refuse parse-value", bad)
 		}

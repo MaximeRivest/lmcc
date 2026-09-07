@@ -290,6 +290,7 @@ must match what the format `emits` (`format-placement-mismatch`).
 - **Integer text** — `-?[0-9]+`; else `parse-value`. Written in decimal.
   Implementations carry at least int64.
 - **Number text** — `-?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?`; binary64.
+  A number read whose binary64 result is not finite refuses `parse-value`.
   Written with the ECMAScript `Number::toString` algorithm (`3`, `0.5`,
   `1e-7`, `1e+21`); non-finite refuses `value-invalid`.
 - **Booleans** — read `true|yes` / `false|no` after ASCII case-folding;

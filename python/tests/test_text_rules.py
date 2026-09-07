@@ -51,12 +51,14 @@ def test_integer_grammar_rejects(text):
 
 
 @pytest.mark.parametrize("text, value", [
-    ("1e3", 1000.0), ("-2.5", -2.5), ("007.5", 7.5), ("1E-2", 0.01)])
+    ("1e3", 1000.0), ("-2.5", -2.5), ("007.5", 7.5), ("1E-2", 0.01),
+    ("1.7976931348623157e308", 1.7976931348623157e308),
+    ("-1.7976931348623157e308", -1.7976931348623157e308)])
 def test_number_grammar_accepts(text, value):
     assert core.read_number(text, where="t") == value
 
 
-@pytest.mark.parametrize("text", [".5", "5.", "NaN", "Infinity", "+1", "1e", "1_0"])
+@pytest.mark.parametrize("text", [".5", "5.", "NaN", "Infinity", "+1", "1e", "1_0", "1e400", "-1e400"])
 def test_number_grammar_rejects(text):
     with pytest.raises(lmcc.Refusal) as err:
         core.read_number(text, where="t")

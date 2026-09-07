@@ -1,0 +1,37 @@
+{
+ "name": "refuse-number-positive-overflow",
+ "kind": "refuse",
+ "entry": {
+  "name": "number_read",
+  "versions": {
+   "kernel": "0.2.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "<n>{n}</n>"
+   }
+  ],
+  "parse": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "",
+  "fields": [
+   {
+    "name": "n",
+    "direction": "output",
+    "shape": {
+     "type": "number"
+    }
+   }
+  ]
+ },
+ "response": "<n>1e400</n>",
+ "expect": {
+  "code": "parse-value",
+  "at": "parse"
+ }
+}
