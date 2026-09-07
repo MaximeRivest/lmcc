@@ -17,3 +17,4 @@ Protocol per plan: spec → corpus (hand-authored bytes) → code →
 | `06-structured-fix-hints.md` | ✅ every pre-render refusal carries a `fix` from a closed action vocabulary; corpus-pinned in both kernels | S |
 | `07-dspy-parity.md` | ✅ any DSPy signature lowers, renders, parses; 16-row catalog vs real DSPy | L |
 | `08-v3-alignment.md` | ✅ the contract is the v3 design: formats by type, strategies by role, parts/spans, UDFs, `@lmcc.fn`, plan faces | XL |
+| `09-audit-triage.md` | classify 114 audit findings; ratify policy gates, then pin defects and missing contract rules | XL |
