@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Status — lmcc</title>
+<meta name="description" content="What works, what is planned, and what portable means for lmcc at kernel 0.2. Stated exactly.">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-header">
+  <div class="bar">
+    <a class="wordmark" href="index.html">lmcc<span class="ver">kernel 0.2</span></a>
+    <nav class="site-nav" aria-label="Site">
+      <ul>
+        <li><a href="start.html">Start</a></li>
+        <li><a href="why.html">Why</a></li>
+        <li><a href="docs.html">Docs</a></li>
+        <li><a href="status.html" aria-current="page">Status</a></li>
+        <li><a href="https://github.com/MaximeRivest/lmcc">Repository</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+<div class="prose">
+<h1>Status</h1>
+<p class="lede">Kernel 0.2.0, tag <code>kernel-0.2</code>. This page says
+what works, what is planned, and what portable means. Each row names the
+file that supports it.</p>
+
+<h2 id="works">What works</h2>
+<table class="status-table">
+  <thead><tr><th>item</th><th>state</th><th>source</th></tr></thead>
+  <tbody>
+    <tr><td>Corpus</td><td>82 byte-exact cases: 23 render, 20 parse, 3 roundtrip, 35 refuse, 1 plan. The corpus is the authority.</td><td><code>contract/corpus/</code></td></tr>
+    <tr><td>Python reference</td><td>Passes 82 of 82 cases. Imports the standard library only.</td><td><code>contract/harness/runner.py</code>; <code>python/tests/test_agent_surface.py</code></td></tr>
+    <tr><td>Go implementation</td><td>Passes 76 of 82 cases byte-exactly. Declares 6 cases unclaimed: they require <code>udf:python</code>, and the Go runtime places no code. Both kernels raise the same refusal codes, minus one code only a runtime that places code can raise.</td><td><code>plans/README.md</code>; <code>python/tests/test_coherence.py</code></td></tr>
+    <tr><td>Streaming</td><td>Done. A sans-I/O reducer. Every parse case is replayed at every scalar and part split through both kernels.</td><td><code>plans/01-streaming.md</code>; kernel §8</td></tr>
+    <tr><td>Fix hints</td><td>Done. Every refusal before render carries a <code>fix</code> from a closed action vocabulary. 36 refusal codes, 11 fix actions.</td><td><code>plans/06-structured-fix-hints.md</code>; <code>contract/spec/errors.md</code></td></tr>
+    <tr><td>DSPy frontend</td><td>Any <code>dspy.Signature</code> lowers, bakes, renders and parses. A 16-row catalog runs against a real DSPy.</td><td><code>plans/07-dspy-parity.md</code>; <code>python/lmcc_dspy/</code></td></tr>
+    <tr><td>Go frontend</td><td>Struct tags lower to a signature.</td><td>kernel §1; decisions D-18</td></tr>
+    <tr><td>Standard vocabulary</td><td>7 entries, all 0.1.0: formats <code>json</code>, <code>table</code>, <code>scaled_number</code>; strategies <code>prefix_cot</code>, <code>reasoning_tags</code>, <code>native_reasoning</code>; lens <code>json_object</code>. Provided by <code>lmcc_std</code> and, byte-identically, by <code>lmccstd</code>.</td><td><code>contract/spec/vocab/README.md</code></td></tr>
+    <tr><td>Capabilities</td><td>Vocabulary 0.1.0, 7 facts: <code>instruct</code>, <code>completion</code>, <code>native_reasoning</code>, <code>native_function_calling</code>, <code>native_citations</code>, <code>native_structured_output</code>, <code>image_input</code>.</td><td><code>contract/spec/vocab/capabilities.md</code></td></tr>
+    <tr><td>Roles</td><td><code>plain</code> and <code>reasoning</code> are live. <code>tools</code>, <code>citations</code>, <code>citable</code> are reserved: named, no strategies shipped.</td><td><code>contract/spec/vocab/roles.md</code></td></tr>
+    <tr><td>One check</td><td><code>./check</code> runs the Python tests, the corpus through both kernels, the schemas, the README verbatim, and the DSPy catalog.</td><td><code>check</code></td></tr>
+  </tbody>
+</table>
+
+<h2 id="progress">In progress</h2>
+<table class="status-table">
+  <thead><tr><th>item</th><th>state</th><th>source</th></tr></thead>
+  <tbody>
+    <tr><td>TypeScript implementation</td><td>In progress. Not yet conformant. Not in the repository at tag <code>kernel-0.2</code>.</td><td>stated by the maintainer <span class="tag">placeholder: link when public</span></td></tr>
+  </tbody>
+</table>
+
+<h2 id="planned">Planned, not done</h2>
+<p>Each item is a plan with acceptance criteria. Each lands as a
+versioned addition. None of them exists in code today.</p>
+<table class="status-table">
+  <thead><tr><th>item</th><th>what it is</th><th>source</th></tr></thead>
+  <tbody>
+    <tr><td>Parse combinators</td><td>Declared recovery for messy replies: fenced blocks, tolerant labels, truncation policy. Refusal stays the default; recovery is opt-in, visible data.</td><td><code>plans/02-parse-combinators.md</code></td></tr>
+    <tr><td>Tool-call turns</td><td>Tool calls and results spelled into the next prompt, probe-checked: <code>parse(render(call)) == call</code> or the rule is refused.</td><td><code>plans/03-turns-face.md</code></td></tr>
+    <tr><td>Tools and citations strategies</td><td>Strategy vocabularies for the reserved roles <code>tools</code> and <code>citations</code>.</td><td><code>plans/04-tools-citations-strategies.md</code></td></tr>
+    <tr><td>Grammar face</td><td>A <code>grammar</code> face of <code>skeleton()</code>. A stated gap.</td><td>kernel §3, "Deliberate gaps (0.2)"</td></tr>
+  </tbody>
+</table>
+
+<h2 id="portable">What portable means here</h2>
+<p>Exactly this:</p>
+<ul>
+  <li>The artifact is data and travels anywhere.</li>
+  <li>The layout is byte-exact across implementations.</li>
+  <li>A named format is byte-exact where both runtimes ship the name.</li>
+  <li>A shipped UDF runs where its language can be placed and is declared
+  <em>unclaimed</em> where it cannot.</li>
+</ul>
+<p>That boundary is the contract's, not an accident. A type with no
+artifact entry uses the runtime binding or the kernel default, and
+<code>plan.describe()</code> says which. This is the stated place where
+two runtimes may legitimately spell the same type differently.</p>
+<p class="src">README.md §11; contract/spec/kernel.md §5, §9</p>
+
+<h2 id="versions">Versions</h2>
+<ul>
+  <li>Kernel and every vocabulary entry version independently. Semver.
+  While major = 0, minor is breaking.</li>
+  <li>Artifacts pin what they need. Loaders refuse
+  <code>version-incompatible</code>, naming both sides.</li>
+  <li>Adding a refusal code or a fix action is a minor change. Changing
+  when a code fires, or renaming an action, is breaking.</li>
+</ul>
+<p class="src">contract/spec/kernel.md §9; contract/spec/errors.md</p>
+
+<h2 id="not-claimed">Not claimed</h2>
+<p>This site does not say "production-ready". It does not give adoption
+numbers. It does not name a published package. The repository does not
+contain those facts, so the site does not either.</p>
+</div>
+</main>
+
+<footer class="site-footer">
+  <div class="bar">
+    <p>lmcc · kernel 0.2 · <a href="https://github.com/MaximeRivest/lmcc">github.com/MaximeRivest/lmcc</a> · MIT license.</p>
+    <p>Every sentence on this site traces to a file in the repository.</p>
+  </div>
+</footer>
+</body>
+</html>

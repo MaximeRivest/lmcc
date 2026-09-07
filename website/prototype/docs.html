@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guide · 1–2 — lmcc docs</title>
+<meta name="description" content="The lmcc documentation shell: guide, how-to, reference, and the contract. This page shows the first two sections of the guide.">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-header">
+  <div class="bar">
+    <a class="wordmark" href="index.html">lmcc<span class="ver">kernel 0.2</span></a>
+    <nav class="site-nav" aria-label="Site">
+      <ul>
+        <li><a href="start.html">Start</a></li>
+        <li><a href="why.html">Why</a></li>
+        <li><a href="docs.html" aria-current="page">Docs</a></li>
+        <li><a href="status.html">Status</a></li>
+        <li><a href="https://github.com/MaximeRivest/lmcc">Repository</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+<div class="docs">
+<nav class="docs-nav" aria-label="Documentation">
+  <h2>Guide</h2>
+  <ul>
+    <li><a href="docs.html" aria-current="page">1. One idea before any code</a></li>
+    <li><a href="docs.html#signature">2. The signature</a></li>
+    <li><a href="docs.html#adapter">3. The adapter</a></li>
+    <li><span class="placeholder">4. Bind, render, parse</span></li>
+    <li><span class="placeholder">5. Refusal is the interface</span></li>
+    <li><span class="placeholder">6. Bare output slots</span></li>
+    <li><span class="placeholder">7. Strategies</span></li>
+    <li><span class="placeholder">8. History</span></li>
+    <li><span class="placeholder">9. Formats</span></li>
+    <li><span class="placeholder">10. The artifact</span></li>
+    <li><span class="placeholder">11. Seeing what you built</span></li>
+  </ul>
+  <h2>How-to</h2>
+  <ul>
+    <li><span class="placeholder">Register a format for your type</span></li>
+    <li><span class="placeholder">Ship a format inside the artifact</span></li>
+    <li><span class="placeholder">Choose a strategy by capability</span></li>
+    <li><span class="placeholder">Read a reply as it arrives</span></li>
+    <li><span class="placeholder">Lower a DSPy signature</span></li>
+    <li><span class="placeholder">Run the corpus against your implementation</span></li>
+  </ul>
+  <h2>Reference</h2>
+  <ul>
+    <li><span class="placeholder">Signature: <code>@lmcc.fn</code>, <code>lmcc.signature</code></span></li>
+    <li><span class="placeholder">Adapter: <code>adapter</code>, <code>dump</code>, <code>load</code></span></li>
+    <li><span class="placeholder">Plan: <code>render</code>, <code>parse</code>, <code>stream</code>, <code>describe</code>, <code>skeleton</code>, <code>prefix</code></span></li>
+    <li><span class="placeholder">Refusal: <code>code</code>, <code>hint</code>, <code>fix</code>, <code>partial</code></span></li>
+    <li><span class="placeholder">Registry, Strategy, Role</span></li>
+  </ul>
+  <h2>Contract</h2>
+  <ul>
+    <li><a href="https://github.com/MaximeRivest/lmcc/blob/main/contract/spec/kernel.md">Kernel specification</a></li>
+    <li><a href="https://github.com/MaximeRivest/lmcc/blob/main/contract/spec/errors.md">Refusal codes and fix actions</a></li>
+    <li><a href="https://github.com/MaximeRivest/lmcc/blob/main/contract/spec/vocab/README.md">Vocabulary</a></li>
+    <li><a href="https://github.com/MaximeRivest/lmcc/blob/main/contract/spec/vocab/capabilities.md">Capabilities</a></li>
+    <li><a href="https://github.com/MaximeRivest/lmcc/blob/main/contract/spec/vocab/roles.md">Roles</a></li>
+    <li><a href="https://github.com/MaximeRivest/lmcc/tree/main/contract/schema">Schemas</a></li>
+    <li><a href="https://github.com/MaximeRivest/lmcc/blob/main/contract/corpus/README.md">Corpus</a></li>
+    <li><a href="https://github.com/MaximeRivest/lmcc/blob/main/contract/spec/decisions.md">Decisions</a></li>
+  </ul>
+</nav>
+
+<article class="prose">
+<p class="muted">Guide · kernel only · every code block is executed by
+<code>python/tests/test_guide.py</code></p>
+<h1>Using lmcc — the kernel guide</h1>
+
+<div class="note">
+  <p><strong>Prototype note.</strong> This page shows how the docs are
+  navigated. Only guide sections 1 to 3 are rendered here, verbatim from
+  <code>GUIDE.md</code>. Every item marked "placeholder" in the sidebar
+  has no page yet. The Contract links go to the repository.</p>
+</div>
+
+<p>This guide uses <strong>only the kernel</strong>: <code>import
+lmcc</code>, nothing else. No <code>lmcc_std</code>, no packs. Everything
+here runs against an empty registry — except the last sections, where
+you register <em>your own</em> formats through the sockets, which is the
+point of them.</p>
+
+<p>Every code block in this file is executed, in order, by
+<code>tests/test_guide.py</code>. If the guide drifts from the code,
+<code>./check</code> goes red. Read it as a program.</p>
+
+<h2 id="one-idea">1. One idea before any code</h2>
+
+<p>You describe a typed contract (the <strong>signature</strong>) and a
+conversation shape (the <strong>adapter</strong>). The kernel binds them
+into a <strong>plan</strong> that turns values into exact messages, and the
+model's reply back into typed values. One description does both
+directions — the parts that could disagree are derived from each other,
+so they cannot. When something cannot be done honestly, lmcc refuses with
+a named <code>Refusal</code> <strong>before</strong> any model is called.
+It never guesses.</p>
+
+<h2 id="signature">2. The signature: what goes in, what comes out</h2>
+
+<pre data-src="GUIDE.md#0"><code class="language-python">import dataclasses
+import lmcc
+
+@dataclasses.dataclass
+class Facts:
+    title: str
+    year: int
+    confident: bool
+
+@lmcc.fn
+def book(text: str) -&gt; Facts:
+    """Extract the book facts from the sentence."""
+
+assert [f.name for f in book.signature.inputs] == ["text"]
+assert [(f.name, f.type) for f in book.signature.outputs] == [("title", "str"), ("year", "int"), ("confident", "bool")]
+</code></pre>
+
+<p>Parameters are inputs, the return type is the output, a dataclass
+return is several outputs, the docstring is the instruction. The same
+signature as plain data — what every frontend lowers to — is
+<code>lmcc.signature_to_dict(book.signature)</code>; it has a JSON Schema
+(<code>contract/schema/signature.schema.json</code>). Descriptions and
+roles: <code>lmcc.signature("...", inputs={"text": str}, outputs={"title":
+lmcc.field(str, desc="the book title")})</code>.</p>
+
+<h2 id="adapter">3. The adapter: how the conversation looks</h2>
+
+<p>An adapter never knows a signature. It is a template, a parse rule,
+strategies by role, formats by type — never a field name. The template
+has exactly three constructs — slots, loops, escapes:</p>
+
+<pre data-src="GUIDE.md#1"><code class="language-python">adapter = lmcc.adapter(messages=[
+    lmcc.system("{instruction}\n\nAnswer in exactly this form:\n"
+                "{% for f in outputs %}&lt;{f.name}&gt;\n{f.value}\n&lt;/{f.name}&gt;\n{% endfor %}"),
+    lmcc.demos(),
+    lmcc.user("{text}"),
+])
+</code></pre>
+
+<p>The outputs loop containing <code>{f.value}</code> is the <strong>output
+pattern</strong>. It renders the prompt's skeleton, it writes example
+answers, and <strong>the parser is derived from it</strong> — the literal
+text around each hole becomes the anchors the parser looks for. You never
+write a parser.</p>
+
+<hr>
+<p class="muted">Sections 4 to 12 are placeholders in this prototype. Read
+them in <a href="https://github.com/MaximeRivest/lmcc/blob/main/GUIDE.md">GUIDE.md</a>.</p>
+</article>
+</div>
+</main>
+
+<footer class="site-footer">
+  <div class="bar">
+    <p>lmcc · kernel 0.2 · <a href="https://github.com/MaximeRivest/lmcc">github.com/MaximeRivest/lmcc</a> · MIT license.</p>
+    <p>Every sentence on this site traces to a file in the repository.</p>
+  </div>
+</footer>
+</body>
+</html>
