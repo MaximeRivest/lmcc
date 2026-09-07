@@ -227,15 +227,23 @@ def typename(ann: object) -> str | None:
 def signature_from_dict(data: dict) -> SignatureCore:
     """Load a signature from its plain-data form (the corpus form)."""
     if not isinstance(data, dict) or not isinstance(data.get("fields", []), list):
-        refuse("signature-malformed", "a signature is an object with a fields list")
+        refuse("signature-malformed", "a signature is an object with a fields list",
+               fix={"action": "edit-signature"})
     fields = []
     for f in data.get("fields", []):
         if not isinstance(f, dict):
-            refuse("signature-malformed", "each field is an object")
+            refuse("signature-malformed", "each field is an object", fix={"action": "edit-signature"})
         fields.append(Field(f.get("name"), f.get("direction"), f.get("shape"),
                             type=f.get("type"), role=f.get("role", "plain"),
                             desc=f.get("desc")))
     return _validated(SignatureCore(data.get("instructions", ""), fields))
+
+
+def _fix_field(f: Field) -> dict:
+    """``edit-signature`` naming the field when it has a usable name."""
+    if isinstance(f.name, str) and f.name:
+        return {"action": "edit-signature", "field": f.name}
+    return {"action": "edit-signature"}
 
 
 def _validated(sig: SignatureCore) -> SignatureCore:
@@ -245,22 +253,27 @@ def _validated(sig: SignatureCore) -> SignatureCore:
         if not is_identifier(f.name):
             refuse("signature-malformed",
                    f"field name {f.name!r} is not an ASCII identifier "
-                   f"([A-Za-z_][A-Za-z0-9_]*)")
+                   f"([A-Za-z_][A-Za-z0-9_]*)", fix=_fix_field(f))
         if f.name in seen:
-            refuse("signature-malformed", f"field {f.name!r} is declared twice")
+            refuse("signature-malformed", f"field {f.name!r} is declared twice", fix=_fix_field(f))
         seen.add(f.name)
         if f.direction not in DIRECTIONS:
             refuse("signature-malformed",
-                   f"field {f.name!r}: direction {f.direction!r} is not input/output")
+                   f"field {f.name!r}: direction {f.direction!r} is not input/output",
+                   fix=_fix_field(f))
         if not isinstance(f.shape, dict):
-            refuse("signature-malformed", f"field {f.name!r}: shape must be an object")
+            refuse("signature-malformed", f"field {f.name!r}: shape must be an object",
+                   fix=_fix_field(f))
         if not isinstance(f.role, str) or not _ROLE.match(f.role):
             refuse("signature-malformed",
-                   f"field {f.name!r}: role {f.role!r} is not a (dotted) identifier")
+                   f"field {f.name!r}: role {f.role!r} is not a (dotted) identifier",
+                   fix=_fix_field(f))
         if f.type is not None and not isinstance(f.type, str):
-            refuse("signature-malformed", f"field {f.name!r}: type must be a string")
+            refuse("signature-malformed", f"field {f.name!r}: type must be a string",
+                   fix=_fix_field(f))
         if f.desc is not None and not isinstance(f.desc, str):
-            refuse("signature-malformed", f"field {f.name!r}: desc must be a string")
+            refuse("signature-malformed", f"field {f.name!r}: desc must be a string",
+                   fix=_fix_field(f))
     return sig
 
 
@@ -321,7 +334,8 @@ def annotation_to_shape(ann: object, registry=None, *, field_name: str = "?") ->
         elif all(isinstance(v, int) and not isinstance(v, bool) for v in values):
             shape["type"] = "integer"
         else:
-            refuse("unmapped-type", f"field {field_name!r}: enum {ann.__name__} mixes member kinds")
+            refuse("unmapped-type", f"field {field_name!r}: enum {ann.__name__} mixes member kinds",
+                   fix={"action": "edit-signature", "field": field_name})
         return shape
     if isinstance(ann, type) and dataclasses.is_dataclass(ann):
         # the language's own construct: lowered mechanically, still structured
@@ -331,7 +345,8 @@ def annotation_to_shape(ann: object, registry=None, *, field_name: str = "?") ->
         return {"type": "object", "properties": props, "required": [f.name for f in dataclasses.fields(ann)]}
     refuse("unmapped-type",
            f"field {field_name!r}: cannot map annotation {ann!r} to a shape; "
-           f"pass a JSON-Schema dict, or lower it in your frontend")
+           f"pass a JSON-Schema dict, or lower it in your frontend",
+           fix={"action": "edit-signature", "field": field_name})
 
 
 _SCALAR_TYPES = ("string", "integer", "number", "boolean")
@@ -392,7 +407,7 @@ def is_structured(shape: dict) -> bool:
 # ---------------------------------------------------- scalar spell / parse
 
 
-def spell_value(shape: dict, value: object, *, where: str) -> str:
+def spell_value(shape: dict, value: object, *, where: str, field: str | None = None) -> str:
     """Kernel mechanics (§7a): strings verbatim, integers in decimal,
     numbers by the ECMAScript spelling, booleans as ``true``/``false``,
     enums by member spelling, ``null`` for nullable shapes. Refuses
@@ -433,8 +448,9 @@ def spell_value(shape: dict, value: object, *, where: str) -> str:
     if isinstance(value, str):
         return value
     refuse("no-format",
-           f"{where}: value of type {type(value).__name__} has no codec "
-           f"bound and is not a scalar — bind a codec for this field")
+           f"{where}: value of type {type(value).__name__} has no format "
+           f"bound and is not a scalar — bind a format for this field",
+           fix={"action": "bind-format", "field": field or where, "key": format_key(None, shape)})
 
 
 def read_value(shape: dict, text: str, *, where: str) -> object:
@@ -459,8 +475,42 @@ def read_value(shape: dict, text: str, *, where: str) -> object:
     return text
 
 
+STRUCTURAL_SCALARS = ("string", "integer", "number", "boolean")
+
+
+def structural_keys(shape: dict) -> list[str]:
+    """The structural keys a shape answers to, most specific first, never
+    ``*`` (which resolution consults last, kernel §5)."""
+    base, _ = nullable_base(shape)
+    if is_media(base):
+        return [f"media:{base['media']}", "media:*"]
+    if "enum" in base:
+        return ["enum"]
+    t = base.get("type")
+    if t in STRUCTURAL_SCALARS:
+        return [t]
+    if t == "array":
+        items = base.get("items") or {}
+        inner = structural_keys(items) if isinstance(items, dict) else []
+        keys = [f"list[{k}]" for k in inner if not k.startswith("media")]
+        return keys + ["list[*]"]
+    if t == "object":
+        return ["object"]
+    return []
+
+
+def format_key(type_name: str | None, shape: dict) -> str:
+    """The artifact key a format for this field binds under (errors.md,
+    ``bind-format``): the type name when the frontend spelled one, else
+    the most specific structural key, else ``*``."""
+    if type_name:
+        return type_name
+    keys = structural_keys(shape)
+    return keys[0] if keys else "*"
+
+
 def spell_scalar(f: Field, value: object) -> str:
-    return spell_value(f.shape, value, where=f"field {f.name!r}")
+    return spell_value(f.shape, value, where=f"field {f.name!r}", field=f.name)
 
 
 def parse_scalar(f: Field, text: str) -> object:

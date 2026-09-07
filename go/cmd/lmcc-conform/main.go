@@ -32,6 +32,9 @@ func main() {
 		if answer.Unclaimed != "" {
 			o.Set("unclaimed", answer.Unclaimed)
 		}
+		if answer.StreamTrace != nil {
+			o.Set("stream_trace", answer.StreamTrace)
+		}
 		fmt.Fprintln(out, lmcc.MarshalJSON(o, -1))
 		out.Flush()
 	}

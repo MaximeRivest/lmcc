@@ -69,6 +69,10 @@
  },
  "expect": {
   "code": "capability-missing",
+  "fix": {
+   "action": "declare-capability",
+   "fact": "native_reasoning"
+  },
   "at": "bind"
  }
 }

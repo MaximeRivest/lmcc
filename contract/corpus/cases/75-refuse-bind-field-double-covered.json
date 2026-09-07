@@ -1,16 +1,11 @@
 {
- "name": "refuse-bind-format-shape-mismatch",
+ "name": "refuse-bind-field-double-covered",
  "kind": "refuse",
- "vocab": [
-  "std"
- ],
  "entry": {
-  "name": "mismatch_v1",
+  "name": "visible_and_routed_v1",
   "versions": {
    "kernel": "0.2.0",
-   "vocab": {
-    "format/table": "0.1.0"
-   }
+   "vocab": {}
   },
   "template": [
    {
@@ -25,19 +20,24 @@
   "parse": {
    "kind": "derived"
   },
-  "formats": {
-   "string": {
-    "use": "table",
-    "options": {
-     "columns": [
-      "a"
-     ]
-    }
+  "strategies": {
+   "reasoning": {
+    "routings": [
+     {
+      "from": "text",
+      "between": [
+       "<think>",
+       "</think>"
+      ],
+      "to": "@role",
+      "consume": true
+     }
+    ]
    }
   }
  },
  "signature": {
-  "instructions": "x",
+  "instructions": "Answer.",
   "fields": [
    {
     "name": "q",
@@ -47,7 +47,15 @@
     }
    },
    {
-    "name": "a",
+    "name": "reasoning",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    },
+    "role": "reasoning"
+   },
+   {
+    "name": "answer",
     "direction": "output",
     "shape": {
      "type": "string"
@@ -56,11 +64,10 @@
   ]
  },
  "expect": {
-  "code": "format-shape-mismatch",
+  "code": "field-double-covered",
   "fix": {
-   "action": "bind-format",
-   "field": "q",
-   "key": "string"
+   "action": "edit-entry",
+   "path": "strategies['reasoning'].visible"
   },
   "at": "bind"
  }

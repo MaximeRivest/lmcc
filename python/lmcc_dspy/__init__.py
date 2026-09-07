@@ -73,13 +73,16 @@ def lower(signature, *, registry: lmcc.Registry | None = None) -> Lowered:
         extra = info.json_schema_extra or {}
         direction = extra.get("__dspy_field_type")
         if direction not in ("input", "output"):
-            refuse("signature-malformed", f"field {name!r}: not an InputField/OutputField")
+            refuse("signature-malformed", f"field {name!r}: not an InputField/OutputField",
+                   fix={"action": "edit-signature", "field": name})
         ann = info.annotation
         if ann is History:
             if direction != "input":
-                refuse("unmapped-type", f"field {name!r}: dspy.History must be an input")
+                refuse("unmapped-type", f"field {name!r}: dspy.History must be an input",
+                       fix={"action": "edit-signature", "field": name})
             if history_field is not None:
-                refuse("unmapped-type", f"field {name!r}: a second dspy.History input")
+                refuse("unmapped-type", f"field {name!r}: a second dspy.History input",
+                       fix={"action": "edit-signature", "field": name})
             history_field = name
             continue
         desc = extra.get("desc")
@@ -143,7 +146,8 @@ def _shape_and_role(ann, info, name: str) -> tuple[dict, str]:
         shape = pydantic.TypeAdapter(annotated).json_schema()
     except Exception as exc:  # noqa: BLE001 — refuse by name
         refuse("unmapped-type",
-               f"field {name!r}: cannot lower annotation {ann!r} to a shape ({exc})")
+               f"field {name!r}: cannot lower annotation {ann!r} to a shape ({exc})",
+               fix={"action": "edit-signature", "field": name})
     shape.pop("title", None)
     return shape, role
 

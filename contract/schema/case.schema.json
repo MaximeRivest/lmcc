@@ -169,6 +169,13 @@
               "code": {
                 "type": "string"
               },
+              "fix": {
+                "type": "object",
+                "required": [
+                  "action"
+                ],
+                "description": "the fix the refusal must carry, exactly (fix.schema.json); asserted when present"
+              },
               "at": {
                 "enum": [
                   "load",

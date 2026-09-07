@@ -24,8 +24,9 @@ def _documented_codes() -> set[str]:
     return set(re.findall(r"^\| `([a-z0-9-]+)` \|", text, re.MULTILINE))
 
 
-def _raised_codes() -> set[str]:
-    codes: set[str] = set()
+def _refuse_calls():
+    """Every ``refuse("<code>", ...)`` call in the Python packages:
+    (file, line, code, fix keyword node or None)."""
     for pkg in ("lmcc", "lmcc_std", "lmcc_dspy"):
         for py in sorted((ROOT / "python" / pkg).glob("*.py")):
             tree = ast.parse(py.read_text())
@@ -36,8 +37,35 @@ def _raised_codes() -> set[str]:
                         and node.args
                         and isinstance(node.args[0], ast.Constant)
                         and isinstance(node.args[0].value, str)):
-                    codes.add(node.args[0].value)
-    return codes
+                    fix = next((k.value for k in node.keywords if k.arg == "fix"), None)
+                    yield f"{py.name}:{node.lineno}", node.args[0].value, fix
+
+
+def _raised_codes() -> set[str]:
+    return {code for _, code, _ in _refuse_calls()}
+
+
+def _documented_fixes() -> dict[str, set[str]]:
+    """code -> the fix actions errors.md lists for it (empty when '—')."""
+    text = (SPEC / "errors.md").read_text()
+    out: dict[str, set[str]] = {}
+    for code, actions in re.findall(r"^\| `([a-z0-9-]+)` \| [^|]+ \| ([^|]+) \|", text, re.MULTILINE):
+        out[code] = set(re.findall(r"`([a-z-]+)`", actions))
+    return out
+
+
+def _documented_actions() -> dict[str, tuple[set[str], set[str]]]:
+    """action -> (required parameters, optional parameters), from the
+    fix-actions table in errors.md."""
+    text = (SPEC / "errors.md").read_text().replace("\\|", "/")   # escaped pipes inside cells
+    table = text[text.index("## Fix actions"):]
+    out = {}
+    for action, params in re.findall(r"^\| `([a-z-]+)` \| ([^|]+) \|", table, re.MULTILINE):
+        required, optional = set(), set()
+        for name, opt in re.findall(r"`([a-z]+)`(?: \([^)]*\))?(\?)?", params):
+            (optional if opt else required).add(name)
+        out[action] = (required, optional)
+    return out
 
 
 def test_every_raised_code_is_documented():
@@ -45,6 +73,72 @@ def test_every_raised_code_is_documented():
     assert not undocumented, (
         f"codes raised in source but missing from spec/errors.md: "
         f"{sorted(undocumented)}")
+
+
+def _fix_action(fix_node) -> str | None:
+    """The action literal of a fix expression when it is one statically:
+    a dict literal, ``{**base, ...}`` over one, or a helper call whose
+    name says the action."""
+    if isinstance(fix_node, ast.Dict):
+        for k, v in zip(fix_node.keys, fix_node.values):
+            if isinstance(k, ast.Constant) and k.value == "action" and isinstance(v, ast.Constant):
+                return v.value
+    return None
+
+
+def test_fix_actions_are_documented_and_closed():
+    """Every action a Python call site emits is in the closed table; every
+    documented action is emitted somewhere (the table cannot rot)."""
+    documented = _documented_actions()
+    assert documented, "errors.md has a fix-actions table"
+    schema = json.loads((ROOT / "contract" / "schema" / "fix.schema.json").read_text())
+    in_schema = {b["properties"]["action"]["const"] for b in schema["oneOf"]}
+    assert in_schema == set(documented), "fix.schema.json and errors.md list the same actions"
+    emitted = {a for _, _, fix in _refuse_calls() if (a := _fix_action(fix))}
+    assert emitted <= set(documented), f"undocumented fix actions: {sorted(emitted - set(documented))}"
+    assert emitted == set(documented), (
+        f"documented actions no call site emits: {sorted(set(documented) - emitted)}")
+
+
+def test_every_pre_render_refusal_carries_a_fix():
+    """The rule of errors.md, mechanically: a code the table gives a fix
+    passes ``fix=`` at every call site, with an action from its row; a
+    code marked '—' never does."""
+    fixes = _documented_fixes()
+    for where, code, fix in _refuse_calls():
+        allowed = fixes.get(code, set())
+        if allowed:
+            assert fix is not None, f"{where}: refuse({code!r}) carries no fix; errors.md says {sorted(allowed)}"
+            action = _fix_action(fix)
+            if action is not None:
+                assert action in allowed, f"{where}: fix {action!r} is not one of {sorted(allowed)} for {code!r}"
+        else:
+            assert fix is None, f"{where}: refuse({code!r}) carries a fix, but errors.md says it carries none"
+
+
+def test_every_corpus_fix_matches_the_closed_vocabulary():
+    """Corpus fixes name a documented action with exactly its parameters."""
+    documented = _documented_actions()
+    seen = set()
+    for path in sorted(CASES.glob("*.json")):
+        case = json.loads(path.read_text())
+        if case["kind"] != "refuse":
+            continue
+        if case["expect"]["at"] in ("load", "signature", "bind"):
+            assert "fix" in case["expect"], f"{path.name}: a pre-render refuse case pins its fix"
+        fix = case["expect"].get("fix")
+        if fix is None:
+            continue
+        required, optional = documented[fix["action"]]
+        keys = set(fix) - {"action"}
+        assert required <= keys <= required | optional, (
+            f"{path.name}: fix {fix['action']!r} has parameters {sorted(keys)}, "
+            f"wants {sorted(required)} (+ optional {sorted(optional)})")
+        assert fix["action"] in _documented_fixes()[case["expect"]["code"]], (
+            f"{path.name}: {fix['action']!r} is not a fix errors.md lists for {case['expect']['code']!r}")
+        seen.add(fix["action"])
+    unpinned = set(documented) - seen
+    assert not unpinned, f"documented fix actions with no corpus case: {sorted(unpinned)}"
 
 
 def test_every_corpus_refusal_code_is_documented():
@@ -110,18 +204,37 @@ def test_plans_have_acceptance_criteria():
         assert "acceptance" in text, f"{plan.name} has no acceptance criteria"
 
 
-def _go_raised_codes() -> set[str]:
-    """Every code the Go implementation can raise: refuse("x"),
-    refusef("x", ...), and literal Error{Code: "x"} constructions."""
-    codes: set[str] = set()
+def _go_refuse_calls():
+    """Every refusal the Go implementation can raise: (file:line, code,
+    carries_fix). refuseFix/refuseFixf carry one; refuse/refusef/
+    refusePartial and literal Error{Code: ...} do not."""
     for go in sorted((ROOT / "go").rglob("*.go")):
         if go.name.endswith("_test.go"):
             continue
-        text = go.read_text()
-        codes |= set(re.findall(r'refuse[f]?\("([a-z0-9-]+)"', text))
-        codes |= set(re.findall(r'refusePartial\("([a-z0-9-]+)"', text))
-        codes |= set(re.findall(r'Code:\s*"([a-z0-9-]+)"', text))
-    return codes
+        for i, line in enumerate(go.read_text().splitlines(), 1):
+            for fn, code in re.findall(r'(refuseFixf?|refusef?|refusePartial)\("([a-z0-9-]+)"', line):
+                yield f"{go.name}:{i}", code, fn.startswith("refuseFix")
+            for code in re.findall(r'Code:\s*"([a-z0-9-]+)"', line):
+                yield f"{go.name}:{i}", code, False
+
+
+def _go_raised_codes() -> set[str]:
+    return {code for _, code, _ in _go_refuse_calls()}
+
+
+def test_go_pre_render_refusals_carry_a_fix():
+    """The same rule as the Python kernel, on the Go call sites."""
+    fixes = _documented_fixes()
+    for where, code, has_fix in _go_refuse_calls():
+        if fixes.get(code):
+            assert has_fix, f"{where}: {code!r} must use refuseFix/refuseFixf (errors.md gives it a fix)"
+        else:
+            assert not has_fix, f"{where}: {code!r} carries a fix, but errors.md says it carries none"
+    actions = set()
+    for go in sorted((ROOT / "go" / "lmcc").glob("*.go")):
+        actions |= set(re.findall(r'"action", "([a-z-]+)"', go.read_text()))
+    assert actions == set(_documented_actions()), (
+        f"Go emits {sorted(actions)}; errors.md documents {sorted(_documented_actions())}")
 
 
 def test_go_implementation_raises_only_documented_codes():

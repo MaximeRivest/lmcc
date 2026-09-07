@@ -19,6 +19,11 @@
  },
  "expect": {
   "code": "unknown-parse-kind",
+  "fix": {
+   "action": "install-vocabulary",
+   "kind": "lens",
+   "name": "json_object"
+  },
   "at": "load"
  }
 }

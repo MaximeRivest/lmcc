@@ -93,8 +93,19 @@ Every input must be reachable from a slot or an inputs loop
 bind(adapter, signature, capabilities, registry) → plan   every refusal fires here
 plan.render(inputs, demos?, history?) → {messages, patch}   pure
 plan.parse(response) → {field: value}                      pure
+plan.stream() → stream                                     pure, sans-I/O
+stream.feed(delta) → [event, …]
+stream.finish() → {events: [event, …], values: {field: value}}
 plan.describe() · plan.explain() · plan.skeleton() · plan.prefix()
 ```
+
+A refusal is `Refusal(code, hint, fix, partial)`: `code` is stable
+(`errors.md`), `hint` names the offender for a human, `fix` is the one
+next action as data from the closed action vocabulary of `errors.md` —
+present on every refusal that fires before render (signature, load,
+bind), absent on render and parse refusals — and `partial` is what a
+parse recovered. The corpus pins codes and fixes; both kernels emit the
+same fix for the same refusal.
 
 Messages are lm15-shaped: `{"role", "content": [part, …]}`; adjacent
 text parts merge; empty messages drop. A response is a string or
@@ -129,7 +140,11 @@ backwards:
   hole or the line's end;
 - anchors are matched by their whitespace-stripped forms, first
   occurrence, any order; a capture runs to the field's close, the next
-  anchor, the tail, or end of text, and is stripped (§7a);
+  anchor, the tail, or end of text, and is stripped (§7a). Boundaries are
+  positions, so when the next anchor begins inside this field's anchor
+  (`**Reasoning:**Answer:**` reads the answer marker from the reasoning
+  marker's last two bytes) the capture is empty, never negative and
+  never a guess;
 - demos and the `{format}` skeleton are written through the same
   pattern: `join` (values) and `format` (placeholders) are the lens
   writing forward.
@@ -274,7 +289,107 @@ value that is already a part dict as that part (`{"kind": kind, …}`)
 and reads the first part of that kind from its span. Nothing structured
 has a default.
 
-## 8. Versioning and conformance
+## 8. Streaming parse (sans-I/O)
+
+Streaming is a *refinement* of batch parse, never a second parser:
+
+> Feed the same response in any chunking — the final values equal
+> `parse()` of the concatenated response, exactly. Per field, the
+> concatenation of emitted deltas equals the batch raw text.
+
+`stream = plan.stream()` creates a pure state machine; it opens no
+connection and owns no I/O. `stream.feed(delta)` accepts either a text
+string or one lm15-shaped part delta `{"kind": string, ...}` and returns
+zero or more structurally fixed events. `field_done.value` is the same
+host-typed value as `parse()` (and therefore need not be JSON data).
+`stream.finish()` marks end-of-stream
+and returns `StreamResult(events, values)`: the final events caused by
+EOF and the same typed values as batch `parse`. EOF can end a field and
+release its held trailing whitespace, so final events cannot honestly
+be returned by `feed`; this is why `finish` returns both. Calling
+`feed` after `finish`, or `finish` twice, is host API misuse, not a
+`Refusal`.
+
+Text strings are deltas of the response's `text` channel. Adjacent
+part deltas with the same `kind` and string `text` coalesce into one
+logical part by concatenating `text`; a change of kind closes that
+part. A part delta without text is one complete part. Thus a provider
+can pass its text/thinking deltas without inventing part boundaries.
+A malformed delta refuses `response-malformed` at `feed`.
+
+Events have one of these exact shapes, in signature field order when
+one input delta advances several fields:
+
+```
+{"kind": "field_started", "field": name}
+{"kind": "field_delta",   "field": name, "text": raw_text_delta}
+{"kind": "field_done",    "field": name, "value": typed_value}
+```
+
+One `field_started` and one `field_done` occur per recovered field;
+empty `field_delta` events never occur. `field_delta` is raw text after
+the same §7a outer strip as batch parse. The reducer holds leading and
+trailing ASCII whitespace and any suffix that can begin an anchor,
+close, tail, routing delimiter, or line; it emits only a prefix no
+future delta can change. A marker occurrence acts — opens a field's
+section, ends the previous one, or fixes a close — only once no boundary
+marker can still be growing across it: a later marker may begin inside
+an earlier one (§4, `**Reasoning:**Answer:**`), and the section it
+shrinks must not have emitted yet. This hold is exact, not a fixed
+delay: it costs nothing where no marker prefix is in sight. `field_done`
+is emitted by `finish`, after the
+whole reply passes the batch structural checks and formats read in the
+same order. This deliberately avoids speculative typed values: an
+anchor or close that arrives later can still make the reply ambiguous.
+Every `feed` does work proportional to its delta, never to the reply:
+an implementation must not rescan the accumulated text per delta.
+
+The derived marker lens streams incrementally. A vocabulary lens may
+provide the optional streaming face
+`lens.stream(field_names) → reducer`, where
+`reducer.feed(text_delta) → {field: stable_raw_prefix}` and
+`reducer.finish() → {field: final_raw}`. Calls receive the stable text
+left by routings. Prefixes must only grow; `finish` checks them against
+the batch lens and a disagreement is an implementation bug. A lens
+without this face (the base method returns `None`) buffers and produces all events
+at `finish`. In Go the same optional face is `StreamingLens.NewStream`
+returning a `LensStream` with `Feed` and `Finish`. Routing behavior is:
+
+- `between` emits a capture after its close arrives;
+- `line_prefixed` emits a capture after its newline arrives (or at EOF);
+- `from: channel:<kind>` streams text from matching part deltas;
+- `pattern` buffers its routed field until `finish` because a later byte
+  can change a regex match;
+- a consuming routing passes only stable, non-matching text to the next
+  routing and the lens; routing stages compose in declaration order;
+- when more than one routing writes one field, that field buffers until
+  `finish`, because batch `span.text` concatenates by routing order,
+  not response arrival order.
+
+`plan.describe()["streaming"]` declares `mode` (`incremental`,
+`hybrid`, or `buffered`), the lens mode, each routing's mode and reason,
+and `field_done: "finish"`; buffering is visible, never hidden.
+
+**Refusal law.** `finish()` runs the same structural parse and typed
+reads as `parse()`, in the same order; it therefore raises the same
+`code`, `fix`, and `partial`. `feed` does not raise a content refusal
+that batch parse could supersede later; it only refuses a malformed
+delta. Events already emitted before a final refusal are observations,
+not a successful result.
+
+The conformance harness replays every parse case at every Unicode-scalar
+split (and every text-bearing part split), compares final values with
+batch parse, and compares concatenated field deltas across all splits.
+It also records the one-scalar replay's event log (every feed's events,
+then the EOF events or the refusal code) as the case's *stream trace*;
+an external driver's trace must equal the reference kernel's, so *when*
+raw text becomes visible is pinned across implementations, not only
+what it finally is.
+Transport byte decoding stays outside lmcc: clients must decode network
+bytes incrementally before `feed`, so a split inside a UTF-8 scalar is
+not a distinct lmcc chunking.
+
+## 9. Versioning and conformance
 
 Kernel and every vocabulary entry version independently (semver; while
 major = 0, minor is breaking). Artifacts pin what they need; loaders
@@ -284,19 +399,22 @@ refuse `version-incompatible` naming both sides; unknown names refuse
 The corpus (`corpus/cases/*.json`, `schema/case.schema.json`) is the
 authority: an implementation is conformant when the harness passes every
 case byte-exactly — rendered text and parts, parsed values, refusal
-codes. Case kinds: `render`, `parse`, `roundtrip`, `refuse`. A case may
+codes and their fixes. Case kinds: `render`, `parse`, `roundtrip`, `refuse`. A case may
 declare `requires: ["udf:python"]`; a driver that cannot place that
 language answers `{"ok": true, "unclaimed": "udf:python"}` and the
 harness counts it apart — declared, never silent.
 
 **The driver protocol.** `runner.py --driver CMD` starts one process and
 streams JSON Lines: one case per line in, one `{"ok", "detail"?,
-"unclaimed"?}` per line out. Values compare by JSON equality: objects
-unordered, arrays ordered, numbers by value.
+"unclaimed"?, "stream_trace"?}` per line out. Values compare by JSON
+equality: objects unordered, arrays ordered, numbers by value. For
+`parse` cases and `refuse` cases at `parse`, `stream_trace` is the §8
+one-scalar event log — a list per feed of `[kind, field]` or
+`[kind, field, text]` digests, then the EOF list or `{"refusal": code}`;
+the harness compares it with the reference kernel's.
 
 ## Deliberate gaps (0.2)
 
-`plan.parser()` streaming (plan 01), the `grammar` face of `skeleton()`,
-parse combinators (plan 02), turns (plan 03), tools/citations strategy
-vocabularies (plan 04), fix hints (plan 06). Each lands as a versioned
-addition.
+The `grammar` face of `skeleton()`, parse combinators (plan 02), turns
+(plan 03), and tools/citations strategy vocabularies (plan 04). Each
+lands as a versioned addition.

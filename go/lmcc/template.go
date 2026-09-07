@@ -52,14 +52,14 @@ func compileTemplate(text, where string) []node {
 		case m[4] >= 0: // loop
 			source := text[m[8]:m[9]]
 			if source != "inputs" && source != "outputs" {
-				refusef("template-syntax", "%s: loop source %q is not one of [inputs outputs]", where, source)
+				refuseFixf("template-syntax", fixEditTemplate(where), "%s: loop source %q is not one of [inputs outputs]", where, source)
 			}
 			loop := &loopNode{varName: text[m[6]:m[7]], source: source}
 			stack = append(stack, frame{loop, current})
 			current = &loop.body
 		case m[10] >= 0: // endfor
 			if len(stack) == 0 {
-				refusef("template-syntax", "%s: {%% endfor %%} without an open loop", where)
+				refuseFixf("template-syntax", fixEditTemplate(where), "%s: {%% endfor %%} without an open loop", where)
 			}
 			top := stack[len(stack)-1]
 			stack = stack[:len(stack)-1]
@@ -76,15 +76,19 @@ func compileTemplate(text, where string) []node {
 		*current = append(*current, textNode{tail})
 	}
 	if len(stack) > 0 {
-		refusef("template-syntax", "%s: unclosed {%% for %%} loop", where)
+		refuseFixf("template-syntax", fixEditTemplate(where), "%s: unclosed {%% for %%} loop", where)
 	}
 	return root
+}
+
+func fixEditSlot(where, slot string) *Object {
+	return Obj("action", "edit-template", "path", where, "slot", slot)
 }
 
 func checkLiteral(literal, where string) {
 	for _, ch := range []string{"{", "}"} {
 		if strings.Contains(literal, ch) {
-			refusef("template-syntax", "%s: bare %q — use %q to render a literal brace",
+			refuseFixf("template-syntax", fixEditTemplate(where), "%s: bare %q — use %q to render a literal brace",
 				where, ch, ch+ch)
 		}
 	}
@@ -100,7 +104,7 @@ func validateNodes(nodes []node, known, inputs map[string]bool, where, loopVar s
 			if loopVar != "" && strings.HasPrefix(path, loopVar+".") {
 				attr := path[len(loopVar)+1:]
 				if !contains(loopAttrs, attr) {
-					refusef("unknown-slot", "%s: {%s} — loop attributes are %v", where, path, loopAttrs)
+					refuseFixf("unknown-slot", fixEditSlot(where, path), "%s: {%s} — loop attributes are %v", where, path, loopAttrs)
 				}
 				continue
 			}
@@ -108,7 +112,7 @@ func validateNodes(nodes []node, known, inputs map[string]bool, where, loopVar s
 				continue
 			}
 			if strings.Contains(path, ".") {
-				refusef("unknown-slot", "%s: {%s} — dotted slots are only valid inside their loop", where, path)
+				refuseFixf("unknown-slot", fixEditSlot(where, path), "%s: {%s} — dotted slots are only valid inside their loop", where, path)
 			}
 			if inputs[path] {
 				covered[path] = true
@@ -117,7 +121,7 @@ func validateNodes(nodes []node, known, inputs map[string]bool, where, loopVar s
 			if known[path] {
 				continue // an output slot: renders its placeholder (kernel §2)
 			}
-			refusef("unknown-slot", "%s: {%s} names no field in the signature", where, path)
+			refuseFixf("unknown-slot", fixEditSlot(where, path), "%s: {%s} names no field in the signature", where, path)
 		case loopNode:
 			validateNodes(x.body, known, inputs, where, x.varName, covered)
 			if x.source == "inputs" {

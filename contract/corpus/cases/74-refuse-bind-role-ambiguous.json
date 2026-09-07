@@ -1,8 +1,8 @@
 {
- "name": "refuse-bind-format-placement-mismatch",
+ "name": "refuse-bind-role-ambiguous",
  "kind": "refuse",
  "entry": {
-  "name": "place_v1",
+  "name": "role_twice_v1",
   "versions": {
    "kernel": "0.2.0",
    "vocab": {}
@@ -21,15 +21,24 @@
    "kind": "derived"
   },
   "strategies": {
-   "context": {
-    "placement": {
-     "@role": "controls.context"
-    }
+   "reasoning": {
+    "visible": false,
+    "routings": [
+     {
+      "from": "text",
+      "between": [
+       "<think>",
+       "</think>"
+      ],
+      "to": "@role",
+      "consume": true
+     }
+    ]
    }
   }
  },
  "signature": {
-  "instructions": "x",
+  "instructions": "Answer.",
   "fields": [
    {
     "name": "q",
@@ -39,12 +48,20 @@
     }
    },
    {
-    "name": "ctx",
-    "direction": "input",
+    "name": "draft",
+    "direction": "output",
     "shape": {
      "type": "string"
     },
-    "role": "context"
+    "role": "reasoning"
+   },
+   {
+    "name": "notes",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    },
+    "role": "reasoning"
    },
    {
     "name": "answer",
@@ -56,11 +73,11 @@
   ]
  },
  "expect": {
-  "code": "format-placement-mismatch",
+  "code": "role-ambiguous",
   "fix": {
-   "action": "bind-format",
-   "field": "ctx",
-   "key": "string"
+   "action": "edit-signature",
+   "field": "notes",
+   "role": "reasoning"
   },
   "at": "bind"
  }

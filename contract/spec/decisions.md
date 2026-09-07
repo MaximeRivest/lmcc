@@ -262,3 +262,114 @@ cares. Costs, each stated in `plans/08`: a second corpus seeding
 unclaimed and lacks `format-not-self-contained`, strict escapes remain
 (`{{"answer": "{answer}"}}`), `reach` from the v2 pack-authors notes is
 not adopted, and `parser()`/`grammar` stay gaps.
+
+**D-25 · Refusals before render carry a `fix`; the vocabulary is closed
+and corpus-pinned.** `Refusal` gains `fix: {"action", ...parameters}`
+(Python) / `Error.Fix` (Go). Eleven actions, each with a fixed parameter
+set of names a program can act on — a field, a role, a capability fact,
+a vocabulary name, a version pair, a locator into the artifact — and a
+`fix` column in the code table saying which action each code carries.
+The rule: every refusal at construct, signature, load, or bind carries
+one; render, parse, and registration refusals carry none. Reason: bind
+is the gate, and a gate that names the next step as data is what makes
+"refuse before money" usable by an agent; after render the cause is a
+program value or model text, and what to do about it (retry, ask again)
+is orchestration, which lmcc refuses to be — the `partial` face already
+serves parse. Choices: one fix per refusal, the primary repair (prose
+lists alternatives), because a list of fixes is a guess dressed as data;
+`bind-format.key` is the type name, else the most specific structural
+key, else `*`, so the fix is the artifact key to write; the first
+offender in signature order is the one named; `satisfy-predicate`
+carries the predicate itself (`{"any": [...]}` over a `choose`) rather
+than a computed set of facts, because the predicate is the contract and
+the caller may prefer an `else`. Costs, stated: ~110 call sites per
+kernel now carry a fix, so adding a pre-render refusal is one more line
+and the coherence test refuses a bare one; corpus refuse cases now pin
+payloads, so a kernel that names a different offender is non-conformant
+(case 56's hand-authored guess was corrected by the harness in the
+reference's favor); `Fn.__call__` now raises `TypeError` instead of
+`entry-malformed` — calling a signature is Python API misuse, not an
+artifact defect, and it had no honest fix; the Go `FormatSpec.Read`
+fallback error lost its `format-direction` code (it was never surfaced
+as one: bind refuses `format-direction` first, and read errors wrap as
+`format-read-error`). Pinned by corpus 09–14, 24, 29, 33, 42, 43, 50,
+56, 59–61, 67, 68, 73–79; `schema/fix.schema.json`;
+`tests/test_fix_hints.py`; `tests/test_coherence.py`.
+
+**D-26 · Streaming refines batch; EOF returns events and final values.**
+`plan.stream()` creates a pure sans-I/O reducer; `feed` accepts decoded
+text or one lm15 part delta and emits `field_started` / stable raw
+`field_delta`; `finish` returns `{events, values}` and is the only place
+that emits typed `field_done`. The law is chunking-invariance: final
+values or the complete refusal equal batch `parse`, and deltas join to
+the exact raw spans batch captured. Reason: there must be one semantic
+parser; a second set of final checks would drift, so stream EOF calls
+the shared batch span/read path, while the incremental projection only
+exposes prefixes future input cannot revise. Choices and costs: (1) the
+plan sketch's `values = finish()` became `result = finish()` with both
+EOF events and values — EOF can close an unclosed final field and
+release held text, so an API that returns only values silently loses
+required events; (2) typed done waits for EOF rather than firing at an
+early close — a later duplicate anchor/close can make the reply
+ambiguous, and an expert parser must not publish a typed value before
+whole-document validation; the cost is less early typed data, while raw
+deltas still stream; (3) the reducer retains the accumulated response
+and reruns the shared batch path at EOF — formats can require complete
+spans and global duplicate checks can invalidate early structure; the
+cost is memory proportional to the reply and repeated projection work
+per provider chunk (measured near 0.1 s for 100,000 ASCII characters in
+1,000 chunks in the Python reference), accepted for exact refusal and
+format order; (4) regex-routed fields buffer because a later scalar can
+change an earlier RE2 match; a consuming regex buffers lens text too;
+(5) two routings to one field buffer because batch joins spans by
+routing declaration order, not arrival order; these costs are all
+visible under `plan.describe()["streaming"]`; (6) adjacent text-bearing
+part deltas of one kind coalesce, so providers need not invent part
+boundaries, at the cost that two adjacent logical text parts of the same
+kind must be separated by a kind change or sent as one; (7) harness
+splits are Unicode-scalar, not raw-byte — UTF-8 decoding is transport
+I/O and must happen incrementally before `feed`; testing invalid partial
+Unicode as text would put transport policy into the calling convention.
+Vocabulary lenses get one optional stream face with growing-prefix
+semantics; absence buffers visibly. No artifact or kernel version bump:
+the serialized entry and all old render/parse semantics are unchanged;
+this is an additive runtime plan face. Implementing full-refusal equality
+also exposed and fixed Go `Error.Describe`: `partial` is now an ordered
+LMCC `Object`, not a host map. Pinned without duplicate fixtures: both
+harness drivers replay every parse and parse-refusal corpus response
+whole, one scalar at a time, at every scalar and text-part split;
+`python/tests/test_streaming.py`; `go/lmcc/stream_test.go`.
+
+**D-27 · Streaming is linear in the reply; marker overlap holds, never crashes.**
+The §8 reducer no longer rescans the accumulated reply on every delta.
+Markers are found by per-marker incremental scanners over a window one
+byte shorter than the longest marker; each field keeps its emitted
+pieces plus a short held tail; routings are chained transducers; the
+whole reply is retained only for the batch parse at EOF. Reason: the
+first implementation (D-26) was quadratic — 100,000 characters at
+token-sized (4-character) deltas cost 4.9 s in Python and 0.9 s in Go,
+and doubled reply length quadrupled the cost; D-26's "0.1 s in 1,000
+chunks" figure hid this behind 100-character chunks. Now the same input
+costs 0.36 s and about 20 ms, per-feed work is constant (≈17 µs Python),
+and both kernels carry a scaling test. Emission timing is unchanged
+(identical events on 3,000 random multi-chunk scenarios against the
+D-26 reducer) except in one class of inputs the old reducer could not
+handle: a marker beginning inside an earlier marker's occurrence
+(`**Reasoning:**Answer:**` under `**Reasoning:**{r}**Answer:**{a}`).
+Batch reads an empty reasoning capture (§4, corpus 80 — which also
+exposed and fixed a Go batch panic on the negative slice); the old
+reducer emitted `A` then raised `RuntimeError` on model text. The new
+rule: a marker occurrence acts only once no boundary marker can still be
+growing across it. This is exact (a prefix-table lookup bounded by the
+longest marker), so ordinary templates lose no eagerness. Costs taken:
+(1) the reducer is a state machine, about twice the code, in both
+kernels — guarded by the EOF cross-check, the every-split harness, a
+seeded random multi-chunk fuzz in each kernel over a shared plan set, and
+the new cross-kernel stream trace; (2) event timing is now pinned across
+kernels by the harness against the reference kernel's trace, not by
+hand-authored corpus bytes — the §8 hold-back prose is the meaning and
+the reference is its executable form; storing traces per case would
+duplicate the parse corpus at every scalar; (3) a `between` routing with
+both delimiters empty makes batch loop forever in both kernels (schema
+allows it); the reducer breaks out instead of hanging, the batch bug is
+left for its own fix. Memory stays proportional to the reply (D-26 (3)).

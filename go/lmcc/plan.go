@@ -1,6 +1,7 @@
 package lmcc
 
 import (
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -356,8 +357,7 @@ func (p *Plan) Skeleton() *Object { return p.Lens.Skeleton() }
 
 // ------------------------------------------------------------------- parse
 
-func (p *Plan) Parse(response any) (values *Object, err error) {
-	defer catch(&err)
+func (p *Plan) parseWithSpans(response any) (values *Object, spans map[string]Span) {
 	text, parts := ResponseTextAndParts(response)
 	text, routed := applyRoutings(text, parts, p.routings)
 	names := make([]string, len(p.VisibleOutputs))
@@ -365,14 +365,24 @@ func (p *Plan) Parse(response any) (values *Object, err error) {
 		names[i] = f.Name
 	}
 	raw := p.splitWithLens(text, names)
+	spans = map[string]Span{}
 	values = NewObject()
 	for _, f := range p.VisibleOutputs {
-		values.Set(f.Name, p.read(f, SpanOfText(raw[f.Name])))
+		span := SpanOfText(raw[f.Name])
+		spans[f.Name] = span
+		values.Set(f.Name, p.read(f, span))
 	}
 	for _, name := range routed.Keys {
 		span := mustGet(routed, name).(Span)
+		spans[name] = span
 		values.Set(name, p.read(p.Signature.FieldNamed(name), span))
 	}
+	return values, spans
+}
+
+func (p *Plan) Parse(response any) (values *Object, err error) {
+	defer catch(&err)
+	values, _ = p.parseWithSpans(response)
 	return values, nil
 }
 
@@ -462,6 +472,7 @@ func (p *Plan) Describe() *Object {
 		"inputs", inputs, "outputs", outputs, "hidden", hidden, "strategies", strategies,
 		"routings", routings, "placements", placements, "fragments", p.Fragments.Clone(),
 		"patch", DeepClone(p.PatchData), "skeleton", p.Skeleton(),
+		"streaming", p.DescribeStreaming(),
 		"versions", Obj("kernel", KernelVersion, "vocab", vocab))
 }
 
@@ -527,16 +538,17 @@ func deriveLens(p *Plan) *DerivedLens {
 		}
 	}
 	if len(all) == 0 {
-		refuse("not-lensable", "parse kind 'derived' needs an output pattern — an outputs loop containing {f.value}, or output slots — and the template has none")
+		refuseFix("not-lensable", fixEditTemplate("template"), "parse kind 'derived' needs an output pattern — an outputs loop containing {f.value}, or output slots — and the template has none")
 	}
 	if len(all) > 1 {
 		var idx []string
 		for _, f := range all {
 			idx = append(idx, strconv.Itoa(f.index))
 		}
-		refusef("not-lensable", "the output pattern must live in one message; found holes in messages [%s]", strings.Join(idx, " "))
+		refuseFixf("not-lensable", fixEditTemplate("template["+strconv.Itoa(all[1].index)+"]"), "the output pattern must live in one message; found holes in messages [%s]", strings.Join(idx, " "))
 	}
 	nodes, holes := all[0].nodes, all[0].holes
+	here := "template[" + strconv.Itoa(all[0].index) + "]"
 	var loops []*loopNode
 	for _, h := range holes {
 		if h.loop != nil {
@@ -544,16 +556,16 @@ func deriveLens(p *Plan) *DerivedLens {
 		}
 	}
 	if len(loops) > 1 {
-		refusef("not-lensable", "the template has %d output-pattern loops; one pattern", len(loops))
+		refuseFixf("not-lensable", fixEditTemplate(here), "the template has %d output-pattern loops; one pattern", len(loops))
 	}
 	var anchors []Anchor
 	tail := ""
 	if len(loops) == 1 {
 		if len(holes) != 1 {
-			refuse("not-lensable", "an outputs loop and bare output slots cannot both form the pattern")
+			refuseFix("not-lensable", fixEditTemplate(here), "an outputs loop and bare output slots cannot both form the pattern")
 		}
 		for _, f := range p.VisibleOutputs {
-			pre, post := instantiate(loops[0], f, p)
+			pre, post := instantiate(loops[0], f, p, here)
 			anchors = append(anchors, Anchor{f.Name, pre, post})
 		}
 		tail = tailAfter(nodes, loops[0])
@@ -575,21 +587,21 @@ func deriveLens(p *Plan) *DerivedLens {
 	}
 	for _, a := range anchors {
 		if RStrip(a.Prefix) == "" {
-			refusef("not-lensable", "field %q: no literal text before its hole — nothing anchors the parser; put the field's marker before the hole", a.Name)
+			refuseFixf("not-lensable", Obj("action", "edit-template", "path", here, "field", a.Name), "field %q: no literal text before its hole — nothing anchors the parser; put the field's marker before the hole", a.Name)
 		}
 	}
 	seen := map[string]string{}
 	for _, a := range anchors {
 		key := RStrip(a.Prefix)
 		if other, dup := seen[key]; dup {
-			refusef("not-lensable", "fields %q and %q share the anchor %q; anchors must tell fields apart", other, a.Name, key)
+			refuseFixf("not-lensable", Obj("action", "edit-template", "path", here, "field", a.Name), "fields %q and %q share the anchor %q; anchors must tell fields apart", other, a.Name, key)
 		}
 		seen[key] = a.Name
 	}
 	return &DerivedLens{Anchors: anchors, Tail: tail}
 }
 
-func instantiate(loop *loopNode, f *Field, p *Plan) (string, string) {
+func instantiate(loop *loopNode, f *Field, p *Plan, here string) (string, string) {
 	var pre, post strings.Builder
 	target := &pre
 	for _, n := range loop.body {
@@ -601,7 +613,7 @@ func instantiate(loop *loopNode, f *Field, p *Plan) (string, string) {
 			switch attr {
 			case "value":
 				if target == &post {
-					refuse("not-lensable", "the output-pattern block has two {f.value} holes per field; one value, one hole")
+					refuseFix("not-lensable", fixEditTemplate(here), "the output-pattern block has two {f.value} holes per field; one value, one hole")
 				}
 				target = &post
 			case "name":
@@ -617,10 +629,10 @@ func instantiate(loop *loopNode, f *Field, p *Plan) (string, string) {
 			case "role":
 				target.WriteString(f.Role)
 			default:
-				refusef("not-lensable", "slot {%s} inside the output pattern is not invertible", x.path)
+				refuseFixf("not-lensable", Obj("action", "edit-template", "path", here, "slot", x.path), "slot {%s} inside the output pattern is not invertible", x.path)
 			}
 		default:
-			refuse("not-lensable", "nested loops inside the output-pattern block are not invertible")
+			refuseFix("not-lensable", fixEditTemplate(here), "nested loops inside the output-pattern block are not invertible")
 		}
 	}
 	return pre.String(), post.String()
@@ -711,40 +723,41 @@ func (p *Plan) materialize(binding any, key string) Format {
 		}
 		return admitUDF(b, "formats['"+key+"']")
 	}
-	refusef("entry-malformed", "formats[%q]: not a format binding", key)
+	refuseFixf("entry-malformed", fixEditEntry("formats['"+key+"']"), "formats[%q]: not a format binding", key)
 	return nil
 }
 
 func (p *Plan) resolveFormat(f *Field) formatChoice {
 	adp, reg := p.Adapter, p.Registry
-	check := func(fmt Format, by string) formatChoice {
+	check := func(fmt Format, by, key string) formatChoice {
+		rebind := fixBindFormat(f.Name, key)
 		if !formatAccepts(fmt, f) {
-			refusef("format-shape-mismatch", "field %q: format %s accepts %v, but the field's type/shape is %s", f.Name, nameOr(fmt), fmt.Accepts(), f.Type)
+			refuseFixf("format-shape-mismatch", rebind, "field %q: format %s accepts %v, but the field's type/shape is %s", f.Name, nameOr(fmt), fmt.Accepts(), f.Type)
 		}
 		d := fmt.Direction()
 		if (d == "in" && f.Direction == "output") || (d == "out" && f.Direction == "input") {
-			refusef("format-direction", "field %q: format %s is %s-only, but the field is an %s", f.Name, nameOr(fmt), d, f.Direction)
+			refuseFixf("format-direction", rebind, "field %q: format %s is %s-only, but the field is an %s", f.Name, nameOr(fmt), d, f.Direction)
 		}
 		return formatChoice{fmt, by}
 	}
 	if f.Type != "" && adp.Formats.Has(f.Type) {
-		return check(p.materialize(mustGet(adp.Formats, f.Type), f.Type), "artifact:"+f.Type)
+		return check(p.materialize(mustGet(adp.Formats, f.Type), f.Type), "artifact:"+f.Type, f.Type)
 	}
 	for _, key := range StructuralKeys(f.Shape) {
 		if adp.Formats.Has(key) {
-			return check(p.materialize(mustGet(adp.Formats, key), key), "artifact:"+key)
+			return check(p.materialize(mustGet(adp.Formats, key), key), "artifact:"+key, key)
 		}
 	}
 	if bound := reg.typeBinding(f.Annotation); bound != nil {
-		return check(bound, "runtime:"+TypeName(f.Annotation))
+		return check(bound, "runtime:"+TypeName(f.Annotation), FormatKey(f.Type, f.Shape))
 	}
 	if d := kernelDefault(f.Shape); d != nil {
 		return formatChoice{d, "kernel"}
 	}
 	if adp.Formats.Has("*") {
-		return check(p.materialize(mustGet(adp.Formats, "*"), "*"), "artifact:*")
+		return check(p.materialize(mustGet(adp.Formats, "*"), "*"), "artifact:*", "*")
 	}
-	refusef("no-format", "field %q (%s) has a structured shape and no format — bind one in the artifact under its type name or a structural key, register one for its type at runtime, or ship one", f.Name, f.Type)
+	refuseFixf("no-format", fixBindFormat(f.Name, FormatKey(f.Type, f.Shape)), "field %q (%s) has a structured shape and no format — bind one in the artifact under its type name or a structural key, register one for its type at runtime, or ship one", f.Name, f.Type)
 	return formatChoice{}
 }
 
@@ -769,11 +782,12 @@ func Bind(a *Adapter, sig *Signature, capabilities *Object, reg *Registry) (p *P
 			continue
 		}
 		if other, dup := byRole[f.Role]; dup {
-			refusef("role-ambiguous", "role %q appears on both %q and %q; a role may bind to one field", f.Role, other.Name, f.Name)
+			refuseFixf("role-ambiguous", Obj("action", "edit-signature", "field", f.Name, "role", f.Role), "role %q appears on both %q and %q; a role may bind to one field", f.Role, other.Name, f.Name)
 		}
 		byRole[f.Role] = f
 	}
 	hidden := map[string]bool{}
+	patchOwner := map[string]string{} // control key -> the role whose strategy set it
 	for _, f := range sig.Fields {
 		if f.Role == "plain" {
 			continue
@@ -800,7 +814,7 @@ func Bind(a *Adapter, sig *Signature, capabilities *Object, reg *Registry) (p *P
 			sub := ref[len("@role."):]
 			t, ok := byRole[f.Role+"."+sub]
 			if !ok {
-				refusef("unknown-slot", "role %q: strategy %q %s targets %q, but no field bears the role %q", f.Role, name, what, ref, f.Role+"."+sub)
+				refuseFixf("unknown-slot", Obj("action", "assign-role", "role", f.Role+"."+sub), "role %q: strategy %q %s targets %q, but no field bears the role %q", f.Role, name, what, ref, f.Role+"."+sub)
 			}
 			return t
 		}
@@ -834,9 +848,10 @@ func Bind(a *Adapter, sig *Signature, capabilities *Object, reg *Registry) (p *P
 		for _, key := range strategy.Controls.Keys {
 			v, _ := strategy.Controls.Get(key)
 			if old, ok := p.PatchData.Get(key); ok && !Equal(old, v) {
-				refusef("control-conflict", "strategies disagree on request control %q", key)
+				refuseFixf("control-conflict", fixEditEntry("strategies['"+f.Role+"'].controls['"+key+"']"), "strategies disagree on request control %q", key)
 			}
 			p.PatchData.Set(key, v)
+			patchOwner[key] = f.Role
 		}
 	}
 
@@ -856,34 +871,39 @@ func Bind(a *Adapter, sig *Signature, capabilities *Object, reg *Registry) (p *P
 	for _, f := range sig.Fields {
 		p.formats[f.Name] = p.resolveFormat(f)
 	}
-	routedKinds := map[string]map[string]bool{}
+	routedKinds := map[string][]string{}
+	var routedOrder []string // first-seen order, so the first offender is deterministic
 	for _, r := range p.routings {
 		from, _ := r.spec.Str("from")
 		kind := "text"
 		if strings.HasPrefix(from, "channel:") {
 			kind = from[len("channel:"):]
 		}
-		if routedKinds[r.field] == nil {
-			routedKinds[r.field] = map[string]bool{}
+		if _, seen := routedKinds[r.field]; !seen {
+			routedOrder = append(routedOrder, r.field)
 		}
-		routedKinds[r.field][kind] = true
+		if !contains(routedKinds[r.field], kind) {
+			routedKinds[r.field] = append(routedKinds[r.field], kind)
+		}
 	}
-	for fname, kinds := range routedKinds {
+	for _, fname := range routedOrder {
 		fmt := p.formats[fname].format
 		reads := fmt.Reads()
 		if contains(reads, "*") {
 			continue
 		}
-		for k := range kinds {
+		for _, k := range routedKinds[fname] {
 			if !contains(reads, k) {
-				refusef("format-span-mismatch", "field %q: routings deliver %s parts, but its format %s reads %v", fname, k, nameOr(fmt), reads)
+				fld := sig.FieldNamed(fname)
+				refuseFixf("format-span-mismatch", fixBindFormat(fname, FormatKey(fld.Type, fld.Shape)), "field %q: routings deliver %s parts, but its format %s reads %v", fname, k, nameOr(fmt), reads)
 			}
 		}
 	}
 	for _, pl := range p.placements {
 		fmt := p.formats[pl.field].format
 		if strings.HasPrefix(pl.place, "controls.") && fmt.Emits() != "parts" {
-			refusef("format-placement-mismatch", "field %q: placement %q needs parts, but its format %s emits text", pl.field, pl.place, nameOr(fmt))
+			fld := sig.FieldNamed(pl.field)
+			refuseFixf("format-placement-mismatch", fixBindFormat(pl.field, FormatKey(fld.Type, fld.Shape)), "field %q: placement %q needs parts, but its format %s emits text", pl.field, pl.place, nameOr(fmt))
 		}
 	}
 
@@ -895,14 +915,14 @@ func Bind(a *Adapter, sig *Signature, capabilities *Object, reg *Registry) (p *P
 	}
 	for _, fact := range p.Lens.Requires() {
 		if !capabilities.Bool(fact, false) {
-			refusef("capability-missing", "lens %q requires capability %q, which the model does not declare — use an invertible pattern instead", p.lensKind, fact)
+			refuseFixf("capability-missing", Obj("action", "declare-capability", "fact", fact), "lens %q requires capability %q, which the model does not declare — use an invertible pattern instead", p.lensKind, fact)
 		}
 	}
 	if patch := p.Lens.Patch(p.VisibleOutputs); patch != nil {
 		for _, key := range patch.Keys {
 			v, _ := patch.Get(key)
 			if old, ok := p.PatchData.Get(key); ok && !Equal(old, v) {
-				refusef("control-conflict", "lens and strategies disagree on request control %q", key)
+				refuseFixf("control-conflict", fixEditEntry("strategies['"+patchOwner[key]+"'].controls['"+key+"']"), "lens and strategies disagree on request control %q", key)
 			}
 			p.PatchData.Set(key, v)
 		}
@@ -924,11 +944,17 @@ func Bind(a *Adapter, sig *Signature, capabilities *Object, reg *Registry) (p *P
 	var uncovered []string
 	for _, f := range p.VisibleInputs {
 		if !covered[f.Name] {
-			uncovered = append(uncovered, "'"+f.Name+"'")
+			uncovered = append(uncovered, f.Name)
 		}
 	}
 	if len(uncovered) > 0 {
-		refuse("field-uncovered", "input field(s) never rendered by the template: "+strings.Join(uncovered, ", "))
+		sort.Strings(uncovered)
+		quoted := make([]string, len(uncovered))
+		for i, n := range uncovered {
+			quoted[i] = "'" + n + "'"
+		}
+		refuseFix("field-uncovered", Obj("action", "edit-template", "path", "template", "field", uncovered[0]),
+			"input field(s) never rendered by the template: "+strings.Join(quoted, ", "))
 	}
 
 	// 6. routed-but-also-visible is ambiguous.
@@ -938,7 +964,7 @@ func Bind(a *Adapter, sig *Signature, capabilities *Object, reg *Registry) (p *P
 	}
 	for _, r := range p.routings {
 		if visibleOut[r.field] {
-			refusef("field-double-covered", "field %q is both a parsed section and a routing target — hide it (visible: false) or drop the routing", r.field)
+			refuseFixf("field-double-covered", fixEditEntry("strategies['"+sig.FieldNamed(r.field).Role+"'].visible"), "field %q is both a parsed section and a routing target — hide it (visible: false) or drop the routing", r.field)
 		}
 	}
 	return p, nil

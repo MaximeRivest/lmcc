@@ -61,6 +61,11 @@
  },
  "expect": {
   "code": "unknown-format",
+  "fix": {
+   "action": "install-vocabulary",
+   "kind": "format",
+   "name": "no_such_codec"
+  },
   "at": "load"
  }
 }

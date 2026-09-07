@@ -65,6 +65,11 @@
  },
  "expect": {
   "code": "format-untrusted",
+  "fix": {
+   "action": "place-udf",
+   "language": "python",
+   "path": "formats['Person']"
+  },
   "at": "load"
  }
 }

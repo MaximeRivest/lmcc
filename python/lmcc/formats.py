@@ -26,7 +26,7 @@ import types
 from . import core
 from .errors import refuse
 
-STRUCTURAL_SCALARS = ("string", "integer", "number", "boolean")
+STRUCTURAL_SCALARS = core.STRUCTURAL_SCALARS
 
 
 class Format:
@@ -102,7 +102,7 @@ class ScalarFormat(Format):
     def write(self, value, field):
         if isinstance(value, enum.Enum):      # the language's own construct
             value = value.value
-        return core.spell_value(field.shape, value, where=f"field {field.name!r}")
+        return core.spell_value(field.shape, value, where=f"field {field.name!r}", field=field.name)
 
     def read(self, span, field):
         value = core.read_value(field.shape, span.text, where=f"field {field.name!r}")
@@ -154,25 +154,7 @@ def kernel_default(shape: dict) -> Format | None:
 # --------------------------------------------------------- structural keys
 
 
-def structural_keys(shape: dict) -> list[str]:
-    """The structural keys a shape answers to, most specific first, never
-    ``*`` (which resolution consults last, kernel §5)."""
-    base, _ = core.nullable_base(shape)
-    if core.is_media(base):
-        return [f"media:{base['media']}", "media:*"]
-    if "enum" in base:
-        return ["enum"]
-    t = base.get("type")
-    if t in STRUCTURAL_SCALARS:
-        return [t]
-    if t == "array":
-        items = base.get("items") or {}
-        inner = structural_keys(items) if isinstance(items, dict) else []
-        keys = [f"list[{k}]" for k in inner if not k.startswith("media")]
-        return keys + ["list[*]"]
-    if t == "object":
-        return ["object"]
-    return []
+structural_keys = core.structural_keys
 
 
 def accepts(fmt: Format, field: core.Field) -> bool:
@@ -199,7 +181,8 @@ def ship(fmt: Format, *, language: str = "python", deps: list[str] | None = None
         check_self_contained(src, face)
         sources[face] = src
     if "write" not in sources:
-        refuse("entry-malformed", "a shipped format needs a write function")
+        refuse("entry-malformed", "a shipped format needs a write function",
+               fix={"action": "edit-entry", "path": "write"})
     entry = {"language": language, "deps": list(deps or []), **sources,
              "sha256": digest(sources), "authored_by": authored_by,
              "accepts": list(fmt.accepts), "emits": fmt.emits, "round_trip": fmt.round_trip,
@@ -219,9 +202,11 @@ def _source_of(fn, face: str) -> str:
     try:
         src = textwrap.dedent(inspect.getsource(fn)).strip()
     except (OSError, TypeError):
-        refuse("format-not-self-contained", f"{face}: source is not retrievable; define it as a def")
+        refuse("format-not-self-contained", f"{face}: source is not retrievable; define it as a def",
+               fix={"action": "reship-udf", "path": face})
     if not src.startswith("def "):
-        refuse("format-not-self-contained", f"{face}: ship needs a named def, not a lambda")
+        refuse("format-not-self-contained", f"{face}: ship needs a named def, not a lambda",
+               fix={"action": "reship-udf", "path": face})
     return src
 
 
@@ -231,13 +216,16 @@ def check_self_contained(src: str, face: str) -> None:
     try:
         code = compile(src, f"<{face}>", "exec")
     except SyntaxError as exc:
-        refuse("entry-malformed", f"{face}: source does not compile: {exc}")
+        refuse("entry-malformed", f"{face}: source does not compile: {exc}",
+               fix={"action": "edit-entry", "path": face})
     fn_code = next((c for c in code.co_consts if isinstance(c, types.CodeType)), None)
     if fn_code is None:
-        refuse("format-not-self-contained", f"{face}: no function defined in source")
+        refuse("format-not-self-contained", f"{face}: no function defined in source",
+               fix={"action": "reship-udf", "path": face})
     if fn_code.co_freevars:
         refuse("format-not-self-contained",
-               f"{face}: closes over {sorted(fn_code.co_freevars)}; pass values as arguments")
+               f"{face}: closes over {sorted(fn_code.co_freevars)}; pass values as arguments",
+               fix={"action": "reship-udf", "path": face})
     imported: set[str] = set()
     for ins in dis.get_instructions(fn_code):
         if ins.opname in ("IMPORT_NAME",):
@@ -249,17 +237,20 @@ def check_self_contained(src: str, face: str) -> None:
             name = ins.argval
             if name not in imported and not hasattr(builtins, name):
                 refuse("format-not-self-contained",
-                       f"{face}: reaches into global {name!r}; import it inside the function")
+                       f"{face}: reaches into global {name!r}; import it inside the function",
+                       fix={"action": "reship-udf", "path": face})
 
 
 def load_udf(entry: dict, *, where: str) -> Format:
     """Admit and materialize a shipped UDF in this Python runtime. The
     caller has already decided placement is allowed here."""
     if entry.get("language") != "python":
-        refuse("udf-unplaceable", f"{where}: this host places python only, not {entry.get('language')!r}")
+        refuse("udf-unplaceable", f"{where}: this host places python only, not {entry.get('language')!r}",
+               fix={"action": "place-udf", "language": str(entry.get("language")), "path": where})
     sources = {k: entry[k] for k in ("write", "read", "describe") if k in entry}
     if digest(sources) != entry.get("sha256"):
-        refuse("udf-tampered", f"{where}: sha256 does not match the shipped source")
+        refuse("udf-tampered", f"{where}: sha256 does not match the shipped source",
+               fix={"action": "reship-udf", "path": where})
     fns = {}
     for face, src in sources.items():
         check_self_contained(src, f"{where}.{face}")
@@ -267,7 +258,8 @@ def load_udf(entry: dict, *, where: str) -> Format:
         exec(compile(src, f"<{where}.{face}>", "exec"), ns)  # noqa: S102 — admitted above
         fn = next((v for v in ns.values() if callable(v) and not isinstance(v, type)), None)
         if fn is None:
-            refuse("entry-malformed", f"{where}.{face}: source defines no function")
+            refuse("entry-malformed", f"{where}.{face}: source defines no function",
+                   fix={"action": "edit-entry", "path": f"{where}.{face}"})
         fns[face] = fn
     fmt = make(write=fns["write"], read=fns.get("read"), describe=fns.get("describe"),
                accepts=tuple(entry.get("accepts", ["*"])), emits=entry.get("emits", "text"),

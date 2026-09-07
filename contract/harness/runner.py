@@ -3,14 +3,20 @@
 Cases live in ``contract/corpus/cases/*.json``. Each case names a kind:
 
 - ``render``:    load entry, bake, render → compare messages + patch, exact.
-- ``parse``:     load entry, bake, parse the given response → compare values.
+- ``parse``:     load entry, bake, parse the given response → compare values;
+                 replay streaming whole, one scalar at a time, and at every
+                 text/part split → compare values and concatenated deltas.
+                 The one-scalar replay's event log is the case's
+                 ``stream_trace``; an external driver's trace must equal the
+                 reference kernel's (event timing is pinned across kernels).
 - ``roundtrip``: load then dump → compare to the original entry, exact.
-- ``refuse``:    the named step must refuse with the expected error code.
+- ``refuse``:    the named step must refuse with the expected error code
+                 and, when the case says so, the exact ``fix`` payload.
 
 A driver adapts one implementation to the harness. The in-process
 ``PythonDriver`` covers the reference implementation; other languages
 implement the same four calls behind a JSON Lines stdin/stdout protocol
-(``SubprocessDriver``; see contract/spec/kernel.md §10): one case object
+(``SubprocessDriver``; see contract/spec/kernel.md §9): one case object
 per line in, one ``{"ok": bool, "detail": str}`` per line out, in order.
 
     python runner.py                     # the Python reference
@@ -72,7 +78,13 @@ class PythonDriver:
                 return _compare(expect, got, "render result")
             if kind == "parse":
                 values = baked.parse(case["response"])
-                return _compare(expect["values"], values, "values")
+                compared = _compare(expect["values"], values, "values")
+                if not compared["ok"]:
+                    return compared
+                result = _check_stream_success(baked, case["response"], values)
+                if result["ok"]:
+                    result["stream_trace"] = _stream_trace(baked, case["response"])
+                return result
             if kind == "refuse":
                 if "inputs" in case:
                     baked.render(inputs=case["inputs"], demos=case.get("demos"),
@@ -85,9 +97,135 @@ class PythonDriver:
             return {"ok": False, "detail": f"unknown case kind {kind!r}"}
         except lmcc.Refusal as err:
             if kind == "refuse" and err.code == expect["code"]:
+                if "fix" in expect:
+                    compared = _compare(expect["fix"], err.fix, f"fix of [{err.code}]")
+                    if not compared["ok"]:
+                        return compared
+                if expect.get("at") == "parse" and "response" in case:
+                    result = _check_stream_refusal(baked, case["response"], err)
+                    if result["ok"]:
+                        result["stream_trace"] = _stream_trace(baked, case["response"])
+                    return result
                 return {"ok": True, "detail": ""}
             return {"ok": False,
                     "detail": f"unexpected refusal [{err.code}]: {err.hint}"}
+
+
+def _stream_chunkings(response: object) -> list[list[object]]:
+    """One whole feed, then every Unicode-scalar split of text and of each
+    text-bearing part. Transport byte decoding is outside lmcc (§8)."""
+    if isinstance(response, str):
+        return [[response], list(response)] + [[response[:i], response[i:]]
+                                               for i in range(len(response) + 1)]
+    parts = response.get("content", [])
+    out: list[list[object]] = [[dict(p) for p in parts]]
+    for pi, part in enumerate(parts):
+        text = part.get("text")
+        if not isinstance(text, str):
+            continue
+        characters = []
+        for character in text:
+            delta = dict(part)
+            delta["text"] = character
+            characters.append(delta)
+        if not characters:
+            characters = [dict(part)]
+        out.append([*[dict(p) for p in parts[:pi]], *characters,
+                    *[dict(p) for p in parts[pi + 1:]]])
+        for i in range(len(text) + 1):
+            left, right = dict(part), dict(part)
+            left["text"], right["text"] = text[:i], text[i:]
+            out.append([*[dict(p) for p in parts[:pi]], left, right,
+                        *[dict(p) for p in parts[pi + 1:]]])
+    return out
+
+
+def _delta_text(events: list[dict]) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for event in events:
+        if event.get("kind") == "field_delta":
+            field = event["field"]
+            out[field] = out.get(field, "") + event["text"]
+    return out
+
+
+def _check_stream_success(plan, response: object, batch_values: dict) -> dict:
+    baseline = None
+    for n, chunks in enumerate(_stream_chunkings(response)):
+        stream = plan.stream()
+        events = []
+        try:
+            for chunk in chunks:
+                events.extend(stream.feed(chunk))
+            result = stream.finish()
+            events.extend(result.events)
+        except Exception as exc:  # noqa: BLE001 — conformance detail
+            return {"ok": False, "detail": f"stream split {n} refused/failed: {exc}"}
+        if result.values != batch_values:
+            return _compare(batch_values, result.values, f"stream split {n} values")
+        deltas = _delta_text(events)
+        if baseline is None:
+            baseline = deltas
+        elif deltas != baseline:
+            return _compare(baseline, deltas, f"stream split {n} field deltas")
+    return {"ok": True, "detail": ""}
+
+
+def _check_stream_refusal(plan, response: object, batch_error) -> dict:
+    import lmcc
+    expected = batch_error.describe()
+    for n, chunks in enumerate(_stream_chunkings(response)):
+        stream = plan.stream()
+        try:
+            for chunk in chunks:
+                stream.feed(chunk)
+            stream.finish()
+        except lmcc.Refusal as err:
+            if err.describe() == expected:
+                continue
+            return _compare(expected, err.describe(), f"stream split {n} refusal")
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "detail": f"stream split {n} failed outside Refusal: {exc}"}
+        return {"ok": False,
+                "detail": f"stream split {n}: expected refusal [{batch_error.code}]"}
+    return {"ok": True, "detail": ""}
+
+
+def _trace_chunking(response: object) -> list[object]:
+    """One Unicode scalar per feed; a part without text is one feed."""
+    if isinstance(response, str):
+        return list(response)
+    out: list[object] = []
+    for part in response.get("content", []):
+        text = part.get("text")
+        if isinstance(text, str) and text:
+            out.extend({**part, "text": character} for character in text)
+        else:
+            out.append(dict(part))
+    return out
+
+
+def _event_digest(event: dict) -> list:
+    digest = [event["kind"], event["field"]]
+    if event["kind"] == "field_delta":
+        digest.append(event["text"])
+    return digest
+
+
+def _stream_trace(plan, response: object) -> list:
+    """The events of every feed at one-scalar chunking, then the EOF events
+    or the refusal code. Typed values are left out: the values comparison
+    already pins them; the trace pins *when* raw text becomes visible."""
+    import lmcc
+    stream = plan.stream()
+    trace: list = []
+    try:
+        for chunk in _trace_chunking(response):
+            trace.append([_event_digest(e) for e in stream.feed(chunk)])
+        trace.append([_event_digest(e) for e in stream.finish().events])
+    except lmcc.Refusal as err:
+        trace.append({"refusal": err.code})
+    return trace
 
 
 class SubprocessDriver:
@@ -118,6 +256,8 @@ class SubprocessDriver:
         out = {"ok": answer["ok"], "detail": str(answer.get("detail", ""))}
         if answer.get("unclaimed"):
             out["unclaimed"] = str(answer["unclaimed"])
+        if "stream_trace" in answer:
+            out["stream_trace"] = answer["stream_trace"]
         return out
 
     def close(self) -> None:
@@ -141,6 +281,7 @@ class Report:
     failed: int
     failures: list[tuple[str, str]]
     unclaimed: list[tuple[str, str]] = None  # (case, what the driver cannot place)
+    traced: int = 0  # cases whose stream trace matched the reference kernel
 
     @property
     def ok(self) -> bool:
@@ -149,11 +290,22 @@ class Report:
 
 def run_corpus(driver=None, cases_dir: Path = CASES_DIR) -> Report:
     driver = driver or PythonDriver()
-    passed, failed, failures, unclaimed = 0, 0, [], []
+    reference = None if isinstance(driver, PythonDriver) else PythonDriver()
+    passed, failed, failures, unclaimed, traced = 0, 0, [], [], 0
     try:
         for path in sorted(cases_dir.glob("*.json")):
             case = json.loads(path.read_text(encoding="utf-8"))
             result = driver.run(case)
+            if result.get("ok") and reference is not None and "stream_trace" in result:
+                expected = reference.run(case).get("stream_trace")
+                if expected is None:
+                    result = {"ok": False, "detail": "driver sent a stream trace the reference has none for"}
+                else:
+                    compared = _compare(expected, result["stream_trace"], "stream trace vs reference kernel")
+                    if compared["ok"]:
+                        traced += 1
+                    else:
+                        result = compared
             if result.get("unclaimed"):
                 unclaimed.append((path.name, result["unclaimed"]))
             elif result["ok"]:
@@ -164,7 +316,7 @@ def run_corpus(driver=None, cases_dir: Path = CASES_DIR) -> Report:
     finally:
         if hasattr(driver, "close"):
             driver.close()
-    return Report(passed, failed, failures, unclaimed)
+    return Report(passed, failed, failures, unclaimed, traced)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -182,6 +334,8 @@ def main(argv: list[str] | None = None) -> int:
     for name, detail in report.failures:
         print(f"FAIL {name}\n{detail}\n")
     note = f", {len(report.unclaimed)} unclaimed ({', '.join(sorted({u for _, u in report.unclaimed}))})" if report.unclaimed else ""
+    if args.driver:
+        note += f", {report.traced} stream traces match the reference kernel"
     print(f"[{driver.name}] {report.passed} passed, {report.failed} failed{note}")
     return 0 if report.ok else 1
 

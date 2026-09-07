@@ -68,6 +68,10 @@
  },
  "expect": {
   "code": "udf-tampered",
+  "fix": {
+   "action": "reship-udf",
+   "path": "formats['Person']"
+  },
   "at": "load"
  }
 }

@@ -43,6 +43,10 @@
  },
  "expect": {
   "code": "capability-missing",
+  "fix": {
+   "action": "declare-capability",
+   "fact": "native_structured_output"
+  },
   "at": "bind"
  }
 }

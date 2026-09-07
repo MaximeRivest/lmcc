@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:lmcc:schema:fix:0.2.0",
+  "title": "LMCC refusal fix",
+  "description": "The machine-actionable next step a refusal carries (spec/errors.md, Fix actions). Closed: one branch per action, exact parameter sets.",
+  "type": "object",
+  "required": ["action"],
+  "oneOf": [
+    {
+      "properties": {
+        "action": {"const": "install-vocabulary"},
+        "kind": {"enum": ["format", "strategy", "lens"]},
+        "name": {"type": "string"}
+      },
+      "required": ["action", "kind", "name"],
+      "additionalProperties": false
+    },
+    {
+      "properties": {
+        "action": {"const": "match-version"},
+        "entry": {"type": "string"},
+        "needs": {"type": "string"},
+        "provides": {"type": "string"}
+      },
+      "required": ["action", "entry", "needs", "provides"],
+      "additionalProperties": false
+    },
+    {
+      "properties": {
+        "action": {"const": "place-udf"},
+        "language": {"type": "string"},
+        "path": {"type": "string"}
+      },
+      "required": ["action", "language", "path"],
+      "additionalProperties": false
+    },
+    {
+      "properties": {
+        "action": {"const": "reship-udf"},
+        "path": {"type": "string"}
+      },
+      "required": ["action", "path"],
+      "additionalProperties": false
+    },
+    {
+      "properties": {
+        "action": {"const": "edit-entry"},
+        "path": {"type": "string"}
+      },
+      "required": ["action", "path"],
+      "additionalProperties": false
+    },
+    {
+      "properties": {
+        "action": {"const": "edit-template"},
+        "path": {"type": "string"},
+        "slot": {"type": "string"},
+        "field": {"type": "string"}
+      },
+      "required": ["action", "path"],
+      "additionalProperties": false
+    },
+    {
+      "properties": {
+        "action": {"const": "edit-signature"},
+        "field": {"type": "string"},
+        "role": {"type": "string"}
+      },
+      "required": ["action"],
+      "additionalProperties": false
+    },
+    {
+      "properties": {
+        "action": {"const": "assign-role"},
+        "role": {"type": "string"}
+      },
+      "required": ["action", "role"],
+      "additionalProperties": false
+    },
+    {
+      "properties": {
+        "action": {"const": "declare-capability"},
+        "fact": {"type": "string"}
+      },
+      "required": ["action", "fact"],
+      "additionalProperties": false
+    },
+    {
+      "properties": {
+        "action": {"const": "satisfy-predicate"},
+        "role": {"type": "string"},
+        "predicate": {"type": "object"}
+      },
+      "required": ["action", "role", "predicate"],
+      "additionalProperties": false
+    },
+    {
+      "properties": {
+        "action": {"const": "bind-format"},
+        "field": {"type": "string"},
+        "key": {"type": "string"}
+      },
+      "required": ["action", "field", "key"],
+      "additionalProperties": false
+    }
+  ]
+}

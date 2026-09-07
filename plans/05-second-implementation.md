@@ -36,7 +36,8 @@ kernels; decisions D-13 to D-17):
 - [x] Both kernels raise exactly the same error-code set
       (`test_coherence.py`).
 
-**Still open (not this plan).** Media emission, streaming, and the
-`requires` sidecar mechanism are kernel gaps in both implementations
-alike; `describe()` output is not corpus-pinned, so the two `describe`
-shapes agree by construction, not by proof.
+**Still open when this plan landed (not this plan).** Media emission,
+streaming, and the `requires` sidecar mechanism were kernel gaps in both
+implementations alike; streaming later landed in plan 01 (D-26).
+`describe()` output is not corpus-pinned, so the two `describe` shapes
+agree by construction, not by proof.

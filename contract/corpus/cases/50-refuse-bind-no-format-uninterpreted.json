@@ -49,6 +49,11 @@
  },
  "expect": {
   "code": "no-format",
+  "fix": {
+   "action": "bind-format",
+   "field": "pick",
+   "key": "*"
+  },
   "at": "bind"
  }
 }

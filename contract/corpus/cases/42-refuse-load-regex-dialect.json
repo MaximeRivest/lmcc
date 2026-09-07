@@ -63,6 +63,10 @@
  },
  "expect": {
   "code": "entry-malformed",
+  "fix": {
+   "action": "edit-entry",
+   "path": "strategies['reasoning'].routings[0]"
+  },
   "at": "load"
  }
 }

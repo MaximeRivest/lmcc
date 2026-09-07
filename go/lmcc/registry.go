@@ -53,7 +53,7 @@ func (r *Registry) RegisterFormat(name string, f FormatFactory, version string, 
 func (r *Registry) namedFormat(name string, options *Object) Format {
 	entry, ok := r.formats[name]
 	if !ok {
-		refusef("unknown-format", "format %q is not registered — install the package that provides it, or ship the format with the artifact", name)
+		refuseFixf("unknown-format", fixInstall("format", name), "format %q is not registered — install the package that provides it, or ship the format with the artifact", name)
 	}
 	if options == nil {
 		options = NewObject()
@@ -63,7 +63,7 @@ func (r *Registry) namedFormat(name string, options *Object) Format {
 		if e, ok := err.(*Error); ok {
 			panic(e)
 		}
-		refusef("entry-malformed", "format %q: %v", name, err)
+		refuseFixf("entry-malformed", fixEditEntry("formats['"+name+"']"), "format %q: %v", name, err)
 	}
 	return &namedWrap{Format: f, name: name}
 }
@@ -127,7 +127,7 @@ func (r *Registry) RegisterStrategy(name string, f StrategyFactory, version stri
 func (r *Registry) strategy(name string, options *Object) *Strategy {
 	entry, ok := r.strategies[name]
 	if !ok {
-		refusef("unknown-strategy", "strategy %q is not registered — install the package that provides it, or inline the strategy as data", name)
+		refuseFixf("unknown-strategy", fixInstall("strategy", name), "strategy %q is not registered — install the package that provides it, or inline the strategy as data", name)
 	}
 	if options == nil {
 		options = NewObject()
@@ -137,7 +137,7 @@ func (r *Registry) strategy(name string, options *Object) *Strategy {
 		if e, ok := err.(*Error); ok {
 			panic(e)
 		}
-		refusef("entry-malformed", "strategy %q: %v", name, err)
+		refuseFixf("entry-malformed", fixEditEntry("strategies['"+name+"']"), "strategy %q: %v", name, err)
 	}
 	return s
 }
@@ -158,14 +158,14 @@ func (r *Registry) lens(spec *Object) Lens {
 	kind, _ := spec.Str("kind")
 	entry, ok := r.lenses[kind]
 	if !ok {
-		refusef("unknown-parse-kind", "parse kind %q is neither the kernel lens 'derived' nor a registered lens — install the package that provides it", kind)
+		refuseFixf("unknown-parse-kind", fixInstall("lens", kind), "parse kind %q is neither the kernel lens 'derived' nor a registered lens — install the package that provides it", kind)
 	}
 	l, err := entry.factory(spec)
 	if err != nil {
 		if e, ok := err.(*Error); ok {
 			panic(e)
 		}
-		refusef("entry-malformed", "lens %q: %v", kind, err)
+		refuseFixf("entry-malformed", fixEditEntry("parse"), "lens %q: %v", kind, err)
 	}
 	return l
 }

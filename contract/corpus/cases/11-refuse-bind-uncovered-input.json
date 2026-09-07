@@ -49,6 +49,11 @@
  },
  "expect": {
   "code": "field-uncovered",
+  "fix": {
+   "action": "edit-template",
+   "path": "template",
+   "field": "extra"
+  },
   "at": "bind"
  }
 }

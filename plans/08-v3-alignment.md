@@ -22,7 +22,7 @@ UDFs, no `@lmcc.fn`). This plan closes that distance.
 | strategy predicate only | `choose: [{when, use}, {else}]` inside a strategy; `placement: {"@role": "controls.tools"}` | §6, §11 |
 | `LMCCError(code, detail, partial)` | `Refusal(code, hint, partial)`; read-side value errors are `parse-value` | §9 |
 | no typed-function surface | `@lmcc.fn`, dataclass return for several outputs, `Role["reasoning", str]`, `fn.bind(adapter, capabilities=…) → plan` | §1, §3 |
-| plan = render, parse, describe | + `skeleton()` (prefill, stops, grammar), `prefix()` (cache-stable bytes), `parser()` (streaming) | §8, §10 |
+| plan = render, parse, describe | + `skeleton()` (prefill, stops, grammar), `prefix()` (cache-stable bytes), streaming (later landed as `stream()`, D-26) | §8, §10 |
 | `template: {"messages": [...]}` | `template: [...]` | §11 |
 
 ## Choices v3 leaves open — taken here, veto any
@@ -73,8 +73,8 @@ UDFs, no `@lmcc.fn`). This plan closes that distance.
   bind-time contracts v3 names (`format-span-mismatch`,
   `format-placement-mismatch`) are adopted; `reach-violation` is not.
 - **V3-10 `skeleton()`** ships prefill and stops derived from the lens;
-  the grammar face is a stated gap (plan 01/10). `parser()` streaming
-  stays plan 01.
+  the grammar face is a stated gap. Streaming was left to plan 01 and
+  later landed as `plan.stream()` (D-26).
 
 ## Acceptance criteria
 

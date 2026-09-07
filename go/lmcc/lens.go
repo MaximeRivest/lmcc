@@ -125,6 +125,18 @@ type Lens interface {
 	Skeleton() *Object
 }
 
+// LensStreamReducer and StreamingLens are the optional vocabulary-lens
+// streaming face (kernel §8). Feed returns stable raw prefixes; Finish
+// returns final raw values. A lens without this interface buffers to EOF.
+type LensStreamReducer interface {
+	Feed(textDelta string) map[string]string
+	Finish() map[string]string
+}
+
+type StreamingLens interface {
+	NewStream(fieldNames []string) LensStreamReducer
+}
+
 // BaseLens supplies the kernel defaults for the mode hooks. Embed it.
 type BaseLens struct{}
 
@@ -226,6 +238,9 @@ func (l *DerivedLens) Split(text string, fieldNames []string) map[string]string 
 		end := len(text)
 		if i+1 < len(bounds) {
 			end = bounds[i+1].start
+		}
+		if end < b.after {
+			end = b.after // the next anchor began inside this one: empty capture (§4)
 		}
 		raw[b.name] = Strip(cutAtClose(text[b.after:end], b.suffix, b.name))
 	}

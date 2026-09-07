@@ -33,10 +33,13 @@ import json, glob, jsonschema
 entry = json.load(open("contract/schema/entry.schema.json"))
 signature = json.load(open("contract/schema/signature.schema.json"))
 case_schema = json.load(open("contract/schema/case.schema.json"))
+fix_schema = json.load(open("contract/schema/fix.schema.json"))
 n = 0
 for f in sorted(glob.glob("contract/corpus/cases/*.json")):
     case = json.load(open(f))
     jsonschema.validate(case, case_schema)
+    if "fix" in case.get("expect", {}):
+        jsonschema.validate(case["expect"]["fix"], fix_schema)
     jsonschema.validate(case["entry"], entry)
     if "entry" in case.get("expect", {}):
         jsonschema.validate(case["expect"]["entry"], entry)
@@ -46,7 +49,7 @@ for f in sorted(glob.glob("contract/corpus/cases/*.json")):
         pass  # a refuse-at-load entry may be deliberately malformed for the schema too
 
     n += 1
-print(n, "cases validate against the case, entry and signature schemas")
+print(n, "cases validate against the case, entry, signature and fix schemas")
 '
 if python -c 'import jsonschema' 2>/dev/null; then
   python -c "$VALIDATE"

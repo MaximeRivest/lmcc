@@ -64,29 +64,35 @@ class Strategy:
     @classmethod
     def from_dict(cls, data: dict, *, where: str) -> "Strategy":
         if not isinstance(data, dict):
-            refuse("entry-malformed", f"{where}: a strategy is an object")
+            refuse("entry-malformed", f"{where}: a strategy is an object",
+                   fix={"action": "edit-entry", "path": where})
         if "choose" in data:
             if set(data) != {"choose"} or not isinstance(data["choose"], list) or not data["choose"]:
-                refuse("entry-malformed", f"{where}: choose is a non-empty list and stands alone")
+                refuse("entry-malformed", f"{where}: choose is a non-empty list and stands alone",
+                       fix={"action": "edit-entry", "path": where})
             alts = []
             for i, alt in enumerate(data["choose"]):
                 aw = f"{where}.choose[{i}]"
                 if not isinstance(alt, dict):
-                    refuse("entry-malformed", f"{aw}: an alternative is an object")
+                    refuse("entry-malformed", f"{aw}: an alternative is an object",
+                           fix={"action": "edit-entry", "path": aw})
                 if "else" in alt:
                     if set(alt) != {"else"} or i != len(data["choose"]) - 1:
-                        refuse("entry-malformed", f"{aw}: else stands alone and comes last")
+                        refuse("entry-malformed", f"{aw}: else stands alone and comes last",
+                               fix={"action": "edit-entry", "path": aw})
                     alts.append({"else": cls.from_dict(alt["else"], where=aw)})
                 elif set(alt) == {"when", "use"}:
                     validate_predicate(alt["when"], where=f"{aw}.when")
                     alts.append({"when": alt["when"], "use": cls.from_dict(alt["use"], where=aw)})
                 else:
-                    refuse("entry-malformed", f"{aw}: an alternative is {{when, use}} or {{else}}")
+                    refuse("entry-malformed", f"{aw}: an alternative is {{when, use}} or {{else}}",
+                           fix={"action": "edit-entry", "path": aw})
             return cls(choose=alts)
         unknown = set(data) - set(_KEYS)
         if unknown:
             refuse("entry-malformed",
-                   f"{where}: unknown strategy key(s) {sorted(unknown)}; known keys are {list(_KEYS)}")
+                   f"{where}: unknown strategy key(s) {sorted(unknown)}; known keys are {list(_KEYS)}",
+                   fix={"action": "edit-entry", "path": where})
         s = cls(when=data.get("when"), requires=list(data.get("requires", [])),
                 visible=bool(data.get("visible", True)),
                 fragments=dict(data.get("fragments", {})), controls=dict(data.get("controls", {})),
@@ -106,14 +112,16 @@ class Strategy:
             if not _TO.match(target) or not isinstance(place, str) or not _PLACEMENT.match(place):
                 refuse("entry-malformed",
                        f"{where}.placement: {target!r}: {place!r} — a placement is "
-                       f"'@role' or '@role.<sub>' → 'controls.<key>' or 'message:<role>'")
+                       f"'@role' or '@role.<sub>' → 'controls.<key>' or 'message:<role>'",
+                       fix={"action": "edit-entry", "path": f"{where}.placement"})
         for k, v in self.fragments.items():
             if k not in ("system", "user", "assistant") or not isinstance(v, str):
-                refuse("entry-malformed", f"{where}.fragments: {k!r} must name a message role, text")
+                refuse("entry-malformed", f"{where}.fragments: {k!r} must name a message role, text",
+                       fix={"action": "edit-entry", "path": f"{where}.fragments"})
         if not self.visible and not self.routings and not self.placement:
             refuse("entry-malformed",
                    f"{where}: visible=false but no routing or placement serves the field — "
-                   f"the value would be unrecoverable")
+                   f"the value would be unrecoverable", fix={"action": "edit-entry", "path": where})
 
     # ------------------------------------------------------------ bind
 
@@ -130,17 +138,21 @@ class Strategy:
             if chosen is None:
                 refuse("capability-missing",
                        f"role {role!r}: strategy {name!r}: no alternative of 'choose' "
-                       f"holds for the declared capabilities and there is no else")
+                       f"holds for the declared capabilities and there is no else",
+                       fix={"action": "satisfy-predicate", "role": role,
+                            "predicate": {"any": [dict(alt["when"]) for alt in s.choose]}})
             s = chosen
         if s.when is not None and not eval_predicate(s.when, capabilities):
             refuse("capability-missing",
                    f"role {role!r}: strategy {name!r}: 'when' {s.when!r} is false for the "
-                   f"declared capabilities")
+                   f"declared capabilities",
+                   fix={"action": "satisfy-predicate", "role": role, "predicate": dict(s.when)})
         for fact in s.requires:
             if not capabilities.get(fact):
                 refuse("capability-missing",
                        f"role {role!r}: strategy {name!r} requires capability {fact!r}, "
-                       f"which the model does not declare")
+                       f"which the model does not declare",
+                       fix={"action": "declare-capability", "fact": fact})
         return s
 
     def bound(self, field_name: str) -> "Strategy":
@@ -154,31 +166,39 @@ class Strategy:
 
 def validate_routing(r: dict, *, where: str) -> None:
     if not isinstance(r, dict):
-        refuse("entry-malformed", f"{where}: a routing is an object")
+        refuse("entry-malformed", f"{where}: a routing is an object",
+               fix={"action": "edit-entry", "path": where})
     src, to = r.get("from"), r.get("to")
     if not isinstance(src, str) or not _FROM.match(src):
-        refuse("entry-malformed", f"{where}: 'from' is 'text' or 'channel:<part kind>'")
+        refuse("entry-malformed", f"{where}: 'from' is 'text' or 'channel:<part kind>'",
+               fix={"action": "edit-entry", "path": where})
     if not isinstance(to, str) or not _TO.match(to):
-        refuse("entry-malformed", f"{where}: 'to' is '@role' or '@role.<sub>'")
+        refuse("entry-malformed", f"{where}: 'to' is '@role' or '@role.<sub>'",
+               fix={"action": "edit-entry", "path": where})
     unknown = set(r) - {"from", "to", "consume", "between", "pattern", "line_prefixed"}
     if unknown:
-        refuse("entry-malformed", f"{where}: unknown routing key(s) {sorted(unknown)}")
+        refuse("entry-malformed", f"{where}: unknown routing key(s) {sorted(unknown)}",
+               fix={"action": "edit-entry", "path": where})
     kinds = [k for k in ("between", "pattern", "line_prefixed") if k in r]
     if src == "text":
         if len(kinds) != 1:
             refuse("entry-malformed",
-                   f"{where}: a text routing needs exactly one of between/pattern/line_prefixed")
+                   f"{where}: a text routing needs exactly one of between/pattern/line_prefixed",
+                   fix={"action": "edit-entry", "path": where})
         k = kinds[0]
         v = r[k]
         if k == "between":
             if not (isinstance(v, list) and len(v) == 2 and all(isinstance(x, str) and x for x in v)):
-                refuse("entry-malformed", f"{where}: between is [open, close], non-empty strings")
+                refuse("entry-malformed", f"{where}: between is [open, close], non-empty strings",
+                       fix={"action": "edit-entry", "path": where})
         elif not isinstance(v, str) or not v:
-            refuse("entry-malformed", f"{where}: {k} is a non-empty string")
+            refuse("entry-malformed", f"{where}: {k} is a non-empty string",
+                   fix={"action": "edit-entry", "path": where})
         if k == "pattern":
             check_re2(v, where=where)
     elif kinds or r.get("consume"):
-        refuse("entry-malformed", f"{where}: a channel routing takes no text extractor and no consume")
+        refuse("entry-malformed", f"{where}: a channel routing takes no text extractor and no consume",
+               fix={"action": "edit-entry", "path": where})
 
 
 def check_re2(regex: str, *, where: str) -> None:
@@ -188,29 +208,34 @@ def check_re2(regex: str, *, where: str) -> None:
         refuse("entry-malformed",
                f"{where}: regex {regex!r} uses {hit.group(0)!r}, which is outside the "
                f"portable RE2 dialect (no lookaround, backreferences, named groups, "
-               f"atomic or possessive constructs)")
+               f"atomic or possessive constructs)", fix={"action": "edit-entry", "path": where})
     try:
         re.compile(regex, re.DOTALL)
     except re.error as exc:
-        refuse("entry-malformed", f"{where}: regex {regex!r} does not compile: {exc}")
+        refuse("entry-malformed", f"{where}: regex {regex!r} does not compile: {exc}",
+               fix={"action": "edit-entry", "path": where})
 
 
 def validate_predicate(p: object, *, where: str) -> None:
     if not isinstance(p, dict) or len(p) != 1:
-        refuse("entry-malformed", f"{where}: a predicate is one of {_PREDICATE_KEYS}, one key")
+        refuse("entry-malformed", f"{where}: a predicate is one of {_PREDICATE_KEYS}, one key",
+               fix={"action": "edit-entry", "path": where})
     key, value = next(iter(p.items()))
     if key == "capability":
         if not isinstance(value, str):
-            refuse("entry-malformed", f"{where}: 'capability' names a fact")
+            refuse("entry-malformed", f"{where}: 'capability' names a fact",
+                   fix={"action": "edit-entry", "path": where})
     elif key == "not":
         validate_predicate(value, where=where)
     elif key in ("all", "any"):
         if not isinstance(value, list):
-            refuse("entry-malformed", f"{where}: {key!r} takes a list")
+            refuse("entry-malformed", f"{where}: {key!r} takes a list",
+                   fix={"action": "edit-entry", "path": where})
         for q in value:
             validate_predicate(q, where=where)
     else:
-        refuse("entry-malformed", f"{where}: unknown predicate key {key!r}; known: {_PREDICATE_KEYS}")
+        refuse("entry-malformed", f"{where}: unknown predicate key {key!r}; known: {_PREDICATE_KEYS}",
+               fix={"action": "edit-entry", "path": where})
 
 
 def eval_predicate(p: dict, capabilities: dict) -> bool:

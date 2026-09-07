@@ -3,6 +3,7 @@ package lmcc
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 )
 
 // Format: how a type is written and read (kernel §5).
@@ -71,7 +72,7 @@ func (s *FormatSpec) Describe(f *Field) string {
 func (s *FormatSpec) Write(value any, f *Field) (any, error) { return s.WriteFn(value, f) }
 func (s *FormatSpec) Read(span Span, f *Field) (any, error) {
 	if s.ReadFn == nil {
-		return nil, &Error{Code: "format-direction", Detail: "this format is write-only"}
+		return nil, errors.New("this format is write-only") // surfaces as format-read-error; bind refuses format-direction first
 	}
 	return s.ReadFn(span, f)
 }
@@ -83,7 +84,7 @@ var scalarDefault Format = &FormatSpec{
 	ReadsKinds: []string{"*"},
 	DescribeFn: func(f *Field) string { return ShapeSummary(f.Shape) },
 	WriteFn: func(v any, f *Field) (any, error) {
-		return SpellValue(f.Shape, v, "field '"+f.Name+"'"), nil
+		return SpellValue(f.Shape, v, "field '"+f.Name+"'", f.Name), nil
 	},
 	ReadFn: func(span Span, f *Field) (any, error) {
 		return ReadValue(f.Shape, span.Text(), "field '"+f.Name+"'"), nil
@@ -210,9 +211,9 @@ func Digest(entry *Object) string {
 // any language (kernel §5, `udf-unplaceable`).
 func admitUDF(entry *Object, where string) Format {
 	if sha, _ := entry.Str("sha256"); sha != Digest(entry) {
-		refusef("udf-tampered", "%s: sha256 does not match the shipped source", where)
+		refuseFixf("udf-tampered", Obj("action", "reship-udf", "path", where), "%s: sha256 does not match the shipped source", where)
 	}
 	lang, _ := entry.Str("language")
-	refusef("udf-unplaceable", "%s: this host has no placement for %s UDFs", where, lang)
+	refuseFixf("udf-unplaceable", Obj("action", "place-udf", "language", lang, "path", where), "%s: this host has no placement for %s UDFs", where, lang)
 	return nil
 }

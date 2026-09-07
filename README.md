@@ -71,11 +71,29 @@ assert request.messages[1]["content"][0]["text"] == "<question>\nWhy is the sky 
 assert request.patch == {}
 
 assert plan.parse("<answer>\nRayleigh scattering.\n</answer>") == {"answer": "Rayleigh scattering."}
+
+# Or read the same reply as the client receives it.
+stream = plan.stream()
+events = stream.feed("<answer>\nRayleigh")
+assert events == [
+    {"kind": "field_started", "field": "answer"},
+    {"kind": "field_delta", "field": "answer", "text": "Rayleigh"},
+]
+events += stream.feed(" scattering.\n</answer>")
+end = stream.finish()              # EOF can release final events
+assert end.values == {"answer": "Rayleigh scattering."}
+assert end.events == [
+    {"kind": "field_done", "field": "answer", "value": "Rayleigh scattering."},
+]
 ```
 
 - `bind` joins a signature, an adapter, and what the model declares it
   can do. **Every refusal fires here**, before any call.
-- `render` and `parse` are pure. Look at a million prompts for free.
+- `render`, `parse`, and `stream` are pure. Look at a million prompts for free.
+- Streaming is a refinement: any chunking finishes with exactly the same
+  values or refusal as `parse`; field deltas join to the batch raw text.
+- `feed` accepts text or one part delta. `finish` returns EOF events and
+  final values. Typed `field_done` events wait for full validation.
 - The rendered form is plain messages with parts plus a request patch.
   Hand it to any client.
 
@@ -219,16 +237,22 @@ try:
     raise AssertionError("should have refused")
 except lmcc.Refusal as r:
     assert r.code == "capability-missing"
+    assert r.fix == {"action": "declare-capability", "fact": "native_reasoning"}
 ```
 
 Capabilities are a closed, versioned vocabulary of facts, declared by
-whoever knows the model. Nothing is sniffed.
+whoever knows the model. Nothing is sniffed. Every refusal that fires
+before render carries a `fix`: the one next action, as data from a
+closed vocabulary (`spec/errors.md`), naming the exact field, role,
+fact, name, or artifact path to act on. A program can repair without
+reading English.
 
 ## 8. What the plan knows
 
 ```python
 assert p1.skeleton() == {"prefill": "<answer>\n", "stops": ["</answer>"]}
 assert [m["role"] for m in p1.prefix()] == ["system"]
+assert p1.describe()["streaming"]["mode"] == "incremental"
 ```
 
 `skeleton` is what a client uses for assistant prefill and stop
@@ -242,9 +266,11 @@ try:
     p1.parse("<think>hmm</think>\n<answer>\nnine\n</answer>")
 except lmcc.Refusal as r:
     assert r.code == "parse-value" and "nine" in r.hint
+    assert r.fix is None
 ```
 
-lmcc gives the hint. Retrying is not its job — a plan is one call.
+lmcc gives the hint. Retrying is not its job — a plan is one call — so
+refusals about model text or program values carry no `fix`.
 
 ## 10. The artifact
 
@@ -268,7 +294,7 @@ loads it lays out the same bytes.
 contract/          the authority (no code)
   spec/            kernel.md (the convention), errors.md, vocab/ specs
   schema/          entry, signature, case — JSON Schema
-  corpus/          73 byte-exact cases — the real source of truth
+  corpus/          80 byte-exact cases — the real source of truth
   harness/         runs any implementation against the corpus
 python/
   lmcc/            the reference kernel, stdlib only

@@ -18,6 +18,7 @@ from .plan import Plan, RenderResult, bind
 from .registry import Registry, default_registry
 from .serde import KERNEL_VERSION, dump, load
 from .strategy import Strategy
+from .stream import Stream, StreamResult
 
 __version__ = KERNEL_VERSION
 
@@ -33,6 +34,7 @@ def format(host_type, **kw):
 __all__ = [
     "Adapter", "Field", "Fn", "Format", "KERNEL_VERSION", "Lens", "One", "Plan",
     "Refusal", "Registry", "RenderResult", "Role", "SignatureCore", "Span", "Strategy",
+    "Stream", "StreamResult",
     "adapter", "assistant", "bind", "default_registry", "demos", "directive", "dump",
     "field", "fn", "format", "history", "load", "make_format", "message", "refuse", "ship",
     "signature", "signature_from_dict", "signature_to_dict", "system", "typename", "use", "user",

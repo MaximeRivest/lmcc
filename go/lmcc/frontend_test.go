@@ -81,8 +81,41 @@ func TestStructTagsLowerToSignatureCore(t *testing.T) {
 func TestUnmappedTypeRefusesByName(t *testing.T) {
 	type odd struct{ C chan int }
 	_, err := StructSignature("x", odd{}, nil, NewRegistry())
-	if e, ok := AsError(err); !ok || e.Code != "unmapped-type" {
-		t.Errorf("want unmapped-type, got %v", err)
+	e, ok := AsError(err)
+	if !ok || e.Code != "unmapped-type" {
+		t.Fatalf("want unmapped-type, got %v", err)
+	}
+	// a signature-time refusal carries its fix, naming the field (errors.md)
+	want := Obj("action", "edit-signature", "field", "c")
+	if !Equal(e.Fix, want) {
+		t.Errorf("fix: want %s, got %s", MarshalJSON(want, -1), MarshalJSON(e.Fix, -1))
+	}
+	d := e.Describe()
+	if code, _ := d.Str("code"); code != "unmapped-type" || !Equal(mustGet(d, "fix"), want) {
+		t.Errorf("Describe(): %s", MarshalJSON(d, -1))
+	}
+}
+
+func TestRenderRefusalsCarryNoFix(t *testing.T) {
+	sig, err := SignatureFromJSON(Obj("instructions", "x", "fields", []any{
+		Obj("name", "q", "direction", "input", "shape", Obj("type", "string")),
+		Obj("name", "n", "direction", "output", "shape", Obj("type", "integer"))}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	adp, err := NewAdapter("x", []*Object{
+		Obj("role", "system", "text", "{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"),
+		Obj("role", "user", "text", "{q}")}, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := Bind(adp, sig, nil, NewRegistry())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = plan.Parse("<n>\nnine\n</n>")
+	if e, ok := AsError(err); !ok || e.Code != "parse-value" || e.Fix != nil {
+		t.Errorf("parse-value carries no fix; got %v", err)
 	}
 }
 

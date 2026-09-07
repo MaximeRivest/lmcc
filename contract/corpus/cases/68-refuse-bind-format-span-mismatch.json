@@ -84,6 +84,11 @@
  },
  "expect": {
   "code": "format-span-mismatch",
+  "fix": {
+   "action": "bind-format",
+   "field": "reasoning",
+   "key": "Thought"
+  },
   "at": "bind"
  }
 }

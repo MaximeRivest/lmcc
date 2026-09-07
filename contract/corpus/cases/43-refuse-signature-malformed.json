@@ -49,6 +49,10 @@
  },
  "expect": {
   "code": "signature-malformed",
+  "fix": {
+   "action": "edit-signature",
+   "field": "a"
+  },
   "at": "signature"
  }
 }

@@ -1,8 +1,8 @@
 {
- "name": "refuse-bind-format-placement-mismatch",
+ "name": "refuse-bind-control-conflict",
  "kind": "refuse",
  "entry": {
-  "name": "place_v1",
+  "name": "two_temperatures_v1",
   "versions": {
    "kernel": "0.2.0",
    "vocab": {}
@@ -21,15 +21,20 @@
    "kind": "derived"
   },
   "strategies": {
-   "context": {
-    "placement": {
-     "@role": "controls.context"
+   "reasoning": {
+    "controls": {
+     "temperature": 0
+    }
+   },
+   "style": {
+    "controls": {
+     "temperature": 1
     }
    }
   }
  },
  "signature": {
-  "instructions": "x",
+  "instructions": "Answer.",
   "fields": [
    {
     "name": "q",
@@ -39,12 +44,20 @@
     }
    },
    {
-    "name": "ctx",
-    "direction": "input",
+    "name": "reasoning",
+    "direction": "output",
     "shape": {
      "type": "string"
     },
-    "role": "context"
+    "role": "reasoning"
+   },
+   {
+    "name": "tone",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    },
+    "role": "style"
    },
    {
     "name": "answer",
@@ -56,11 +69,10 @@
   ]
  },
  "expect": {
-  "code": "format-placement-mismatch",
+  "code": "control-conflict",
   "fix": {
-   "action": "bind-format",
-   "field": "ctx",
-   "key": "string"
+   "action": "edit-entry",
+   "path": "strategies['style'].controls['temperature']"
   },
   "at": "bind"
  }

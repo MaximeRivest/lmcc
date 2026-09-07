@@ -78,6 +78,10 @@
  },
  "expect": {
   "code": "unknown-slot",
+  "fix": {
+   "action": "assign-role",
+   "role": "work.notes"
+  },
   "at": "bind"
  }
 }

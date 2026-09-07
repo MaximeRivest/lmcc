@@ -274,9 +274,19 @@ class Plan:
     def skeleton(self) -> dict:
         return self.lens.skeleton()
 
+    def stream(self):
+        """Create a pure, sans-I/O streaming parser (kernel §8)."""
+        from .stream import Stream
+        return Stream(self)
+
     # ------------------------------------------------------------ parse
 
-    def parse(self, response: object) -> dict:
+    def _parse_with_spans(self, response: object) -> tuple[dict, dict[str, core.Span]]:
+        """The one batch parse path, shared by ``parse`` and stream EOF.
+
+        Returning spans internally lets streaming prove that its emitted
+        raw deltas equal the batch captures without inventing another parser.
+        """
         text, parts = core.response_text_and_parts(response)
         text, routed = apply_routings(text, parts, self.routings)
         try:
@@ -286,11 +296,18 @@ class Plan:
         except Exception as exc:  # noqa: BLE001
             refuse("lens-parse-error",
                    f"lens {self.adapter.parse.get('kind')!r} failed to read the reply: {exc}")
+        spans: dict[str, core.Span] = {
+            f.name: core.Span.of_text(raw[f.name]) for f in self.visible_outputs}
+        spans.update(routed)
         values: dict = {}
         for f in self.visible_outputs:
-            values[f.name] = self.read(f, core.Span.of_text(raw[f.name]))
+            values[f.name] = self.read(f, spans[f.name])
         for name, span in routed.items():
             values[name] = self.read(self.signature.field_named(name), span)
+        return values, spans
+
+    def parse(self, response: object) -> dict:
+        values, _spans = self._parse_with_spans(response)
         return values
 
     # ---------------------------------------------------------- describe
@@ -320,6 +337,8 @@ class Plan:
             "patch": _deep_copy(self.patch),
             "skeleton": self.skeleton(),
         }
+        from .stream import describe_streaming
+        out["streaming"] = describe_streaming(self)
         if isinstance(self.lens, DerivedLens):
             out["lens"]["anchors"] = [list(a) for a in self.lens.anchors]
             if self.lens.tail:
@@ -413,23 +432,28 @@ def _derive_lens(plan: Plan) -> DerivedLens:
     if not found:
         refuse("not-lensable",
                "parse kind 'derived' needs an output pattern — an outputs loop containing "
-               "{f.value}, or output slots — and the template has none")
+               "{f.value}, or output slots — and the template has none",
+               fix={"action": "edit-template", "path": "template"})
     if len(found) > 1:
         refuse("not-lensable",
                f"the output pattern must live in one message; found holes in messages "
-               f"{[i for i, _, _ in found]}")
-    _, nodes, holes = found[0]
+               f"{[i for i, _, _ in found]}",
+               fix={"action": "edit-template", "path": f"template[{found[1][0]}]"})
+    index, nodes, holes = found[0]
+    here = {"action": "edit-template", "path": f"template[{index}]"}
     loops = [h for h in holes if h[0] == "loop"]
     if len(loops) > 1:
-        refuse("not-lensable", f"the template has {len(loops)} output-pattern loops; one pattern")
+        refuse("not-lensable", f"the template has {len(loops)} output-pattern loops; one pattern",
+               fix=here)
     anchors: list[tuple[str, str, str]] = []
     tail = ""
     if loops:
         if len(holes) != 1:
-            refuse("not-lensable", "an outputs loop and bare output slots cannot both form the pattern")
+            refuse("not-lensable", "an outputs loop and bare output slots cannot both form the pattern",
+                   fix=here)
         loop = loops[0][1]
         for f in plan.visible_outputs:
-            pre, post = _instantiate(loop, f, plan)
+            pre, post = _instantiate(loop, f, plan, fix=here)
             anchors.append((f.name, pre, post))
         tail = _tail_after(nodes, loop)
     else:
@@ -446,19 +470,21 @@ def _derive_lens(plan: Plan) -> DerivedLens:
         if not core.rstrip(prefix):
             refuse("not-lensable",
                    f"field {name!r}: no literal text before its hole — nothing anchors the "
-                   f"parser; put the field's marker before the hole")
+                   f"parser; put the field's marker before the hole",
+                   fix={**here, "field": name})
     seen: dict[str, str] = {}
     for name, prefix, _suffix in anchors:
         key = core.rstrip(prefix)
         if key in seen:
             refuse("not-lensable",
                    f"fields {seen[key]!r} and {name!r} share the anchor {key!r}; anchors "
-                   f"must tell fields apart")
+                   f"must tell fields apart",
+                   fix={**here, "field": name})
         seen[key] = name
     return DerivedLens(anchors, tail)
 
 
-def _instantiate(loop: Loop, f: core.Field, plan: Plan) -> tuple[str, str]:
+def _instantiate(loop: Loop, f: core.Field, plan: Plan, *, fix: dict) -> tuple[str, str]:
     pre: list[str] = []
     post: list[str] = []
     target = pre
@@ -471,7 +497,7 @@ def _instantiate(loop: Loop, f: core.Field, plan: Plan) -> tuple[str, str]:
                 if target is post:
                     refuse("not-lensable",
                            "the output-pattern block has two {f.value} holes per field; "
-                           "one value, one hole")
+                           "one value, one hole", fix=fix)
                 target = post
             elif attr == "name":
                 target.append(f.name)
@@ -484,9 +510,11 @@ def _instantiate(loop: Loop, f: core.Field, plan: Plan) -> tuple[str, str]:
             elif attr == "role":
                 target.append(f.role)
             else:
-                refuse("not-lensable", f"slot {{{node.path}}} inside the output pattern is not invertible")
+                refuse("not-lensable", f"slot {{{node.path}}} inside the output pattern is not invertible",
+                       fix={**fix, "slot": node.path})
         else:
-            refuse("not-lensable", "nested loops inside the output-pattern block are not invertible")
+            refuse("not-lensable", "nested loops inside the output-pattern block are not invertible",
+                   fix=fix)
     return "".join(pre), "".join(post)
 
 
@@ -556,35 +584,38 @@ def _resolve_format(plan: Plan, f: core.Field) -> _FormatChoice:
             return _formats.load_udf(binding, where=f"formats[{key!r}]")
         return binding
 
-    def check(fmt: _formats.Format, by: str) -> _FormatChoice:
+    def check(fmt: _formats.Format, by: str, key: str) -> _FormatChoice:
+        rebind = {"action": "bind-format", "field": f.name, "key": key}
         if not _formats.accepts(fmt, f):
             refuse("format-shape-mismatch",
                    f"field {f.name!r}: format {fmt.name or by} accepts {list(fmt.accepts)}, "
-                   f"but the field's type/shape is {f.type or f.shape}")
+                   f"but the field's type/shape is {f.type or f.shape}", fix=rebind)
         if fmt.direction == "in" and f.direction == "output" or (
                 fmt.direction == "out" and f.direction == "input"):
             refuse("format-direction",
                    f"field {f.name!r}: format {fmt.name or by} is {fmt.direction}-only, "
-                   f"but the field is an {f.direction}")
+                   f"but the field is an {f.direction}", fix=rebind)
         return _FormatChoice(fmt, by)
 
     if f.type and f.type in adp.formats:
-        return check(materialize(adp.formats[f.type], f.type), f"artifact:{f.type}")
+        return check(materialize(adp.formats[f.type], f.type), f"artifact:{f.type}", f.type)
     for key in _formats.structural_keys(f.shape):
         if key in adp.formats:
-            return check(materialize(adp.formats[key], key), f"artifact:{key}")
+            return check(materialize(adp.formats[key], key), f"artifact:{key}", key)
     bound = reg.type_binding(f.annotation)
     if bound is not None:
-        return check(bound, f"runtime:{f.type or core.typename(f.annotation)}")
+        return check(bound, f"runtime:{f.type or core.typename(f.annotation)}",
+                     core.format_key(f.type, f.shape))
     default = _formats.kernel_default(f.shape)
     if default is not None:
         return _FormatChoice(default, "kernel")
     if "*" in adp.formats:
-        return check(materialize(adp.formats["*"], "*"), "artifact:*")
+        return check(materialize(adp.formats["*"], "*"), "artifact:*", "*")
     refuse("no-format",
            f"field {f.name!r} ({f.type or f.shape}) has a structured shape and no format — "
            f"bind one in the artifact under its type name or a structural key, register "
-           f"one for its type at runtime, or ship one")
+           f"one for its type at runtime, or ship one",
+           fix={"action": "bind-format", "field": f.name, "key": core.format_key(f.type, f.shape)})
 
 
 # ------------------------------------------------------------------ bind
@@ -601,9 +632,11 @@ def bind(adapter: Adapter, sig: core.SignatureCore, capabilities: dict, registry
         if f.role in by_role:
             refuse("role-ambiguous",
                    f"role {f.role!r} appears on both {by_role[f.role].name!r} and {f.name!r}; "
-                   f"a role may bind to one field")
+                   f"a role may bind to one field",
+                   fix={"action": "edit-signature", "field": f.name, "role": f.role})
         by_role[f.role] = f
     hidden: set[str] = set()
+    patch_owner: dict[str, str] = {}   # control key -> the role whose strategy set it
     for f in sig.fields:
         if f.role == "plain":
             continue
@@ -626,7 +659,8 @@ def bind(adapter: Adapter, sig: core.SignatureCore, capabilities: dict, registry
             if t is None:
                 refuse("unknown-slot",
                        f"role {f.role!r}: strategy {name!r} {what} targets {ref!r}, but no "
-                       f"field bears the role {f.role + '.' + sub!r}")
+                       f"field bears the role {f.role + '.' + sub!r}",
+                       fix={"action": "assign-role", "role": f"{f.role}.{sub}"})
             return t
 
         if not strategy.visible or strategy.placement:
@@ -645,8 +679,11 @@ def bind(adapter: Adapter, sig: core.SignatureCore, capabilities: dict, registry
             plan.fragments[msg_role] = (existing + "\n" + text) if existing else text
         for key, value in strategy.controls.items():
             if key in plan.patch and plan.patch[key] != value:
-                refuse("control-conflict", f"strategies disagree on request control {key!r}")
+                refuse("control-conflict", f"strategies disagree on request control {key!r}",
+                       fix={"action": "edit-entry",
+                            "path": f"strategies[{f.role!r}].controls[{key!r}]"})
             plan.patch[key] = value
+            patch_owner[key] = f.role
 
     # 2. visibility.
     plan.visible_inputs = [f for f in sig.inputs if f.name not in hidden]
@@ -664,13 +701,17 @@ def bind(adapter: Adapter, sig: core.SignatureCore, capabilities: dict, registry
         if "*" not in fmt.reads and not kinds <= set(fmt.reads):
             refuse("format-span-mismatch",
                    f"field {fname!r}: routings deliver {sorted(kinds)} parts, but its format "
-                   f"{fmt.name or '(inline)'} reads {list(fmt.reads)}")
+                   f"{fmt.name or '(inline)'} reads {list(fmt.reads)}",
+                   fix={"action": "bind-format", "field": fname,
+                        "key": core.format_key(sig.field_named(fname).type, sig.field_named(fname).shape)})
     for fname, place in plan.placements:
         fmt = plan.formats[fname].format
         if place.startswith("controls.") and fmt.emits != "parts":
             refuse("format-placement-mismatch",
                    f"field {fname!r}: placement {place!r} needs parts, but its format "
-                   f"{fmt.name or '(inline)'} emits text")
+                   f"{fmt.name or '(inline)'} emits text",
+                   fix={"action": "bind-format", "field": fname,
+                        "key": core.format_key(sig.field_named(fname).type, sig.field_named(fname).shape)})
 
     # 4. the lens: derived from the template, or vocabulary; its gate and patch.
     if adapter.parse.get("kind") == "derived":
@@ -681,10 +722,13 @@ def bind(adapter: Adapter, sig: core.SignatureCore, capabilities: dict, registry
         if not capabilities.get(fact):
             refuse("capability-missing",
                    f"lens {adapter.parse.get('kind')!r} requires capability {fact!r}, which "
-                   f"the model does not declare — use an invertible pattern instead")
+                   f"the model does not declare — use an invertible pattern instead",
+                   fix={"action": "declare-capability", "fact": fact})
     for key, value in (plan.lens.patch(plan.visible_outputs) or {}).items():
         if key in plan.patch and plan.patch[key] != value:
-            refuse("control-conflict", f"lens and strategies disagree on request control {key!r}")
+            refuse("control-conflict", f"lens and strategies disagree on request control {key!r}",
+                   fix={"action": "edit-entry",
+                        "path": f"strategies[{patch_owner[key]!r}].controls[{key!r}]"})
         plan.patch[key] = value
 
     # 5. template validation + input coverage.
@@ -699,7 +743,8 @@ def bind(adapter: Adapter, sig: core.SignatureCore, capabilities: dict, registry
     if uncovered:
         refuse("field-uncovered",
                "input field(s) never rendered by the template: "
-               + ", ".join(sorted(repr(n) for n in uncovered)))
+               + ", ".join(sorted(repr(n) for n in uncovered)),
+               fix={"action": "edit-template", "path": "template", "field": min(uncovered)})
 
     # 6. a routed field that is also a visible section is ambiguous.
     visible_out = {f.name for f in plan.visible_outputs}
@@ -707,6 +752,8 @@ def bind(adapter: Adapter, sig: core.SignatureCore, capabilities: dict, registry
         if fname in visible_out:
             refuse("field-double-covered",
                    f"field {fname!r} is both a parsed section and a routing target — hide "
-                   f"it (visible: false) or drop the routing")
+                   f"it (visible: false) or drop the routing",
+                   fix={"action": "edit-entry",
+                        "path": f"strategies[{sig.field_named(fname).role!r}].visible"})
     return plan
 

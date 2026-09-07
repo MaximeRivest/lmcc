@@ -53,21 +53,24 @@ a decision, derive from these before inventing anything:
    template decides where visible things sit (v3 §6b).
 3. **Refuse loudly, before money.** Bake is the gate. Every failure has
    a stable code (`contract/spec/errors.md`), names its exact offender,
-   and says what to do next. Ambiguity refuses (`parse-ambiguous`);
+   and says what to do next — before render, as data: a `fix` from the
+   closed action vocabulary. Ambiguity refuses (`parse-ambiguous`);
    guessing is the one forbidden behavior.
 
 ## Invariants — verify, do not trust
 
 | invariant | enforced by |
 |---|---|
-| corpus is byte-exact authority | `contract/harness/runner.py` (73 cases; 6 need `udf:python`) |
+| corpus is byte-exact authority | `contract/harness/runner.py` (80 cases; 6 need `udf:python`) |
 | the contract is portable: an independent Go kernel passes every claimable case byte-exactly, and both kernels raise the same refusal-code set (minus the declared placement-only code) | `./check` step 5 (`runner.py --driver go/bin/lmcc-conform`), `tests/test_coherence.py` |
 | text primitives are portable: ASCII strip, explicit integer/number grammars, ECMAScript number spelling, RE2 regex (kernel §7a, §5) | corpus 35–37, 40–42, 44, 45; `tests/test_text_rules.py`; `go/lmcc/text_test.go` |
 | `split(join(x)) == x` for marker-free, trimmed `x`; `join` refuses collisions (`value-collides`) | `tests/test_kernel.py`, `test_text_rules.py`; corpus 38 |
 | the artifact never names a field: strategies by role, formats by type/structural key | `schema/entry.schema.json`; corpus 55 |
 | resolution order: artifact type → structural key → runtime binding → kernel default → `*` → `no-format` | `tests/test_formats.py`; corpus 48–50, 55–56 |
 | shipped formats are admitted (hash, self-containment, placement) and never run by `load` | `tests/test_formats.py`; corpus 57–62; Go answers `unclaimed` |
+| streaming refines batch: every text/part split has identical final values or full refusal; field deltas concatenate independently of chunking; both kernels emit the same events at the same feeds; per-feed work does not grow with the reply | corpus harness replays every parse and parse-refusal case whole, one scalar at a time, and at every split through both kernels and compares the Go stream trace with the reference; seeded random multi-chunk fuzz, marker-overlap and scaling tests in `tests/test_streaming.py` and `go/lmcc/stream_test.go` |
 | all refusals fire at bind, never mid-render | refuse-corpus cases (`at: bind`) |
+| every refusal before render carries a `fix` from the closed action vocabulary; both kernels emit the same one; render/parse refusals carry none | `spec/errors.md` (code → fix column, action table), `schema/fix.schema.json`, every pre-render refuse case pins `expect.fix`, `tests/test_coherence.py` (call-site rule in both kernels), `tests/test_fix_hints.py` |
 | data-only entries load with zero registrations | corpus case 08 + empty-registry harness default |
 | kernel imports stdlib only, ships zero vocabulary | `tests/test_agent_surface.py` |
 | artifacts never contain signatures | `schema/entry.schema.json` |
@@ -86,11 +89,16 @@ a decision, derive from these before inventing anything:
   `plan.explain()` is its pretty-printer. Read plans, not code.
 - `plan.skeleton()` (prefill, stops) and `plan.prefix()` (cache-stable
   messages) — what the plan knows about the reply and the prompt.
+- `stream = plan.stream()` → `stream.feed(delta)` emits started/raw-delta
+  events; `stream.finish()` returns EOF events + typed values. Read
+  `plan.describe()["streaming"]` before assuming a route/lens streams.
 - `registry.describe()` → every named format, type binding, strategy,
   lens, and whether this runtime places UDFs.
 - `adapter.dump()` → the artifact. Diff two of them to see any change.
 - Every `Refusal` has `.code` (stable, in `spec/errors.md`), `.hint`
-  (names the offender), and `.partial` (what parsing recovered).
+  (names the offender), `.fix` (the next action as data, on every
+  refusal before render), and `.partial` (what parsing recovered);
+  `.describe()` is all four as a dict.
 - `render(...)` is pure: preview exact bytes without spending anything.
 
 ## Act — the accretion protocol (data first, always)
@@ -114,13 +122,22 @@ Checklists:
   A format declares `accepts`, `direction`, `emits`, `round_trip`.
 - **new capability fact**: row in `spec/vocab/capabilities.md` (minor
   version bump) → a corpus case that predicates on it.
-- **new error code**: row in `spec/errors.md` → a refuse-corpus case
-  asserting it → raised in **both** kernels (the coherence test
-  requires identical code sets). Changing *when* a code fires is
-  breaking.
+- **new error code**: row in `spec/errors.md` (with its fix action, or
+  `—` if it fires at render/parse) → a refuse-corpus case asserting it
+  and, before render, its `fix` → raised in **both** kernels (the
+  coherence test requires identical code sets and checks every call
+  site carries a fix exactly when the table says so). Changing *when* a
+  code fires is breaking.
+- **new fix action**: row in the action table of `spec/errors.md` →
+  branch in `schema/fix.schema.json` → a corpus case pinning it → both
+  kernels emit it. Renaming an action or a parameter is breaking.
 - **kernel change**: touches `spec/kernel.md` first; expect corpus
   changes to be reviewed as contract changes; implement in `python/`
   and `go/` — the corpus will not pass until both agree.
+- **anything that touches streaming**: preserve the §8 refinement law;
+  add every-split tests in both harness drivers; never emit a prefix a
+  later delta can revise; make every forced buffer visible in
+  `plan.describe()["streaming"]`.
 - **anything that touches model text**: use the §7a primitives
   (`core.strip`, `read_integer`, `format_number` / `lmcc.Strip`,
   `ReadInteger`, `FormatNumber`), never the host language's own

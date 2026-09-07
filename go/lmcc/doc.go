@@ -5,7 +5,9 @@
 // Values are plain data: nil, bool, int64, float64, string, []any, and
 // *Object (an insertion-ordered JSON object). Signatures, entries, plans,
 // messages and patches are all built from these, so everything the kernel
-// produces is serializable and comparable.
+// produces is serializable and comparable. Plan.Stream is a pure sans-I/O
+// reducer: Feed accepts text/part deltas; Finish returns EOF events and the
+// same typed values or refusal as batch Parse.
 //
 // Refusals are *Error values with a stable Code (contract/spec/errors.md).
 // Internally the kernel raises them with panic and recovers at every

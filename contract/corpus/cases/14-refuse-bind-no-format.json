@@ -48,6 +48,11 @@
  },
  "expect": {
   "code": "no-format",
+  "fix": {
+   "action": "bind-format",
+   "field": "items",
+   "key": "list[*]"
+  },
   "at": "bind"
  }
 }

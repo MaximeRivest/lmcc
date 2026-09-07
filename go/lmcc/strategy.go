@@ -84,50 +84,50 @@ func (s *Strategy) ToJSON() *Object {
 
 func strategyFromJSON(data *Object, where string) *Strategy {
 	if data == nil {
-		refusef("entry-malformed", "%s: a strategy is an object", where)
+		refuseFixf("entry-malformed", fixEditEntry(where), "%s: a strategy is an object", where)
 	}
 	if data.Has("choose") {
 		alts := data.List("choose")
 		if data.Len() != 1 || len(alts) == 0 {
-			refusef("entry-malformed", "%s: choose is a non-empty list and stands alone", where)
+			refuseFixf("entry-malformed", fixEditEntry(where), "%s: choose is a non-empty list and stands alone", where)
 		}
 		s := &Strategy{Choose: []chooseAlt{}}
 		for i, raw := range alts {
 			aw := where + ".choose[" + strconv.Itoa(i) + "]"
 			alt, ok := raw.(*Object)
 			if !ok {
-				refusef("entry-malformed", "%s: an alternative is an object", aw)
+				refuseFixf("entry-malformed", fixEditEntry(aw), "%s: an alternative is an object", aw)
 			}
 			if alt.Has("else") {
 				if alt.Len() != 1 || i != len(alts)-1 {
-					refusef("entry-malformed", "%s: else stands alone and comes last", aw)
+					refuseFixf("entry-malformed", fixEditEntry(aw), "%s: else stands alone and comes last", aw)
 				}
 				s.Choose = append(s.Choose, chooseAlt{nil, strategyFromJSON(alt.Object("else"), aw)})
 			} else if alt.Len() == 2 && alt.Has("when") && alt.Has("use") {
 				validatePredicate(mustGet(alt, "when"), aw+".when")
 				s.Choose = append(s.Choose, chooseAlt{alt.Object("when"), strategyFromJSON(alt.Object("use"), aw)})
 			} else {
-				refusef("entry-malformed", "%s: an alternative is {when, use} or {else}", aw)
+				refuseFixf("entry-malformed", fixEditEntry(aw), "%s: an alternative is {when, use} or {else}", aw)
 			}
 		}
 		return s
 	}
 	for _, k := range data.Keys {
 		if !contains(strategyKeys, k) {
-			refusef("entry-malformed", "%s: unknown strategy key %q; known keys are %v", where, k, strategyKeys)
+			refuseFixf("entry-malformed", fixEditEntry(where), "%s: unknown strategy key %q; known keys are %v", where, k, strategyKeys)
 		}
 	}
 	s := NewStrategy()
 	if data.Has("when") {
 		s.When = data.Object("when")
 		if s.When == nil {
-			refusef("entry-malformed", "%s.when: a predicate is one of %v, one key", where, predicateKeys)
+			refuseFixf("entry-malformed", fixEditEntry(where+".when"), "%s.when: a predicate is one of %v, one key", where, predicateKeys)
 		}
 	}
 	for _, r := range data.List("requires") {
 		rs, ok := r.(string)
 		if !ok {
-			refusef("entry-malformed", "%s: requires names facts", where)
+			refuseFixf("entry-malformed", fixEditEntry(where), "%s: requires names facts", where)
 		}
 		s.Requires = append(s.Requires, rs)
 	}
@@ -144,7 +144,7 @@ func strategyFromJSON(data *Object, where string) *Strategy {
 	for _, r := range data.List("routings") {
 		ro, ok := r.(*Object)
 		if !ok {
-			refusef("entry-malformed", "%s: each routing is an object", where)
+			refuseFixf("entry-malformed", fixEditEntry(where), "%s: each routing is an object", where)
 		}
 		s.Routings = append(s.Routings, ro.Clone())
 	}
@@ -167,16 +167,16 @@ func (s *Strategy) validate(where string) {
 	for _, target := range s.Placement.Keys {
 		place, ok := s.Placement.Str(target)
 		if !toRE.MatchString(target) || !ok || !placementRE.MatchString(place) {
-			refusef("entry-malformed", "%s.placement: %q: %v — a placement is '@role' or '@role.<sub>' → 'controls.<key>' or 'message:<role>'", where, target, mustGet(s.Placement, target))
+			refuseFixf("entry-malformed", fixEditEntry(where+".placement"), "%s.placement: %q: %v — a placement is '@role' or '@role.<sub>' → 'controls.<key>' or 'message:<role>'", where, target, mustGet(s.Placement, target))
 		}
 	}
 	for _, k := range s.Fragments.Keys {
 		if _, ok := s.Fragments.Str(k); !ok || (k != "system" && k != "user" && k != "assistant") {
-			refusef("entry-malformed", "%s.fragments: %q must name a message role, text", where, k)
+			refuseFixf("entry-malformed", fixEditEntry(where+".fragments"), "%s.fragments: %q must name a message role, text", where, k)
 		}
 	}
 	if !s.Visible && len(s.Routings) == 0 && s.Placement.Len() == 0 {
-		refusef("entry-malformed", "%s: visible=false but no routing or placement serves the field — the value would be unrecoverable", where)
+		refuseFixf("entry-malformed", fixEditEntry(where), "%s: visible=false but no routing or placement serves the field — the value would be unrecoverable", where)
 	}
 }
 
@@ -184,14 +184,14 @@ func validateRouting(r *Object, where string) {
 	src, _ := r.Str("from")
 	to, _ := r.Str("to")
 	if !fromRE.MatchString(src) {
-		refusef("entry-malformed", "%s: 'from' is 'text' or 'channel:<part kind>'", where)
+		refuseFixf("entry-malformed", fixEditEntry(where), "%s: 'from' is 'text' or 'channel:<part kind>'", where)
 	}
 	if !toRE.MatchString(to) {
-		refusef("entry-malformed", "%s: 'to' is '@role' or '@role.<sub>'", where)
+		refuseFixf("entry-malformed", fixEditEntry(where), "%s: 'to' is '@role' or '@role.<sub>'", where)
 	}
 	for _, k := range r.Keys {
 		if !contains([]string{"from", "to", "consume", "between", "pattern", "line_prefixed"}, k) {
-			refusef("entry-malformed", "%s: unknown routing key %q", where, k)
+			refuseFixf("entry-malformed", fixEditEntry(where), "%s: unknown routing key %q", where, k)
 		}
 	}
 	var kinds []string
@@ -202,7 +202,7 @@ func validateRouting(r *Object, where string) {
 	}
 	if src == "text" {
 		if len(kinds) != 1 {
-			refusef("entry-malformed", "%s: a text routing needs exactly one of between/pattern/line_prefixed", where)
+			refuseFixf("entry-malformed", fixEditEntry(where), "%s: a text routing needs exactly one of between/pattern/line_prefixed", where)
 		}
 		switch kinds[0] {
 		case "between":
@@ -214,57 +214,57 @@ func validateRouting(r *Object, where string) {
 				}
 			}
 			if !ok {
-				refusef("entry-malformed", "%s: between is [open, close], non-empty strings", where)
+				refuseFixf("entry-malformed", fixEditEntry(where), "%s: between is [open, close], non-empty strings", where)
 			}
 		case "pattern":
 			re, ok := r.Str("pattern")
 			if !ok || re == "" {
-				refusef("entry-malformed", "%s: pattern is a non-empty string", where)
+				refuseFixf("entry-malformed", fixEditEntry(where), "%s: pattern is a non-empty string", where)
 			}
 			checkRE2(re, where)
 		case "line_prefixed":
 			if p, ok := r.Str("line_prefixed"); !ok || p == "" {
-				refusef("entry-malformed", "%s: line_prefixed is a non-empty string", where)
+				refuseFixf("entry-malformed", fixEditEntry(where), "%s: line_prefixed is a non-empty string", where)
 			}
 		}
 	} else if len(kinds) > 0 || r.Bool("consume", false) {
-		refusef("entry-malformed", "%s: a channel routing takes no text extractor and no consume", where)
+		refuseFixf("entry-malformed", fixEditEntry(where), "%s: a channel routing takes no text extractor and no consume", where)
 	}
 }
 
 func checkRE2(re, where string) {
 	if hit := nonRE2.FindString(escapes.ReplaceAllString(re, "")); hit != "" {
-		refusef("entry-malformed", "%s: regex %q uses %q, which is outside the portable RE2 dialect (no lookaround, backreferences, named groups, atomic or possessive constructs)", where, re, hit)
+		refuseFixf("entry-malformed", fixEditEntry(where), "%s: regex %q uses %q, which is outside the portable RE2 dialect (no lookaround, backreferences, named groups, atomic or possessive constructs)", where, re, hit)
 	}
 	if _, err := regexp.Compile("(?s)" + re); err != nil {
-		refusef("entry-malformed", "%s: regex %q does not compile: %v", where, re, err)
+		refuseFixf("entry-malformed", fixEditEntry(where), "%s: regex %q does not compile: %v", where, re, err)
 	}
 }
 
 func validatePredicate(p any, where string) {
 	po, ok := p.(*Object)
 	if !ok || po.Len() != 1 {
-		refusef("entry-malformed", "%s: a predicate is one of %v, one key", where, predicateKeys)
+		refuseFixf("entry-malformed", fixEditEntry(where), "%s: a predicate is one of %v, one key", where, predicateKeys)
 	}
 	key := po.Keys[0]
 	value, _ := po.Get(key)
 	switch key {
 	case "capability":
 		if _, ok := value.(string); !ok {
-			refusef("entry-malformed", "%s: 'capability' names a fact", where)
+			refuseFixf("entry-malformed", fixEditEntry(where), "%s: 'capability' names a fact", where)
 		}
 	case "not":
 		validatePredicate(value, where)
 	case "all", "any":
 		list, ok := value.([]any)
 		if !ok {
-			refusef("entry-malformed", "%s: %q takes a list", where, key)
+			refuseFixf("entry-malformed", fixEditEntry(where), "%s: %q takes a list", where, key)
 		}
 		for _, q := range list {
 			validatePredicate(q, where)
 		}
 	default:
-		refusef("entry-malformed", "%s: unknown predicate key %q; known: %v", where, key, predicateKeys)
+		refuseFixf("entry-malformed", fixEditEntry(where), "%s: unknown predicate key %q; known: %v", where, key, predicateKeys)
 	}
 }
 
@@ -303,16 +303,23 @@ func (s *Strategy) selectFor(capabilities *Object, role, name string) *Strategy 
 			}
 		}
 		if chosen == nil {
-			refusef("capability-missing", "role %q: strategy %q: no alternative of 'choose' holds for the declared capabilities and there is no else", role, name)
+			whens := []any{}
+			for _, alt := range s.Choose {
+				whens = append(whens, DeepClone(alt.When))
+			}
+			refuseFixf("capability-missing", Obj("action", "satisfy-predicate", "role", role, "predicate", Obj("any", whens)),
+				"role %q: strategy %q: no alternative of 'choose' holds for the declared capabilities and there is no else", role, name)
 		}
 		s = chosen
 	}
 	if s.When != nil && !evalPredicate(s.When, capabilities) {
-		refusef("capability-missing", "role %q: strategy %q: 'when' %s is false for the declared capabilities", role, name, MarshalJSON(s.When, -1))
+		refuseFixf("capability-missing", Obj("action", "satisfy-predicate", "role", role, "predicate", DeepClone(s.When)),
+			"role %q: strategy %q: 'when' %s is false for the declared capabilities", role, name, MarshalJSON(s.When, -1))
 	}
 	for _, fact := range s.Requires {
 		if !capabilities.Bool(fact, false) {
-			refusef("capability-missing", "role %q: strategy %q requires capability %q, which the model does not declare", role, name, fact)
+			refuseFixf("capability-missing", Obj("action", "declare-capability", "fact", fact),
+				"role %q: strategy %q requires capability %q, which the model does not declare", role, name, fact)
 		}
 	}
 	return s

@@ -111,6 +111,34 @@ except lmcc.Refusal as err:
     assert err.code == "value-collides"
 ```
 
+### Read a reply as it arrives
+
+`parse()` reads a complete reply. `stream()` reads the same reply in
+pieces, without owning a network connection:
+
+```python
+stream = plan.stream()
+events = stream.feed("<title>\nDu")
+events += stream.feed("ne\n</title>\n<year>\n1965\n</year>\n<confident>\nyes\n</confident>")
+end = stream.finish()
+assert end.values == {"title": "Dune", "year": 1965, "confident": True}
+assert "".join(e["text"] for e in events + end.events
+               if e["kind"] == "field_delta" and e["field"] == "title") == "Dune"
+```
+
+`feed` accepts a text delta or one part delta such as
+`{"kind": "thinking", "text": "…"}`. It emits `field_started` and
+safe `field_delta` events. It holds trailing spaces and partial markers
+because later text can change their meaning. `finish` returns the final
+events and values. It emits typed `field_done` events only after the
+whole reply passes the same checks as `parse()`.
+
+The rule is strict: every way to split one reply gives the same final
+values or refusal, and each field's deltas join to the raw text that
+batch parsing captured. Regex routings and lenses without a streaming
+face buffer until EOF; `plan.describe()["streaming"]` states every such
+choice and its reason.
+
 ## 5. Refusal is the interface
 
 Every failure has a stable code (`contract/spec/errors.md`), a hint that
@@ -136,7 +164,17 @@ try:
     raise AssertionError("should have refused")
 except lmcc.Refusal as err:
     assert err.code == "not-lensable"           # no anchor before the hole
+    assert err.fix == {"action": "edit-template", "path": "template[0]", "field": "title"}
 ```
+
+The last one shows the fourth face of a refusal. Every refusal that
+fires *before render* — at signature, load, or bind — carries a `fix`:
+the one next action as plain data, from a closed vocabulary
+(`contract/spec/errors.md`, "Fix actions"). Its parameters are names a
+program can act on (a field, a role, a capability fact, a vocabulary
+name, a path into the artifact), never prose. `err.describe()` is the
+whole refusal as a dict. Render and parse refusals carry `fix: None`:
+what to do about a bad value or a bad reply is orchestration.
 
 ## 6. Bare output slots — spell any pattern
 

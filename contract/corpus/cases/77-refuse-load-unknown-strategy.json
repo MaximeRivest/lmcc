@@ -1,15 +1,12 @@
 {
- "name": "refuse-bind-format-shape-mismatch",
+ "name": "refuse-load-unknown-strategy",
  "kind": "refuse",
- "vocab": [
-  "std"
- ],
  "entry": {
-  "name": "mismatch_v1",
+  "name": "missing_pack_v1",
   "versions": {
    "kernel": "0.2.0",
    "vocab": {
-    "format/table": "0.1.0"
+    "strategy/no_such_strategy": "0.1.0"
    }
   },
   "template": [
@@ -25,19 +22,14 @@
   "parse": {
    "kind": "derived"
   },
-  "formats": {
-   "string": {
-    "use": "table",
-    "options": {
-     "columns": [
-      "a"
-     ]
-    }
+  "strategies": {
+   "reasoning": {
+    "use": "no_such_strategy"
    }
   }
  },
  "signature": {
-  "instructions": "x",
+  "instructions": "Answer.",
   "fields": [
    {
     "name": "q",
@@ -47,7 +39,15 @@
     }
    },
    {
-    "name": "a",
+    "name": "reasoning",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    },
+    "role": "reasoning"
+   },
+   {
+    "name": "answer",
     "direction": "output",
     "shape": {
      "type": "string"
@@ -56,12 +56,12 @@
   ]
  },
  "expect": {
-  "code": "format-shape-mismatch",
+  "code": "unknown-strategy",
   "fix": {
-   "action": "bind-format",
-   "field": "q",
-   "key": "string"
+   "action": "install-vocabulary",
+   "kind": "strategy",
+   "name": "no_such_strategy"
   },
-  "at": "bind"
+  "at": "load"
  }
 }

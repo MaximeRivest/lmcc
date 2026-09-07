@@ -1,16 +1,11 @@
 {
- "name": "refuse-bind-format-shape-mismatch",
+ "name": "refuse-load-template-syntax",
  "kind": "refuse",
- "vocab": [
-  "std"
- ],
  "entry": {
-  "name": "mismatch_v1",
+  "name": "bare_brace_v1",
   "versions": {
    "kernel": "0.2.0",
-   "vocab": {
-    "format/table": "0.1.0"
-   }
+   "vocab": {}
   },
   "template": [
    {
@@ -19,25 +14,15 @@
    },
    {
     "role": "user",
-    "text": "{q}"
+    "text": "Question: {q"
    }
   ],
   "parse": {
    "kind": "derived"
-  },
-  "formats": {
-   "string": {
-    "use": "table",
-    "options": {
-     "columns": [
-      "a"
-     ]
-    }
-   }
   }
  },
  "signature": {
-  "instructions": "x",
+  "instructions": "Answer.",
   "fields": [
    {
     "name": "q",
@@ -47,7 +32,7 @@
     }
    },
    {
-    "name": "a",
+    "name": "answer",
     "direction": "output",
     "shape": {
      "type": "string"
@@ -56,12 +41,11 @@
   ]
  },
  "expect": {
-  "code": "format-shape-mismatch",
+  "code": "template-syntax",
   "fix": {
-   "action": "bind-format",
-   "field": "q",
-   "key": "string"
+   "action": "edit-template",
+   "path": "template[1]"
   },
-  "at": "bind"
+  "at": "load"
  }
 }

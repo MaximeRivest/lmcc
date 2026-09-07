@@ -58,6 +58,10 @@
  },
  "expect": {
   "code": "format-not-self-contained",
+  "fix": {
+   "action": "reship-udf",
+   "path": "formats['Person'].write"
+  },
   "at": "load"
  }
 }

@@ -78,14 +78,16 @@ def compile_template(text: str, *, where: str = "template") -> list[Node]:
             source = m.group("source")
             if source not in LOOP_SOURCES:
                 refuse("template-syntax",
-                       f"{where}: loop source {source!r} is not one of {LOOP_SOURCES}")
+                       f"{where}: loop source {source!r} is not one of {LOOP_SOURCES}",
+                       fix={"action": "edit-template", "path": where})
             loop = Loop(m.group("var"), source, [])
             current.append(loop)
             stack.append((loop, current))
             current = loop.body
         elif m.group("end"):
             if not stack:
-                refuse("template-syntax", f"{where}: {{% endfor %}} without an open loop")
+                refuse("template-syntax", f"{where}: {{% endfor %}} without an open loop",
+                       fix={"action": "edit-template", "path": where})
             _, current = stack.pop()
         else:
             current.append(Slot(m.group("path")))
@@ -95,7 +97,8 @@ def compile_template(text: str, *, where: str = "template") -> list[Node]:
     if tail:
         current.append(Text(tail))
     if stack:
-        refuse("template-syntax", f"{where}: unclosed {{% for %}} loop")
+        refuse("template-syntax", f"{where}: unclosed {{% for %}} loop",
+               fix={"action": "edit-template", "path": where})
     return root
 
 
@@ -103,7 +106,8 @@ def _check_literal(literal: str, where: str) -> None:
     for ch in ("{", "}"):
         if ch in literal:
             refuse("template-syntax",
-                   f"{where}: bare {ch!r} — use {ch * 2!r} to render a literal brace")
+                   f"{where}: bare {ch!r} — use {ch * 2!r} to render a literal brace",
+                   fix={"action": "edit-template", "path": where})
 
 
 def validate_nodes(nodes: list[Node], *, known_fields: set[str],
@@ -119,21 +123,23 @@ def validate_nodes(nodes: list[Node], *, known_fields: set[str],
                 attr = path[len(in_loop_var) + 1:]
                 if attr not in LOOP_ATTRS:
                     refuse("unknown-slot",
-                           f"{where}: {{{path}}} — loop attributes are {LOOP_ATTRS}")
+                           f"{where}: {{{path}}} — loop attributes are {LOOP_ATTRS}",
+                           fix={"action": "edit-template", "path": where, "slot": path})
                 continue
             if path in ("instruction", "format"):
                 continue  # reserved slots; they shadow same-named fields
             if "." in path:
                 refuse("unknown-slot",
                        f"{where}: {{{path}}} — dotted slots are only valid inside "
-                       f"their loop")
+                       f"their loop", fix={"action": "edit-template", "path": where, "slot": path})
             if path in input_fields:
                 covered.add(path)
                 continue
             if path in known_fields:
                 continue  # an output slot: renders its placeholder (kernel §2)
             refuse("unknown-slot",
-                   f"{where}: {{{path}}} names no field in the signature")
+                   f"{where}: {{{path}}} names no field in the signature",
+                   fix={"action": "edit-template", "path": where, "slot": path})
         elif isinstance(node, Loop):
             covered |= validate_nodes(
                 node.body, known_fields=known_fields, input_fields=input_fields,

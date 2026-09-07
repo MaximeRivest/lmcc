@@ -53,7 +53,8 @@ class Registry:
         if entry is None:
             refuse("unknown-format",
                    f"format {name!r} is not registered — install the package that "
-                   f"provides it, or ship the format with the artifact")
+                   f"provides it, or ship the format with the artifact",
+                   fix={"action": "install-vocabulary", "kind": "format", "name": name})
         fmt = entry.factory(options or {})
         fmt.name = name
         return fmt
@@ -67,7 +68,8 @@ class Registry:
             binding: Format | dict = {"use": use, "options": options or {}}
         else:
             if write is None:
-                refuse("entry-malformed", "a format needs at least write")
+                refuse("entry-malformed", "a format needs at least write",
+                       fix={"action": "edit-entry", "path": "write"})
             binding = make(write=write, read=read, describe=describe, **facts)
         self.type_bindings.append((host_type, binding))
         return binding if isinstance(binding, Format) else self.named_format(use, options)
@@ -97,7 +99,8 @@ class Registry:
         if entry is None:
             refuse("unknown-strategy",
                    f"strategy {name!r} is not registered — install the package that "
-                   f"provides it, or inline the strategy as data")
+                   f"provides it, or inline the strategy as data",
+                   fix={"action": "install-vocabulary", "kind": "strategy", "name": name})
         return entry.factory(options or {})
 
     # -------------------------------------------------------------- lenses
@@ -116,7 +119,8 @@ class Registry:
         if entry is None:
             refuse("unknown-parse-kind",
                    f"parse kind {kind!r} is neither the kernel lens 'derived' nor a "
-                   f"registered lens — install the package that provides it")
+                   f"registered lens — install the package that provides it",
+                   fix={"action": "install-vocabulary", "kind": "lens", "name": str(kind)})
         return entry.factory(spec)
 
     # ------------------------------------------------------------ describe

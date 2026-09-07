@@ -53,19 +53,19 @@ func (s *Signature) FieldNamed(name string) *Field {
 func SignatureFromJSON(data *Object) (sig *Signature, err error) {
 	defer catch(&err)
 	if data == nil {
-		refuse("signature-malformed", "a signature is an object with a fields list")
+		refuseFix("signature-malformed", fixEditSignature(""), "a signature is an object with a fields list")
 	}
 	sig = &Signature{}
 	sig.Instructions, _ = data.Str("instructions")
 	if raw, ok := data.Get("fields"); ok {
 		list, ok := raw.([]any)
 		if !ok {
-			refuse("signature-malformed", "fields must be a list")
+			refuseFix("signature-malformed", fixEditSignature(""), "fields must be a list")
 		}
 		for _, item := range list {
 			fo, ok := item.(*Object)
 			if !ok {
-				refuse("signature-malformed", "each field is an object")
+				refuseFix("signature-malformed", fixEditSignature(""), "each field is an object")
 			}
 			f := &Field{Role: "plain"}
 			f.Name, _ = fo.Str("name")
@@ -74,7 +74,7 @@ func SignatureFromJSON(data *Object) (sig *Signature, err error) {
 			if t, ok := fo.Get("type"); ok {
 				ts, isStr := t.(string)
 				if !isStr {
-					refusef("signature-malformed", "field %q: type must be a string", f.Name)
+					refuseFixf("signature-malformed", fixEditSignature(f.Name), "field %q: type must be a string", f.Name)
 				}
 				f.Type = ts
 			}
@@ -84,7 +84,7 @@ func SignatureFromJSON(data *Object) (sig *Signature, err error) {
 			if d, ok := fo.Get("desc"); ok {
 				s, ok := d.(string)
 				if !ok {
-					refusef("signature-malformed", "field %q: desc must be a string", f.Name)
+					refuseFixf("signature-malformed", fixEditSignature(f.Name), "field %q: desc must be a string", f.Name)
 				}
 				f.Desc = &s
 			}
@@ -118,23 +118,23 @@ func validateSignature(sig *Signature) {
 	seen := map[string]bool{}
 	for _, f := range sig.Fields {
 		if !IsIdentifier(f.Name) {
-			refusef("signature-malformed",
+			refuseFixf("signature-malformed", fixEditSignature(f.Name),
 				"field name %q is not an ASCII identifier ([A-Za-z_][A-Za-z0-9_]*)", f.Name)
 		}
 		if seen[f.Name] {
-			refusef("signature-malformed", "field %q is declared twice", f.Name)
+			refuseFixf("signature-malformed", fixEditSignature(f.Name), "field %q is declared twice", f.Name)
 		}
 		seen[f.Name] = true
 		if f.Direction != "input" && f.Direction != "output" {
-			refusef("signature-malformed", "field %q: direction %q is not input/output",
-				f.Name, f.Direction)
+			refuseFixf("signature-malformed", fixEditSignature(f.Name),
+				"field %q: direction %q is not input/output", f.Name, f.Direction)
 		}
 		if f.Shape == nil {
-			refusef("signature-malformed", "field %q: shape must be an object", f.Name)
+			refuseFixf("signature-malformed", fixEditSignature(f.Name), "field %q: shape must be an object", f.Name)
 		}
 		if !roleRE.MatchString(f.Role) {
-			refusef("signature-malformed", "field %q: role %q is not a (dotted) identifier",
-				f.Name, f.Role)
+			refuseFixf("signature-malformed", fixEditSignature(f.Name),
+				"field %q: role %q is not a (dotted) identifier", f.Name, f.Role)
 		}
 	}
 }
@@ -210,7 +210,7 @@ func StructSignature(instructions string, in, out any, reg *Registry) (sig *Sign
 			t = t.Elem()
 		}
 		if t.Kind() != reflect.Struct {
-			refusef("unmapped-type", "%s side: %v is not a struct", dir.d, t)
+			refuseFixf("unmapped-type", fixEditSignature(""), "%s side: %v is not a struct", dir.d, t)
 		}
 		for i := 0; i < t.NumField(); i++ {
 			sf := t.Field(i)
@@ -250,7 +250,7 @@ func typeToShape(typ any, reg *Registry, fieldName string) (*Object, reflect.Typ
 	case reflect.Type:
 		return reflectShape(x, reg, fieldName), x
 	case nil:
-		refusef("unmapped-type", "field %q: no type given", fieldName)
+		refuseFixf("unmapped-type", fixEditSignature(fieldName), "field %q: no type given", fieldName)
 	}
 	t := reflect.TypeOf(typ)
 	return reflectShape(t, reg, fieldName), t
@@ -306,7 +306,7 @@ func reflectShape(t reflect.Type, reg *Registry, fieldName string) *Object {
 		}
 		return Obj("type", "object", "properties", props, "required", required)
 	}
-	refusef("unmapped-type",
+	refuseFixf("unmapped-type", fixEditSignature(fieldName),
 		"field %q: cannot map Go type %v to a shape; pass a raw shape, or lower it in your frontend",
 		fieldName, t)
 	return nil
@@ -422,7 +422,30 @@ func enumSpelling(v any) string {
 // ------------------------------------------------------ scalar spell/read
 
 // SpellValue: kernel §7a writing direction.
-func SpellValue(shape *Object, value any, where string) string {
+// fixEditSignature: edit-signature naming the field when there is one.
+func fixEditSignature(field string) *Object {
+	if field == "" {
+		return Obj("action", "edit-signature")
+	}
+	return Obj("action", "edit-signature", "field", field)
+}
+
+// FormatKey: the artifact key a format for this field binds under
+// (errors.md, bind-format): the type name when the frontend spelled one,
+// else the most specific structural key, else "*".
+func FormatKey(typeName string, shape *Object) string {
+	if typeName != "" {
+		return typeName
+	}
+	if keys := StructuralKeys(shape); len(keys) > 0 {
+		return keys[0]
+	}
+	return "*"
+}
+
+// SpellValue spells a scalar; field names the field for the no-format fix
+// (it may equal where when no field is known).
+func SpellValue(shape *Object, value any, where, field string) string {
 	shape, nullable := NullableBase(shape)
 	if value == nil {
 		if nullable {
@@ -473,7 +496,8 @@ func SpellValue(shape *Object, value any, where string) string {
 	if s, ok := value.(string); ok {
 		return s
 	}
-	refusef("no-format", "%s: value of type %T has no format and is not a scalar — bind a format for this field",
+	refuseFixf("no-format", fixBindFormat(field, FormatKey("", shape)),
+		"%s: value of type %T has no format and is not a scalar — bind a format for this field",
 		where, value)
 	return ""
 }

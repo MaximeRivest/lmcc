@@ -103,6 +103,11 @@ class Lens:
     def skeleton(self) -> dict:
         return {}
 
+    def stream(self, field_names: list[str]):
+        """Optional kernel §8 face. Vocabulary lenses override this and
+        return a reducer with ``feed(text_delta)`` and ``finish()``."""
+        return None
+
 
 def _cut_at_close(chunk: str, close: str, name: str) -> str:
     if not close:

@@ -58,9 +58,8 @@ def test_fn_lowers_parameters_return_and_docstring():
     s2 = solve.signature
     assert [(f.name, f.role, f.type) for f in s2.outputs] == [
         ("reasoning", "reasoning", "str"), ("answer", "plain", "int")]
-    with pytest.raises(lmcc.Refusal) as err:
+    with pytest.raises(TypeError, match="not a callable"):   # host API misuse, not a refusal
         answer("x")
-    assert err.value.code == "entry-malformed"
 
 
 def test_bind_render_parse_round_trip():

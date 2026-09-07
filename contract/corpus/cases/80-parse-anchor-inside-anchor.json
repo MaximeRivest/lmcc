@@ -1,8 +1,8 @@
 {
- "name": "refuse-not-lensable",
- "kind": "refuse",
+ "name": "parse-anchor-inside-anchor",
+ "kind": "parse",
  "entry": {
-  "name": "derived_bad_v1",
+  "name": "markdown_v1",
   "versions": {
    "kernel": "0.2.0",
    "vocab": {}
@@ -10,7 +10,7 @@
   "template": [
    {
     "role": "system",
-    "text": "{instruction}\n{% for f in outputs %}{f.value}\n{% endfor %}"
+    "text": "{instruction}\nReply exactly like this:\n**Reasoning:**{reasoning}**Answer:**{answer}"
    },
    {
     "role": "user",
@@ -32,6 +32,13 @@
     }
    },
    {
+    "name": "reasoning",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
     "name": "answer",
     "direction": "output",
     "shape": {
@@ -40,13 +47,11 @@
    }
   ]
  },
+ "response": "**Reasoning:**Answer:** Paris",
  "expect": {
-  "code": "not-lensable",
-  "fix": {
-   "action": "edit-template",
-   "path": "template[0]",
-   "field": "answer"
-  },
-  "at": "bind"
+  "values": {
+   "reasoning": "",
+   "answer": "Paris"
+  }
  }
 }

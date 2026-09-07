@@ -29,7 +29,8 @@ def assistant(text: str) -> dict:
 
 def message(role: str, text: str) -> dict:
     if role not in ("system", "user", "assistant"):
-        refuse("entry-malformed", f"message role {role!r} must be system/user/assistant")
+        refuse("entry-malformed", f"message role {role!r} must be system/user/assistant",
+               fix={"action": "edit-entry", "path": "template"})
     return {"role": role, "text": text}
 
 
@@ -43,7 +44,8 @@ def history() -> dict:
 
 def directive(kind: str) -> dict:
     if kind not in ("demos", "history"):
-        refuse("entry-malformed", f"directive {kind!r} must be 'demos' or 'history'")
+        refuse("entry-malformed", f"directive {kind!r} must be 'demos' or 'history'",
+               fix={"action": "edit-entry", "path": "template"})
     return {"directive": kind}
 
 
@@ -90,18 +92,23 @@ def adapter(*, messages: list[dict] | None = None, template: list[dict] | dict |
     if messages is None:
         messages = template.get("messages") if isinstance(template, dict) else template
     if not isinstance(messages, list):
-        refuse("entry-malformed", "template must be a list of messages and directives")
+        refuse("entry-malformed", "template must be a list of messages and directives",
+               fix={"action": "edit-entry", "path": "template"})
     for i, m in enumerate(messages):
         if not isinstance(m, dict) or not ({"role", "text"} <= set(m) or "directive" in m):
-            refuse("entry-malformed", f"template[{i}]: a message is {{role, text}} or {{directive}}")
+            refuse("entry-malformed", f"template[{i}]: a message is {{role, text}} or {{directive}}",
+                   fix={"action": "edit-entry", "path": f"template[{i}]"})
         if "directive" in m and m["directive"] not in ("demos", "history"):
-            refuse("entry-malformed", f"template[{i}]: directive must be demos or history")
+            refuse("entry-malformed", f"template[{i}]: directive must be demos or history",
+                   fix={"action": "edit-entry", "path": f"template[{i}]"})
         if "role" in m and m["role"] not in ("system", "user", "assistant"):
-            refuse("entry-malformed", f"template[{i}]: role must be system/user/assistant")
+            refuse("entry-malformed", f"template[{i}]: role must be system/user/assistant",
+                   fix={"action": "edit-entry", "path": f"template[{i}]"})
     parse = parse or {"kind": "derived"}
     kind = parse.get("kind")
     if not isinstance(kind, str) or not kind:
-        refuse("unknown-parse-kind", "parse.kind must name a lens")
+        refuse("unknown-parse-kind", "parse.kind must name a lens",
+               fix={"action": "edit-entry", "path": "parse"})
     s_bindings: dict[str, object] = {}
     for role, value in (strategies or {}).items():
         where = f"strategies[{role!r}]"
@@ -115,7 +122,8 @@ def adapter(*, messages: list[dict] | None = None, template: list[dict] | dict |
         elif isinstance(value, dict):
             s_bindings[role] = Strategy.from_dict(value, where=where)
         else:
-            refuse("entry-malformed", f"{where}: expected a name, Strategy, use(...), or dict")
+            refuse("entry-malformed", f"{where}: expected a name, Strategy, use(...), or dict",
+                   fix={"action": "edit-entry", "path": where})
     f_bindings: dict[str, object] = {}
     for key, value in (formats or {}).items():
         where = f"formats[{key!r}]"
@@ -128,7 +136,8 @@ def adapter(*, messages: list[dict] | None = None, template: list[dict] | dict |
         elif hasattr(value, "write"):
             f_bindings[key] = value
         else:
-            refuse("entry-malformed", f"{where}: expected a name, use(...), a shipped format, or a Format")
+            refuse("entry-malformed", f"{where}: expected a name, use(...), a shipped format, or a Format",
+                   fix={"action": "edit-entry", "path": where})
     adp = Adapter(template=list(messages), parse=dict(parse), strategies=s_bindings,
                   formats=f_bindings, name=name)
     adp.compiled_messages()  # surface template syntax errors immediately

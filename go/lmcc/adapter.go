@@ -30,13 +30,13 @@ func NewAdapter(name string, template []*Object, parse *Object, strategies, form
 		a.Parse = Obj("kind", "derived")
 	}
 	if kind, ok := a.Parse.Str("kind"); !ok || kind == "" {
-		refuse("unknown-parse-kind", "parse.kind must name a lens")
+		refuseFix("unknown-parse-kind", fixEditEntry("parse"), "parse.kind must name a lens")
 	}
 	for i, m := range template {
 		where := "template[" + strconv.Itoa(i) + "]"
 		if d, ok := m.Str("directive"); ok {
 			if d != "demos" && d != "history" {
-				refusef("entry-malformed", "%s: directive must be demos or history", where)
+				refuseFixf("entry-malformed", fixEditEntry(where), "%s: directive must be demos or history", where)
 			}
 			a.Template = append(a.Template, m.Clone())
 			a.compiled = append(a.compiled, nil)
@@ -45,7 +45,7 @@ func NewAdapter(name string, template []*Object, parse *Object, strategies, form
 		role, _ := m.Str("role")
 		text, ok := m.Str("text")
 		if (role != "system" && role != "user" && role != "assistant") || !ok {
-			refusef("entry-malformed", "%s: a message is {role, text} or {directive}", where)
+			refuseFixf("entry-malformed", fixEditEntry(where), "%s: a message is {role, text} or {directive}", where)
 		}
 		a.Template = append(a.Template, m.Clone())
 		a.compiled = append(a.compiled, compileTemplate(text, where))

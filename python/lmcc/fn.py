@@ -29,7 +29,8 @@ class Role:
 
     def __class_getitem__(cls, item):
         if not (isinstance(item, tuple) and len(item) == 2 and isinstance(item[0], str)):
-            refuse("unmapped-type", "Role takes [name, type], e.g. Role['reasoning', str]")
+            refuse("unmapped-type", "Role takes [name, type], e.g. Role['reasoning', str]",
+                   fix={"action": "edit-signature"})
         return typing.Annotated[item[1], cls(item[0])]
 
     def __init__(self, name: str):
@@ -72,9 +73,9 @@ class Fn:
         return adapter.bind(self.signature, capabilities or {}, registry=registry)
 
     def __call__(self, *a, **kw):
-        refuse("entry-malformed",
-               f"{self.__name__} is a signature, not a callable: bind it to an adapter, "
-               f"render, send with your client, then parse")
+        raise TypeError(
+            f"{self.__name__} is a signature, not a callable: bind it to an adapter, "
+            f"render, send with your client, then parse")
 
 
 def fn(func=None, *, registry=None):
@@ -91,12 +92,14 @@ def _lower(func, registry) -> core.SignatureCore:
     fields: list[core.Field] = []
     for name, param in sig.parameters.items():
         if name not in hints:
-            refuse("unmapped-type", f"parameter {name!r} has no type annotation")
+            refuse("unmapped-type", f"parameter {name!r} has no type annotation",
+                   fix={"action": "edit-signature", "field": name})
         ann, role = _split_role(hints[name])
         fields.append(core.Field(name, "input", core.annotation_to_shape(ann, registry, field_name=name),
                                  type=core.typename(ann), role=role, annotation=ann))
     if "return" not in hints:
-        refuse("unmapped-type", f"{func.__name__}: no return annotation — the return type is the output")
+        refuse("unmapped-type", f"{func.__name__}: no return annotation — the return type is the output",
+               fix={"action": "edit-signature", "field": func.__name__})
     ret, role, one = _unwrap(hints["return"])
     if dataclasses.is_dataclass(ret) and isinstance(ret, type) and not one:
         for df in dataclasses.fields(ret):
