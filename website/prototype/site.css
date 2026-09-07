@@ -177,8 +177,8 @@ main {
   margin: 0 auto;
   padding: var(--s2) var(--s3) var(--s5);
 }
-.prose { max-width: var(--measure); }
-.prose > pre, .prose > figure { max-width: none; }
+.prose > :not(pre, figure, table) { max-width: var(--measure); }
+.prose > table { max-width: 60rem; }
 
 .site-footer {
   border-top: 1px solid var(--border);
@@ -227,7 +227,7 @@ section.band > h2 { margin-top: 0; }
   grid-template-columns: minmax(0, 1fr);
 }
 @media (min-width: 60rem) {
-  .two-col { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); }
+  .two-col { grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); }
 }
 
 /* The wire: a list of messages, the site's primary visual element. */
@@ -274,6 +274,7 @@ section.band > h2 { margin-top: 0; }
 
 /* status page */
 .status-table td:first-child { white-space: nowrap; }
+.status-table td:nth-child(2) { width: 55%; }
 .tag {
   display: inline-block;
   font-family: var(--mono);
@@ -300,7 +301,7 @@ section.band > h2 { margin-top: 0; }
 .docs-nav a:hover { text-decoration: underline; }
 .docs-nav a[aria-current="page"] { color: var(--accent); font-weight: 650; }
 .docs-nav .placeholder { color: var(--fg-muted); }
-.docs-nav .placeholder::after { content: " (placeholder)"; font-size: 0.8rem; }
+
 .toc { font-size: 0.9rem; }
 
 .note {
