@@ -290,13 +290,18 @@ class Report:
 
 def run_corpus(driver=None, cases_dir: Path = CASES_DIR) -> Report:
     driver = driver or PythonDriver()
-    reference = None if isinstance(driver, PythonDriver) else PythonDriver()
+    # The reference kernel is needed only to judge a driver's stream trace
+    # (D-27). A driver that sends none runs against the corpus alone, so a
+    # foreign implementation never needs the Python packages importable.
+    reference = None
     passed, failed, failures, unclaimed, traced = 0, 0, [], [], 0
     try:
         for path in sorted(cases_dir.glob("*.json")):
             case = json.loads(path.read_text(encoding="utf-8"))
             result = driver.run(case)
-            if result.get("ok") and reference is not None and "stream_trace" in result:
+            if result.get("ok") and not isinstance(driver, PythonDriver) and "stream_trace" in result:
+                if reference is None:
+                    reference = PythonDriver()
                 expected = reference.run(case).get("stream_trace")
                 if expected is None:
                     result = {"ok": False, "detail": "driver sent a stream trace the reference has none for"}
