@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Start — lmcc</title>
+<meta name="description" content="A signature, an adapter, then bind, render, parse. The first three sections of the lmcc README, verbatim.">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-header">
+  <div class="bar">
+    <a class="wordmark" href="index.html">lmcc<span class="ver">kernel 0.2</span></a>
+    <nav class="site-nav" aria-label="Site">
+      <ul>
+        <li><a href="start.html" aria-current="page">Start</a></li>
+        <li><a href="why.html">Why</a></li>
+        <li><a href="docs.html">Docs</a></li>
+        <li><a href="status.html">Status</a></li>
+        <li><a href="https://github.com/MaximeRivest/lmcc">Repository</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+<div class="prose">
+<h1>Start</h1>
+<p class="lede">A signature, an adapter, then bind, render, parse. This page
+is the first three sections of <code>README.md</code>. The test suite runs
+every code block on it.</p>
+
+<div class="note">
+  <p><strong>Install.</strong> The repository has no published package.
+  Run from a checkout: <code>cd python &amp;&amp; PYTHONPATH=. python</code>.
+  Python 3.10 or later. The kernel imports the standard library only.
+  <span class="src">check; python/pyproject.toml; python/tests/test_agent_surface.py</span></p>
+</div>
+
+<h2 id="signature">1. A signature</h2>
+
+<pre data-src="README.md#1"><code class="language-python">import lmcc
+
+@lmcc.fn
+def answer(question: str) -&gt; str:
+    """Answer the question in one sentence."""
+</code></pre>
+
+<p>Inputs from the parameters, outputs from the return type, instructions
+from the docstring. Nothing else is inferred. Several outputs: return a
+dataclass. One structured value: <code>-&gt; lmcc.One[Person]</code>.</p>
+
+<h2 id="adapter">2. An adapter is a template</h2>
+
+<pre data-src="README.md#2"><code class="language-python">xml = lmcc.adapter(messages=[
+    lmcc.system(
+        "{instruction}\n\n"
+        "Reply with exactly this pattern:\n"
+        "{% for f in outputs %}&lt;{f.name}&gt;\n{f.value}\n&lt;/{f.name}&gt;\n{% endfor %}"),
+    lmcc.demos(),
+    lmcc.user("{% for f in inputs %}&lt;{f.name}&gt;\n{f.value}\n&lt;/{f.name}&gt;\n{% endfor %}"),
+])
+</code></pre>
+
+<p>An adapter never knows your field names — that is what lets one adapter
+serve every signature. The template has three constructs and nothing
+else:</p>
+
+<table>
+  <thead>
+    <tr><th>construct</th><th>example</th><th>meaning</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>slot</td><td><code>{instruction}</code>, <code>{question}</code>, <code>{f.name}</code>, <code>{f.value}</code></td><td>a value goes here</td></tr>
+    <tr><td>loop</td><td><code>{% for f in inputs %} … {% endfor %}</code> (also <code>outputs</code>)</td><td>once per field</td></tr>
+    <tr><td>escape</td><td><code>{{</code>, <code>}}</code></td><td>a literal brace</td></tr>
+  </tbody>
+</table>
+
+<p><code>lmcc.demos()</code> marks where worked examples go. Read the
+template top to bottom and you know the prompt. If a byte is not in the
+template or in a format you registered, it is not in the prompt.</p>
+
+<h2 id="bind">3. Bind, render, parse</h2>
+
+<pre data-src="README.md#3"><code class="language-python">plan = answer.bind(xml, capabilities={"instruct": True})
+
+request = plan.render(question="Why is the sky blue?")
+assert request.messages[1]["content"][0]["text"] == "&lt;question&gt;\nWhy is the sky blue?\n&lt;/question&gt;\n"
+assert request.patch == {}
+
+assert plan.parse("&lt;answer&gt;\nRayleigh scattering.\n&lt;/answer&gt;") == {"answer": "Rayleigh scattering."}
+
+# Or read the same reply as the client receives it.
+stream = plan.stream()
+events = stream.feed("&lt;answer&gt;\nRayleigh")
+assert events == [
+    {"kind": "field_started", "field": "answer"},
+    {"kind": "field_delta", "field": "answer", "text": "Rayleigh"},
+]
+events += stream.feed(" scattering.\n&lt;/answer&gt;")
+end = stream.finish()              # EOF can release final events
+assert end.values == {"answer": "Rayleigh scattering."}
+assert end.events == [
+    {"kind": "field_done", "field": "answer", "value": "Rayleigh scattering."},
+]
+</code></pre>
+
+<ul>
+  <li><code>bind</code> joins a signature, an adapter, and what the model
+  declares it can do. <strong>Every refusal fires here</strong>, before any
+  call.</li>
+  <li><code>render</code>, <code>parse</code>, and <code>stream</code> are
+  pure. Look at a million prompts for free.</li>
+  <li>Streaming is a refinement: any chunking finishes with exactly the
+  same values or refusal as <code>parse</code>; field deltas join to the
+  batch raw text.</li>
+  <li><code>feed</code> accepts text or one part delta. <code>finish</code>
+  returns EOF events and final values. Typed <code>field_done</code> events
+  wait for full validation.</li>
+  <li>The rendered form is plain messages with parts plus a request patch.
+  Hand it to any client.</li>
+</ul>
+
+<h2 id="wire">What the wire holds</h2>
+
+<p>The request from step 3, as bytes. lmcc does not send it; you do.</p>
+</div>
+
+<figure class="wire">
+  <div class="msg">
+    <span class="role">system</span>
+<pre data-src="run:README.md#1-3:0"><code>Answer the question in one sentence.
+
+Reply with exactly this pattern:
+&lt;answer&gt;
+...
+&lt;/answer&gt;
+</code></pre>
+  </div>
+  <div class="msg">
+    <span class="role">user</span>
+<pre data-src="run:README.md#1-3:1"><code>&lt;question&gt;
+Why is the sky blue?
+&lt;/question&gt;
+</code></pre>
+  </div>
+  <div class="arrow">patch: {}</div>
+  <figcaption>Produced by running README.md §1–§3 with the reference kernel
+  at tag kernel-0.2.</figcaption>
+</figure>
+
+<div class="prose">
+<h2 id="next">Next</h2>
+<ul>
+  <li>Sections 4 to 12 of the README: the template is the parser, formats,
+  strategies, capabilities, the plan, the artifact.
+  <a href="https://github.com/MaximeRivest/lmcc/blob/main/README.md">README.md</a></li>
+  <li>The longer walkthrough, kernel only, every block executed:
+  <a href="docs.html">the guide</a>.</li>
+  <li>Why the design is shaped this way: <a href="why.html">Why</a>.</li>
+</ul>
+</div>
+</main>
+
+<footer class="site-footer">
+  <div class="bar">
+    <p>lmcc · kernel 0.2 · <a href="https://github.com/MaximeRivest/lmcc">github.com/MaximeRivest/lmcc</a> · MIT license.</p>
+    <p>Every sentence on this site traces to a file in the repository.</p>
+  </div>
+</footer>
+</body>
+</html>
