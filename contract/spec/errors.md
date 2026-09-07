@@ -45,7 +45,7 @@ parameters, is breaking.
 | `parse-missing-fields` | parse | — | the reply lacks fields the lens expects; `partial` carries what was read |
 | `parse-ambiguous` | parse | — | an anchor, close, tail, or JSON member appears twice — refused, never guessed |
 | `lens-parse-error` | parse | — | the reply does not fit the lens's document form at all |
-| `response-malformed` | parse | — | the response is neither text nor a part list |
+| `response-malformed` | parse | — | the response is neither text nor an object with a content part list, or a part is not an object with string kind and optional string text (also checked at feed) |
 
 ## Fix actions (normative, closed)
 

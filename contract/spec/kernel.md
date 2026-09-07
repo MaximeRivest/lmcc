@@ -261,6 +261,10 @@ A field both visible and routed is `field-double-covered`.
 Batch parse normalizes response parts before routing by the same logical-part
 rule as streaming (§8): adjacent same-kind text-bearing parts coalesce,
 including empty text; a kind change or a part without text ends the run.
+Every response part is an object with a string `kind`; `text`, when present,
+is a string. Otherwise batch parse and part-delta `feed` refuse
+`response-malformed`, without a `fix`. A bare string is valid as a text
+response or text delta, but not as an element of a response part list.
 Metadata keys accumulate within a run; the last supplied value of each key
 wins. Normalization does not change the caller's parts.
 

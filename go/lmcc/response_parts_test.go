@@ -2,6 +2,30 @@ package lmcc
 
 import "testing"
 
+func TestMalformedResponseParts(t *testing.T) {
+	parts := []any{nil, int64(7), []any{}, "bare", NewObject(), Obj("kind", nil),
+		Obj("kind", int64(7)), Obj("kind", "text", "text", nil), Obj("kind", "thinking", "text", int64(7))}
+	for _, part := range parts {
+		var batch error
+		func() {
+			defer catch(&batch)
+			ResponseTextAndParts(Obj("content", []any{part}))
+		}()
+		e, ok := AsError(batch)
+		if !ok || e.Code != "response-malformed" || e.Fix != nil {
+			t.Fatalf("part %v: %v", part, batch)
+		}
+		if _, text := part.(string); !text {
+			s := &Stream{}
+			_, err := s.Feed(part)
+			feed, ok := AsError(err)
+			if !ok || !Equal(feed.Describe(), e.Describe()) {
+				t.Fatalf("feed differs: %v", err)
+			}
+		}
+	}
+}
+
 func TestLogicalPartsMetadataBoundariesAndInputOwnership(t *testing.T) {
 	parts := []any{
 		Obj("kind", "thinking", "text", "fo", "id", int64(1), "keep", true),

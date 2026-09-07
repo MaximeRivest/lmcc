@@ -585,11 +585,20 @@ def merge_text_parts(parts: list[dict]) -> list[dict]:
     return out
 
 
+def validate_response_part(part: object) -> None:
+    """The shared batch and part-delta boundary; no text coercion."""
+    if not isinstance(part, dict) or not isinstance(part.get("kind"), str):
+        refuse("response-malformed", "response part must be an object with a string 'kind'")
+    if "text" in part and not isinstance(part["text"], str):
+        refuse("response-malformed", "a response part's 'text' must be text")
+
+
 def normalize_response_parts(parts: list[dict]) -> list[dict]:
     """Coalesce text runs as §8 does, without copying growing text."""
     out: list[dict] = []
     texts: list[str] = []
     for part in parts:
+        validate_response_part(part)
         has_text = isinstance(part.get("text"), str)
         if has_text and texts and out[-1].get("kind") == part.get("kind"):
             texts.append(part["text"])

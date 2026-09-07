@@ -22,7 +22,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from . import core
-from .errors import refuse
 from .parse import DerivedLens, Lens, _text_spans
 
 _WS = core.WHITESPACE
@@ -541,10 +540,7 @@ class Stream:
             if self._part_mode:
                 return delta, self._append_part(core.text_part(delta))
             return delta, None
-        if not isinstance(delta, dict) or not isinstance(delta.get("kind"), str):
-            refuse("response-malformed", "stream delta must be text or a part object with a string 'kind'")
-        if "text" in delta and not isinstance(delta["text"], str):
-            refuse("response-malformed", "a stream part delta's 'text' must be text")
+        core.validate_response_part(delta)
         if not self._part_mode:
             self._part_mode = True
             if self._pieces:

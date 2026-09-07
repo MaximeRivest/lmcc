@@ -616,6 +616,23 @@ func MergeTextParts(parts []any) []any {
 	return out
 }
 
+// validateResponsePart is the shared batch and part-delta boundary.
+func validateResponsePart(raw any) *Object {
+	part, ok := raw.(*Object)
+	if !ok || part == nil {
+		refuse("response-malformed", "response part must be an object with a string 'kind'")
+	}
+	if _, ok := part.Str("kind"); !ok {
+		refuse("response-malformed", "response part must be an object with a string 'kind'")
+	}
+	if raw, has := part.Get("text"); has {
+		if _, ok := raw.(string); !ok {
+			refuse("response-malformed", "a response part's 'text' must be text")
+		}
+	}
+	return part
+}
+
 // normalizeResponseParts coalesces text runs as §8 does, without copying growing text.
 func normalizeResponseParts(parts []any) []any {
 	out := []any{}
@@ -628,13 +645,7 @@ func normalizeResponseParts(parts []any) []any {
 		texts.Reset()
 	}
 	for _, raw := range parts {
-		part, ok := raw.(*Object)
-		if !ok {
-			flush()
-			hasRun = false
-			out = append(out, raw)
-			continue
-		}
+		part := validateResponsePart(raw)
 		text, hasText := part.Str("text")
 		kind, _ := part.Str("kind")
 		if hasRun && hasText {

@@ -749,19 +749,8 @@ func (s *Stream) append(delta any) (string, *partDelta) {
 		}
 		return text, nil
 	}
-	part, ok := delta.(*Object)
-	if !ok {
-		refuse("response-malformed", "stream delta must be text or a part object with a string 'kind'")
-	}
-	kind, ok := part.Str("kind")
-	if !ok {
-		refuse("response-malformed", "stream delta must be text or a part object with a string 'kind'")
-	}
-	if raw, has := part.Get("text"); has {
-		if _, ok := raw.(string); !ok {
-			refuse("response-malformed", "a stream part delta's 'text' must be text")
-		}
-	}
+	part := validateResponsePart(delta)
+	kind, _ := part.Str("kind")
 	if !s.partMode {
 		s.partMode = true
 		if s.pieces.Len() > 0 {
