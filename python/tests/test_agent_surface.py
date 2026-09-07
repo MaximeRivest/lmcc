@@ -8,7 +8,7 @@ import pathlib
 import lmcc
 import lmcc_std
 
-STDLIB = {"__future__", "builtins", "dataclasses", "decimal", "dis", "enum", "functools", "hashlib", "inspect",
+STDLIB = {"__future__", "builtins", "dataclasses", "decimal", "dis", "enum", "hashlib", "inspect",
           "json", "math", "re", "textwrap", "types", "typing"}
 
 

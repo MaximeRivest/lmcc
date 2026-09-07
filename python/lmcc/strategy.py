@@ -12,13 +12,14 @@ import re
 from dataclasses import dataclass, field as dc_field
 
 from .errors import refuse
-from . import re2
 
 _KEYS = ("when", "requires", "visible", "fragments", "controls", "placement", "routings")
 _PREDICATE_KEYS = ("capability", "not", "all", "any")
 _TO = re.compile(r"^@role(\.[A-Za-z_][A-Za-z0-9_]*)?$")
 _PLACEMENT = re.compile(r"^(controls\.[A-Za-z_][A-Za-z0-9_.]*|message:(system|user|assistant))$")
 _FROM = re.compile(r"^(text|channel:[a-z_]+)$")
+# outside the portable RE2 dialect (kernel §7a)
+_NON_RE2 = re.compile(r"\(\?[=!>]|\(\?P?<|\\[1-9]|\\k<|[*+?}]\+")
 
 
 @dataclass
@@ -201,9 +202,16 @@ def validate_routing(r: dict, *, where: str) -> None:
 
 
 def check_re2(regex: str, *, where: str) -> None:
+    unescaped = re.sub(r"\\[^1-9k]", "", regex)
+    hit = _NON_RE2.search(unescaped)
+    if hit:
+        refuse("entry-malformed",
+               f"{where}: regex {regex!r} uses {hit.group(0)!r}, which is outside the "
+               f"portable RE2 dialect (no lookaround, backreferences, named groups, "
+               f"atomic or possessive constructs)", fix={"action": "edit-entry", "path": where})
     try:
-        re2.compile(regex)
-    except (re.error, ValueError) as exc:
+        re.compile(regex, re.DOTALL)
+    except re.error as exc:
         refuse("entry-malformed", f"{where}: regex {regex!r} does not compile: {exc}",
                fix={"action": "edit-entry", "path": where})
 

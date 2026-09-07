@@ -13,7 +13,9 @@ read backwards. Any other kind is vocabulary through the lens socket.
 
 from __future__ import annotations
 
-from . import core, re2
+import re
+
+from . import core
 from .errors import refuse
 
 
@@ -43,8 +45,8 @@ def _text_spans(text: str, routing: dict) -> list[tuple[int, int, str]]:
                 spans.append((pos, pos + len(line), line[len(prefix):]))
             pos += len(line) + 1
     else:
-        pattern = re2.compile(routing["pattern"])
-        for m in re2.finditer(pattern, text):
+        pattern = re.compile(routing["pattern"], re.DOTALL)
+        for m in pattern.finditer(text):
             if m.end() == m.start():
                 continue
             cap = m.group(1) if pattern.groups else m.group(0)

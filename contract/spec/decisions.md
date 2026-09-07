@@ -496,3 +496,23 @@ UDF cases unclaimed. All 95 cases pass schema validation; Go compares
 83–85 and 89–91. It fails 86–88 on batch/feed hint equality, 92–94 on
 regex admission, and 95 on DOTALL. It reports no compared traces.
 Parent review remains required; these results do not accept the batch.
+
+
+**D-32 · Withdraw the custom regex engine; retain the safety fixes.**
+The maintainer rejected mandatory ownership of a regex engine and authorized
+removing the experiment. Reverse the regex implementation from bf822da,
+including its Unicode tables, generator, integration changes, and tests.
+Withdraw experimental corpus cases 91–95 before merging this branch.
+Preserve their bytes and differential-review evidence outside the active corpus
+for future library evaluation. Existing cases 01–82 are unchanged.
+
+D-30 remains the historical record of the experiment, not approval of its
+backend. Its regex support and completion claims no longer describe this branch.
+Cases 83–90, response normalization, response validation, overflow refusal,
+and their regression tests remain. Legacy regex behavior is restored with its
+known limits; this is not a claim those limits are fixed. Backend and extension
+contract selection must precede new regex implementation work.
+
+Cost: the regex findings remain unresolved. Benefit: the branch no longer
+carries an unapproved custom engine. The three safety fixes remain isolated
+and reviewable without accepting that engine.

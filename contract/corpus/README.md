@@ -47,15 +47,15 @@ both kernels: a reference's factory now runs at load, its failure is
 validated like inline data. Case 82 pins the same rule for a format
 whose options the pack rejects.
 
-**Batch 1 (plan 09).** Cases 83–95 were hand-authored after their spec
-sentences, before the kernel changes. Cases 83–85 pin adjacent-part
-coalescing, kind changes, and empty text. Cases 86–88 pin malformed-part
-refusals; 89–90 pin number overflow. Cases 91–95 pin ASCII word classes,
-quoted literals, POSIX classes, Unicode letters, and DOTALL across four
-line separators. No earlier expectation changed. Both kernels pass every
-claimable case and every scalar/part replay. The drivers retain malformed
-parts during replay and preserve part-list context for bare strings.
-D-30 records the compatibility costs and the regex implementation limits.
+**Batch 1 safety fixes (plan 09).** Cases 83–90 remain active.
+Cases 83–85 pin adjacent-part coalescing, kind changes, and empty text.
+Cases 86–88 pin malformed-part refusals; 89–90 pin number overflow.
+The experimental regex cases 91–95 were withdrawn with the custom matcher
+before this branch merged. They remain in history and the review archive
+as candidate tests, not requirements for a selected backend.
+The drivers retain malformed parts during replay and preserve part-list
+context for bare strings. D-30 records the original experiment; D-32
+records its withdrawal without discarding the safety fixes.
 
 **Streaming refinement (plan 01).** No streaming fixtures duplicate the
 parse corpus. Both harness drivers replay every parse response whole,

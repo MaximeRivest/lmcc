@@ -298,28 +298,8 @@ must match what the format `emits` (`format-placement-mismatch`).
 - **Enum** — the stripped text equals a member's spelling.
 - **Null** — nullable shapes only: written `null`, read `null` exactly.
 - **Rounding** — half-to-even in binary64: `roundeven(x·10ⁿ)/10ⁿ`.
-- **Regex** — admission and matching follow RE2 semantics, not the host
-  regex engine. The only LMCC exclusion from RE2 is named groups;
-  lookaround, backreferences, atomic groups and possessive quantifiers
-  are outside RE2 and refuse `entry-malformed` at construct/load.
-  Matching is leftmost-first, including capture priority in nullable
-  repetitions; a host's extra empty loop iteration must not overwrite
-  the capture RE2 selects. `.` matches every scalar by default,
-  including LF, CR, U+2028 and U+2029 (DOTALL); inline `i`, `m`, `s`, `U`
-  flags and their scoped/negated forms retain RE2 meanings.
-  Perl classes are ASCII: `\w` = `[0-9A-Za-z_]`, `\d` = `[0-9]`,
-  `\s` = `[\t\n\f\r ]` (not vertical tab); uppercase forms complement
-  them. `\b` and `\B` use ASCII word boundaries. POSIX classes
-  (`alnum`, `alpha`, `ascii`, `blank`, `cntrl`, `digit`, `graph`, `lower`,
-  `print`, `punct`, `space`, `upper`, `word`, `xdigit`) are ASCII,
-  including negated forms inside a character class.
-  `\Q…\E` quotes literal text; `\p`/`\P` select Unicode categories
-  and scripts, not host word classes. A property followed by `+` is
-  repetition, never a possessive quantifier. Unicode simple case folding
-  applies under `i`; it does not change word-boundary membership.
-  A host may translate these constructs, octal/hex escapes, strict
-  end-of-text `\z`/`$`, and ungreedy quantifiers into its engine, but
-  must not add host-only syntax or silently narrow the dialect.
+- **Regex** — RE2 syntax; lookaround, backreferences, named groups,
+  atomic/possessive constructs refuse `entry-malformed`.
 
 ### 7b. Kernel default formats
 
