@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# One verify command: type check, unit tests, corpus conformance.
+# Run from anywhere; works in ts/.
+set -u
+cd "$(dirname "$0")"
+status=0
+
+step() { printf '\n== %s\n' "$*"; }
+
+step "tsc --noEmit"
+if command -v tsc >/dev/null 2>&1; then
+  tsc --noEmit -p . || status=1
+else
+  nix shell nixpkgs#typescript -c tsc --noEmit -p . || status=1
+fi
+
+step "node --test"
+node --experimental-strip-types --test 'tests/*.test.ts' 2> >(grep -v ExperimentalWarning >&2) || status=1
+
+step "corpus harness"
+python3 ../contract/harness/runner.py --driver 'node --experimental-strip-types conform/main.ts' --cwd . || status=1
+
+printf '\n== check exit %s\n' "$status"
+exit "$status"

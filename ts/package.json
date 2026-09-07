@@ -1,0 +1,10 @@
+{
+  "name": "lmcc-ts",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "LMCC kernel + std pack + conformance driver, clean-room TypeScript (Node stdlib only, no dependencies)",
+  "scripts": {
+    "check": "./check"
+  }
+}
