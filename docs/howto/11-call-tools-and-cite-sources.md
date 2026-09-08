@@ -1,17 +1,8 @@
 # Call tools and cite sources — one program, native or text
 
-**Goal.** Write one function that may call a tool and one that cites
-its sources. Run each on a model with native support *and* on a plain
-instruct model, changing nothing in the program. Along the way, meet
-the five kernel mechanics that make this honest: a **call turn**
-(`suffices`), a placement's own spelling (`via`), spelling the past
-(`turns`) with its **probe**, the **whole-reply** pattern, and how
-placed text joins a message.
+**Goal.** Write one function that may call a tool and one that cites its sources. Run each on a model with native support *and* on a plain instruct model, changing nothing in the program. Along the way, meet the five kernel mechanics that make this honest: a **call turn** (`suffices`), a placement's own spelling (`via`), spelling the past (`turns`) with its **probe**, the **whole-reply** pattern, and how placed text joins a message.
 
-This guide is a notebook: run the cells in order and read what they
-print. No network is touched — the model's replies are written by hand
-so you see exactly what lmcc reads. The live version, against real
-providers, is `python/integration/lm15_tools_citations.py`.
+This guide is a notebook: run the cells in order and read what they print. No network is touched — the model's replies are written by hand so you see exactly what lmcc reads. The live version, against real providers, is `python/integration/lm15_tools_citations.py`.
 
 ## 0. Setup
 
@@ -39,12 +30,13 @@ def refuses(thunk):
 print("std vocabulary:", *sorted(registry.describe()["strategies"]))
 ```
 
+```output
+std vocabulary: fenced_tools inline_citations native_citations native_reasoning native_tools prefix_cot reasoning_tags
+```
+
 ## 1. The program
 
-Two roles from the vocabulary: `tools` (an **input**: what the model may
-call) and `tools.calls` (an **output**: what it asked for). The value
-types are the std pack's — lm15's shapes with Python names. Formats
-resolve by *type*, so `tools` and `calls` must be different types.
+Two roles from the vocabulary: `tools` (an **input**: what the model may call) and `tools.calls` (an **output**: what it asked for). The value types are the std pack's — lm15's shapes with Python names. Formats resolve by *type*, so `tools` and `calls` must be different types.
 
 ```python
 @dataclasses.dataclass
@@ -63,11 +55,16 @@ for f in ask.signature.fields:
     print(f"{f.direction:<6} {f.name:<9} role={f.role:<12} type={f.type}")
 ```
 
+```output
+input  question  role=plain        type=str
+input  tools     role=tools        type=list[Tool]
+output calls     role=tools.calls  type=list[ToolCall]
+output answer    role=plain        type=str
+```
+
 ## 2. One adapter, two strategies, chosen by declared facts
 
-The template puts `history` *after* the user's question: in a tool loop
-the conversation continues after the user's turn — question, the
-model's call, the result, in that order.
+The template puts `history` *after* the user's question: in a tool loop the conversation continues after the user's turn — question, the model's call, the result, in that order.
 
 ```python
 template = [
@@ -89,13 +86,16 @@ for name, plan in ("native", native), ("fenced", fenced):
     print(f"{name}: hidden={d['hidden']}  routings={d['routings']}  placements={d['placements']}")
 ```
 
-Both plans hide `tools` and `calls` from the template: those fields
-travel by strategy, not by slot. Same routing target, different source.
+```output
+native: hidden=['tools', 'calls']  routings=[{'field': 'calls', 'from': 'channel:tool_call', 'suffices': True}]  placements=[{'field': 'tools', 'at': 'controls.tools'}]
+fenced: hidden=['tools', 'calls']  routings=[{'field': 'calls', 'from': 'text', 'between': ['```tool\n', '\n```'], 'consume': True, 'suffices': True}]  placements=[{'field': 'tools', 'at': 'message:system'}]
+```
+
+Both plans hide `tools` and `calls` from the template: those fields travel by strategy, not by slot. Same routing target, different source.
 
 ## 3. Where the tools go — `via`, a placement's own spelling
 
-Same field, same type `list[Tool]`. Render both and compare where the
-tool ended up.
+Same field, same type `list[Tool]`. Render both and compare where the tool ended up.
 
 ```python
 rn = native.render(question="Weather in Paris?", tools=[weather])
@@ -106,6 +106,44 @@ print("\nfenced → request.tools:", rf.patch)
 print("fenced → end of the system prompt:\n" + rf.system[-260:])
 ```
 
+```output
+native → request.tools:
+{
+  "tools": [
+    {
+      "type": "function",
+      "name": "get_weather",
+      "description": "Weather for a city.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "city"
+        ]
+      }
+    }
+  ]
+}
+
+fenced → request.tools: {}
+fenced → end of the system prompt:
+h exactly one fenced block:
+ ```tool
+{"name": "<tool>", "input": {...}}
+ ```
+and nothing else; you will be given the result and asked again.
+
+- get_weather({"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}): Weather for a city.
+```
+and nothing else; you will be given the result and asked again.
+
+- get_weather({"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}): Weather for a city.
+```
+
 Formats resolve by type (kernel §5), and one type cannot have two
 formats in one artifact. So the fenced strategy says, for its own
 placement, *spell this through `tool_catalog` instead*:
@@ -114,17 +152,22 @@ placement, *spell this through `tool_catalog` instead*:
 show({k: v for k, v in lmcc_std.tools.fenced_tools({}).to_dict().items() if k in ("placement", "via")})
 ```
 
-`via` is the one exception to format-by-type, scoped to placements —
-how a placed value is spelled is inseparable from where it is placed.
-Notice the blank line before `- get_weather` above: placed text joins a
-message after a blank line, exactly like a strategy's fragment does.
+```output
+{
+  "placement": {
+    "@role": "message:system"
+  },
+  "via": {
+    "@role": "tool_catalog"
+  }
+}
+```
+
+`via` is the one exception to format-by-type, scoped to placements — how a placed value is spelled is inseparable from where it is placed. Notice the blank line before `- get_weather` above: placed text joins a message after a blank line, exactly like a strategy's fragment does.
 
 ## 4. Reading the reply — a call turn is a reply, not an error
 
-A model that calls a tool does not write `Answer:`. The routing that
-reads calls declares `suffices: true`: a capture on it completes the
-reply, and outputs the lens cannot find are omitted, never refused.
-Three replies, three outcomes:
+A model that calls a tool does not write `Answer:`. The routing that reads calls declares `suffices: true`: a capture on it completes the reply, and outputs the lens cannot find are omitted, never refused. Three replies, three outcomes:
 
 ```python
 call_turn = {"role": "assistant", "parts": [
@@ -135,15 +178,29 @@ print("answer turn →", native.parse("Answer: Sunny."))
 print("neither     →", end=" "); refuses(lambda: native.parse("I have no idea."))
 ```
 
-The fenced tier reads the same thing from text. Its call has an
-*assigned* id (`call_1`, in reply order): the model gave none, and the
-result you send back must name one.
+```output
+call turn   → {'calls': [ToolCall(id='call_9', name='get_weather', input={'city': 'Paris'})]}
+answer turn → {'answer': 'Sunny.', 'calls': []}
+neither     → Refusal[parse-missing-fields]  fix=None
+  reply is missing pattern section(s): 'answer'
+```
+
+The fenced tier reads the same thing from text. Its call has an *assigned* id (`call_1`, in reply order): the model gave none, and the result you send back must name one.
 
 ```python
 FENCE = "`" * 3   # this guide's own code fences would end here, so build the model's from parts
 fenced_reply = FENCE + 'tool\n{"name": "get_weather", "input": {"city": "Paris"}}\n' + FENCE
 print(fenced_reply)
 print("→", fenced.parse(fenced_reply))
+```
+
+```output
+ ```tool
+{"name": "get_weather", "input": {"city": "Paris"}}
+ ```
+→ {'calls': [ToolCall(id='call_1', name='get_weather', input={'city': 'Paris'})]}
+```
+→ {'calls': [ToolCall(id='call_1', name='get_weather', input={'city': 'Paris'})]}
 ```
 
 ## 5. The second call — `turns` spell the past
@@ -165,19 +222,32 @@ for name, plan in ("native", native), ("fenced", fenced):
         print(f"  {m['role']:<9} {p['type']:<10} {p.get('text', p.get('name'))!r}")
 ```
 
-Native passes the protocol parts through untouched. The fenced strategy
-has `turns` — a spelling for a past call and a past result — and the
-`tool` message becomes a `user` one:
+```output
+native:
+  user      text       'Weather in Paris?'
+  assistant tool_call  'get_weather'
+  tool      tool_result 'get_weather'
+
+fenced:
+  user      text       'Weather in Paris?'
+  assistant text       '```tool\n{"name": "get_weather", "input": {"city": "Paris"}}\n```'
+  user      text       'Result of get_weather (call_9):\nSunny, 22C'
+```
+
+Native passes the protocol parts through untouched. The fenced strategy has `turns` — a spelling for a past call and a past result — and the `tool` message becomes a `user` one:
 
 ```python
 show(lmcc_std.tools.fenced_tools({}).turns)
 ```
 
-The spelling of a *past* call and the routing that reads a *new* one
-are two copies of one contract, and copies drift. So at bind the kernel
-runs a **probe**: it spells a fake call through `turns.call`, reads it
-back through the strategy's own routing and format, and refuses if the
-two disagree — the "template is the lens" law at strategy level.
+```output
+{
+  "call": "```tool\n{\"name\": \"{name}\", \"input\": {input}}\n```",
+  "result": "Result of {name} ({id}):\n{output}"
+}
+```
+
+The spelling of a *past* call and the routing that reads a *new* one are two copies of one contract, and copies drift. So at bind the kernel runs a **probe**: it spells a fake call through `turns.call`, reads it back through the strategy's own routing and format, and refuses if the two disagree — the "template is the lens" law at strategy level.
 
 ```python
 drifted = lmcc_std.tools.fenced_tools({})
@@ -187,13 +257,14 @@ refuses(lambda: ask.bind(lmcc.adapter(messages=template, strategies={"tools": dr
                          capabilities={"instruct": True}, registry=registry))
 ```
 
+```output
+Refusal[turns-drift]  fix={'action': 'edit-entry', 'path': "strategies['tools'].turns"}
+  role 'tools': strategy '(inline)': turns.call spells a call as 'CALL probe WITH {"probe": true}', and its own routing/fo
+```
+
 ## 6. Citations: numbered sources, or the provider's own
 
-Two programs, because they mean different things: one cites *sources
-you supply* (spelled into the prompt, markers read back); one cites
-*what the provider found* (a search tool the strategy asks for,
-`citation` parts read back). lm15 has no per-document citation flag
-yet, so supplied sources have no native tier — stated, not papered over.
+Two programs, because they mean different things: one cites *sources you supply* (spelled into the prompt, markers read back); one cites *what the provider found* (a search tool the strategy asks for, `citation` parts read back). lm15 has no per-document citation flag yet, so supplied sources have no native tier — stated, not papered over.
 
 ```python
 @dataclasses.dataclass
@@ -215,18 +286,47 @@ print(r.system, "\n---")
 print(r.messages[0]["parts"][0]["text"])
 ```
 
-The markers stay in the prose (`consume: false`); `citations` reads them —
-distinct, in order, bracketed prose skipped:
+```output
+Answer from the sources only.
+Answer: ...
+
+Cite the numbered sources inline as [n] after each claim they support. 
+---
+When was the tower built?
+
+[1] Encyclopedia: Completed in 1889.
+[2] Almanac: 330 m tall.
+```
+
+The markers stay in the prose (`consume: false`); `citations` reads them — distinct, in order, bracketed prose skipped:
 
 ```python
 show(inline.parse("Answer: In 1889 [1], and it is 330 m [2] [1] [see]."))
 ```
 
+```output
+{
+  "answer": "In 1889 [1], and it is 330 m [2] [1] [see].",
+  "citations": [
+    {
+      "url": null,
+      "title": null,
+      "text": null,
+      "source": 1
+    },
+    {
+      "url": null,
+      "title": null,
+      "text": null,
+      "source": 2
+    }
+  ]
+}
+```
+
 ## 7. The whole-reply pattern
 
-Provider search mode answers in prose and ignores reply patterns. "The
-whole reply is the answer" — the simplest adapter there is — needed a
-rule: one visible output, a bare slot, nothing after it in its message.
+Provider search mode answers in prose and ignores reply patterns. "The whole reply is the answer" — the simplest adapter there is — needed a rule: one visible output, a bare slot, nothing after it in its message.
 
 ```python
 @lmcc.fn
@@ -246,9 +346,23 @@ reply = {"role": "assistant", "parts": [
 show(native_cite.parse(reply))
 ```
 
-The rule is deliberately narrow. Anything else without an anchor still
-refuses — including a slot with prose after it, which is *not* "the
-whole reply":
+```output
+asks the provider for: {'tools': [{'type': 'builtin', 'name': 'web_search'}]}
+lens anchors: [['answer', '', '']]  skeleton: {'prefill': '', 'stops': []}
+{
+  "answer": "The 2028 Games will be held in Los Angeles.",
+  "citations": [
+    {
+      "url": "https://example.org/la2028",
+      "title": "LA 2028",
+      "text": "Los Angeles",
+      "source": null
+    }
+  ]
+}
+```
+
+The rule is deliberately narrow. Anything else without an anchor still refuses — including a slot with prose after it, which is *not* "the whole reply":
 
 ```python
 sig = lmcc.signature("x", inputs={"question": str}, outputs={"answer": str})
@@ -258,19 +372,29 @@ for bad in ("{instruction}\n<answer>\n{answer}\n</answer>",                    #
     refuses(lambda: lmcc.adapter(messages=[lmcc.system(bad), lmcc.user("{question}")]).bind(sig))
 ```
 
+```output
+'{instruction}\n<answer>\n{answer}\n</answer>' → Refusal[not-lensable]  fix={'action': 'edit-template', 'path': 'template[0]', 'field': 'answer'}
+  field 'answer': no literal text before its hole — nothing anchors the parser; put the field's marker before the hole
+'{instruction}\n{% for f in outputs %}{f.value}\n{% endfor %}' → Refusal[not-lensable]  fix={'action': 'edit-template', 'path': 'template[0]', 'field': 'answer'}
+  field 'answer': no literal text before its hole — nothing anchors the parser; put the field's marker before the hole
+```
+
 ## 8. The loop is yours
 
-lmcc lays out one call and reads one reply. Running the tool and
-calling again is the caller's — with lm15 it is four lines:
+lmcc lays out one call and reads one reply. Running the tool and calling again is the caller's — with lm15 it is four lines:
 
 ```python
-# request  = lmcc_lm15.request(plan.render(question=q, tools=[weather], history=history), model=...)
+a# request  = lmcc_lm15.request(plan.render(question=q, tools=[weather], history=history), model=...)
 # response = lm.complete(request)
 # values   = lmcc_lm15.parse(plan, response)
 # if values.get("calls"): run them, then
 #     history += [lmcc_lm15.message_to_history(response.message),
 #                 lmcc_lm15.message_to_history(lm15.Message.tool(call.id, result))]
 print("see python/integration/lm15_tools_citations.py for the live loop on two providers")
+```
+
+```output
+see python/integration/lm15_tools_citations.py for the live loop on two providers
 ```
 
 ## What can refuse here
