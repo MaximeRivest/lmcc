@@ -125,6 +125,32 @@ class Resolved:
                 "binding": self.binding.binding}
 
 
+def uses_family(strategies: dict, family: str) -> bool:
+    """Whether any *inline* strategy (through ``choose`` branches) carries a
+    routing of ``family``. Named strategies are resolved at bind with a
+    registry and are not seen here."""
+    from .strategy import Strategy
+
+    def walk(s: Strategy) -> bool:
+        if s.choose is not None:
+            return any(walk(alt.get("else") or alt["use"]) for alt in s.choose)
+        return any(family == "pattern" and "pattern" in r for r in s.routings)
+
+    return any(isinstance(s, Strategy) and walk(s) for s in strategies.values())
+
+
+def default_declaration(strategies: dict, declared: dict[str, str]) -> dict[str, str]:
+    """The constructor's convenience (kernel §10): an inline ``pattern``
+    routing with no ``pattern/*`` declared gets the default tier — the
+    host's native engine, ``pattern/legacy-re2`` at the version this
+    kernel binds. The declaration is written into the adapter, so the
+    dumped artifact says it. Loading never defaults: an artifact on disk
+    must speak for itself."""
+    if uses_family(strategies, "pattern") and not any(family_of(n) == "pattern" for n in declared):
+        return {**declared, LegacyRE2.extension: LegacyRE2.version}
+    return declared
+
+
 def validate_declaration(extensions: object) -> dict[str, str]:
     """Rules 1–2 of kernel §10: shape, names, versions, one per family."""
     if extensions is None:
@@ -197,5 +223,5 @@ def resolve(adapter, registry) -> dict[str, Resolved]:
     return resolved
 
 
-__all__ = ["ExtensionBinding", "PatternBinding", "LegacyRE2", "Resolved",
-           "native_extensions", "resolve", "validate_declaration"]
+__all__ = ["ExtensionBinding", "PatternBinding", "LegacyRE2", "Resolved", "default_declaration",
+           "native_extensions", "resolve", "uses_family", "validate_declaration"]

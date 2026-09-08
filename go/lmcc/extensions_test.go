@@ -62,13 +62,27 @@ func TestCoreOnlyHostRefusesBeforeAnyPlan(t *testing.T) {
 	wantRefusal(t, err, "extension-unsupported", Obj("action", "bind-extension", "name", "pattern/legacy-re2", "needs", "0.1.0"))
 }
 
-func TestUndeclaredPatternRefusesAtBind(t *testing.T) {
+func TestConstructorDeclaresTheDefaultTierAndDumpSaysSo(t *testing.T) {
 	a := extAdapter(t, Obj("reasoning", patternStrategy()), nil)
-	_, err := Bind(a, extSignature(), nil, NewRegistry())
-	wantRefusal(t, err, "extension-undeclared", Obj("action", "declare-extension", "family", "pattern", "path", "strategies['reasoning'].routings[0]"))
+	if !Equal(a.Extensions, legacy) {
+		t.Fatalf("default not declared: %s", MarshalJSON(a.Extensions, 0))
+	}
+	entry, _ := Dump(a, NewRegistry())
+	if !Equal(entry.Object("extensions"), legacy) {
+		t.Fatalf("dump: %s", MarshalJSON(entry, 0))
+	}
+	// an explicit pattern/* declaration is never overridden
+	b := extAdapter(t, Obj("reasoning", patternStrategy()), Obj("pattern/other", "0.1.0"))
+	if !Equal(b.Extensions, Obj("pattern/other", "0.1.0")) {
+		t.Fatalf("explicit declaration overridden: %s", MarshalJSON(b.Extensions, 0))
+	}
+	// nothing to default without a pattern routing
+	if c := extAdapter(t, nil, nil); c.Extensions.Len() != 0 {
+		t.Fatal("declared without a pattern routing")
+	}
 }
 
-func TestUndeclaredPatternInsideChooseNamesTheBranch(t *testing.T) {
+func TestDefaultReachesChooseBranchesAndLoadNeverDefaults(t *testing.T) {
 	native := NewStrategy()
 	native.Visible = false
 	native.Routings = []*Object{Obj("from", "channel:thinking", "to", "@role")}
@@ -77,7 +91,12 @@ func TestUndeclaredPatternInsideChooseNamesTheBranch(t *testing.T) {
 		{When: nil, Use: patternStrategy()},
 	}}
 	a := extAdapter(t, Obj("reasoning", choose), nil)
-	_, err := Bind(a, extSignature(), Obj("native_reasoning", true), NewRegistry())
+	if !Equal(a.Extensions, legacy) {
+		t.Fatalf("choose branch not seen: %s", MarshalJSON(a.Extensions, 0))
+	}
+	entry, _ := Dump(a, NewRegistry())
+	entry.Delete("extensions")
+	_, err := Load(entry, NewRegistry())
 	wantRefusal(t, err, "extension-undeclared", Obj("action", "declare-extension", "family", "pattern", "path", "strategies['reasoning'].choose[1].routings[0]"))
 }
 

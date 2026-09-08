@@ -340,35 +340,42 @@ print(registry.describe())
 ## Portability and execution requirements
 
 Portability means identical behavior within a declared feature set, not
-support for every extension on every host. The kernel is a small core; a
-`pattern` routing needs a declared extension:
+support for every extension on every host. The kernel is a small core;
+regex is not in it. A `pattern` routing runs under a declared extension —
+like SQL dialects: divergence between engines is normal, *undeclared*
+divergence is the sin. The constructor declares the default tier for you
+(the host's own engine, `pattern/legacy-re2`); the artifact carries the
+line; a loaded artifact without it refuses:
 
 ```python
 regex = lmcc.Strategy(visible=False, routings=[
     {"from": "text", "pattern": "Thought: ([^\\n]+)", "to": "@role", "consume": True}])
 xml = lmcc.adapter(messages=cot_adapter.template, strategies={"reasoning": regex})
+assert xml.dump()["extensions"] == {"pattern/legacy-re2": "0.1.0"}      # written for you
+assert cot.bind(xml).describe()["extensions"] == {
+    "pattern/legacy-re2": {"needs": "0.1.0", "provides": "0.1.0", "binding": "python:re"}}
 try:
-    cot.bind(xml)
+    cot.bind(xml, registry=lmcc.Registry(extensions=()))   # a core-only host
+except lmcc.Refusal as r:
+    assert r.code == "extension-unsupported"
+bare = xml.dump(); del bare["extensions"]
+try:
+    lmcc.load(bare)                                        # an artifact must speak for itself
 except lmcc.Refusal as r:
     assert r.code == "extension-undeclared"
     assert r.fix == {"action": "declare-extension", "family": "pattern",
                      "path": "strategies['reasoning'].routings[0]"}
-declared = lmcc.adapter(messages=xml.template, strategies={"reasoning": regex},
-                        extensions={"pattern/legacy-re2": "0.1.0"})
-assert cot.bind(declared).describe()["extensions"] == {
-    "pattern/legacy-re2": {"needs": "0.1.0", "provides": "0.1.0", "binding": "python:re"}}
-try:
-    cot.bind(declared, registry=lmcc.Registry(extensions=()))   # a core-only host
-except lmcc.Refusal as r:
-    assert r.code == "extension-unsupported"
 ```
 
-The host binds compatible support (`Registry()` binds what Python's
-standard library can honestly do; `register_extension` binds yours) or
-refuses before a model request. A frontend must never silently translate
-a pattern into a different dialect. Read
-[portability](contract/spec/portability.md) and the
-[extension index](contract/spec/extensions/README.md) before choosing a backend.
+Three tiers exist or can: the default (native engine, small stated
+divergence, no dependency), an exact single-language pin (a contract
+named for one engine and version), and an exact cross-language engine
+(one shared library). All are rows in the
+[extension index](contract/spec/extensions/README.md); only the first
+exists today, the others are added when an adapter demands them. The host
+binds (`Registry()` binds what the standard library can honestly do;
+`register_extension` binds yours) or refuses before a model request. A
+frontend must never silently translate a pattern into another dialect.
 
 ## 12. Where to go next
 

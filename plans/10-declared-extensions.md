@@ -24,13 +24,22 @@ This plan gates regex-related work in plan 09; its other safety fixes remain use
 
 ## Status
 
-**Phase 1 — the mechanism — landed as kernel 0.3 (D-33).** The contract
-now has a declaration (`entry.extensions`), a binding table
-(`Registry.extensions`), discovery (`registry.describe()["extensions"]`),
-inspection (`plan.describe()["extensions"]`), three refusals with fixes,
-scoped harness claims, and one extension (`pattern/legacy-re2`, the
-migration bridge). **Phase 2 — a rigorously specified pattern dialect
-with library evidence — is open** and is the only regex work left.
+**Phase 1 — the mechanism — landed as kernel 0.3 (D-33, D-34).** The
+contract has a declaration (`entry.extensions`), a binding table
+(`Registry.extensions`), discovery, inspection, three refusals with fixes,
+scoped harness claims, one extension (`pattern/legacy-re2`), and the
+constructor declares that default tier for you.
+
+**Phase 2 is demand-driven, not scheduled.** The earlier text here asked
+for a rigorously authored regex dialect and a library benchmark. That
+was inertia from the era when regex was mandatory (D-14); D-31 removed
+the mandate and D-34 removes the task. Regex is not in LMCC's one
+sentence; `between` and `line_prefixed` cover the extraction real
+adapters do (the corpus has one `pattern` parse case, and it could be
+`line_prefixed`). The next regex work starts when an adapter needs what
+the default tier cannot give, and it is *binding an engine* — a row in
+the tier table of `spec/extensions/README.md` — never authoring a
+grammar or a matcher.
 
 ## Acceptance criteria
 
@@ -47,11 +56,15 @@ Phase 1 (done, kernel 0.3):
 - [x] Add schemas and harness support for scoped claims; never count missing extensions as passes (`requires` generalized; drivers bind exactly what is listed).
 - [x] Implement in Python and Go; update docs, plans, versions, decisions; `./check` green.
 
-Phase 2 (open):
+Phase 2 (when demanded — each item needs a real adapter that asks for it):
 
-- [ ] Define routing-pattern syntax and all observable matching semantics, with Unicode and capture cases, as a new contract `pattern/<name>` — not by tightening `legacy-re2`.
-- [ ] Compare mature libraries (Go `regexp`, Python `re`/`regex`, RE2 bindings, Rust `regex`) against those cases; record limits, dependencies, and rejected alternatives; pick bindings per kernel by evidence.
-- [ ] Test the TypeScript clean-room implementation independently against 0.3 (it currently targets 0.2 and will refuse `version-incompatible`; its regex gaps become a *claim* question, not a defect).
+- [ ] **Exact, one language:** a contract named for one engine and version (`pattern/cpython-re` at a Python minor; `pattern/go-regexp` at a Go minor). Spec = "that engine, that version, these cases"; the binding is the runtime itself; other runtimes refuse `extension-unsupported`. Acceptance: spec file, index row, cases that `requires` it, a native binding that claims it only when the runtime matches.
+- [ ] **Exact, every language:** one shared engine, bound from a pack (RE2 bindings, or a Rust `regex` build as WebAssembly). Acceptance: the same cases pass byte-exactly through Python and Go via the *same* engine; the dependency lives outside the kernel (`test_agent_surface` stays green); costs recorded.
+- [ ] Constructor default for *named* strategies: today only inline strategies are seen (kernel §10); if a pack ever emits `pattern`, decide whether the pack declares it or bind fills it.
+
+Housekeeping (not regex, still open):
+
+- [ ] Test the TypeScript clean-room implementation against 0.3 (it targets 0.2 and refuses `version-incompatible`); its regex gaps become a *claim* question, not a defect.
 - [ ] Decide whether `udf:<language>` placement joins the extension mechanism (`udf/<language>`) in a later version; today it stays a separate `requires` form because unifying it would change existing refusal codes without a corpus reason.
 - [ ] Decide whether trust admission for bindings that start services needs a declaration beyond the binding label.
 

@@ -30,6 +30,22 @@ on cases; `format-untrusted` / `udf-unplaceable` at load): those admit
 artifact *code*; an extension binds host *behavior*. Unifying placement
 under the extension mechanism is a recorded follow-up, not done here.
 
+## Tiers — divergence is normal, undeclared divergence is not
+
+Engines legitimately differ, as SQL dialects do. What LMCC forbids is
+not knowing which one an artifact meant. Three tiers exist or can, all
+as rows of the same table, resolved by the same mechanism:
+
+| tier | contract shape | exactness | cost |
+|---|---|---|---|
+| **default** — the host's own engine | `pattern/legacy-re2` | agrees on its cases; beyond them hosts may differ, and the spec says where | none; the constructor declares it for you |
+| **exact, one language** | a contract named for one engine and version (`pattern/cpython-re` at a Python minor, `pattern/go-regexp` at a Go minor) | identical wherever that runtime runs; other runtimes refuse | pin the runtime version — usually already done |
+| **exact, every language** | one shared engine (RE2 bindings, or a Rust `regex` build as WebAssembly) | byte-identical across hosts by construction | a native or WASM dependency, outside the kernel, in a pack |
+
+Only the first exists. The others are added when an adapter demands
+what the default cannot give — by *binding an engine*, never by
+authoring a grammar or a matcher (D-32, D-34).
+
 ## Families and contracts
 
 | family | governs | contract | version | spec | evidence |

@@ -87,12 +87,15 @@ class Adapter:
 def adapter(*, messages: list[dict] | None = None, template: list[dict] | dict | None = None,
             parse: dict | None = None, strategies: dict | None = None,
             formats: dict | None = None, name: str = "adapter",
-            extensions: dict[str, str] | None = None) -> Adapter:
+            extensions: dict[str, str] | None = None, declare_defaults: bool = True) -> Adapter:
     """Build an adapter. ``strategies`` values: a name, a :class:`Strategy`,
     a data dict, or ``use(...)``. ``formats`` keys: type names or structural
     keys; values: a name, ``use(...)``, a shipped dict, or a Format.
     ``extensions``: ``{"<family>/<name>": version}`` the adapter needs
-    (kernel §10); checked against the registry at bind."""
+    (kernel §10); checked against the registry at bind. With
+    ``declare_defaults`` (the constructor's convenience, not the loader's)
+    an inline ``pattern`` routing declares ``pattern/legacy-re2`` for you;
+    the dumped artifact carries the line either way."""
     if messages is None:
         messages = template.get("messages") if isinstance(template, dict) else template
     if not isinstance(messages, list):
@@ -142,8 +145,11 @@ def adapter(*, messages: list[dict] | None = None, template: list[dict] | dict |
         else:
             refuse("entry-malformed", f"{where}: expected a name, use(...), a shipped format, or a Format",
                    fix={"action": "edit-entry", "path": where})
-    from .extensions import validate_declaration
+    from .extensions import default_declaration, validate_declaration
+    declared = validate_declaration(extensions)
+    if declare_defaults:
+        declared = default_declaration(s_bindings, declared)
     adp = Adapter(template=list(messages), parse=dict(parse), strategies=s_bindings,
-                  formats=f_bindings, name=name, extensions=validate_declaration(extensions))
+                  formats=f_bindings, name=name, extensions=declared)
     adp.compiled_messages()  # surface template syntax errors immediately
     return adp

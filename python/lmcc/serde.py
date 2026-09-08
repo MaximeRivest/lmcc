@@ -138,7 +138,7 @@ def load(entry: dict, *, registry=None) -> Adapter:
 
     adp = make_adapter(messages=template, parse=parse_spec, strategies=strategies,
                         formats=formats, name=entry.get("name", "adapter"),
-                        extensions=entry.get("extensions"))
+                        extensions=entry.get("extensions"), declare_defaults=False)
     _extensions.resolve(adp, registry)   # kernel §10: refuse here, before any plan
     return adp
 

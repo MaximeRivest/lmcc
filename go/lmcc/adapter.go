@@ -15,8 +15,14 @@ type Adapter struct {
 }
 
 // NewAdapter builds an adapter from data; template syntax is validated here.
-// Extensions may be nil; declaring them is checked against the registry at Bind.
+// Extensions may be nil; declaring them is checked against the registry at
+// Bind. An inline `pattern` routing with no pattern/* declared gets the
+// default tier, pattern/legacy-re2 (kernel §10) — Load never defaults.
 func NewAdapter(name string, template []*Object, parse *Object, strategies, formats, extensions *Object) (a *Adapter, err error) {
+	return newAdapter(name, template, parse, strategies, formats, extensions, true)
+}
+
+func newAdapter(name string, template []*Object, parse *Object, strategies, formats, extensions *Object, declareDefaults bool) (a *Adapter, err error) {
 	defer catch(&err)
 	var ext any
 	if extensions != nil {
@@ -60,6 +66,9 @@ func NewAdapter(name string, template []*Object, parse *Object, strategies, form
 		if s, ok := mustGet(a.Strategies, role).(*Strategy); ok {
 			s.validate("strategies[" + role + "]")
 		}
+	}
+	if declareDefaults {
+		a.Extensions = defaultDeclaration(a.Strategies, a.Extensions)
 	}
 	return a, nil
 }

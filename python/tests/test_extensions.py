@@ -36,23 +36,36 @@ def test_core_only_host_refuses_before_any_plan():
     assert err.value.fix == {"action": "bind-extension", "name": "pattern/legacy-re2", "needs": "0.1.0"}
 
 
-def test_undeclared_pattern_refuses_at_bind_for_code_built_adapters():
-    with pytest.raises(lmcc.Refusal) as err:
-        lmcc.adapter(messages=XML, strategies={"reasoning": PATTERN}).bind(SIG)
-    assert err.value.code == "extension-undeclared"
-    assert err.value.fix == {"action": "declare-extension", "family": "pattern",
-                             "path": "strategies['reasoning'].routings[0]"}
+def test_constructor_declares_the_default_tier_and_dump_says_so():
+    adapter = lmcc.adapter(messages=XML, strategies={"reasoning": PATTERN})
+    assert adapter.extensions == LEGACY
+    assert adapter.dump()["extensions"] == LEGACY
+    assert adapter.bind(SIG).describe()["extensions"]["pattern/legacy-re2"]["binding"] == "python:re"
+    # an explicit pattern/* declaration is never overridden; nothing declared without a pattern
+    explicit = lmcc.adapter(messages=XML, strategies={"reasoning": PATTERN}, extensions={"pattern/other": "0.1.0"})
+    assert explicit.extensions == {"pattern/other": "0.1.0"}
+    assert lmcc.adapter(messages=XML).extensions == {}
 
 
-def test_undeclared_pattern_inside_choose_names_the_branch():
+def test_default_reaches_choose_branches_and_load_never_defaults():
     choose = lmcc.Strategy(choose=[
         {"when": {"capability": "native_reasoning"},
          "use": lmcc.Strategy(visible=False, routings=[{"from": "channel:thinking", "to": "@role"}])},
         {"else": PATTERN}])
+    adapter = lmcc.adapter(messages=XML, strategies={"reasoning": choose})
+    assert adapter.extensions == LEGACY
+    entry = adapter.dump()
+    del entry["extensions"]
     with pytest.raises(lmcc.Refusal) as err:
-        lmcc.adapter(messages=XML, strategies={"reasoning": choose}).bind(SIG, {"native_reasoning": True})
+        lmcc.load(entry)
     assert err.value.code == "extension-undeclared"
     assert err.value.fix["path"] == "strategies['reasoning'].choose[1].routings[0]"
+
+
+def test_declare_defaults_can_be_switched_off():
+    with pytest.raises(lmcc.Refusal) as err:
+        lmcc.adapter(messages=XML, strategies={"reasoning": PATTERN}, declare_defaults=False).bind(SIG)
+    assert err.value.code == "extension-undeclared"
 
 
 def test_pattern_from_a_named_strategy_counts_at_the_same_path():

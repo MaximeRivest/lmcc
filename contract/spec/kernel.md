@@ -486,6 +486,17 @@ Declaring an extension the artifact does not use is allowed; it only
 narrows where the artifact runs. `dump` writes `extensions` back
 verbatim.
 
+**The default tier.** The adapter *constructor* (`lmcc.adapter`,
+`NewAdapter`) — never the loader — fills in the default when an inline
+strategy carries `pattern` and no `pattern/*` is declared:
+`pattern/legacy-re2` at the version the kernel binds natively. The line
+is written into the adapter, so the dumped artifact says it; an explicit
+`pattern/*` declaration is never overridden; a strategy reached by name
+(`{"use": …}`) is not seen by the constructor and its author declares by
+hand. This is a tooling convenience with the same effect as typing the
+line: the artifact on disk always speaks for itself, and `load` refuses
+one that does not.
+
 **Host side.** A registry carries **extension bindings**: for each
 extension name, the version it implements and a binding label
 (`python:re`, `go:regexp`, a library, a service — never a secret).

@@ -171,7 +171,7 @@ func Load(entry *Object, reg *Registry) (a *Adapter, err error) {
 			refuseFix("entry-malformed", fixEditEntry("extensions"), "extensions must be an object of '<family>/<name>': version")
 		}
 	}
-	a, err = NewAdapter(name, template, parse, strategies, formats, extensions)
+	a, err = newAdapter(name, template, parse, strategies, formats, extensions, false)
 	if err != nil {
 		panic(err)
 	}

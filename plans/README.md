@@ -18,4 +18,4 @@ Protocol per plan: spec → corpus (hand-authored bytes) → code →
 | `07-dspy-parity.md` | ✅ any DSPy signature lowers, renders, parses; 16-row catalog vs real DSPy | L |
 | `08-v3-alignment.md` | ✅ the contract is the v3 design: formats by type, strategies by role, parts/spans, UDFs, `@lmcc.fn`, plan faces | XL |
 | `09-audit-triage.md` | classify 114 audit findings; ratify policy gates, then pin defects and missing contract rules | XL |
-| `10-declared-extensions.md` | ✅ phase 1 (kernel 0.3): declared extensions, host bindings, scoped claims, `pattern/legacy-re2` bridge · phase 2 open: a rigorously specified pattern dialect with library evidence | L |
+| `10-declared-extensions.md` | ✅ phase 1 (kernel 0.3): declared extensions, host bindings, scoped claims, `pattern/legacy-re2` default tier declared by the constructor · phase 2 demand-driven: exact tiers by binding an engine, never authoring one | L |

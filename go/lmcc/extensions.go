@@ -115,6 +115,45 @@ func (r resolvedExtension) describe() *Object {
 	return Obj("needs", r.needs, "provides", r.binding.Version(), "binding", r.binding.Binding())
 }
 
+func usesPattern(s *Strategy) bool {
+	if s.Choose != nil {
+		for _, alt := range s.Choose {
+			if usesPattern(alt.Use) {
+				return true
+			}
+		}
+		return false
+	}
+	for _, r := range s.Routings {
+		if r.Has("pattern") {
+			return true
+		}
+	}
+	return false
+}
+
+// defaultDeclaration is the constructor's convenience (kernel §10): an
+// inline `pattern` routing with no pattern/* declared gets the default
+// tier — the host's native engine, pattern/legacy-re2 at the version this
+// kernel binds. Written into the adapter, so Dump says it. Load never
+// defaults: an artifact on disk must speak for itself.
+func defaultDeclaration(strategies, declared *Object) *Object {
+	for _, n := range declared.Keys {
+		if familyOf(n) == "pattern" {
+			return declared
+		}
+	}
+	for _, role := range strategies.Keys {
+		if s, ok := mustGet(strategies, role).(*Strategy); ok && usesPattern(s) {
+			out := declared.Clone()
+			native := NewLegacyRE2()
+			out.Set(native.Extension(), native.Version())
+			return out
+		}
+	}
+	return declared
+}
+
 // validateExtensions: kernel §10 rules 1–2 — shape, names, versions, one
 // per family. Returns the declaration as an ordered object (nil → empty).
 func validateExtensions(raw any) *Object {

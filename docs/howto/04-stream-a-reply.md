@@ -124,8 +124,9 @@ except lmcc.Refusal as r:
 ```python
 regex = lmcc.Strategy(visible=False, routings=[
     {"from": "text", "pattern": "THOUGHT: ([^\\n]*)\\n", "to": "@role", "consume": True}])
-p3 = solve.bind(lmcc.adapter(messages=adapter.template, strategies={"reasoning": regex},
-                             extensions={"pattern/legacy-re2": "0.1.0"}))
+p3 = solve.bind(lmcc.adapter(messages=adapter.template, strategies={"reasoning": regex}))
+assert p3.describe()["extensions"] == {
+    "pattern/legacy-re2": {"needs": "0.1.0", "provides": "0.1.0", "binding": "python:re"}}
 assert p3.describe()["streaming"] == {
     "mode": "buffered",
     "lens": {"mode": "buffered", "reason": "a consuming pattern routing can revise lens text"},
@@ -137,13 +138,13 @@ assert s.feed("THOUGHT: hm\n<answer>\n4\n</answer>") == []
 assert s.finish().values == {"answer": 4, "reasoning": "hm"}
 ```
 
-A `pattern` routing is not core: the adapter must declare which
-dialect the string is in (`extensions`, kernel §10). `pattern/legacy-re2`
-is the host's own regex engine with `.` matching newlines and group 1 as
-the capture — exactly what kernel 0.2 did. Without the declaration, bind
-refuses `extension-undeclared`; on a host that binds no regex at all it
-refuses `extension-unsupported`. Both fire before anything is sent, and
-`p3.describe()["extensions"]` shows what resolved.
+A `pattern` routing is not core: the artifact declares which dialect
+the string is in (`extensions`, kernel §10), and the constructor writes
+the default tier for you — `pattern/legacy-re2`, the host's own regex
+engine with `.` matching newlines and group 1 as the capture, exactly
+what kernel 0.2 did. A loaded artifact without the line refuses
+`extension-undeclared`; a host that binds no regex at all refuses
+`extension-unsupported`. Both fire before anything is sent.
 
 ## What can refuse here
 

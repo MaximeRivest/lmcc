@@ -607,3 +607,42 @@ parameter. Benefits: the core provably needs no regex engine (a core-only
 registry passes every case that does not `requires` one); every
 difference between hosts is a named contract or a named refusal; a
 conformance claim is a list, not an adjective.
+
+
+**D-34 · The default tier is declared by the constructor; exact tiers are
+bound engines, added on demand; the authored-dialect task is withdrawn.**
+
+- **Model: SQL dialects.** Engines legitimately diverge; what LMCC forbids
+  is an artifact that does not say which engine it meant. So the tiers
+  are: the host's native engine (`pattern/legacy-re2`, small stated
+  divergence, no dependency — the common case, made easy); an exact
+  single-language pin (a contract named for one engine at one version —
+  identical wherever that runtime runs, refused elsewhere); an exact
+  cross-language engine (RE2 bindings or Rust `regex` as WebAssembly, from
+  a pack). All are rows of one table; the mechanism (D-33) never changes.
+- **The constructor declares the default; the loader never does.**
+  `lmcc.adapter` / `NewAdapter` write `pattern/legacy-re2` into the
+  adapter when an inline strategy carries `pattern` and no `pattern/*` is
+  declared, so the dumped artifact carries the line. `load` refuses an
+  artifact without it (case 91 stands). Rejected: making a bare `pattern`
+  *mean* legacy — then a default-tier artifact and a not-yet-declared one
+  are indistinguishable on disk, and the day an exact tier exists nobody
+  can tell which was meant. Explicit in the artifact, automatic in the
+  tooling — a compiler writes the ABI into the binary without asking.
+  Limit: named strategies are resolved at bind with a registry the
+  constructor lacks; a pack that emits `pattern` is declared by hand (no
+  std pack does). `declare_defaults=False` keeps the strict behavior for
+  callers who want it.
+- **Plan 10 phase 2 as written is withdrawn.** "Author a rigorous regex
+  dialect with Unicode and capture cases; benchmark five libraries" was
+  the residue of D-14's universal mandate, not a derivation from the one
+  sentence. Regex is not in it; `between` and `line_prefixed` cover what
+  adapters do; the corpus has one `pattern` parse case. Exact tiers are
+  built when an adapter demands one, by binding an engine — never by
+  authoring a grammar or a matcher (D-32 stands).
+
+Cost: a code-built adapter now silently gets the default tier unless
+`declare_defaults=False`; the trade is that the default is visible in
+`dump()` and `plan.describe()`, and the artifact is what the loader
+judges. Benefit: the common case costs zero keystrokes and stays honest;
+the next agent inherits a demand-driven list, not a scheduled engine.
