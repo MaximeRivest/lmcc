@@ -567,7 +567,12 @@ def _derive_lens(plan: Plan) -> DerivedLens:
             post = texts.get(("after", slot.path), "")
             anchors.append((f.name, pre, post))
     for name, prefix, _suffix in anchors:
-        if not core.rstrip(prefix) and (loops or len(anchors) > 1):   # one bare slot may own the whole reply (§4)
+        # one bare slot may own the whole reply (§4) — only when it is the last
+        # thing in its message; a slot with prose after it has no anchor and
+        # is refused as before, never quietly reinterpreted
+        whole = (not loops and len(anchors) == 1
+                 and not core.strip(texts.get(("rest", holes[0][1].path), "x")))
+        if not core.rstrip(prefix) and not whole:
             refuse("not-lensable",
                    f"field {name!r}: no literal text before its hole — nothing anchors the "
                    f"parser; put the field's marker before the hole",
@@ -664,6 +669,7 @@ def _literal_segments(nodes, sig: core.SignatureCore) -> dict:
         prev_text = ""
     if last_slot is not None:
         out[("after", last_slot)] = prev_text.split("\n", 1)[0] if "\n" in prev_text else prev_text
+        out[("rest", last_slot)] = prev_text      # everything to the end of the message
     return out
 
 

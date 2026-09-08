@@ -756,7 +756,9 @@ func deriveLens(p *Plan) *DerivedLens {
 		}
 	}
 	for _, a := range anchors {
-		if RStrip(a.Prefix) == "" && (len(loops) > 0 || len(anchors) > 1) { // one bare slot may own the whole reply (§4)
+		rest, found := restAfterLastSlot(nodes, sig)
+		whole := len(loops) == 0 && len(anchors) == 1 && found && Strip(rest) == ""
+		if RStrip(a.Prefix) == "" && !whole { // one bare slot may own the whole reply (§4), only as the last thing in its message
 			refuseFixf("not-lensable", Obj("action", "edit-template", "path", here, "field", a.Name), "field %q: no literal text before its hole — nothing anchors the parser; put the field's marker before the hole", a.Name)
 		}
 	}
@@ -831,6 +833,30 @@ func tailAfter(nodes []node, loop *loopNode) string {
 		return literal[:len(literal)-len(stripped)] + stripped[:i] + "\n"
 	}
 	return literal
+}
+
+// restAfterLastSlot: everything after the last output slot to the end of
+// the message (the whole-reply rule, kernel §4, needs it blank).
+func restAfterLastSlot(nodes []node, sig *Signature) (rest string, found bool) {
+	var b strings.Builder
+	for _, n := range nodes {
+		switch x := n.(type) {
+		case textNode:
+			b.WriteString(x.text)
+		case slotNode:
+			if f := sig.FieldNamed(x.path); f != nil && f.Direction == "output" {
+				b.Reset()
+				found = true
+			} else {
+				found = false
+				b.Reset()
+			}
+		default:
+			found = false
+			b.Reset()
+		}
+	}
+	return b.String(), found
 }
 
 func literalSegments(nodes []node, sig *Signature) (before, after map[string]string) {

@@ -180,11 +180,12 @@ loop, or bare output slots — and it must live in one message. Read
 backwards:
 
 - a template whose **only** visible output is a bare slot with no
-  literal before it is the *whole-reply* pattern: the field's capture
-  starts at the reply's first byte and runs to its close, the tail, or
-  end of text (a chat-style adapter; `{instruction}` in the system
-  message and `{answer}` alone in the pattern message). With two or more
-  visible outputs an anchorless hole refuses `not-lensable`;
+  literal before it **and nothing but whitespace after it in its
+  message** is the *whole-reply* pattern: the capture is the whole reply
+  (a chat-style adapter: `{instruction}\n{answer}`). Any other anchorless
+  hole — two or more outputs, a loop, or prose after the slot such as
+  `<answer>\n{answer}\n</answer>` — refuses `not-lensable` as always;
+  a refusal is never quietly reinterpreted;
 - per visible output field, the literal before its hole (loop body
   instantiated with the field's `name`/`desc`/`type`/`schema`/`role`)
   is its **anchor**; the literal after it, up to the next hole, its

@@ -1,0 +1,52 @@
+{
+ "name": "refuse-not-lensable-slot-with-prose-after",
+ "kind": "refuse",
+ "entry": {
+  "name": "derived_bad_v1",
+  "versions": {
+   "kernel": "0.5.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n<answer>\n{answer}\n</answer>"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "parse": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Answer.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "expect": {
+  "code": "not-lensable",
+  "fix": {
+   "action": "edit-template",
+   "path": "template[0]",
+   "field": "answer"
+  },
+  "at": "bind"
+ }
+}
