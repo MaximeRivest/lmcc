@@ -43,8 +43,16 @@ def reasoning_tags(options: dict) -> Strategy:
 
 
 def native_reasoning(options: dict) -> Strategy:
+    """Options: ``effort`` (lm15 ``Reasoning.effort`` word; default
+    ``medium``) and optional ``thinking_budget`` (int). The strategy both
+    *asks* for thinking (``config.reasoning`` in the request patch) and
+    *reads* it back (``channel:thinking``)."""
+    reasoning: dict = {"effort": options.get("effort", "medium")}
+    if "thinking_budget" in options:
+        reasoning["thinking_budget"] = options["thinking_budget"]
     return Strategy(
         requires=["native_reasoning"],
+        controls={"config": {"reasoning": reasoning}},
         routings=[{"from": "channel:thinking", "to": "@role"}],
         visible=False,
     )

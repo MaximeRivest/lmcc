@@ -27,8 +27,17 @@ var (
 	strategyKeys  = []string{"when", "requires", "visible", "fragments", "controls", "placement", "routings"}
 	predicateKeys = []string{"capability", "not", "all", "any"}
 	toRE          = regexp.MustCompile(`^@role(\.[A-Za-z_][A-Za-z0-9_]*)?$`)
-	placementRE   = regexp.MustCompile(`^(controls\.[A-Za-z_][A-Za-z0-9_.]*|message:(system|user|assistant))$`)
-	fromRE        = regexp.MustCompile(`^(text|channel:[a-z_]+)$`)
+	placementRE   = regexp.MustCompile(`^(controls\.(config\.[a-z_]+|tools)|message:(system|developer|user|assistant))$`)
+
+	// The controls patch is a partial lm15 request (kernel §3): the first
+	// path segment is `config` or `tools`; `config` keys are the pinned lm15
+	// Config fields (contract/LM15_CONTRACT_PIN). Below that, opaque.
+	lm15ConfigFields = map[string]bool{
+		"max_tokens": true, "temperature": true, "top_p": true, "top_k": true, "stop": true,
+		"response_format": true, "tool_choice": true, "reasoning": true, "cache": true,
+		"service_tier": true, "user_id": true, "store": true, "extensions": true,
+	}
+	fromRE = regexp.MustCompile(`^(text|channel:[a-z_]+)$`)
 )
 
 func NewStrategy() *Strategy {
@@ -168,8 +177,16 @@ func (s *Strategy) validate(where string) {
 			refuseFixf("entry-malformed", fixEditEntry(where+".placement"), "%s.placement: %q: %v — a placement is '@role' or '@role.<sub>' → 'controls.<key>' or 'message:<role>'", where, target, mustGet(s.Placement, target))
 		}
 	}
+	for _, leaf := range controlLeaves(s.Controls, "") {
+		validateControlPath(leaf.path, where+".controls['"+leaf.path+"']")
+	}
+	for _, target := range s.Placement.Keys {
+		if place, _ := s.Placement.Str(target); strings.HasPrefix(place, "controls.") {
+			validateControlPath(place[len("controls."):], where+".placement")
+		}
+	}
 	for _, k := range s.Fragments.Keys {
-		if _, ok := s.Fragments.Str(k); !ok || (k != "system" && k != "user" && k != "assistant") {
+		if _, ok := s.Fragments.Str(k); !ok || (k != "system" && k != "developer" && k != "user" && k != "assistant") {
 			refuseFixf("entry-malformed", fixEditEntry(where+".fragments"), "%s.fragments: %q must name a message role, text", where, k)
 		}
 	}
@@ -226,6 +243,37 @@ func validateRouting(r *Object, where string) {
 		}
 	} else if len(kinds) > 0 || r.Bool("consume", false) {
 		refuseFixf("entry-malformed", fixEditEntry(where), "%s: a channel routing takes no text extractor and no consume", where)
+	}
+}
+
+type controlLeaf struct {
+	path  string
+	value any
+}
+
+// controlLeaves flattens a controls object to (dotted path, value) at the
+// depth the kernel validates (two levels), leaving deeper values opaque.
+func controlLeaves(controls *Object, prefix string) []controlLeaf {
+	var out []controlLeaf
+	if controls == nil {
+		return out
+	}
+	for _, key := range controls.Keys {
+		value, _ := controls.Get(key)
+		if sub, ok := value.(*Object); ok && key == "config" && prefix == "" {
+			out = append(out, controlLeaves(sub, "config.")...)
+			continue
+		}
+		out = append(out, controlLeaf{prefix + key, value})
+	}
+	return out
+}
+
+func validateControlPath(path, where string) {
+	segments := strings.Split(path, ".")
+	ok := segments[0] == "tools" || (segments[0] == "config" && len(segments) >= 2 && lm15ConfigFields[segments[1]])
+	if !ok {
+		refuseFixf("entry-malformed", fixEditEntry(where), "%s: %q is not a field of an lm15 request — controls patch 'config.<field>' or 'tools'; provider-native knobs go under config.extensions", where, path)
 	}
 }
 

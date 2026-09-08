@@ -71,7 +71,7 @@ registry.format(Person,
 plan = extract.bind(adapter, registry=registry)
 assert plan.describe()["outputs"][0]["resolved_by"] == "runtime:Person"
 
-system_text = plan.render(text="Ann is 41.").messages[0]["content"][0]["text"]
+system_text = plan.render(text="Ann is 41.").system
 assert system_text == (
     "Extract the person mentioned in the text.\n\n"
     "Reply with exactly this pattern:\n"
@@ -103,8 +103,8 @@ fence = "`" * 3
 fenced = f'<extract>\n{fence}json\n{{"name": "Ann", "age": 41}}\n{fence}\n</extract>'
 assert plan2.parse(fenced) == {"extract": Person("Ann", 41)}
 
-demo = plan2.render(text="x", demos=[{"text": "Bo is 7.", "extract": Person("Bo", 7)}]).messages[2]
-assert demo["content"][0]["text"] == '<extract>\n{\n  "name": "Bo",\n  "age": 7\n}\n</extract>'
+demo = plan2.render(text="x", demos=[{"text": "Bo is 7.", "extract": Person("Bo", 7)}]).messages[1]
+assert demo["parts"][0]["text"] == '<extract>\n{\n  "name": "Bo",\n  "age": 7\n}\n</extract>'
 assert shared.dump(registry=std)["formats"] == {"Person": {"use": "json"}}
 ```
 

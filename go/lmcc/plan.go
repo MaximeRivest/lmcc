@@ -20,9 +20,33 @@ type formatChoice struct {
 type placement struct{ field, place string }
 
 // RenderResult is plain lm15-shaped messages plus a request patch.
+// RenderResult is an lm15 request minus its model (kernel §3): System
+// (a string, a part list, or nil), Messages (lm15 messages), Patch (the
+// partial request: config, tools). Request() is the whole thing as one
+// lm15 canonical object, feedable to any lm15 implementation.
 type RenderResult struct {
+	System   any
 	Messages []any
 	Patch    *Object
+}
+
+// Request assembles the lm15 request; model may be "" to omit it.
+func (r RenderResult) Request(model string) *Object {
+	out := NewObject()
+	if model != "" {
+		out.Set("model", model)
+	}
+	if r.System != nil {
+		out.Set("system", r.System)
+	}
+	out.Set("messages", r.Messages)
+	if r.Patch != nil {
+		for _, k := range r.Patch.Keys {
+			v, _ := r.Patch.Get(k)
+			out.Set(k, DeepClone(v))
+		}
+	}
+	return out
 }
 
 // Plan is the bound adapter × signature × capabilities: pure faces only.
@@ -109,7 +133,7 @@ func (p *Plan) spelledText(f *Field, value any) string {
 	var b strings.Builder
 	for _, part := range p.write(f, value) {
 		po := part.(*Object)
-		if k, _ := po.Str("kind"); k != "text" {
+		if k, _ := po.Str("type"); k != "text" {
 			refusef("demo-not-renderable", "field %q: its format emits non-text parts, which a text pattern cannot hold", f.Name)
 		}
 		t, _ := po.Str("text")
@@ -156,7 +180,7 @@ func (e env) valueOf(f *Field) (string, string, []any) {
 	parts := e.p.write(f, raw)
 	if len(parts) == 1 {
 		if po := parts[0].(*Object); po != nil {
-			if k, _ := po.Str("kind"); k == "text" {
+			if k, _ := po.Str("type"); k == "text" {
 				t, _ := po.Str("text")
 				return "text", t, nil
 			}
@@ -213,7 +237,7 @@ func (p *Plan) render(inputs *Object, demos, history []*Object, stopAt int) Rend
 		}
 		text, _ := p.Fragments.Str(role)
 		if t := findMessage(messages, role); t != nil {
-			t.Set("content", MergeTextParts(append(t.List("content"), TextPart("\n\n"+text))))
+			t.Set("parts", MergeTextParts(append(t.List("parts"), TextPart("\n\n"+text))))
 		} else {
 			messages = append(messages, MakeMessage(role, []any{TextPart(text)}))
 		}
@@ -230,16 +254,34 @@ func (p *Plan) render(inputs *Object, demos, history []*Object, stopAt int) Rend
 		} else {
 			role := pl.place[len("message:"):]
 			if t := findMessage(messages, role); t != nil {
-				t.Set("content", MergeTextParts(append(t.List("content"), parts...)))
+				t.Set("parts", MergeTextParts(append(t.List("parts"), parts...)))
 			} else {
 				messages = append(messages, MakeMessage(role, parts))
 			}
 		}
 	}
-	if messages == nil {
-		messages = []any{}
+	var system any
+	var systemParts, rest []any
+	for _, m := range messages {
+		mo := m.(*Object)
+		if r, _ := mo.Str("role"); r == "system" {
+			systemParts = append(systemParts, mo.List("parts")...)
+		} else {
+			rest = append(rest, m)
+		}
 	}
-	return RenderResult{Messages: messages, Patch: patch}
+	if len(systemParts) == 1 {
+		if t, ok := systemParts[0].(*Object).Str("type"); ok && t == "text" {
+			system, _ = systemParts[0].(*Object).Str("text")
+		}
+	}
+	if system == nil && len(systemParts) > 0 {
+		system = systemParts
+	}
+	if rest == nil {
+		rest = []any{}
+	}
+	return RenderResult{System: system, Messages: rest, Patch: patch}
 }
 
 func findMessage(messages []any, role string) *Object {
@@ -251,6 +293,33 @@ func findMessage(messages []any, role string) *Object {
 		}
 	}
 	return nil
+}
+
+func getPath(target *Object, path string) (any, bool) {
+	var cur any = target
+	for _, k := range strings.Split(path, ".") {
+		o, ok := cur.(*Object)
+		if !ok {
+			return nil, false
+		}
+		if cur, ok = o.Get(k); !ok {
+			return nil, false
+		}
+	}
+	return cur, true
+}
+
+// mergeControl deep-merges one control leaf into the patch (kernel §3):
+// the same value from two sources is fine; a different one is
+// control-conflict, fixed at the later source's path.
+func (p *Plan) mergeControl(path string, value any, owner string, patchOwner map[string]string, conflictPath string) {
+	if old, ok := getPath(p.PatchData, path); ok && !Equal(old, value) {
+		refuseFixf("control-conflict", fixEditEntry(conflictPath), "%q and %q disagree on request control %q", owner, patchOwner[path], path)
+	}
+	setPath(p.PatchData, path, value)
+	if _, seen := patchOwner[path]; !seen {
+		patchOwner[path] = owner
+	}
 }
 
 func setPath(target *Object, path string, value any) {
@@ -304,25 +373,19 @@ func (p *Plan) renderHistory(history []*Object) []any {
 			continue
 		}
 		role, _ := t.Str("role")
-		if role != "user" && role != "assistant" {
-			refusef("value-invalid", "history item must be {role: user|assistant, content} or {fields: {...}}; got keys %v", t.Keys)
-		}
-		content, _ := t.Get("content")
+		content, _ := t.Get("parts")
 		parts, ok := content.([]any)
-		if !ok {
-			s, isStr := content.(string)
-			if !isStr {
-				s = MarshalJSON(content, -1)
-			}
-			parts = []any{TextPart(s)}
+		if (role != "user" && role != "assistant" && role != "tool" && role != "developer") || !ok {
+			refusef("value-invalid", "history item must be an lm15 message {role, parts} or a {fields: {...}} turn; got keys %v", t.Keys)
 		}
-		turns = append(turns, MakeMessage(role, parts))
+		turns = append(turns, MakeMessage(role, append([]any{}, parts...)))
 	}
 	return turns
 }
 
 // Prefix: the rendered messages that do not depend on inputs (kernel §3).
-func (p *Plan) Prefix(demos, history []*Object) (out []any, err error) {
+// Prefix is the cache-stable request prefix {"system"?, "messages"} (kernel §3).
+func (p *Plan) Prefix(demos, history []*Object) (out *Object, err error) {
 	defer catch(&err)
 	inputNames := map[string]bool{}
 	for _, f := range p.VisibleInputs {
@@ -335,7 +398,13 @@ func (p *Plan) Prefix(demos, history []*Object) (out []any, err error) {
 			break
 		}
 	}
-	return p.render(NewObject(), demos, history, stop).Messages, nil
+	rendered := p.render(NewObject(), demos, history, stop)
+	out = NewObject()
+	if rendered.System != nil {
+		out.Set("system", rendered.System)
+	}
+	out.Set("messages", rendered.Messages)
+	return out, nil
 }
 
 func dependsOnInputs(nodes []node, inputs map[string]bool) bool {
@@ -851,13 +920,8 @@ func Bind(a *Adapter, sig *Signature, capabilities *Object, reg *Registry) (p *P
 				p.Fragments.Set(msgRole, text)
 			}
 		}
-		for _, key := range strategy.Controls.Keys {
-			v, _ := strategy.Controls.Get(key)
-			if old, ok := p.PatchData.Get(key); ok && !Equal(old, v) {
-				refuseFixf("control-conflict", fixEditEntry("strategies['"+f.Role+"'].controls['"+key+"']"), "strategies disagree on request control %q", key)
-			}
-			p.PatchData.Set(key, v)
-			patchOwner[key] = f.Role
+		for _, leaf := range controlLeaves(strategy.Controls, "") {
+			p.mergeControl(leaf.path, leaf.value, f.Role, patchOwner, "strategies['"+f.Role+"'].controls['"+leaf.path+"']")
 		}
 	}
 
@@ -925,12 +989,9 @@ func Bind(a *Adapter, sig *Signature, capabilities *Object, reg *Registry) (p *P
 		}
 	}
 	if patch := p.Lens.Patch(p.VisibleOutputs); patch != nil {
-		for _, key := range patch.Keys {
-			v, _ := patch.Get(key)
-			if old, ok := p.PatchData.Get(key); ok && !Equal(old, v) {
-				refuseFixf("control-conflict", fixEditEntry("strategies['"+patchOwner[key]+"'].controls['"+key+"']"), "lens and strategies disagree on request control %q", key)
-			}
-			p.PatchData.Set(key, v)
+		for _, leaf := range controlLeaves(patch, "") {
+			validateControlPath(leaf.path, "parse")
+			p.mergeControl(leaf.path, leaf.value, "(lens)", patchOwner, "strategies['"+patchOwner[leaf.path]+"'].controls['"+leaf.path+"']")
 		}
 	}
 

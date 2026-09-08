@@ -101,9 +101,9 @@ var mediaDefault Format = &FormatSpec{
 		if !ok {
 			refusef("value-invalid", "field %q: a media value must be a plain dict of part data", f.Name)
 		}
-		part := Obj("kind", kind)
+		part := Obj("type", kind)
 		for _, k := range vo.Keys {
-			if k != "kind" {
+			if k != "type" {
 				x, _ := vo.Get(k)
 				part.Set(k, x)
 			}
@@ -119,7 +119,7 @@ var mediaDefault Format = &FormatSpec{
 		out := NewObject()
 		po := parts[0].(*Object)
 		for _, k := range po.Keys {
-			if k != "kind" {
+			if k != "type" {
 				x, _ := po.Get(k)
 				out.Set(k, x)
 			}

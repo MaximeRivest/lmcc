@@ -4,7 +4,7 @@
  "entry": {
   "name": "derived_v1",
   "versions": {
-   "kernel": "0.3.0",
+   "kernel": "0.4.0",
    "vocab": {}
   },
   "template": [
@@ -62,44 +62,37 @@
   }
  ],
  "expect": {
-  "messages": [
-   {
-    "role": "system",
-    "content": [
-     {
-      "kind": "text",
-      "text": "Answer.\n\nAnswer in exactly this form:\n<answer>\nshort answer\n</answer>\n<score>\n(integer)\n</score>\n"
-     }
-    ]
-   },
-   {
-    "role": "user",
-    "content": [
-     {
-      "kind": "text",
-      "text": "2+2?"
-     }
-    ]
-   },
-   {
-    "role": "assistant",
-    "content": [
-     {
-      "kind": "text",
-      "text": "<answer>\n4\n</answer>\n<score>\n10\n</score>"
-     }
-    ]
-   },
-   {
-    "role": "user",
-    "content": [
-     {
-      "kind": "text",
-      "text": "3+3?"
-     }
-    ]
-   }
-  ],
-  "patch": {}
+  "request": {
+   "system": "Answer.\n\nAnswer in exactly this form:\n<answer>\nshort answer\n</answer>\n<score>\n(integer)\n</score>\n",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "2+2?"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "<answer>\n4\n</answer>\n<score>\n10\n</score>"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "3+3?"
+      }
+     ]
+    }
+   ]
+  }
  }
 }

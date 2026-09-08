@@ -40,8 +40,8 @@ def test_type_binding_at_runtime_is_the_lmcc_format_surface():
     plan = extract.bind(PATTERN, registry=reg)
     assert plan.describe()["outputs"][0]["resolved_by"] == "runtime:Person"
     req = plan.render(text="t", demos=[{"text": "d", "extract": Person("Ann", 41)}])
-    assert req.messages[0]["content"][0]["text"] == "<extract>\nname and age, as JSON\n</extract>\n"
-    assert req.messages[2]["content"][0]["text"] == '<extract>\n{"name": "Ann", "age": 41}\n</extract>'
+    assert req.system == "<extract>\nname and age, as JSON\n</extract>\n"
+    assert req.messages[1]["parts"][0]["text"] == '<extract>\n{"name": "Ann", "age": 41}\n</extract>'
     assert plan.parse('<extract>\n{"name": "Bo", "age": 7}\n</extract>') == {"extract": Person("Bo", 7)}
 
 
@@ -55,7 +55,7 @@ def test_resolution_order_artifact_type_then_structural_then_runtime_then_kernel
     plan = adp.bind(sig, registry=reg)
     d = {o["name"]: o["resolved_by"] for o in plan.describe()["outputs"]}
     assert d == {"a": "artifact:Name", "b": "artifact:integer"}
-    assert plan.render(text="t", demos=[{"text": "d", "a": "ann", "b": 3}]).messages[2]["content"][0]["text"] == \
+    assert plan.render(text="t", demos=[{"text": "d", "a": "ann", "b": 3}]).messages[1]["parts"][0]["text"] == \
         "<a>\nANN\n</a>\n<b>\n<3>\n</b>"
     plain = lmcc.adapter(messages=PATTERN.template).bind(sig, registry=reg)
     assert {o["resolved_by"] for o in plain.describe()["outputs"]} == {"kernel"}
@@ -117,8 +117,8 @@ def test_media_default_writes_parts_and_reads_them():
                                  lmcc.user("{text}{photo}")])
     plan = adp.bind(sig)
     req = plan.render(text="see", photo={"data": "b64", "mime": "image/png"})
-    assert req.messages[1]["content"] == [{"kind": "text", "text": "see"},
-                                          {"kind": "image", "data": "b64", "mime": "image/png"}]
+    assert req.messages[0]["parts"] == [{"type": "text", "text": "see"},
+                                          {"type": "image", "data": "b64", "mime": "image/png"}]
     with pytest.raises(lmcc.Refusal) as err:
         plan.render(text="see", photo="not a part")
     assert err.value.code == "value-invalid"

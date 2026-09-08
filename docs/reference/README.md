@@ -44,7 +44,7 @@ Bind, render, parse, stream (kernel §3, §4, §8):
 |---|---|---|
 | `bind` | `bind(adapter, signature, capabilities, registry) -> Plan`; every refusal fires here | §3 |
 | `Plan` | `.render()`, `.parse()`, `.stream()`, `.describe()`, `.explain()`, `.skeleton()`, `.prefix()` | §3 |
-| `RenderResult` | `.messages`, `.patch`, `.request()` | §3 |
+| `RenderResult` | `.system`, `.messages`, `.patch`, `.request(model=None)` — an lm15 request minus its model | §3 |
 | `Lens` | one reply document form: `split`, `join`, `format`, `requires`, `patch`, `skeleton`, `stream` | §4 |
 | `Stream` | `.feed(delta) -> [event]`, `.finish() -> StreamResult` | §8 |
 | `StreamResult` | `.events`, `.values` | §8 |
@@ -71,9 +71,11 @@ Registry and artifact (kernel §5, §6, §9):
 |---|---|---|
 | `Registry` | `Registry(allow_udf=, extensions=)`: `register_format`, `register_strategy`, `register_lens`, `register_extension`, `format`, `describe` — `extensions=()` is a core-only host | §5, §6, §10 |
 | `native_extensions()`, `ExtensionBinding`, `PatternBinding` | what this runtime binds by default; the protocol a host implements to bind its own | §10 |
+| `lmcc_lm15.request(rendered, model=, config=, override=)` | an `lm15.Request`; the plan's patch is the base, a contradicting Config raises `ConfigConflict` | §3 |
+| `lmcc_lm15.parse(plan, response)`, `lmcc_lm15.stream(plan, events)` | typed values from an `lm15.Response`/`Message`; drive the sans-I/O stream from `lm.stream(...)` | §3, §8 |
 | `default_registry` | the registry `lmcc.format` and `Fn.bind` use when none is given | §5 |
 | `dump`, `load` | the artifact ([entry.schema.json](../../contract/schema/entry.schema.json)); `load` never runs a UDF | §5, §9 |
-| `KERNEL_VERSION` | `"0.3.0"` | §9 |
+| `KERNEL_VERSION` | `"0.4.0"` | §9 |
 
 Refusals:
 

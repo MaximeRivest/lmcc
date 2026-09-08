@@ -19,6 +19,10 @@ def system(text: str) -> dict:
     return {"role": "system", "text": text}
 
 
+def developer(text: str) -> dict:
+    return {"role": "developer", "text": text}
+
+
 def user(text: str) -> dict:
     return {"role": "user", "text": text}
 
@@ -28,8 +32,8 @@ def assistant(text: str) -> dict:
 
 
 def message(role: str, text: str) -> dict:
-    if role not in ("system", "user", "assistant"):
-        refuse("entry-malformed", f"message role {role!r} must be system/user/assistant",
+    if role not in ("system", "developer", "user", "assistant"):
+        refuse("entry-malformed", f"message role {role!r} must be system/developer/user/assistant",
                fix={"action": "edit-entry", "path": "template"})
     return {"role": role, "text": text}
 
@@ -108,8 +112,14 @@ def adapter(*, messages: list[dict] | None = None, template: list[dict] | dict |
         if "directive" in m and m["directive"] not in ("demos", "history"):
             refuse("entry-malformed", f"template[{i}]: directive must be demos or history",
                    fix={"action": "edit-entry", "path": f"template[{i}]"})
-        if "role" in m and m["role"] not in ("system", "user", "assistant"):
-            refuse("entry-malformed", f"template[{i}]: role must be system/user/assistant",
+        if "role" in m and m["role"] not in ("system", "developer", "user", "assistant"):
+            refuse("entry-malformed", f"template[{i}]: role must be system/developer/user/assistant",
+                   fix={"action": "edit-entry", "path": f"template[{i}]"})
+        if m.get("role") == "system" and any("role" in x and x["role"] != "system" or "directive" in x
+                                             for x in messages[:i]):
+            refuse("entry-malformed",
+                   f"template[{i}]: system messages lead the template (they become the lm15 "
+                   f"request's system field); put later instructions in a developer message",
                    fix={"action": "edit-entry", "path": f"template[{i}]"})
     parse = parse or {"kind": "derived"}
     kind = parse.get("kind")

@@ -9,21 +9,21 @@ from lmcc import core
 
 def test_logical_parts_metadata_boundaries_and_input_ownership():
     parts = [
-        {"kind": "thinking", "text": "fo", "id": 1, "keep": True},
-        {"kind": "thinking", "text": "", "id": 2},
-        {"kind": "thinking", "text": "ur"},
-        {"kind": "thinking", "id": 3},
-        {"kind": "thinking", "text": "b"},
-        {"kind": "text", "text": "<answer>ok</answer>"},
+        {"type": "thinking", "text": "fo", "id": 1, "keep": True},
+        {"type": "thinking", "text": "", "id": 2},
+        {"type": "thinking", "text": "ur"},
+        {"type": "thinking", "id": 3},
+        {"type": "thinking", "text": "b"},
+        {"type": "text", "text": "<answer>ok</answer>"},
     ]
     before = copy.deepcopy(parts)
     expected = [
-        {"kind": "thinking", "text": "four", "id": 2, "keep": True},
-        {"kind": "thinking", "id": 3},
-        {"kind": "thinking", "text": "b"},
-        {"kind": "text", "text": "<answer>ok</answer>"},
+        {"type": "thinking", "text": "four", "id": 2, "keep": True},
+        {"type": "thinking", "id": 3},
+        {"type": "thinking", "text": "b"},
+        {"type": "text", "text": "<answer>ok</answer>"},
     ]
-    assert core.response_text_and_parts({"content": parts}) == ("<answer>ok</answer>", expected)
+    assert core.response_text_and_parts({"role": "assistant", "parts": parts}) == ("<answer>ok</answer>", expected)
     plan = lmcc.adapter(messages=[lmcc.system("<answer>{answer}</answer>")]).bind(
         lmcc.signature("", outputs={"answer": str}))
     stream = plan.stream()
@@ -34,13 +34,13 @@ def test_logical_parts_metadata_boundaries_and_input_ownership():
     assert parts == before
 
 
-@pytest.mark.parametrize("part", [None, 7, [], "bare", {}, {"kind": None},
-    {"kind": 7}, {"kind": "text", "text": None}, {"kind": "thinking", "text": 7}])
+@pytest.mark.parametrize("part", [None, 7, [], "bare", {}, {"type": None},
+    {"type": 7}, {"type": "text", "text": None}, {"type": "thinking", "text": 7}])
 def test_malformed_parts_refuse_without_fix_or_host_errors(part):
     plan = lmcc.adapter(messages=[lmcc.system("<answer>{answer}</answer>")]).bind(
         lmcc.signature("", outputs={"answer": str}))
     with pytest.raises(lmcc.Refusal) as batch:
-        plan.parse({"content": [part]})
+        plan.parse({"role": "assistant", "parts": [part]})
     assert batch.value.code == "response-malformed"
     assert batch.value.fix is None
     if not isinstance(part, str):  # Strings are legal text deltas, not legal list parts.

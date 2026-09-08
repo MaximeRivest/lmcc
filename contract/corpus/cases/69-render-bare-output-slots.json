@@ -4,7 +4,7 @@
  "entry": {
   "name": "bare_v1",
   "versions": {
-   "kernel": "0.3.0",
+   "kernel": "0.4.0",
    "vocab": {}
   },
   "template": [
@@ -51,26 +51,19 @@
   "q": "capital?"
  },
  "expect": {
-  "messages": [
-   {
-    "role": "system",
-    "content": [
-     {
-      "kind": "text",
-      "text": "Answer.\nReply exactly like this:\n{\"answer\": \"...\", \"score\": (integer)}"
-     }
-    ]
-   },
-   {
-    "role": "user",
-    "content": [
-     {
-      "kind": "text",
-      "text": "capital?"
-     }
-    ]
-   }
-  ],
-  "patch": {}
+  "request": {
+   "system": "Answer.\nReply exactly like this:\n{\"answer\": \"...\", \"score\": (integer)}",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "capital?"
+      }
+     ]
+    }
+   ]
+  }
  }
 }

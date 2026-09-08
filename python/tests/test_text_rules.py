@@ -127,8 +127,8 @@ def test_pattern_discards_empty_matches_and_consumes_whole_match():
 
 
 def test_span_text_strips_and_joins_every_text_bearing_part():
-    span = lmcc.Span([{"kind": "text", "text": " a "}, {"kind": "thinking", "text": "b\n"}, {"kind": "image", "data": "x"}])
-    assert span.text == "a\nb" and span.of("image") == [{"kind": "image", "data": "x"}]
+    span = lmcc.Span([{"type": "text", "text": " a "}, {"type": "thinking", "text": "b\n"}, {"type": "image", "data": "x"}])
+    assert span.text == "a\nb" and span.of("image") == [{"type": "image", "data": "x"}]
 
 
 @pytest.mark.parametrize("regex", [

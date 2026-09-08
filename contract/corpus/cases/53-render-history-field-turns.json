@@ -4,7 +4,7 @@
  "entry": {
   "name": "chat_v1",
   "versions": {
-   "kernel": "0.3.0",
+   "kernel": "0.4.0",
    "vocab": {}
   },
   "template": [
@@ -72,7 +72,12 @@
   },
   {
    "role": "assistant",
-   "content": "raw turn"
+   "parts": [
+    {
+     "type": "text",
+     "text": "raw turn"
+    }
+   ]
   },
   {
    "fields": {
@@ -82,71 +87,64 @@
   }
  ],
  "expect": {
-  "messages": [
-   {
-    "role": "system",
-    "content": [
-     {
-      "kind": "text",
-      "text": "Chat.\n[[ ## a ## ]]\n...\n[[ ## score ## ]]\n(integer)\n[[ ## completed ## ]]"
-     }
-    ]
-   },
-   {
-    "role": "user",
-    "content": [
-     {
-      "kind": "text",
-      "text": "== q ==\nfirst\n== hint ==\nh1\n"
-     }
-    ]
-   },
-   {
-    "role": "assistant",
-    "content": [
-     {
-      "kind": "text",
-      "text": "[[ ## a ## ]]\none\n[[ ## score ## ]]\n1\n[[ ## completed ## ]]"
-     }
-    ]
-   },
-   {
-    "role": "assistant",
-    "content": [
-     {
-      "kind": "text",
-      "text": "raw turn"
-     }
-    ]
-   },
-   {
-    "role": "user",
-    "content": [
-     {
-      "kind": "text",
-      "text": "== q ==\nsecond\n"
-     }
-    ]
-   },
-   {
-    "role": "assistant",
-    "content": [
-     {
-      "kind": "text",
-      "text": "[[ ## a ## ]]\ntwo\n[[ ## completed ## ]]"
-     }
-    ]
-   },
-   {
-    "role": "user",
-    "content": [
-     {
-      "kind": "text",
-      "text": "== q ==\nthird\n== hint ==\nh3\n"
-     }
-    ]
-   }
-  ],
-  "patch": {}
+  "request": {
+   "system": "Chat.\n[[ ## a ## ]]\n...\n[[ ## score ## ]]\n(integer)\n[[ ## completed ## ]]",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "== q ==\nfirst\n== hint ==\nh1\n"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "[[ ## a ## ]]\none\n[[ ## score ## ]]\n1\n[[ ## completed ## ]]"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "raw turn"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "== q ==\nsecond\n"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "[[ ## a ## ]]\ntwo\n[[ ## completed ## ]]"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "== q ==\nthird\n== hint ==\nh3\n"
+      }
+     ]
+    }
+   ]
+  }
  }
 }

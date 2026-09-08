@@ -106,12 +106,12 @@ def test_line_routing_waits_for_newline_and_preserves_lens_newline():
 def test_channel_part_deltas_coalesce_and_stream():
     plan = routed_plan({"from": "channel:thinking"})
     stream = plan.stream()
-    assert stream.feed({"kind": "thinking", "text": "  rea"}) == [
+    assert stream.feed({"type": "thinking", "text": "  rea"}) == [
         {"kind": "field_started", "field": "reasoning"},
         {"kind": "field_delta", "field": "reasoning", "text": "rea"}]
-    assert stream.feed({"kind": "thinking", "text": "son  "}) == [
+    assert stream.feed({"type": "thinking", "text": "son  "}) == [
         {"kind": "field_delta", "field": "reasoning", "text": "son"}]
-    stream.feed({"kind": "text", "text": "<answer>\nok\n</answer>"})
+    stream.feed({"type": "text", "text": "<answer>\nok\n</answer>"})
     result = stream.finish()
     assert result.values == {"answer": "ok", "reasoning": "reason"}
 
@@ -357,7 +357,7 @@ class FuzzGenerator:
         parts = []
         for _ in range(self.rng.randint(1, 5)):
             kind = self.rng.choice(["text", "thinking", "image"])
-            parts.append({"kind": "image", "url": "x"} if kind == "image" else {"kind": kind, "text": self.text()})
+            parts.append({"type": "image", "url": "x"} if kind == "image" else {"type": kind, "text": self.text()})
         chunks = []
         for p in parts:
             if isinstance(p.get("text"), str):
@@ -366,12 +366,12 @@ class FuzzGenerator:
                 chunks.append(dict(p))
         coalesced: list = []
         for p in parts:
-            if (coalesced and isinstance(p.get("text"), str) and coalesced[-1].get("kind") == p["kind"]
+            if (coalesced and isinstance(p.get("text"), str) and coalesced[-1].get("type") == p["type"]
                     and isinstance(coalesced[-1].get("text"), str)):
                 coalesced[-1] = {**coalesced[-1], "text": coalesced[-1]["text"] + p["text"]}
             else:
                 coalesced.append(dict(p))
-        return {"content": coalesced}, chunks
+        return {"role": "assistant", "parts": coalesced}, chunks
 
 
 def test_fuzz_random_chunking_refines_batch():

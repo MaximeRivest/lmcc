@@ -90,7 +90,7 @@ assert d["streaming"] == {
     "mode": "incremental", "lens": {"mode": "incremental"},
     "routings": [{"field": "reasoning", "from": "text", "mode": "incremental"}],
     "field_done": "finish"}
-assert d["versions"] == {"kernel": "0.3.0",
+assert d["versions"] == {"kernel": "0.4.0",
                          "vocab": {"format/json": "0.1.0", "strategy/reasoning_tags": "0.1.0"}}
 assert d["capabilities"] == {"instruct": True}
 ```

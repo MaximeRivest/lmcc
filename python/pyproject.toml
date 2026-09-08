@@ -11,6 +11,8 @@ license = { text = "MIT" }
 
 [project.optional-dependencies]
 dspy = ["dspy>=3.0", "pydantic>=2"]
+# lm15 is not on PyPI yet: a git commit, bumped deliberately (see python/lmcc_lm15/check)
+lm15 = ["lm15 @ git+https://github.com/lm15-dev/lm15-python@33a5c52"]
 
 [tool.setuptools]
-packages = ["lmcc", "lmcc_std", "lmcc_dspy"]
+packages = ["lmcc", "lmcc_std", "lmcc_dspy", "lmcc_lm15"]

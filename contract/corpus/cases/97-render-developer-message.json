@@ -1,0 +1,75 @@
+{
+ "name": "render-developer-message",
+ "kind": "render",
+ "entry": {
+  "name": "dev",
+  "versions": {
+   "kernel": "0.4.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\nAnswer: {answer}"
+   },
+   {
+    "role": "developer",
+    "text": "Be brief."
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "parse": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Answer.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "q": "hi"
+ },
+ "expect": {
+  "request": {
+   "system": "Answer.\nAnswer: ...",
+   "messages": [
+    {
+     "role": "developer",
+     "parts": [
+      {
+       "type": "text",
+       "text": "Be brief."
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "hi"
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

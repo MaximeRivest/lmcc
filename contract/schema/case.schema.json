@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:lmcc:schema:case:0.3.0",
+  "$id": "urn:lmcc:schema:case:0.4.0",
   "title": "LMCC corpus case",
   "description": "One conformance case. The harness feeds these to any driver; the driver compares and answers {ok, detail}.",
   "type": "object",
@@ -65,13 +65,32 @@
         {
           "type": "object",
           "required": [
-            "content"
+            "parts"
           ],
           "properties": {
-            "content": {
+            "role": {
+              "type": "string"
+            },
+            "parts": {
               "type": "array"
             }
-          }
+          },
+          "description": "an lm15 message"
+        },
+        {
+          "type": "object",
+          "required": [
+            "message"
+          ],
+          "properties": {
+            "message": {
+              "type": "object",
+              "required": [
+                "parts"
+              ]
+            }
+          },
+          "description": "an lm15 response"
         }
       ]
     },
@@ -103,8 +122,7 @@
         "properties": {
           "expect": {
             "required": [
-              "messages",
-              "patch"
+              "request"
             ]
           }
         }

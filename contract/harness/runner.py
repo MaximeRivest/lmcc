@@ -92,8 +92,7 @@ class PythonDriver:
                 result = baked.render(inputs=case.get("inputs", {}),
                                       demos=case.get("demos"),
                                       history=case.get("history"))
-                got = {"messages": result.messages, "patch": result.patch}
-                return _compare(expect, got, "render result")
+                return _compare(expect["request"], result.request(), "request")
             if kind == "parse":
                 values = baked.parse(case["response"])
                 compared = _compare(expect["values"], values, "values")
@@ -129,13 +128,20 @@ class PythonDriver:
                     "detail": f"unexpected refusal [{err.code}]: {err.hint}"}
 
 
+def _message_parts(response: object) -> list:
+    """The part list of an lm15 message or response (kernel §3)."""
+    if isinstance(response, dict) and isinstance(response.get("message"), dict):
+        response = response["message"]
+    return response.get("parts", []) if isinstance(response, dict) else []
+
+
 def _stream_chunkings(response: object) -> list[list[object]]:
     """One whole feed, then every Unicode-scalar split of text and of each
     text-bearing part. Transport byte decoding is outside lmcc (§8)."""
     if isinstance(response, str):
         return [[response], list(response)] + [[response[:i], response[i:]]
                                                for i in range(len(response) + 1)]
-    parts = response.get("content", [])
+    parts = _message_parts(response)
     out: list[list[object]] = [list(parts)]
     for pi, part in enumerate(parts):
         text = part.get("text") if isinstance(part, dict) else None
@@ -160,7 +166,7 @@ def _feed_chunk(plan, stream, response, chunk):
     # A string in a part list is not a text delta. Check its list boundary
     # before feed can reinterpret it. Other malformed deltas reach feed.
     if not isinstance(response, str) and isinstance(chunk, str):
-        plan.parse({"content": [chunk]})
+        plan.parse({"role": "assistant", "parts": [chunk]})
     return stream.feed(chunk)
 
 
@@ -220,7 +226,7 @@ def _trace_chunking(response: object) -> list[object]:
     if isinstance(response, str):
         return list(response)
     out: list[object] = []
-    for part in response.get("content", []):
+    for part in _message_parts(response):
         text = part.get("text") if isinstance(part, dict) else None
         if isinstance(text, str) and text:
             out.extend({**part, "text": character} for character in text)

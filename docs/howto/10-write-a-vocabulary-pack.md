@@ -74,7 +74,7 @@ case = {
     "name": "mypack-csv-scratchpad", "kind": "parse", "vocab": ["mypack"],
     "entry": {
         "name": "notes_v1",
-        "versions": {"kernel": "0.3.0", "vocab": {"format/csv": "0.1.0", "strategy/scratchpad": "0.1.0"}},
+        "versions": {"kernel": "0.4.0", "vocab": {"format/csv": "0.1.0", "strategy/scratchpad": "0.1.0"}},
         "template": [
             {"role": "system", "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"},
             {"role": "user", "text": "{text}"}],
@@ -105,7 +105,7 @@ def run_parse_case(case, registry):
     return plan
 
 plan = run_parse_case(case, registry)
-assert plan.render(text="t").messages[0]["content"][0]["text"].endswith(
+assert plan.render(text="t").system.endswith(
     "<names>\nvalues separated by ';'\n</names>\n\n\nWrite your notes on lines starting with 'NOTE:'.")
 ```
 

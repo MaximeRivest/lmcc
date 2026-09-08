@@ -4,7 +4,7 @@
  "entry": {
   "name": "scalars_v1",
   "versions": {
-   "kernel": "0.3.0",
+   "kernel": "0.4.0",
    "vocab": {}
   },
   "template": [
@@ -148,44 +148,37 @@
   }
  ],
  "expect": {
-  "messages": [
-   {
-    "role": "system",
-    "content": [
-     {
-      "kind": "text",
-      "text": "Spell.\n<a>\n(number)\n<b>\n(number)\n<c>\n(number)\n<d>\n(number)\n<e>\n(number)\n<f>\n(number)\n<g>\n(number)\n<h>\n(number)\n<i>\n(integer)\n</done>"
-     }
-    ]
-   },
-   {
-    "role": "user",
-    "content": [
-     {
-      "kind": "text",
-      "text": "x=0.25 flag=false count=0 level=low"
-     }
-    ]
-   },
-   {
-    "role": "assistant",
-    "content": [
-     {
-      "kind": "text",
-      "text": "<a>\n3\n<b>\n1e+21\n<c>\n0.000001\n<d>\n1e-7\n<e>\n123456789012345680000\n<f>\n-0.5\n<g>\n0\n<h>\n1.5e+300\n<i>\n9007199254740993\n</done>"
-     }
-    ]
-   },
-   {
-    "role": "user",
-    "content": [
-     {
-      "kind": "text",
-      "text": "x=0.5 flag=true count=-12 level=high"
-     }
-    ]
-   }
-  ],
-  "patch": {}
+  "request": {
+   "system": "Spell.\n<a>\n(number)\n<b>\n(number)\n<c>\n(number)\n<d>\n(number)\n<e>\n(number)\n<f>\n(number)\n<g>\n(number)\n<h>\n(number)\n<i>\n(integer)\n</done>",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "x=0.25 flag=false count=0 level=low"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "<a>\n3\n<b>\n1e+21\n<c>\n0.000001\n<d>\n1e-7\n<e>\n123456789012345680000\n<f>\n-0.5\n<g>\n0\n<h>\n1.5e+300\n<i>\n9007199254740993\n</done>"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "x=0.5 flag=true count=-12 level=high"
+      }
+     ]
+    }
+   ]
+  }
  }
 }

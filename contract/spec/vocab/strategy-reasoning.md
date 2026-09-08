@@ -31,7 +31,11 @@ matches, stripped, joined by newlines).
 ## strategy/native_reasoning
 
 Models with a native thinking channel. Requires `native_reasoning`.
-**Hidden.** No fragments, no token cost. Routing: `{from:
+**Hidden.** No fragments. The strategy does everything its meaning
+needs: it *asks* for thinking — controls `{config: {reasoning: {effort,
+thinking_budget?}}}`, a partial lm15 request (kernel §3); options
+`effort` (an lm15 `Reasoning.effort` word, default `medium`) and
+`thinking_budget` (int) — and *reads* it back: routing `{from:
 channel:thinking, to: @role}`.
 
 **Corpus.** `10-refuse-bind-capability.json` (predicate refusal),

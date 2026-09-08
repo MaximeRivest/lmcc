@@ -129,13 +129,13 @@ class MediaFormat(Format):
         if not isinstance(value, dict):
             refuse("value-invalid",
                    f"field {field.name!r}: a media value must be a plain dict of part data")
-        return [{"kind": kind, **{k: v for k, v in value.items() if k != "kind"}}]
+        return [{"type": kind, **{k: v for k, v in value.items() if k != "type"}}]
 
     def read(self, span, field):
         parts = span.of(field.shape.get("media"))
         if not parts:
             refuse("parse-value", f"field {field.name!r}: no {field.shape.get('media')} part in the span")
-        return {k: v for k, v in parts[0].items() if k != "kind"}
+        return {k: v for k, v in parts[0].items() if k != "type"}
 
 
 SCALAR_DEFAULT = ScalarFormat()

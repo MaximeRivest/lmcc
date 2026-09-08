@@ -4,7 +4,7 @@
  "entry": {
   "name": "two_temperatures_v1",
   "versions": {
-   "kernel": "0.3.0",
+   "kernel": "0.4.0",
    "vocab": {}
   },
   "template": [
@@ -23,12 +23,16 @@
   "strategies": {
    "reasoning": {
     "controls": {
-     "temperature": 0
+     "config": {
+      "temperature": 0
+     }
     }
    },
    "style": {
     "controls": {
-     "temperature": 1
+     "config": {
+      "temperature": 1
+     }
     }
    }
   }
@@ -72,7 +76,7 @@
   "code": "control-conflict",
   "fix": {
    "action": "edit-entry",
-   "path": "strategies['style'].controls['temperature']"
+   "path": "strategies['style'].controls['config.temperature']"
   },
   "at": "bind"
  }

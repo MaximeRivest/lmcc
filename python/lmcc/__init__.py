@@ -6,8 +6,8 @@ replies. The kernel ships no vocabulary beyond its scalar and media
 defaults; everything else registers through the sockets.
 """
 
-from .adapter import (Adapter, adapter, assistant, demos, directive, history, message,
-                      system, use, user)
+from .adapter import (Adapter, adapter, assistant, demos, developer, directive, history,
+                      message, system, use, user)
 from .core import (Field, SignatureCore, Span, field, signature, signature_from_dict,
                    signature_to_dict, typename)
 from .errors import Refusal, refuse
@@ -37,7 +37,7 @@ __all__ = [
     "PatternBinding", "Plan",
     "Refusal", "Registry", "RenderResult", "Role", "SignatureCore", "Span", "Strategy",
     "Stream", "StreamResult",
-    "adapter", "assistant", "bind", "default_registry", "demos", "directive", "dump",
+    "adapter", "assistant", "bind", "default_registry", "demos", "developer", "directive", "dump",
     "field", "fn", "format", "history", "load", "make_format", "message", "native_extensions",
     "refuse", "ship",
     "signature", "signature_from_dict", "signature_to_dict", "system", "typename", "use", "user",

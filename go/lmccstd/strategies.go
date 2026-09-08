@@ -30,9 +30,20 @@ func reasoningTags(options *lmcc.Object) (*lmcc.Strategy, error) {
 	return s, nil
 }
 
+// nativeReasoning both asks for thinking (config.reasoning in the request
+// patch; options effort, thinking_budget) and reads it back (channel:thinking).
 func nativeReasoning(options *lmcc.Object) (*lmcc.Strategy, error) {
 	s := lmcc.NewStrategy()
 	s.Requires = []string{"native_reasoning"}
+	effort := "medium"
+	if e, ok := options.Str("effort"); ok {
+		effort = e
+	}
+	reasoning := lmcc.Obj("effort", effort)
+	if b, ok := options.Get("thinking_budget"); ok {
+		reasoning.Set("thinking_budget", b)
+	}
+	s.Controls = lmcc.Obj("config", lmcc.Obj("reasoning", reasoning))
 	s.Routings = []*lmcc.Object{lmcc.Obj("from", "channel:thinking", "to", "@role")}
 	s.Visible = false
 	return s, nil

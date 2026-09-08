@@ -4,7 +4,7 @@
  "entry": {
   "name": "sub_v1",
   "versions": {
-   "kernel": "0.3.0",
+   "kernel": "0.4.0",
    "vocab": {}
   },
   "template": [
@@ -97,34 +97,28 @@
     "</answer>"
    ]
   },
-  "prefix": [
-   {
-    "role": "system",
-    "content": [
-     {
-      "kind": "text",
-      "text": "Do.\n<answer>\n...\n</answer>\n"
-     }
-    ]
-   },
-   {
-    "role": "user",
-    "content": [
-     {
-      "kind": "text",
-      "text": "d"
-     }
-    ]
-   },
-   {
-    "role": "assistant",
-    "content": [
-     {
-      "kind": "text",
-      "text": "<answer>\ny\n</answer>"
-     }
-    ]
-   }
-  ]
+  "prefix": {
+   "system": "Do.\n<answer>\n...\n</answer>\n",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "d"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "<answer>\ny\n</answer>"
+      }
+     ]
+    }
+   ]
+  }
  }
 }

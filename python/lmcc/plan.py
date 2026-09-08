@@ -18,7 +18,7 @@ from .errors import Refusal, refuse
 from . import extensions as _extensions
 from .parse import DerivedLens, Lens, apply_routings
 from .serde import KERNEL_VERSION
-from .strategy import Strategy
+from .strategy import Strategy, control_leaves, validate_control_path
 from .template import Loop, Slot, Text, render_nodes, validate_nodes
 
 
@@ -38,11 +38,23 @@ class _FormatChoice:
 
 @dataclass
 class RenderResult:
+    """An lm15 request minus its model (kernel §3): ``system`` (text, a
+    part list, or None), ``messages`` (lm15 messages), and ``patch`` (the
+    partial request: ``config``, ``tools``). ``request()`` is the whole
+    thing as one lm15 canonical dict, feedable to any lm15 implementation."""
     messages: list[dict]
     patch: dict = dc_field(default_factory=dict)
+    system: object = None
 
-    def request(self) -> dict:
-        return {"messages": self.messages, **self.patch}
+    def request(self, model: str | None = None) -> dict:
+        out: dict = {}
+        if model is not None:
+            out["model"] = model
+        if self.system is not None:
+            out["system"] = self.system
+        out["messages"] = self.messages
+        out.update(_deep_copy(self.patch))
+        return out
 
 
 class _Env:
@@ -78,7 +90,7 @@ class _Env:
         if f.name not in self.values:
             refuse("missing-input", f"no value supplied for field {f.name!r}")
         parts = self.plan.write(f, self.values[f.name])
-        if len(parts) == 1 and parts[0].get("kind") == "text":
+        if len(parts) == 1 and parts[0].get("type") == "text":
             return ("text", parts[0]["text"])
         return ("parts", parts)
 
@@ -160,7 +172,7 @@ class Plan:
                    f"field {f.name!r}: format {fmt.name or '(inline)'} does not round-trip, "
                    f"so a demo written with it could not be read back")
         parts = self.write(f, value)
-        if any(p.get("kind") != "text" for p in parts):
+        if any(p.get("type") != "text" for p in parts):
             refuse("demo-not-renderable",
                    f"field {f.name!r}: its format emits non-text parts, which a text "
                    f"pattern cannot hold")
@@ -205,8 +217,8 @@ class Plan:
                 if target is None:
                     messages.append(core.make_message(role, [core.text_part(text)]))
                 else:
-                    target["content"] = core.merge_text_parts(
-                        target["content"] + [core.text_part("\n\n" + text)])
+                    target["parts"] = core.merge_text_parts(
+                        target["parts"] + [core.text_part("\n\n" + text)])
         patch = _deep_copy(self.patch)
         for fname, place in self.placements:
             f = self.signature.field_named(fname)
@@ -221,8 +233,14 @@ class Plan:
                 if target is None:
                     messages.append(core.make_message(role, parts))
                 else:
-                    target["content"] = core.merge_text_parts(target["content"] + parts)
-        return RenderResult(messages=messages, patch=patch)
+                    target["parts"] = core.merge_text_parts(target["parts"] + parts)
+        system_parts = [p for m in messages if m["role"] == "system" for p in m["parts"]]
+        system = None
+        if system_parts:
+            system = (system_parts[0]["text"] if len(system_parts) == 1
+                      and system_parts[0].get("type") == "text" else system_parts)
+        return RenderResult(messages=[m for m in messages if m["role"] != "system"],
+                            patch=patch, system=system)
 
     def _render_message(self, nodes, values: dict, *, partial: bool = False) -> list[dict]:
         out: list[dict] = []
@@ -257,28 +275,31 @@ class Plan:
                     refuse("value-invalid", "history field turn: 'fields' must be an object")
                 turns.extend(self._render_turns(turn["fields"]))
                 continue
-            role = turn.get("role")
-            if role not in ("user", "assistant"):
+            role, parts = turn.get("role"), turn.get("parts")
+            if role not in ("user", "assistant", "tool", "developer") or not isinstance(parts, list):
                 refuse("value-invalid",
-                       f"history item must be {{role: user|assistant, content}} or "
-                       f"{{fields: {{...}}}}; got keys {sorted(turn)}")
-            content = turn.get("content")
-            parts = content if isinstance(content, list) else [core.text_part(str(content))]
-            turns.append(core.make_message(role, parts))
+                       f"history item must be an lm15 message {{role, parts}} or a "
+                       f"{{fields: {{...}}}} turn; got keys {sorted(turn)}")
+            turns.append(core.make_message(role, list(parts)))
         return turns
 
     def prefix(self, *, demos: list[dict] | None = None,
-               history: list[dict] | None = None) -> list[dict]:
-        """The rendered messages that do not depend on inputs (kernel §3):
-        everything before the first message with an input slot or inputs
-        loop — the cache-stable bytes."""
+               history: list[dict] | None = None) -> dict:
+        """The rendered request prefix that does not depend on inputs
+        (kernel §3): ``{"system"?, "messages"}`` up to the first message
+        with an input slot or inputs loop — the cache-stable bytes."""
         stop = None
         input_names = {f.name for f in self.visible_inputs}
         for i, (msg, nodes) in enumerate(self.adapter.compiled_messages()):
             if nodes is not None and _depends_on_inputs(nodes, input_names):
                 stop = i
                 break
-        return self._render({}, demos, history, stop_at=stop).messages
+        rendered = self._render({}, demos, history, stop_at=stop)
+        out: dict = {}
+        if rendered.system is not None:
+            out["system"] = rendered.system
+        out["messages"] = rendered.messages
+        return out
 
     def skeleton(self) -> dict:
         return self.lens.skeleton()
@@ -393,6 +414,30 @@ def _depends_on_inputs(nodes, input_names: set[str]) -> bool:
         if isinstance(n, Loop) and (n.source == "inputs" or _depends_on_inputs(n.body, input_names)):
             return True
     return False
+
+
+def _get_path(target: dict, path: str):
+    for k in path.split("."):
+        if not isinstance(target, dict) or k not in target:
+            return _MISSING
+        target = target[k]
+    return target
+
+
+_MISSING = object()
+
+
+def _merge_control(plan, path: str, value, *, owner: str, patch_owner: dict, conflict_path: str):
+    """Deep-merge one control leaf into the patch (kernel §3): the same
+    value from two sources is fine; a different one is `control-conflict`,
+    fixed at the later source's path."""
+    existing = _get_path(plan.patch, path)
+    if existing is not _MISSING and existing != value:
+        refuse("control-conflict",
+               f"{owner!r} and {patch_owner.get(path)!r} disagree on request control {path!r}",
+               fix={"action": "edit-entry", "path": conflict_path})
+    _set_path(plan.patch, path, value)
+    patch_owner.setdefault(path, owner)
 
 
 def _set_path(target: dict, path: str, value: object) -> None:
@@ -688,13 +733,9 @@ def bind(adapter: Adapter, sig: core.SignatureCore, capabilities: dict, registry
         for msg_role, text in strategy.fragments.items():
             existing = plan.fragments.get(msg_role)
             plan.fragments[msg_role] = (existing + "\n" + text) if existing else text
-        for key, value in strategy.controls.items():
-            if key in plan.patch and plan.patch[key] != value:
-                refuse("control-conflict", f"strategies disagree on request control {key!r}",
-                       fix={"action": "edit-entry",
-                            "path": f"strategies[{f.role!r}].controls[{key!r}]"})
-            plan.patch[key] = value
-            patch_owner[key] = f.role
+        for path, value in control_leaves(strategy.controls):
+            _merge_control(plan, path, value, owner=f.role, patch_owner=patch_owner,
+                           conflict_path=f"strategies[{f.role!r}].controls[{path!r}]")
 
     # 2. visibility.
     plan.visible_inputs = [f for f in sig.inputs if f.name not in hidden]
@@ -735,12 +776,10 @@ def bind(adapter: Adapter, sig: core.SignatureCore, capabilities: dict, registry
                    f"lens {adapter.parse.get('kind')!r} requires capability {fact!r}, which "
                    f"the model does not declare — use an invertible pattern instead",
                    fix={"action": "declare-capability", "fact": fact})
-    for key, value in (plan.lens.patch(plan.visible_outputs) or {}).items():
-        if key in plan.patch and plan.patch[key] != value:
-            refuse("control-conflict", f"lens and strategies disagree on request control {key!r}",
-                   fix={"action": "edit-entry",
-                        "path": f"strategies[{patch_owner[key]!r}].controls[{key!r}]"})
-        plan.patch[key] = value
+    for path, value in control_leaves(plan.lens.patch(plan.visible_outputs) or {}):
+        validate_control_path(path, where="parse")
+        _merge_control(plan, path, value, owner="(lens)", patch_owner=patch_owner,
+                       conflict_path=f"strategies[{patch_owner.get(path)!r}].controls[{path!r}]")
 
     # 5. template validation + input coverage.
     known = {f.name for f in sig.fields}

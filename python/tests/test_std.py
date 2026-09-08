@@ -35,7 +35,7 @@ def test_json_format_lowers_and_lifts_native_values():
                          outputs={"people": list[Person], "color": Color, "n": int})
     plan = lmcc.adapter(messages=PATTERN, formats={"list[object]": "json"}).bind(sig, registry=_registry())
     req = plan.render(text="t", demos=[{"text": "d", "people": [Person("Ann", 41)], "color": Color.RED, "n": 1}])
-    assert req.messages[2]["content"][0]["text"] == \
+    assert req.messages[1]["parts"][0]["text"] == \
         '<people>\n[\n  {\n    "name": "Ann",\n    "age": 41\n  }\n]\n</people>\n<color>\nred\n</color>\n<n>\n1\n</n>'
     values = plan.parse('<people>\n```json\n[{"name": "Bo", "age": 7}]\n```\n</people>\n<color>\nred\n</color>\n<n>\n2\n</n>')
     assert values == {"people": [Person("Bo", 7)], "color": Color.RED, "n": 2}
@@ -54,7 +54,7 @@ def test_table_format_escaping_and_coercion():
         "type": "array", "items": {"type": "object", "properties": {"name": {"type": "string"}, "ok": {"type": "boolean"}}}}})
     plan = lmcc.adapter(messages=PATTERN, formats={"list[object]": lmcc.use("table", columns=["name", "ok"])}
                         ).bind(sig, registry=_registry())
-    demo = plan.render(text="t", demos=[{"text": "d", "rows": [{"name": "a|b", "ok": True}]}]).messages[2]["content"][0]["text"]
+    demo = plan.render(text="t", demos=[{"text": "d", "rows": [{"name": "a|b", "ok": True}]}]).messages[1]["parts"][0]["text"]
     assert demo == "<rows>\n| a\\|b | true |\n</rows>"
     assert plan.parse(demo) == {"rows": [{"name": "a|b", "ok": True}]}
     with pytest.raises(lmcc.Refusal) as err:
@@ -77,7 +77,7 @@ def test_scaled_number_rounding_and_spelling():
     sig = lmcc.signature("x", inputs={"text": str}, outputs={"p": float})
     plan = lmcc.adapter(messages=PATTERN, formats={"number": lmcc.use("scaled_number", scale=100, suffix="%", round=1)}
                         ).bind(sig, registry=_registry())
-    demo = plan.render(text="t", demos=[{"text": "d", "p": 0.12345}]).messages[2]["content"][0]["text"]
+    demo = plan.render(text="t", demos=[{"text": "d", "p": 0.12345}]).messages[1]["parts"][0]["text"]
     assert demo == "<p>\n12.3%\n</p>"
     assert plan.parse("<p>\n83%\n</p>") == {"p": 0.83}
 
@@ -91,8 +91,8 @@ def test_json_object_lens_is_a_gated_mode():
     assert err.value.code == "capability-missing"
     plan = adp.bind(sig, {"native_structured_output": True}, registry=_registry())
     req = plan.render(q="?")
-    assert req.patch["response_format"]["schema"]["required"] == ["answer", "score"]
-    assert req.messages[0]["content"][0]["text"] == 'Answer.\n{\n  "answer": "...",\n  "score": "(integer)"\n}'
+    assert req.patch["config"]["response_format"]["schema"]["required"] == ["answer", "score"]
+    assert req.system == 'Answer.\n{\n  "answer": "...",\n  "score": "(integer)"\n}'
     assert plan.parse('```json\n{"answer": "A", "score": 9, "extra": 1}\n```') == {"answer": "A", "score": 9}
     with pytest.raises(lmcc.Refusal) as err:
         plan.parse('{"answer": "A", "answer": "B", "score": 1}')

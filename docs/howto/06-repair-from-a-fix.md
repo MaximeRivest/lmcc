@@ -35,7 +35,7 @@ def extract(text: str) -> Out:
     """Extract the person."""
 
 entry = {
-    "name": "x", "versions": {"kernel": "0.3.0", "vocab": {}},
+    "name": "x", "versions": {"kernel": "0.4.0", "vocab": {}},
     "template": [
         {"role": "system", "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"},
         {"role": "user", "text": "{text}"}],
@@ -118,8 +118,8 @@ try:
 except lmcc.Refusal as r:
     assert r.describe() == {
         "code": "version-incompatible",
-        "hint": "kernel: artifact needs 0.9.0, this implementation provides 0.3.0",
-        "fix": {"action": "match-version", "entry": "kernel", "needs": "0.9.0", "provides": "0.3.0"},
+        "hint": "kernel: artifact needs 0.9.0, this implementation provides 0.4.0",
+        "fix": {"action": "match-version", "entry": "kernel", "needs": "0.9.0", "provides": "0.4.0"},
         "partial": None}
 ```
 

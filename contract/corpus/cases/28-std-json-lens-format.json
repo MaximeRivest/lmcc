@@ -7,7 +7,7 @@
  "entry": {
   "name": "format_json_v1",
   "versions": {
-   "kernel": "0.3.0",
+   "kernel": "0.4.0",
    "vocab": {
     "lens/json_object": "0.1.0",
     "format/json": "0.1.0"
@@ -73,48 +73,42 @@
   "question": "capital of France?"
  },
  "expect": {
-  "messages": [
-   {
-    "role": "system",
-    "content": [
-     {
-      "kind": "text",
-      "text": "Answer.\n\nAnswer like this:\n{\n  \"answer\": \"short answer\",\n  \"score\": \"(integer)\",\n  \"payload\": \"JSON matching this schema: {\\\"type\\\": \\\"array\\\"}\"\n}"
-     }
-    ]
-   },
-   {
-    "role": "user",
-    "content": [
-     {
-      "kind": "text",
-      "text": "capital of France?"
-     }
-    ]
-   }
-  ],
-  "patch": {
-   "response_format": {
-    "type": "json_schema",
-    "schema": {
-     "type": "object",
-     "properties": {
-      "answer": {
-       "type": "string"
-      },
-      "score": {
-       "type": "integer"
-      },
-      "payload": {
-       "type": "array"
+  "request": {
+   "system": "Answer.\n\nAnswer like this:\n{\n  \"answer\": \"short answer\",\n  \"score\": \"(integer)\",\n  \"payload\": \"JSON matching this schema: {\\\"type\\\": \\\"array\\\"}\"\n}",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "capital of France?"
       }
-     },
-     "required": [
-      "answer",
-      "score",
-      "payload"
-     ],
-     "additionalProperties": false
+     ]
+    }
+   ],
+   "config": {
+    "response_format": {
+     "type": "json_schema",
+     "schema": {
+      "type": "object",
+      "properties": {
+       "answer": {
+        "type": "string"
+       },
+       "score": {
+        "type": "integer"
+       },
+       "payload": {
+        "type": "array"
+       }
+      },
+      "required": [
+       "answer",
+       "score",
+       "payload"
+      ],
+      "additionalProperties": false
+     }
     }
    }
   }

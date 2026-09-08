@@ -57,7 +57,7 @@ every structured shape goes through `json`.
 
 ```python
 req = plan.render(passage="Rain fell all day.")
-assert req.messages[1]["content"][0]["text"] == (
+assert req.messages[0]["parts"][0]["text"] == (
     "[[ ## passage ## ]]\nRain fell all day.\n\n"
     "Respond with the corresponding output fields, then end with the marker for `[[ ## completed ## ]]`.")
 assert plan.skeleton() == {"prefill": "[[ ## summary ## ]]\n", "stops": ["[[ ## completed ## ]]"]}
@@ -101,7 +101,7 @@ assert turns == [{"fields": {"question": "hi", "answer": "hello"}}]
 cp = adapter.bind(chat.signature, {}, registry=registry)
 req = cp.render(inputs=inputs, history=turns)
 assert [m["role"] for m in req.messages] == ["system", "user", "assistant", "user"]
-assert req.messages[2]["content"][0]["text"] == "[[ ## answer ## ]]\nhello\n\n[[ ## completed ## ]]"
+assert req.messages[1]["parts"][0]["text"] == "[[ ## answer ## ]]\nhello\n\n[[ ## completed ## ]]"
 ```
 
 ## 6. `dspy.Reasoning` carries the role

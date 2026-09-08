@@ -26,10 +26,10 @@ func (l *JSONObjectLens) Patch(fields []*lmcc.Field) *lmcc.Object {
 		props.Set(f.Name, f.Shape.Clone())
 		required = append(required, f.Name)
 	}
-	return lmcc.Obj("response_format", lmcc.Obj(
+	return lmcc.Obj("config", lmcc.Obj("response_format", lmcc.Obj(
 		"type", "json_schema",
 		"schema", lmcc.Obj("type", "object", "properties", props,
-			"required", required, "additionalProperties", false)))
+			"required", required, "additionalProperties", false))))
 }
 
 func (l *JSONObjectLens) Split(text string, fieldNames []string) map[string]string {

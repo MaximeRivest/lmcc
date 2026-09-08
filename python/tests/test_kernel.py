@@ -65,7 +65,7 @@ def test_fn_lowers_parameters_return_and_docstring():
 def test_bind_render_parse_round_trip():
     plan = answer.bind(XML, capabilities={"instruct": True})
     req = plan.render(question="Why is the sky blue?")
-    assert req.messages[-1]["content"][0]["text"] == "<question>\nWhy is the sky blue?\n</question>\n"
+    assert req.messages[-1]["parts"][0]["text"] == "<question>\nWhy is the sky blue?\n</question>\n"
     assert req.patch == {}
     assert plan.parse("<answer>\nRayleigh scattering.\n</answer>") == {"answer": "Rayleigh scattering."}
 
@@ -82,7 +82,7 @@ def test_the_template_is_the_parser():
 def test_demos_are_written_by_the_lens():
     plan = answer.bind(XML)
     req = plan.render(question="q", demos=[{"question": "d", "answer": "a"}])
-    demo_turn = req.messages[2]["content"][0]["text"]
+    demo_turn = req.messages[1]["parts"][0]["text"]
     assert demo_turn == "<answer>\na\n</answer>"
     assert plan.parse(demo_turn) == {"answer": "a"}
 
@@ -94,7 +94,7 @@ def test_bare_output_slots_form_a_pattern():
 
     sig = lmcc.signature("x", inputs={"q": str}, outputs={"answer": str, "n": int})
     plan = spelled.bind(sig)
-    assert plan.render(q="?").messages[0]["content"][0]["text"] == 'Reply exactly like this:\n{"answer": "...", "n": (integer)}'
+    assert plan.render(q="?").system == 'Reply exactly like this:\n{"answer": "...", "n": (integer)}'
     assert plan.parse('{"answer": "Paris", "n": 9}') == {"answer": "Paris", "n": 9}
     assert plan.skeleton() == {"prefill": '{"answer": "', "stops": ["}"]}
 
@@ -139,7 +139,7 @@ def test_plan_faces_are_data():
     json.dumps(d)
     assert d["outputs"][0]["format"] == "kernel-scalar" and d["outputs"][0]["resolved_by"] == "kernel"
     assert d["skeleton"] == {"prefill": "<reasoning>\n", "stops": ["</answer>"]}
-    assert plan.prefix(demos=[{"problem": "p", "reasoning": "r", "answer": 1}])[0]["role"] == "system"
+    assert "system" in plan.prefix(demos=[{"problem": "p", "reasoning": "r", "answer": 1}])
     assert "kernel-scalar" in plan.explain()
 
 
@@ -161,9 +161,9 @@ def test_history_field_turns_and_partial_examples():
     plan = answer.bind(with_history)
     req = plan.render(question="third", history=[
         {"fields": {"question": "first", "answer": "one"}},
-        {"role": "assistant", "content": "raw"}])
+        {"role": "assistant", "parts": [{"type": "text", "text": "raw"}]}])
     roles = [m["role"] for m in req.messages]
-    assert roles == ["system", "user", "assistant", "assistant", "user"]
+    assert roles == ["user", "assistant", "assistant", "user"] and req.system
     with pytest.raises(lmcc.Refusal) as err:
         plan.render(question="x", history=[{"question": "flat"}])
     assert err.value.code == "value-invalid"

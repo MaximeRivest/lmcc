@@ -646,3 +646,64 @@ Cost: a code-built adapter now silently gets the default tier unless
 `dump()` and `plan.describe()`, and the artifact is what the loader
 judges. Benefit: the common case costs zero keystrokes and stays honest;
 the next agent inherits a demand-driven list, not a scheduled engine.
+
+
+**D-35 · Kernel 0.4: the wire is lm15.** lmcc's messages were "lm15-shaped"
+by intent and drifted in three places: parts said `kind` (lm15: `type`),
+messages said `content` (lm15: `parts`), and `system` was a message
+(lm15: a request field; message roles are `user|assistant|tool|developer`).
+Since lm15 exists — or will — in every language lmcc does, the drift
+bought nothing and cost a translation layer in every host. Ratified:
+
+- **The wire layer *is* the lm15 contract** at the commit in
+  `contract/LM15_CONTRACT_PIN`. `render()` produces an lm15 request minus
+  its model (`{"system"?, "messages", "config"?, "tools"?}`); `parse()`
+  takes text, an lm15 message, or an lm15 response; `feed()` takes lm15
+  deltas as canonical JSON. lm15's own `request_from_dict` /
+  `response_to_dict` are the whole typed bridge; nothing is renamed.
+- **The kernel still imports no lm15.** The corpus is data, fed to a Go
+  binary over stdin; if the kernel took lm15 *objects*, byte-exactness
+  would be a claim about every language's serializer, and the kernel
+  would be pinned to lm15's release cadence in every language at once. A
+  contract commit changes deliberately and rarely; that is the pin. The
+  typed face lives beside the kernel (`python/lmcc_lm15`, like
+  `lmcc_dspy`), imports lm15, and is gated by `./check` step 7 against a
+  venv built from a **git commit** — lm15 is not on PyPI; a version pin
+  would be fiction. Bumping the commit is a reviewed edit.
+- **Controls are a partial lm15 request**, deep-merged (`config.<field>`,
+  `tools`), validated at the top two levels against the pinned `Config`
+  field list, opaque below (lm15's own rule: provider knobs go under
+  `config.extensions`). Rejected: no validation (the claim would be
+  unenforced) and a full schema (lm15 duplicated in two kernels).
+  `control-conflict` now means a disagreeing *leaf*; agreeing is fine.
+  The lens patch nests under `config`. `native_reasoning` gained
+  `controls.config.reasoning` (options `effort`, `thinking_budget`) — the
+  live run had exposed that it only *read* thinking and left asking to
+  the caller; a strategy does everything its meaning needs.
+- **`system` messages lead the template** (else `entry-malformed`) and
+  fold into the request field; mid-conversation instructions are lm15's
+  `developer` role, now a template role, fragment target, and placement
+  target. Rejected: keeping `system` as a message in `messages` (lm15
+  would refuse the role) or moving a late `system` silently to the top
+  (reorders what the author wrote).
+- **`RenderResult.request(model)`** is one object — what a calling
+  convention should pin. Rejected: keeping `messages` + a flat `patch`,
+  the very shape lm15 could not consume.
+- **lmcc's own stream events keep `kind`.** They are lmcc objects, not
+  lm15's; renaming buys no compatibility and the corpus trace digests
+  use them. Stated, not hidden.
+- **Version 0.4.0.** Breaking on every axis above; every corpus case was
+  re-spelled by script and reviewed through both drivers; cases 66 and 67
+  were hand-edited to be *valid lm15* (a `function` tool item; a real
+  control path) — their purpose unchanged, their bytes now something lm15
+  accepts. Cases 96–98 pin the new rules. `lmcc_lm15` proves the loop
+  offline (`tests/lm15`) and live (`python/integration/lm15_reasoning.py`:
+  three strategies, two providers, batch and stream, the strategy asking
+  for thinking itself).
+
+Costs: 98 case files and every doc example changed spelling; adapter
+authors write `controls.config.reasoning` instead of `controls.reasoning`;
+a late `system` message that used to render now refuses; the lm15 pin is
+a commit that must be bumped by hand. Benefits: no translation layer in
+any language; `render().request(m)` is the call; a strategy's patch is a
+valid partial request by construction; every wire word has one owner.

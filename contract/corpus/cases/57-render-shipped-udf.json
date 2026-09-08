@@ -7,7 +7,7 @@
  "entry": {
   "name": "udf_v1",
   "versions": {
-   "kernel": "0.3.0",
+   "kernel": "0.4.0",
    "vocab": {}
   },
   "template": [
@@ -79,44 +79,37 @@
   }
  ],
  "expect": {
-  "messages": [
-   {
-    "role": "system",
-    "content": [
-     {
-      "kind": "text",
-      "text": "Extract.\n\nAnswer in exactly this form:\n<who>\nname (age)\n</who>\n"
-     }
-    ]
-   },
-   {
-    "role": "user",
-    "content": [
-     {
-      "kind": "text",
-      "text": "went"
-     }
-    ]
-   },
-   {
-    "role": "assistant",
-    "content": [
-     {
-      "kind": "text",
-      "text": "<who>\nAnn (41)\n</who>"
-     }
-    ]
-   },
-   {
-    "role": "user",
-    "content": [
-     {
-      "kind": "text",
-      "text": "go"
-     }
-    ]
-   }
-  ],
-  "patch": {}
+  "request": {
+   "system": "Extract.\n\nAnswer in exactly this form:\n<who>\nname (age)\n</who>\n",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "went"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "<who>\nAnn (41)\n</who>"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "go"
+      }
+     ]
+    }
+   ]
+  }
  }
 }

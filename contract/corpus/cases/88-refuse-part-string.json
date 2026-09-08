@@ -4,7 +4,7 @@
  "entry": {
   "name": "response_parts",
   "versions": {
-   "kernel": "0.3.0",
+   "kernel": "0.4.0",
    "vocab": {}
   },
   "template": [
@@ -30,7 +30,8 @@
   ]
  },
  "response": {
-  "content": [
+  "role": "assistant",
+  "parts": [
    "<answer>ok</answer>"
   ]
  },

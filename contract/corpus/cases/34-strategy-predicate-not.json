@@ -4,7 +4,7 @@
  "entry": {
   "name": "prefix_cot_style_v1",
   "versions": {
-   "kernel": "0.3.0",
+   "kernel": "0.4.0",
    "vocab": {}
   },
   "template": [
@@ -65,26 +65,19 @@
   "q": "3+3?"
  },
  "expect": {
-  "messages": [
-   {
-    "role": "system",
-    "content": [
-     {
-      "kind": "text",
-      "text": "Answer.\n<reasoning>\n...\n<answer>\n...\n\n\nThink step by step in the reasoning section before answering."
-     }
-    ]
-   },
-   {
-    "role": "user",
-    "content": [
-     {
-      "kind": "text",
-      "text": "3+3?"
-     }
-    ]
-   }
-  ],
-  "patch": {}
+  "request": {
+   "system": "Answer.\n<reasoning>\n...\n<answer>\n...\n\n\nThink step by step in the reasoning section before answering.",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "3+3?"
+      }
+     ]
+    }
+   ]
+  }
  }
 }

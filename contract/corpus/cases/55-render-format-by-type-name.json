@@ -7,7 +7,7 @@
  "entry": {
   "name": "typed_v1",
   "versions": {
-   "kernel": "0.3.0",
+   "kernel": "0.4.0",
    "vocab": {
     "format/json": "0.1.0"
    }
@@ -94,44 +94,37 @@
   }
  ],
  "expect": {
-  "messages": [
-   {
-    "role": "system",
-    "content": [
-     {
-      "kind": "text",
-      "text": "Extract.\n\nAnswer in exactly this form:\n<who>\nJSON matching this schema: {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\"}, \"age\": {\"type\": \"integer\"}}}\n</who>\n<extra>\nJSON matching this schema: {\"type\": \"object\"}\n</extra>\n"
-     }
-    ]
-   },
-   {
-    "role": "user",
-    "content": [
-     {
-      "kind": "text",
-      "text": "went"
-     }
-    ]
-   },
-   {
-    "role": "assistant",
-    "content": [
-     {
-      "kind": "text",
-      "text": "<who>\n{\"name\": \"Ann\", \"age\": 41}\n</who>\n<extra>\n{\n  \"k\": [\n    1,\n    2\n  ]\n}\n</extra>"
-     }
-    ]
-   },
-   {
-    "role": "user",
-    "content": [
-     {
-      "kind": "text",
-      "text": "go"
-     }
-    ]
-   }
-  ],
-  "patch": {}
+  "request": {
+   "system": "Extract.\n\nAnswer in exactly this form:\n<who>\nJSON matching this schema: {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\"}, \"age\": {\"type\": \"integer\"}}}\n</who>\n<extra>\nJSON matching this schema: {\"type\": \"object\"}\n</extra>\n",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "went"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "<who>\n{\"name\": \"Ann\", \"age\": 41}\n</who>\n<extra>\n{\n  \"k\": [\n    1,\n    2\n  ]\n}\n</extra>"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "go"
+      }
+     ]
+    }
+   ]
+  }
  }
 }

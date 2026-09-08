@@ -38,7 +38,7 @@ tags = lmcc.Strategy(
 native = lmcc.Strategy(
     requires=["native_reasoning"],
     visible=False,
-    controls={"reasoning": {"effort": "medium"}},
+    controls={"config": {"reasoning": {"effort": "medium"}}},   # a partial lm15 request
     routings=[{"from": "channel:thinking", "to": "@role"}])
 
 auto = lmcc.Strategy(choose=[
@@ -69,7 +69,7 @@ assert d1["hidden"] == ["reasoning"]
 assert d1["routings"] == [{"field": "reasoning", "from": "text", "between": ["<think>", "</think>"], "consume": True}]
 assert d1["patch"] == {}
 
-system_text = p1.render(problem="2+2").messages[0]["content"][0]["text"]
+system_text = p1.render(problem="2+2").system
 assert system_text == (
     "Solve the arithmetic problem.\n\nReply with exactly this pattern:\n"
     "<answer>\n(integer)\n</answer>\n\n\n"
@@ -89,10 +89,10 @@ p2 = solve.bind(adapter, capabilities={"instruct": True, "native_reasoning": Tru
 d2 = p2.describe()
 assert d2["routings"] == [{"field": "reasoning", "from": "channel:thinking"}]
 assert d2["fragments"] == {}
-assert p2.render(problem="2+2").patch == {"reasoning": {"effort": "medium"}}
+assert p2.render(problem="2+2").patch == {"config": {"reasoning": {"effort": "medium"}}}
 
-reply = {"content": [{"kind": "thinking", "text": "2 and 2"},
-                     {"kind": "text", "text": "<answer>\n4\n</answer>"}]}
+reply = {"role": "assistant", "parts": [{"type": "thinking", "text": "2 and 2"},
+                                        {"type": "text", "text": "<answer>\n4\n</answer>"}]}
 assert p2.parse(reply) == {"answer": 4, "reasoning": "2 and 2"}
 ```
 

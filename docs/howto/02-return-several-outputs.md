@@ -54,7 +54,7 @@ adapter = lmcc.adapter(messages=[
 ])
 plan = review.bind(adapter)
 
-assert plan.render(text="t").messages[0]["content"][0]["text"] == (
+assert plan.render(text="t").system == (
     "Summarize the review.\n\nReply with exactly this pattern:\n"
     "summary: ...\nstars: (integer)\nmood: one of: happy, sad\nprice: (number)\n")
 assert plan.describe()["lens"]["anchors"] == [
@@ -87,11 +87,11 @@ fields the demo supplies.
 
 ```python
 full = plan.render(text="x", demos=[{"text": "d", "summary": "s", "stars": 3, "mood": Mood.SAD, "price": None}])
-assert full.messages[2]["content"][0]["text"] == "summary: s\nstars: 3\nmood: sad\nprice: null"
-assert plan.parse(full.messages[2]["content"][0]["text"]) == {"summary": "s", "stars": 3, "mood": Mood.SAD, "price": None}
+assert full.messages[1]["parts"][0]["text"] == "summary: s\nstars: 3\nmood: sad\nprice: null"
+assert plan.parse(full.messages[1]["parts"][0]["text"]) == {"summary": "s", "stars": 3, "mood": Mood.SAD, "price": None}
 
 part = plan.render(text="x", demos=[{"text": "d", "summary": "s", "stars": 3}])
-assert part.messages[2]["content"][0]["text"] == "summary: s\nstars: 3"
+assert part.messages[1]["parts"][0]["text"] == "summary: s\nstars: 3"
 ```
 
 ## 5. Two ways a reply fails

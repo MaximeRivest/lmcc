@@ -42,7 +42,7 @@ def roundtrip(signature, example: dict, *, capabilities=None, expect_values=None
     outputs = {f.name: example[f.name] for f in lowered.signature.outputs if f.name in example}
     request = baked.render(inputs=inputs, demos=[{**inputs, **outputs}], history=history)
     assistant = [m for m in request.messages if m["role"] == "assistant"]
-    values = baked.parse(assistant[0]["content"][0]["text"])
+    values = baked.parse(assistant[0]["parts"][0]["text"])
     assert values == (expect_values if expect_values is not None else outputs)
     return lowered, baked, request
 
@@ -192,8 +192,8 @@ def test_image_input_is_a_media_shape():
     assert shapes(lowered)["image"] == {"media": "image"}
     baked = adapter.bind(lowered.signature, {"image_input": True}, registry=registry)
     req = baked.render(inputs={"image": dspy.Image(url="https://x/y.png"), "q": "?"})
-    user = req.messages[-1]["content"]
-    assert {"kind": "image", "url": "https://x/y.png"} in user
+    user = req.messages[-1]["parts"]
+    assert {"type": "image", "url": "https://x/y.png"} in user
 
 
 class Chat(dspy.Signature):
@@ -209,7 +209,7 @@ def test_history_input_becomes_field_turns():
         "question": "third", "answer": "three"})
     assert lowered.history_field == "history"
     assert [f.name for f in lowered.signature.fields] == ["question", "answer"]
-    texts = [m["content"][0]["text"] for m in req.messages]
+    texts = [m["parts"][0]["text"] for m in req.messages]
     assert any("first" in t for t in texts) and any("[[ ## answer ## ]]\ntwo" in t for t in texts)
     # history turns come after the demo turns and before the live question
     assert texts.index(next(t for t in texts if "second" in t)) < len(texts) - 1
@@ -255,7 +255,7 @@ def test_tools_lower_to_the_tools_role_and_still_render():
     lowered.signature.field_named("calls").role = "plain"
     baked = adapter.bind(lowered.signature, {}, registry=registry)
     req = baked.render(inputs={"question": "2+2?", "tools": [dspy.Tool(add)]})
-    user = req.messages[-1]["content"][0]["text"]
+    user = req.messages[-1]["parts"][0]["text"]
     assert '"name": "add"' in user and '"description": "Add two numbers."' in user
 
 

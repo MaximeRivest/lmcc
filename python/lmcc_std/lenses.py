@@ -56,7 +56,7 @@ class JsonObjectLens(Lens):
         return ["native_structured_output"]
 
     def patch(self, fields: list) -> dict:
-        return {"response_format": {
+        return {"config": {"response_format": {
             "type": "json_schema",
             "schema": {
                 "type": "object",
@@ -64,7 +64,7 @@ class JsonObjectLens(Lens):
                 "required": [f.name for f in fields],
                 "additionalProperties": False,
             },
-        }}
+        }}}
 
     # ---------------------------------------------------------------- read
 

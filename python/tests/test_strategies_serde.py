@@ -14,14 +14,14 @@ tags = Strategy(fragments={"system": "Think inside <think>…</think> before you
                 routings=[{"from": "text", "between": ["<think>", "</think>"], "to": "@role", "consume": True}],
                 visible=False)
 native = Strategy(requires=["native_reasoning"], visible=False,
-                  controls={"reasoning": {"effort": "medium"}},
+                  controls={"config": {"reasoning": {"effort": "medium"}}},
                   routings=[{"from": "channel:thinking", "to": "@role"}])
 
 
 def test_tags_and_native_serve_one_role_without_touching_the_signature():
     a = lmcc.adapter(messages=XML, strategies={"reasoning": tags})
     plan = a.bind(SIG, {"instruct": True})
-    sys_text = plan.render(q="2+2").messages[0]["content"][0]["text"]
+    sys_text = plan.render(q="2+2").system
     assert "<reasoning>" not in sys_text and "Think inside" in sys_text
     assert plan.parse("<think>easy</think><answer>\n4\n</answer>") == {"answer": 4, "reasoning": "easy"}
 
@@ -30,8 +30,8 @@ def test_tags_and_native_serve_one_role_without_touching_the_signature():
         b.bind(SIG, {"instruct": True})
     assert err.value.code == "capability-missing"
     plan = b.bind(SIG, {"native_reasoning": True})
-    assert plan.render(q="x").patch == {"reasoning": {"effort": "medium"}}
-    assert plan.parse({"content": [{"kind": "thinking", "text": "hm"}, {"kind": "text", "text": "<answer>\n4\n</answer>"}]}) == \
+    assert plan.render(q="x").patch == {"config": {"reasoning": {"effort": "medium"}}}
+    assert plan.parse({"role": "assistant", "parts": [{"type": "thinking", "text": "hm"}, {"type": "text", "text": "<answer>\n4\n</answer>"}]}) == \
         {"answer": 4, "reasoning": "hm"}
 
 
@@ -90,12 +90,12 @@ def test_artifact_round_trips_and_loads_with_zero_ambient_state():
 
 
 @pytest.mark.parametrize("entry, code", [
-    ({"versions": {"kernel": "0.3.0"}, "template": {"messages": []}, "parse": {"kind": "derived"}}, "entry-malformed"),
+    ({"versions": {"kernel": "0.4.0"}, "template": {"messages": []}, "parse": {"kind": "derived"}}, "entry-malformed"),
     ({"versions": {"kernel": "9.0.0"}, "template": [], "parse": {"kind": "derived"}}, "version-incompatible"),
-    ({"versions": {"kernel": "0.3.0"}, "template": [], "parse": {"kind": "nope"}}, "unknown-parse-kind"),
-    ({"versions": {"kernel": "0.3.0"}, "template": [], "parse": {"kind": "derived"}, "formats": {"X": {"use": "nope"}}}, "unknown-format"),
-    ({"versions": {"kernel": "0.3.0"}, "template": [], "parse": {"kind": "derived"}, "strategies": {"r": {"use": "nope"}}}, "unknown-strategy"),
-    ({"versions": {"kernel": "0.3.0"}, "template": [], "parse": {"kind": "derived"}, "formats": {"X": {"language": "python"}}}, "entry-malformed"),
+    ({"versions": {"kernel": "0.4.0"}, "template": [], "parse": {"kind": "nope"}}, "unknown-parse-kind"),
+    ({"versions": {"kernel": "0.4.0"}, "template": [], "parse": {"kind": "derived"}, "formats": {"X": {"use": "nope"}}}, "unknown-format"),
+    ({"versions": {"kernel": "0.4.0"}, "template": [], "parse": {"kind": "derived"}, "strategies": {"r": {"use": "nope"}}}, "unknown-strategy"),
+    ({"versions": {"kernel": "0.4.0"}, "template": [], "parse": {"kind": "derived"}, "formats": {"X": {"language": "python"}}}, "entry-malformed"),
 ])
 def test_load_refuses_by_name(entry, code):
     with pytest.raises(lmcc.Refusal) as err:

@@ -86,11 +86,11 @@ native = lmcc.Strategy(requires=["native_reasoning"], visible=False,
 p2 = solve.bind(lmcc.adapter(messages=adapter.template, strategies={"reasoning": native}),
                 capabilities={"native_reasoning": True})
 s = p2.stream()
-assert s.feed({"kind": "thinking", "text": "two and "}) == [
+assert s.feed({"type": "thinking", "text": "two and "}) == [
     {"kind": "field_started", "field": "reasoning"},
     {"kind": "field_delta", "field": "reasoning", "text": "two and"}]
-assert s.feed({"kind": "thinking", "text": "two"}) == [{"kind": "field_delta", "field": "reasoning", "text": " two"}]
-assert s.feed({"kind": "text", "text": "<answer>\n4"}) == [
+assert s.feed({"type": "thinking", "text": "two"}) == [{"kind": "field_delta", "field": "reasoning", "text": " two"}]
+assert s.feed({"type": "text", "text": "<answer>\n4"}) == [
     {"kind": "field_started", "field": "answer"}, {"kind": "field_delta", "field": "answer", "text": "4"}]
 assert s.feed("\n</answer>") == []
 assert s.finish().values == {"answer": 4, "reasoning": "two and two"}

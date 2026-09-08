@@ -4,7 +4,7 @@
  "entry": {
   "name": "sections_v1",
   "versions": {
-   "kernel": "0.3.0",
+   "kernel": "0.4.0",
    "vocab": {}
   },
   "template": [
@@ -55,35 +55,28 @@
   }
  },
  "expect": {
-  "messages": [
-   {
-    "role": "system",
-    "content": [
-     {
-      "kind": "text",
-      "text": "Describe.\n<answer>\n...\n</done>"
-     }
-    ]
-   },
-   {
-    "role": "user",
-    "content": [
-     {
-      "kind": "text",
-      "text": "what is this?\n"
-     },
-     {
-      "kind": "image",
-      "data": "AAAA",
-      "media_type": "image/png"
-     },
-     {
-      "kind": "text",
-      "text": "\nthanks"
-     }
-    ]
-   }
-  ],
-  "patch": {}
+  "request": {
+   "system": "Describe.\n<answer>\n...\n</done>",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "what is this?\n"
+      },
+      {
+       "type": "image",
+       "data": "AAAA",
+       "media_type": "image/png"
+      },
+      {
+       "type": "text",
+       "text": "\nthanks"
+      }
+     ]
+    }
+   ]
+  }
  }
 }

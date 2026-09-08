@@ -559,7 +559,7 @@ func (s Span) Of(kind string) []any {
 	var out []any
 	for _, p := range s.Parts {
 		if po, ok := p.(*Object); ok {
-			if k, _ := po.Str("kind"); k == kind {
+			if k, _ := po.Str("type"); k == kind {
 				out = append(out, p)
 			}
 		}
@@ -574,7 +574,7 @@ func AsParts(written any, where string) []any {
 		return []any{TextPart(w)}
 	case []any:
 		for _, p := range w {
-			if po, ok := p.(*Object); !ok || !po.Has("kind") {
+			if po, ok := p.(*Object); !ok || !po.Has("type") {
 				refusef("format-write-error", "%s: write returned a non-part in its list", where)
 			}
 		}
@@ -586,10 +586,10 @@ func AsParts(written any, where string) []any {
 
 // ---------------------------------------------------------------- messages
 
-func TextPart(text string) *Object { return Obj("kind", "text", "text", text) }
+func TextPart(text string) *Object { return Obj("type", "text", "text", text) }
 
 func MakeMessage(role string, parts []any) *Object {
-	return Obj("role", role, "content", parts)
+	return Obj("role", role, "parts", parts)
 }
 
 // MergeTextParts: adjacent text parts merge; empty text parts vanish.
@@ -597,14 +597,14 @@ func MergeTextParts(parts []any) []any {
 	out := []any{}
 	for _, p := range parts {
 		po, _ := p.(*Object)
-		if k, _ := po.Str("kind"); k == "text" {
+		if k, _ := po.Str("type"); k == "text" {
 			t, _ := po.Str("text")
 			if t == "" {
 				continue
 			}
 			if n := len(out); n > 0 {
 				last := out[n-1].(*Object)
-				if lk, _ := last.Str("kind"); lk == "text" {
+				if lk, _ := last.Str("type"); lk == "text" {
 					lt, _ := last.Str("text")
 					out[n-1] = TextPart(lt + t)
 					continue
@@ -620,10 +620,10 @@ func MergeTextParts(parts []any) []any {
 func validateResponsePart(raw any) *Object {
 	part, ok := raw.(*Object)
 	if !ok || part == nil {
-		refuse("response-malformed", "response part must be an object with a string 'kind'")
+		refuse("response-malformed", "response part must be an object with a string 'type' (an lm15 part)")
 	}
-	if _, ok := part.Str("kind"); !ok {
-		refuse("response-malformed", "response part must be an object with a string 'kind'")
+	if _, ok := part.Str("type"); !ok {
+		refuse("response-malformed", "response part must be an object with a string 'type' (an lm15 part)")
 	}
 	if raw, has := part.Get("text"); has {
 		if _, ok := raw.(string); !ok {
@@ -647,14 +647,14 @@ func normalizeResponseParts(parts []any) []any {
 	for _, raw := range parts {
 		part := validateResponsePart(raw)
 		text, hasText := part.Str("text")
-		kind, _ := part.Str("kind")
+		kind, _ := part.Str("type")
 		if hasRun && hasText {
 			previous := out[len(out)-1].(*Object)
-			pk, _ := previous.Str("kind")
+			pk, _ := previous.Str("type")
 			if pk == kind {
 				texts.WriteString(text)
 				for _, key := range part.Keys {
-					if key != "kind" && key != "text" {
+					if key != "type" && key != "text" {
 						value, _ := part.Get(key)
 						previous.Set(key, DeepClone(value))
 					}
@@ -673,19 +673,23 @@ func normalizeResponseParts(parts []any) []any {
 	return out
 }
 
-// ResponseTextAndParts accepts a bare string or an lm15-shaped response.
+// ResponseTextAndParts accepts the reply text, an lm15 message
+// {role, parts}, or an lm15 response {message: {...}} (kernel §3).
 func ResponseTextAndParts(response any) (string, []any) {
 	switch r := response.(type) {
 	case string:
 		return r, nil
 	case *Object:
-		if parts, ok := r.Get("content"); ok {
+		if msg := r.Object("message"); msg != nil {
+			r = msg
+		}
+		if parts, ok := r.Get("parts"); ok {
 			if list, ok := parts.([]any); ok {
 				list = normalizeResponseParts(list)
 				var b strings.Builder
 				for _, p := range list {
 					if po, ok := p.(*Object); ok {
-						if k, _ := po.Str("kind"); k == "text" {
+						if k, _ := po.Str("type"); k == "text" {
 							t, _ := po.Str("text")
 							b.WriteString(t)
 						}
@@ -695,6 +699,6 @@ func ResponseTextAndParts(response any) (string, []any) {
 			}
 		}
 	}
-	refuse("response-malformed", "response must be a string or an object with a 'content' part list")
+	refuse("response-malformed", "response must be text, an lm15 message {role, parts}, or an lm15 response {message: ...}")
 	return "", nil
 }

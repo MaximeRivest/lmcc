@@ -67,7 +67,7 @@ format you registered, it is not in the prompt.
 plan = answer.bind(xml, capabilities={"instruct": True})
 
 request = plan.render(question="Why is the sky blue?")
-assert request.messages[1]["content"][0]["text"] == "<question>\nWhy is the sky blue?\n</question>\n"
+assert request.messages[0]["parts"][0]["text"] == "<question>\nWhy is the sky blue?\n</question>\n"
 assert request.patch == {}
 
 assert plan.parse("<answer>\nRayleigh scattering.\n</answer>") == {"answer": "Rayleigh scattering."}
@@ -107,8 +107,8 @@ model is asked to follow.
 
 ```python
 assert plan.describe()["lens"]["anchors"] == [["answer", "<answer>\n", "\n</answer>\n"]]
-demo = plan.render(question="q", demos=[{"question": "d", "answer": "a"}]).messages[2]
-assert plan.parse(demo["content"][0]["text"]) == {"answer": "a"}
+demo = plan.render(question="q", demos=[{"question": "d", "answer": "a"}]).messages[1]
+assert plan.parse(demo["parts"][0]["text"]) == {"answer": "a"}
 ```
 
 Two rules keep it honest: a pattern that cannot be read backwards
@@ -206,7 +206,7 @@ tags = lmcc.Strategy(
 native = lmcc.Strategy(
     requires=["native_reasoning"],
     visible=False,
-    controls={"reasoning": {"effort": "medium"}},
+    controls={"config": {"reasoning": {"effort": "medium"}}},   # a partial lm15 request
     routings=[{"from": "channel:thinking", "to": "@role"}])
 
 auto = lmcc.Strategy(choose=[
@@ -218,8 +218,8 @@ adapter = lmcc.adapter(messages=xml.template, strategies={"reasoning": auto})
 p1 = solve.bind(adapter, capabilities={"instruct": True})
 p2 = solve.bind(adapter, capabilities={"instruct": True, "native_reasoning": True})
 assert p1.parse("<think>4</think><answer>\n4\n</answer>") == {"answer": 4, "reasoning": "4"}
-assert p2.render(problem="2+2").patch == {"reasoning": {"effort": "medium"}}
-assert p2.parse({"content": [{"kind": "thinking", "text": "4"}, {"kind": "text", "text": "<answer>\n4\n</answer>"}]}) == {"answer": 4, "reasoning": "4"}
+assert p2.render(problem="2+2").patch == {"config": {"reasoning": {"effort": "medium"}}}
+assert p2.parse({"role": "assistant", "parts": [{"type": "thinking", "text": "4"}, {"type": "text", "text": "<answer>\n4\n</answer>"}]}) == {"answer": 4, "reasoning": "4"}
 ```
 
 Same signature, same template, two inference behaviors — chosen by the
@@ -251,7 +251,7 @@ reading English.
 
 ```python
 assert p1.skeleton() == {"prefill": "<answer>\n", "stops": ["</answer>"]}
-assert [m["role"] for m in p1.prefix()] == ["system"]
+assert p1.prefix() == {"system": p1.render(problem="x").system, "messages": []}
 assert p1.describe()["streaming"]["mode"] == "incremental"
 ```
 
@@ -294,25 +294,49 @@ loads it lays out the same bytes.
 contract/          the authority (no code)
   spec/            kernel.md (the convention), errors.md, vocab/ specs
   schema/          entry, signature, case — JSON Schema
-  corpus/          90 byte-exact cases — the real source of truth
+  corpus/          98 byte-exact cases — the real source of truth
+  LM15_CONTRACT_PIN the lm15 contract commit the wire layer is
   harness/         runs any implementation against the corpus
 python/
   lmcc/            the reference kernel, stdlib only
   lmcc_std/        formats json/table/scaled_number, lens json_object,
                    reasoning strategies — a pack like anyone's
   lmcc_dspy/       any dspy.Signature → a signature (16-row catalog)
+  lmcc_lm15/       typed face over the shared wire: lm15 Request in, Response out
 go/
   lmcc/, lmccstd/  an independent Go implementation of both
   cmd/lmcc-conform the corpus driver the harness runs it through
 ```
 
 `./check` runs everything: Python tests, the corpus through both
-kernels, the schemas, this README verbatim, and the DSPy catalog. What
+kernels, the schemas, this README verbatim, the DSPy catalog, and the
+lm15 bridge against a pinned lm15. What
 "portable" means here, exactly: the artifact is data and travels
 anywhere; the layout is byte-exact across implementations; a named
 format is byte-exact where both runtimes ship the name; a shipped UDF
 runs where its language can be placed and is declared *unclaimed* where
 it cannot. That boundary is the contract's, not an accident.
+
+## The wire is lm15
+
+lmcc never touches the network; what it renders is an **lm15 request
+minus its model** — `{"system", "messages": [{"role", "parts"}], "config",
+"tools"}` in lm15's canonical JSON, pinned to the lm15 contract commit in
+`contract/LM15_CONTRACT_PIN` — and what it parses is an lm15 message or
+response. No translation layer: `plan.render(...).request(model)` is the
+dict lm15's `request_from_dict` takes, in every language lm15 exists in.
+A strategy's `controls` are a partial lm15 request too (`config.reasoning`,
+`config.response_format`, `tools`), so a strategy does everything its
+meaning needs — asks for thinking *and* reads it back. The typed face
+(`python/lmcc_lm15`) is a few lines over lm15's own serde:
+
+```python
+# import lmcc_lm15, lm15
+# req = lmcc_lm15.request(plan.render(problem="2+2"), model="claude-sonnet-4-5",
+#                         config=lm15.Config(max_tokens=400))   # an lm15.Request
+# values = lmcc_lm15.parse(plan, lm.complete(req))               # typed values
+# events, result = lmcc_lm15.stream(plan, lm.stream(req))        # sans-I/O stream, fed
+```
 
 ## Portability: shared meaning, declared support
 

@@ -16,7 +16,40 @@ from .errors import refuse
 _KEYS = ("when", "requires", "visible", "fragments", "controls", "placement", "routings")
 _PREDICATE_KEYS = ("capability", "not", "all", "any")
 _TO = re.compile(r"^@role(\.[A-Za-z_][A-Za-z0-9_]*)?$")
-_PLACEMENT = re.compile(r"^(controls\.[A-Za-z_][A-Za-z0-9_.]*|message:(system|user|assistant))$")
+_PLACEMENT = re.compile(r"^(controls\.[a-z_][a-z0-9_.]*|message:(system|developer|user|assistant))$")
+
+# The controls patch is a partial lm15 request (kernel §3): the first path
+# segment is `config` or `tools`; `config` keys are the pinned lm15 Config
+# fields (contract/LM15_CONTRACT_PIN). Below that the value is opaque.
+LM15_CONFIG_FIELDS = frozenset((
+    "max_tokens", "temperature", "top_p", "top_k", "stop", "response_format", "tool_choice",
+    "reasoning", "cache", "service_tier", "user_id", "store", "extensions"))
+
+
+def validate_control_path(path: str, *, where: str) -> None:
+    """``where`` is the artifact path of the control, for the refusal."""
+    segments = path.split(".")
+    ok = segments[0] == "tools" or (segments[0] == "config" and len(segments) >= 2
+                                    and segments[1] in LM15_CONFIG_FIELDS)
+    if not ok:
+        refuse("entry-malformed",
+               f"{where}: {path!r} is not a field of an lm15 request — controls patch "
+               f"'config.<field>' ({', '.join(sorted(LM15_CONFIG_FIELDS))}) or 'tools'; "
+               f"provider-native knobs go under config.extensions",
+               fix={"action": "edit-entry", "path": where})
+
+
+def control_leaves(controls: dict, prefix: str = "") -> list[tuple[str, object]]:
+    """Flatten a controls dict to (dotted path, value) at the depth the
+    kernel validates (two levels), leaving deeper values opaque."""
+    out = []
+    for key, value in controls.items():
+        path = f"{prefix}{key}"
+        if key == "config" and not prefix and isinstance(value, dict):
+            out.extend(control_leaves(value, "config."))
+        else:
+            out.append((path, value))
+    return out
 _FROM = re.compile(r"^(text|channel:[a-z_]+)$")
 # outside the portable RE2 dialect (kernel §7a)
 
@@ -113,8 +146,13 @@ class Strategy:
                        f"{where}.placement: {target!r}: {place!r} — a placement is "
                        f"'@role' or '@role.<sub>' → 'controls.<key>' or 'message:<role>'",
                        fix={"action": "edit-entry", "path": f"{where}.placement"})
+        for path, _ in control_leaves(self.controls):
+            validate_control_path(path, where=f"{where}.controls[{path!r}]")
+        for _, place in self.placement.items():
+            if place.startswith("controls."):
+                validate_control_path(place[len("controls."):], where=f"{where}.placement")
         for k, v in self.fragments.items():
-            if k not in ("system", "user", "assistant") or not isinstance(v, str):
+            if k not in ("system", "developer", "user", "assistant") or not isinstance(v, str):
                 refuse("entry-malformed", f"{where}.fragments: {k!r} must name a message role, text",
                        fix={"action": "edit-entry", "path": f"{where}.fragments"})
         if not self.visible and not self.routings and not self.placement:

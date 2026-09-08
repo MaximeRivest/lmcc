@@ -41,13 +41,13 @@ input. That is the system message and the demo turns here.
 
 ```python
 pre = plan.prefix(demos=demos)
-assert [m["role"] for m in pre] == ["system", "user", "user", "assistant"]
-assert pre[0]["content"][0]["text"] == (
+assert [m["role"] for m in pre["messages"]] == ["user", "user", "assistant"]
+assert pre["system"] == (
     "Answer from the context.\n\nReply with exactly this pattern:\n"
     "<answer>\n...\n</answer>\n<score>\n(integer)\n</score>\n</done>")
-assert pre[3]["content"][0]["text"] == "<answer>\nFrance\n</answer>\n<score>\n9\n</score>\n</done>"
+assert pre["messages"][2]["parts"][0]["text"] == "<answer>\nFrance\n</answer>\n<score>\n9\n</score>\n</done>"
 
-stable_chars = sum(len(p["text"]) for m in pre for p in m["content"])
+stable_chars = len(pre["system"]) + sum(len(p["text"]) for m in pre["messages"] for p in m["parts"])
 assert stable_chars == 223
 ```
 
@@ -58,10 +58,10 @@ provider's prompt cache can hold.
 
 ```python
 req = plan.render(context="c", question="q", demos=demos)
-assert req.messages[:4] == pre
-assert [m["role"] for m in req.messages] == ["system", "user", "user", "assistant", "user", "user"]
+assert req.system == pre["system"] and req.messages[:3] == pre["messages"]
+assert [m["role"] for m in req.messages] == ["user", "user", "assistant", "user", "user"]
 assert req.patch == {}
-assert req.request() == {"messages": req.messages}
+assert req.request(model="m") == {"model": "m", "system": req.system, "messages": req.messages}   # an lm15 request
 
 again = plan.render(context="c", question="q", demos=demos)
 assert again == req
@@ -77,7 +77,7 @@ message changes:
 a = plan.render(context="c", question="q")
 b = plan.render(context="c", question="other")
 assert a.messages[:-1] == b.messages[:-1]
-assert b.messages[-1]["content"][0]["text"] == "other"
+assert b.messages[-1]["parts"][0]["text"] == "other"
 ```
 
 ## 4. `skeleton()`: what the reply must contain

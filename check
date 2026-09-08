@@ -15,7 +15,7 @@ run_py() {  # run python with repo layout on the path
   (cd python && PYTHONPATH=. python "$@")
 }
 
-step "1/6 unit + corpus tests (python)"
+step "1/7 unit + corpus tests (python)"
 if pytest --version >/dev/null 2>&1; then
   (cd python && PYTHONPATH=. pytest -q tests/)
 elif python -c 'import pytest' 2>/dev/null; then
@@ -24,10 +24,10 @@ else
   (cd python && PYTHONPATH=. nix run nixpkgs#python3Packages.pytest -- -q tests/)
 fi
 
-step "2/6 conformance harness, python reference (corpus is the authority)"
+step "2/7 conformance harness, python reference (corpus is the authority)"
 run_py ../contract/harness/runner.py
 
-step "3/6 schema validation (entries, signatures, cases)"
+step "3/7 schema validation (entries, signatures, cases)"
 VALIDATE='
 import json, glob, jsonschema
 entry = json.load(open("contract/schema/entry.schema.json"))
@@ -59,7 +59,7 @@ else
     -c python3 -c "$VALIDATE"
 fi
 
-step "4/6 README quickstart, verbatim"
+step "4/7 README quickstart, verbatim"
 run_py - <<'EOF'
 import re, pathlib
 text = pathlib.Path('../README.md').read_text()
@@ -68,7 +68,7 @@ exec(compile(code, 'README-quickstart', 'exec'))
 print('README quickstart runs verbatim')
 EOF
 
-step "5/6 go implementation: own checks, then the corpus via the harness"
+step "5/7 go implementation: own checks, then the corpus via the harness"
 if command -v go >/dev/null 2>&1; then
   (cd go && ./check)
 else
@@ -77,7 +77,10 @@ else
 fi
 run_py ../contract/harness/runner.py --driver ../go/bin/lmcc-conform
 
-step "6/6 dspy frontend: feature catalog against a real DSPy"
+step "6/7 dspy frontend: feature catalog against a real DSPy"
 python/lmcc_dspy/check
+
+step "7/7 lm15 bridge: typed requests, responses and streams against a real lm15 (pinned commit)"
+python/lmcc_lm15/check
 
 printf '\nALL GREEN\n'

@@ -7,7 +7,7 @@
  "entry": {
   "name": "std_spelling_v1",
   "versions": {
-   "kernel": "0.3.0",
+   "kernel": "0.4.0",
    "vocab": {
     "format/json": "0.1.0",
     "format/table": "0.1.0",
@@ -131,44 +131,37 @@
   }
  ],
  "expect": {
-  "messages": [
-   {
-    "role": "system",
-    "content": [
-     {
-      "kind": "text",
-      "text": "Spell.\ndata: JSON matching this schema: {\"type\": \"object\"}\nrows: | name | score | ok |  (one row per item)\nconf: a number like 83%\n\n<data>\nJSON matching this schema: {\"type\": \"object\"}\n<rows>\n| name | score | ok |  (one row per item)\n<conf>\na number like 83%\n</done>"
-     }
-    ]
-   },
-   {
-    "role": "user",
-    "content": [
-     {
-      "kind": "text",
-      "text": "went"
-     }
-    ]
-   },
-   {
-    "role": "assistant",
-    "content": [
-     {
-      "kind": "text",
-      "text": "<data>\n{\n  \"x\": 1,\n  \"y\": 1e+21,\n  \"z\": true,\n  \"s\": \"é\\n\\\"q\\\"\",\n  \"n\": null,\n  \"e\": {},\n  \"l\": []\n}\n<rows>\n| a | 2.5 | true |\n| b | 3 | false |\n<conf>\n78%\n</done>"
-     }
-    ]
-   },
-   {
-    "role": "user",
-    "content": [
-     {
-      "kind": "text",
-      "text": "go"
-     }
-    ]
-   }
-  ],
-  "patch": {}
+  "request": {
+   "system": "Spell.\ndata: JSON matching this schema: {\"type\": \"object\"}\nrows: | name | score | ok |  (one row per item)\nconf: a number like 83%\n\n<data>\nJSON matching this schema: {\"type\": \"object\"}\n<rows>\n| name | score | ok |  (one row per item)\n<conf>\na number like 83%\n</done>",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "went"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "<data>\n{\n  \"x\": 1,\n  \"y\": 1e+21,\n  \"z\": true,\n  \"s\": \"é\\n\\\"q\\\"\",\n  \"n\": null,\n  \"e\": {},\n  \"l\": []\n}\n<rows>\n| a | 2.5 | true |\n| b | 3 | false |\n<conf>\n78%\n</done>"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "go"
+      }
+     ]
+    }
+   ]
+  }
  }
 }

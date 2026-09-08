@@ -4,7 +4,7 @@
  "entry": {
   "name": "place_v1",
   "versions": {
-   "kernel": "0.3.0",
+   "kernel": "0.4.0",
    "vocab": {}
   },
   "template": [
@@ -47,7 +47,7 @@
     "name": "spec",
     "direction": "input",
     "shape": {
-     "media": "tool_spec"
+     "media": "function"
     },
     "role": "tools"
    },
@@ -72,39 +72,31 @@
   "q": "2+2?",
   "spec": {
    "name": "add",
-   "schema": {
+   "parameters": {
     "type": "object"
    }
   },
   "ctx": "Ann is 41."
  },
  "expect": {
-  "messages": [
-   {
-    "role": "system",
-    "content": [
-     {
-      "kind": "text",
-      "text": "Use tools.\n\nAnswer in exactly this form:\n<answer>\n...\n</answer>\nAnn is 41."
-     }
-    ]
-   },
-   {
-    "role": "user",
-    "content": [
-     {
-      "kind": "text",
-      "text": "2+2?"
-     }
-    ]
-   }
-  ],
-  "patch": {
+  "request": {
+   "system": "Use tools.\n\nAnswer in exactly this form:\n<answer>\n...\n</answer>\nAnn is 41.",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "2+2?"
+      }
+     ]
+    }
+   ],
    "tools": [
     {
-     "kind": "tool_spec",
+     "type": "function",
      "name": "add",
-     "schema": {
+     "parameters": {
       "type": "object"
      }
     }

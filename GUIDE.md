@@ -78,7 +78,7 @@ plan = book.bind(adapter)
 request = plan.render(text="Dune came out in 1965.",
                       demos=[{"text": "1984 was published in 1949.",
                               "title": "1984", "year": 1949, "confident": True}])
-assert [m["role"] for m in request.messages] == ["system", "user", "assistant", "user"]
+assert request.system and [m["role"] for m in request.messages] == ["user", "assistant", "user"]
 
 values = plan.parse("Sure!\n<title>\nDune\n</title>\n<year>\n1965\n</year>\n"
                     "<confident>\ntrue\n</confident>\nHope this helps!")
@@ -95,7 +95,7 @@ The lens law, checkable in one line — what the lens wrote as a demo, the
 lens reads back identically:
 
 ```python
-demo_turn = request.messages[2]["content"][0]["text"]
+demo_turn = request.messages[1]["parts"][0]["text"]
 assert plan.parse(demo_turn) == {"title": "1984", "year": 1949, "confident": True}
 ```
 
@@ -127,7 +127,7 @@ assert "".join(e["text"] for e in events + end.events
 ```
 
 `feed` accepts a text delta or one part delta such as
-`{"kind": "thinking", "text": "…"}`. It emits `field_started` and
+`{"type": "thinking", "text": "…"}` — an lm15 delta). It emits `field_started` and
 safe `field_delta` events. It holds trailing spaces and partial markers
 because later text can change their meaning. `finish` returns the final
 events and values. It emits typed `field_done` events only after the
@@ -219,7 +219,7 @@ cot_adapter = lmcc.adapter(messages=[
     lmcc.user("{question}")], strategies={"reasoning": think_aloud})
 
 cp = cot.bind(cot_adapter)
-system_text = cp.render(question="Capital of France?").messages[0]["content"][0]["text"]
+system_text = cp.render(question="Capital of France?").system
 assert "<reasoning>" not in system_text          # hidden from the pattern
 assert "Wrap every thought" in system_text       # fragment landed
 assert cp.parse("<think>easy one</think><answer>\nParis\n</answer>") == {"reasoning": "easy one", "answer": "Paris"}
@@ -242,8 +242,8 @@ chat = lmcc.adapter(messages=[adapter.template[0], lmcc.history(), lmcc.user("{t
 hp = book.bind(chat)
 req = hp.render(text="third", history=[
     {"fields": {"text": "first", "title": "A", "year": 1, "confident": False}},
-    {"role": "assistant", "content": "a raw turn"}])
-assert [m["role"] for m in req.messages] == ["system", "user", "assistant", "assistant", "user"]
+    {"role": "assistant", "parts": [{"type": "text", "text": "a raw turn"}]}])
+assert [m["role"] for m in req.messages] == ["user", "assistant", "assistant", "user"]
 ```
 
 ## 9. Formats: your types, your spelling

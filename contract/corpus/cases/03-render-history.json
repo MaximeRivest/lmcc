@@ -4,7 +4,7 @@
  "entry": {
   "name": "sections_v1",
   "versions": {
-   "kernel": "0.3.0",
+   "kernel": "0.4.0",
    "vocab": {}
   },
   "template": [
@@ -60,52 +60,55 @@
  "history": [
   {
    "role": "user",
-   "content": "hi"
+   "parts": [
+    {
+     "type": "text",
+     "text": "hi"
+    }
+   ]
   },
   {
    "role": "assistant",
-   "content": "hello"
+   "parts": [
+    {
+     "type": "text",
+     "text": "hello"
+    }
+   ]
   }
  ],
  "expect": {
-  "messages": [
-   {
-    "role": "system",
-    "content": [
-     {
-      "kind": "text",
-      "text": "Answer the question.\n\nReply with EXACTLY these sections:\n<answer>\nshort answer\n<score>\n(integer)\n</done>"
-     }
-    ]
-   },
-   {
-    "role": "user",
-    "content": [
-     {
-      "kind": "text",
-      "text": "hi"
-     }
-    ]
-   },
-   {
-    "role": "assistant",
-    "content": [
-     {
-      "kind": "text",
-      "text": "hello"
-     }
-    ]
-   },
-   {
-    "role": "user",
-    "content": [
-     {
-      "kind": "text",
-      "text": "== question ==\nand now?\n"
-     }
-    ]
-   }
-  ],
-  "patch": {}
+  "request": {
+   "system": "Answer the question.\n\nReply with EXACTLY these sections:\n<answer>\nshort answer\n<score>\n(integer)\n</done>",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "hi"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "hello"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "== question ==\nand now?\n"
+      }
+     ]
+    }
+   ]
+  }
  }
 }

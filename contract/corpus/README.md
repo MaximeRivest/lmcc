@@ -1,6 +1,16 @@
 # The corpus
 
-**Kernel 0.3 (D-33).** Every case pins `kernel: 0.3.0`; the migration
+**Kernel 0.4 (D-35).** The wire is lm15: every render expectation is
+`expect.request`, an lm15 request minus its model; responses are lm15
+messages; parts carry `type`. The bytes of 01–95 were re-spelled by
+script and reviewed through both harness drivers — no expectation
+changed meaning; two were hand-edited to be *valid lm15* (66's tool item
+became a `function` tool; 67's placement path a real control path).
+Cases 96–98 pin what 0.4 adds: a control outside the pinned lm15 fields
+refuses (96), a `developer` message renders and `system` folds (97), a
+`system` message that does not lead refuses (98).
+
+**Kernel 0.3 (D-33).** Every case pinned `kernel: 0.3.0`; the migration
 changed no expectation's meaning. A case declares everything beyond the
 core it needs in `requires` (`udf:python`, `pattern/legacy-re2`); drivers
 bind exactly that, so a forgotten requirement refuses instead of passing,

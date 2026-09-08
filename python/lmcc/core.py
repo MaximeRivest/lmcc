@@ -10,7 +10,7 @@ This module owns the plain-data types every other part of the kernel speaks:
   strings through verbatim. Anything structured (object/array) requires a
   codec — that line is the contract's "mechanics vs vocabulary" boundary.
 - Messages: plain dicts, structurally lm15-shaped
-  ``{"role": ..., "content": [{"kind": "text", "text": ...}, ...]}``.
+  ``{"role": ..., "parts": [{"type": "text", "text": ...}, ...]}`` — lm15 canonical JSON.
 
 Imports nothing outside the standard library. That is a rule, not an accident.
 """
@@ -542,12 +542,13 @@ class Span:
         return "\n".join(strip(p["text"]) for p in self.parts
                          if isinstance(p.get("text"), str))
 
-    def of(self, kind: str) -> list[dict]:
-        return [p for p in self.parts if p.get("kind") == kind]
+    def of(self, type_: str) -> list[dict]:
+        return [p for p in self.parts if p.get("type") == type_]
 
     @property
     def kinds(self) -> set[str]:
-        return {p.get("kind") for p in self.parts}
+        """The lm15 part types present (the name is the kernel's span-kind vocabulary)."""
+        return {p.get("type") for p in self.parts}
 
     def __repr__(self) -> str:
         return f"Span({self.parts!r})"
@@ -557,7 +558,7 @@ def as_parts(written: object, *, where: str) -> list[dict]:
     """A format's ``write`` returns text (one text part) or a part list."""
     if isinstance(written, str):
         return [text_part(written)]
-    if isinstance(written, list) and all(isinstance(p, dict) and "kind" in p for p in written):
+    if isinstance(written, list) and all(isinstance(p, dict) and "type" in p for p in written):
         return list(written)
     refuse("format-write-error",
            f"{where}: write must return text or a list of parts, got {type(written).__name__}")
@@ -567,21 +568,21 @@ def as_parts(written: object, *, where: str) -> list[dict]:
 
 
 def text_part(text: str) -> dict:
-    return {"kind": "text", "text": text}
+    return {"type": "text", "text": text}
 
 
 def make_message(role: str, parts: list[dict]) -> dict:
-    return {"role": role, "content": parts}
+    return {"role": role, "parts": parts}
 
 
 def merge_text_parts(parts: list[dict]) -> list[dict]:
     """Adjacent text parts merge; empty text parts vanish."""
     out: list[dict] = []
     for p in parts:
-        if p.get("kind") == "text":
+        if p.get("type") == "text":
             if not p.get("text"):
                 continue
-            if out and out[-1].get("kind") == "text":
+            if out and out[-1].get("type") == "text":
                 out[-1] = text_part(out[-1]["text"] + p["text"])
                 continue
         out.append(p)
@@ -590,8 +591,8 @@ def merge_text_parts(parts: list[dict]) -> list[dict]:
 
 def validate_response_part(part: object) -> None:
     """The shared batch and part-delta boundary; no text coercion."""
-    if not isinstance(part, dict) or not isinstance(part.get("kind"), str):
-        refuse("response-malformed", "response part must be an object with a string 'kind'")
+    if not isinstance(part, dict) or not isinstance(part.get("type"), str):
+        refuse("response-malformed", "response part must be an object with a string 'type' (an lm15 part)")
     if "text" in part and not isinstance(part["text"], str):
         refuse("response-malformed", "a response part's 'text' must be text")
 
@@ -603,9 +604,9 @@ def normalize_response_parts(parts: list[dict]) -> list[dict]:
     for part in parts:
         validate_response_part(part)
         has_text = isinstance(part.get("text"), str)
-        if has_text and texts and out[-1].get("kind") == part.get("kind"):
+        if has_text and texts and out[-1].get("type") == part.get("type"):
             texts.append(part["text"])
-            out[-1].update({k: v for k, v in part.items() if k not in ("kind", "text")})
+            out[-1].update({k: v for k, v in part.items() if k not in ("type", "text")})
             continue
         if texts:
             out[-1]["text"] = "".join(texts)
@@ -617,12 +618,15 @@ def normalize_response_parts(parts: list[dict]) -> list[dict]:
 
 
 def response_text_and_parts(response: object) -> tuple[str, list[dict]]:
-    """Accept a bare string or an lm15-shaped response dict."""
+    """Accept the reply text, an lm15 message ``{"role", "parts"}``, or an
+    lm15 response ``{"message": {...}, ...}`` (kernel §3)."""
     if isinstance(response, str):
         return response, []
-    if isinstance(response, dict) and isinstance(response.get("content"), list):
-        parts = normalize_response_parts(response["content"])
-        text = "".join(p.get("text", "") for p in parts if p.get("kind") == "text")
+    if isinstance(response, dict) and isinstance(response.get("message"), dict):
+        response = response["message"]
+    if isinstance(response, dict) and isinstance(response.get("parts"), list):
+        parts = normalize_response_parts(response["parts"])
+        text = "".join(p.get("text", "") for p in parts if p.get("type") == "text")
         return text, parts
     refuse("response-malformed",
-           "response must be a string or a dict with a 'content' part list")
+           "response must be text, an lm15 message {role, parts}, or an lm15 response {message: ...}")

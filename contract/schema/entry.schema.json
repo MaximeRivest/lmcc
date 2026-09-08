@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:lmcc:schema:entry:0.3.0",
+  "$id": "urn:lmcc:schema:entry:0.4.0",
   "title": "LMCC adapter entry",
   "description": "The artifact (kernel.md \u00a72, \u00a75, \u00a76): a template, a parse rule, strategies by role, formats by type \u2014 never a field name.",
   "type": "object",
@@ -56,6 +56,7 @@
               "role": {
                 "enum": [
                   "system",
+                  "developer",
                   "user",
                   "assistant"
                 ]
@@ -218,7 +219,7 @@
           },
           "additionalProperties": {
             "type": "string",
-            "pattern": "^(controls\\.[A-Za-z_][A-Za-z0-9_.]*|message:(system|user|assistant))$"
+            "pattern": "^(controls\\.(config\\.[a-z_]+|tools)|message:(system|developer|user|assistant))$"
           }
         },
         "routings": {

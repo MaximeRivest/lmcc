@@ -20,7 +20,7 @@ parameters, is breaking.
 | `unknown-parse-kind` | construct/load/bind | `install-vocabulary`, `edit-entry` | `parse.kind` is neither `derived` nor a registered lens (`edit-entry` when it is not even a name) |
 | `unknown-format` | load/dump | `install-vocabulary` | a `{"use": name}` format reference names nothing registered |
 | `unknown-strategy` | load/dump | `install-vocabulary` | a `{"use": name}` strategy reference names nothing registered |
-| `entry-malformed` | construct/load | `edit-entry` | structural problem; hint names the path (includes a routing with no source, a `pattern` regex outside the RE2 dialect, a bad predicate, and a vocabulary reference whose factory rejects its `options` or returns malformed data) |
+| `entry-malformed` | construct/load | `edit-entry` | structural problem; hint names the path (includes a routing with no source, a `pattern` the bound dialect rejects, a bad predicate, a control outside the pinned lm15 request fields, a `system` message that does not lead the template, and a vocabulary reference whose factory rejects its `options` or returns malformed data) |
 | `signature-malformed` | signature | `edit-signature` | field name not an ASCII identifier, duplicate name, bad direction, shape not an object |
 | `version-incompatible` | load/bind | `match-version` | artifact needs a kernel, vocabulary, or extension version this implementation cannot honor |
 | `extension-undeclared` | load/bind | `declare-extension` | a construct needs an extension family the artifact does not declare (a routing carries `pattern` and no `pattern/*` is in `extensions`); hint names the construct's path |
@@ -31,7 +31,7 @@ parameters, is breaking.
 | `role-ambiguous` | bind | `edit-signature` | one role on two fields |
 | `field-uncovered` | bind | `edit-template` | a visible input never rendered by the template |
 | `field-double-covered` | bind | `edit-entry` | a field is both visible and routed |
-| `control-conflict` | bind | `edit-entry` | two strategies, or a lens and a strategy, disagree on a request control |
+| `control-conflict` | bind | `edit-entry` | two strategies, or a lens and a strategy, set one request-control leaf (`config.<field>`, `tools`) to different values; the same value from both is not a conflict |
 | `no-format` | bind (or, for composing formats, write/read) | `bind-format` | a structured shape with no format; hint carries the path (`answer`, `answer[].age`) |
 | `format-shape-mismatch` | bind | `bind-format` | a format bound to a field whose shape it does not accept |
 | `format-direction` | bind | `bind-format` | an input-only format on an output field, or the reverse |

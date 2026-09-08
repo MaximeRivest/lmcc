@@ -1,0 +1,51 @@
+{
+ "name": "refuse-load-system-not-leading",
+ "kind": "refuse",
+ "entry": {
+  "name": "late",
+  "versions": {
+   "kernel": "0.4.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "user",
+    "text": "{q}"
+   },
+   {
+    "role": "system",
+    "text": "{instruction}\n<answer>\n{answer}\n</answer>"
+   }
+  ],
+  "parse": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Answer.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "expect": {
+  "code": "entry-malformed",
+  "fix": {
+   "action": "edit-entry",
+   "path": "template[1]"
+  },
+  "at": "load"
+ }
+}

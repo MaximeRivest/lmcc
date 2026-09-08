@@ -4,7 +4,7 @@
  "entry": {
   "name": "dspy_sections_v1",
   "versions": {
-   "kernel": "0.3.0",
+   "kernel": "0.4.0",
    "vocab": {}
   },
   "template": [
@@ -62,44 +62,37 @@
   }
  ],
  "expect": {
-  "messages": [
-   {
-    "role": "system",
-    "content": [
-     {
-      "kind": "text",
-      "text": "Answer the question.\n\nReply with EXACTLY these sections:\n[[ ## answer ## ]]\nshort answer\n[[ ## score ## ]]\n(integer)\n[[ ## completed ## ]]"
-     }
-    ]
-   },
-   {
-    "role": "user",
-    "content": [
-     {
-      "kind": "text",
-      "text": "== question ==\n2+2?\n"
-     }
-    ]
-   },
-   {
-    "role": "assistant",
-    "content": [
-     {
-      "kind": "text",
-      "text": "[[ ## answer ## ]]\n4\n[[ ## score ## ]]\n10\n[[ ## completed ## ]]"
-     }
-    ]
-   },
-   {
-    "role": "user",
-    "content": [
-     {
-      "kind": "text",
-      "text": "== question ==\n3+3?\n"
-     }
-    ]
-   }
-  ],
-  "patch": {}
+  "request": {
+   "system": "Answer the question.\n\nReply with EXACTLY these sections:\n[[ ## answer ## ]]\nshort answer\n[[ ## score ## ]]\n(integer)\n[[ ## completed ## ]]",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "== question ==\n2+2?\n"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "[[ ## answer ## ]]\n4\n[[ ## score ## ]]\n10\n[[ ## completed ## ]]"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "== question ==\n3+3?\n"
+      }
+     ]
+    }
+   ]
+  }
  }
 }

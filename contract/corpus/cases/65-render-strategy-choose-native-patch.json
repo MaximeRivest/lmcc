@@ -4,7 +4,7 @@
  "entry": {
   "name": "choose_v1",
   "versions": {
-   "kernel": "0.3.0",
+   "kernel": "0.4.0",
    "vocab": {}
   },
   "template": [
@@ -33,8 +33,10 @@
        ],
        "visible": false,
        "controls": {
-        "reasoning": {
-         "effort": "medium"
+        "config": {
+         "reasoning": {
+          "effort": "medium"
+         }
         }
        },
        "routings": [
@@ -102,29 +104,23 @@
   "q": "2+2?"
  },
  "expect": {
-  "messages": [
-   {
-    "role": "system",
-    "content": [
-     {
-      "kind": "text",
-      "text": "Solve.\n\nAnswer in exactly this form:\n<answer>\n(integer)\n</answer>\n"
-     }
-    ]
-   },
-   {
-    "role": "user",
-    "content": [
-     {
-      "kind": "text",
-      "text": "2+2?"
-     }
-    ]
-   }
-  ],
-  "patch": {
-   "reasoning": {
-    "effort": "medium"
+  "request": {
+   "system": "Solve.\n\nAnswer in exactly this form:\n<answer>\n(integer)\n</answer>\n",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "2+2?"
+      }
+     ]
+    }
+   ],
+   "config": {
+    "reasoning": {
+     "effort": "medium"
+    }
    }
   }
  }

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:lmcc:schema:fix:0.3.0",
+  "$id": "urn:lmcc:schema:fix:0.4.0",
   "title": "LMCC refusal fix",
   "description": "The machine-actionable next step a refusal carries (spec/errors.md, Fix actions). Closed: one branch per action, exact parameter sets.",
   "type": "object",

@@ -58,7 +58,7 @@ def apply_routings(text: str, parts: list[dict], routings: list[tuple[str, dict]
     for field_name, r in routings:
         if r["from"].startswith("channel:"):
             kind = r["from"].split(":", 1)[1]
-            span = core.Span([p for p in parts if p.get("kind") == kind])
+            span = core.Span([p for p in parts if p.get("type") == kind])
         else:
             spans = _text_spans(text, r, pattern)
             span = core.Span([core.text_part(cap) for _, _, cap in spans])

@@ -60,7 +60,7 @@
    "action": "match-version",
    "entry": "kernel",
    "needs": "9.0.0",
-   "provides": "0.3.0"
+   "provides": "0.4.0"
   },
   "at": "load"
  }

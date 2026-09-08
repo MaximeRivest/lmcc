@@ -206,10 +206,10 @@ def _emit_value(rendered: tuple[str, object], out: list[dict], buf: list[str]) -
         buf.append(payload)
         return
     for part in payload:
-        if part.get("kind") == "text":
+        if part.get("type") == "text":
             buf.append(part.get("text", ""))
             continue
         if buf:
-            out.append({"kind": "text", "text": "".join(buf)})
+            out.append({"type": "text", "text": "".join(buf)})
             buf.clear()
         out.append(part)

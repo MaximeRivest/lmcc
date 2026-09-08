@@ -92,6 +92,14 @@ func RunCaseOutcome(c *lmcc.Object) (out Outcome) {
 	return Outcome{OK: ok, Detail: detail, StreamTrace: trace}
 }
 
+// messageParts: the part list of an lm15 message or response (kernel §3).
+func messageParts(r *lmcc.Object) []any {
+	if msg := r.Object("message"); msg != nil {
+		r = msg
+	}
+	return r.List("parts")
+}
+
 func runCaseInner(c *lmcc.Object, reg *lmcc.Registry) (bool, string, any) {
 	kind, _ := c.Str("kind")
 	expect := c.Object("expect")
@@ -167,14 +175,13 @@ func run(c *lmcc.Object, kind string, expect *lmcc.Object, reg *lmcc.Registry) (
 			return outcome{}, err
 		}
 		got := lmcc.Obj("skeleton", baked.Skeleton(), "prefix", prefix)
-		return compare(lmcc.Obj("skeleton", expect.Object("skeleton"), "prefix", expect.List("prefix")), got, "plan"), nil
+		return compare(lmcc.Obj("skeleton", expect.Object("skeleton"), "prefix", expect.Object("prefix")), got, "plan"), nil
 	case "render":
 		res, err := baked.Render(c.Object("inputs"), objects(c.List("demos")), objects(c.List("history")))
 		if err != nil {
 			return outcome{}, err
 		}
-		got := lmcc.Obj("messages", res.Messages, "patch", res.Patch)
-		return compare(lmcc.Obj("messages", expect.List("messages"), "patch", expect.Object("patch")), got, "render result"), nil
+		return compare(expect.Object("request"), res.Request(""), "request"), nil
 	case "parse":
 		resp, _ := c.Get("response")
 		values, err := baked.Parse(resp)
@@ -225,7 +232,7 @@ func traceChunking(response any) []any {
 		return out
 	case *lmcc.Object:
 		out := []any{}
-		for _, raw := range r.List("content") {
+		for _, raw := range messageParts(r) {
 			part, ok := raw.(*lmcc.Object)
 			if !ok {
 				out = append(out, lmcc.DeepClone(raw))
@@ -252,7 +259,7 @@ func feedChunk(plan *lmcc.Plan, stream *lmcc.Stream, response, chunk any) ([]any
 	_, textResponse := response.(string)
 	_, textChunk := chunk.(string)
 	if !textResponse && textChunk {
-		_, err := plan.Parse(lmcc.Obj("content", []any{chunk}))
+		_, err := plan.Parse(lmcc.Obj("role", "assistant", "parts", []any{chunk}))
 		return nil, err
 	}
 	return stream.Feed(chunk)
@@ -320,7 +327,7 @@ func streamChunkings(response any) [][]any {
 		}
 		return out
 	case *lmcc.Object:
-		parts := r.List("content")
+		parts := messageParts(r)
 		whole := make([]any, len(parts))
 		for i, part := range parts {
 			whole[i] = lmcc.DeepClone(part)

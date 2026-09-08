@@ -4,7 +4,7 @@
  "entry": {
   "name": "surface_v1",
   "versions": {
-   "kernel": "0.3.0",
+   "kernel": "0.4.0",
    "vocab": {}
   },
   "template": [
@@ -86,57 +86,55 @@
  "history": [
   {
    "role": "user",
-   "content": "earlier"
+   "parts": [
+    {
+     "type": "text",
+     "text": "earlier"
+    }
+   ]
   },
   {
    "role": "assistant",
-   "content": [
+   "parts": [
     {
-     "kind": "text",
+     "type": "text",
      "text": "ok"
     }
    ]
   }
  ],
  "expect": {
-  "messages": [
-   {
-    "role": "system",
-    "content": [
-     {
-      "kind": "text",
-      "text": "Do.\nIN q [plain] the question \nIN n [citable]  (integer)\nOUT reasoning [reasoning] think \nOUT score [plain]  (number)\nOUT level [plain]  one of: low, high\nOUT note [plain]  \n{braces}\n[[ ## reasoning ## ]]\nthink\n[[ ## score ## ]]\n(number)\n[[ ## level ## ]]\none of: low, high\n[[ ## note ## ]]\n...\n[[ ## completed ## ]]"
-     }
-    ]
-   },
-   {
-    "role": "user",
-    "content": [
-     {
-      "kind": "text",
-      "text": "earlier"
-     }
-    ]
-   },
-   {
-    "role": "assistant",
-    "content": [
-     {
-      "kind": "text",
-      "text": "ok"
-     }
-    ]
-   },
-   {
-    "role": "user",
-    "content": [
-     {
-      "kind": "text",
-      "text": "hi 3"
-     }
-    ]
-   }
-  ],
-  "patch": {}
+  "request": {
+   "system": "Do.\nIN q [plain] the question \nIN n [citable]  (integer)\nOUT reasoning [reasoning] think \nOUT score [plain]  (number)\nOUT level [plain]  one of: low, high\nOUT note [plain]  \n{braces}\n[[ ## reasoning ## ]]\nthink\n[[ ## score ## ]]\n(number)\n[[ ## level ## ]]\none of: low, high\n[[ ## note ## ]]\n...\n[[ ## completed ## ]]",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "earlier"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "ok"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "hi 3"
+      }
+     ]
+    }
+   ]
+  }
  }
 }

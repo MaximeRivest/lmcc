@@ -22,6 +22,8 @@ normative form.
                           all refusals fire HERE, before any money is spent
   L2  the artifact        template + parse + strategies by role + formats by
                           type — never a field name (schema/entry.schema.json);
+                          renders to an lm15 request minus model, parses an
+                          lm15 message/response (contract/LM15_CONTRACT_PIN);
                           a shipped format is the one place it carries code,
                           declared (language, deps, sha256, author)
   L1  kernel mechanics    python/lmcc/ (reference) and go/lmcc/ (independent)
@@ -75,7 +77,8 @@ a decision, derive from these before inventing anything:
 
 | invariant | enforced by |
 |---|---|
-| corpus is byte-exact authority | `contract/harness/runner.py` (95 cases; 6 need `udf:python`, 4 need `pattern/legacy-re2`) |
+| corpus is byte-exact authority | `contract/harness/runner.py` (98 cases; 6 need `udf:python`, 4 need `pattern/legacy-re2`) |
+| the wire is lm15: parts `type`, messages `parts`, `system` a request field, controls a partial lm15 request validated at `config.<field>`/`tools`; `render().request(model)` feeds lm15's `request_from_dict` unchanged | every render case's `expect.request`; cases 96–98; `tests/lm15/test_bridge.py` through a real lm15 at the pinned commit (`./check` step 7) |
 | the contract is portable: an independent Go kernel passes every claimable case byte-exactly, and both kernels raise the same refusal-code set (minus the declared placement-only code) | `./check` step 5 (`runner.py --driver go/bin/lmcc-conform`), `tests/test_coherence.py` |
 | text primitives are portable: ASCII strip, explicit integer/number grammars, ECMAScript number spelling (kernel §7a) | corpus 35–37, 44, 45; `tests/test_text_rules.py`; `go/lmcc/text_test.go` |
 | the core needs no regex: a `pattern` routing requires a declared `pattern/*` extension; a core-only host refuses before model I/O; both kernels bind the same natives at the same versions; every native has an indexed spec | corpus 40, 42, 91–95; `tests/test_extensions.py`; `go/lmcc/extensions_test.go`; `tests/test_coherence.py` |
@@ -153,6 +156,11 @@ Checklists:
   add every-split tests in both harness drivers; never emit a prefix a
   later delta can revise; make every forced buffer visible in
   `plan.describe()["streaming"]`.
+- **anything that touches the wire** (a part, a message, a request field):
+  the word is lm15's, never a synonym; a new lm15 field the patch may
+  set goes into the pinned `Config` list in both kernels *and* the spec,
+  with the contract pin bumped deliberately. lmcc's own objects (events,
+  refusals, plans) stay in lmcc's words.
 - **anything that touches model text**: use the §7a primitives
   (`core.strip`, `read_integer`, `format_number` / `lmcc.Strip`,
   `ReadInteger`, `FormatNumber`), never the host language's own

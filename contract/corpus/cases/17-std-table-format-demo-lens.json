@@ -7,7 +7,7 @@
  "entry": {
   "name": "sections_v1",
   "versions": {
-   "kernel": "0.3.0",
+   "kernel": "0.4.0",
    "vocab": {
     "format/table": "0.1.0"
    }
@@ -92,44 +92,37 @@
   }
  ],
  "expect": {
-  "messages": [
-   {
-    "role": "system",
-    "content": [
-     {
-      "kind": "text",
-      "text": "Rank.\n\nReply with EXACTLY these sections:\n<rows>\n| name | score |  (one row per item)\n</done>"
-     }
-    ]
-   },
-   {
-    "role": "user",
-    "content": [
-     {
-      "kind": "text",
-      "text": "== q ==\nrank those\n"
-     }
-    ]
-   },
-   {
-    "role": "assistant",
-    "content": [
-     {
-      "kind": "text",
-      "text": "<rows>\n| a\\|b | 3 |\n| c | 1 |\n</done>"
-     }
-    ]
-   },
-   {
-    "role": "user",
-    "content": [
-     {
-      "kind": "text",
-      "text": "== q ==\nrank these\n"
-     }
-    ]
-   }
-  ],
-  "patch": {}
+  "request": {
+   "system": "Rank.\n\nReply with EXACTLY these sections:\n<rows>\n| name | score |  (one row per item)\n</done>",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "== q ==\nrank those\n"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "<rows>\n| a\\|b | 3 |\n| c | 1 |\n</done>"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "== q ==\nrank these\n"
+      }
+     ]
+    }
+   ]
+  }
  }
 }

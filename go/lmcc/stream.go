@@ -735,7 +735,7 @@ func (s *Stream) Finish() (result *StreamResult, err error) {
 	defer catch(&err)
 	var response any = s.pieces.String()
 	if s.partMode {
-		response = Obj("content", s.materializedParts())
+		response = Obj("role", "assistant", "parts", s.materializedParts())
 	}
 	values, spans := s.plan.parseWithSpans(response)
 	s.run("", nil, true)
@@ -751,7 +751,7 @@ func (s *Stream) append(delta any) (string, *partDelta) {
 		return text, nil
 	}
 	part := validateResponsePart(delta)
-	kind, _ := part.Str("kind")
+	kind, _ := part.Str("type")
 	if !s.partMode {
 		s.partMode = true
 		if s.pieces.Len() > 0 {
@@ -768,15 +768,15 @@ func (s *Stream) append(delta any) (string, *partDelta) {
 }
 
 func (s *Stream) appendPart(part *Object) *partDelta {
-	kind, _ := part.Str("kind")
+	kind, _ := part.Str("type")
 	text, hasText := part.Str("text")
 	if hasText && len(s.parts) > 0 {
 		previous := s.parts[len(s.parts)-1]
-		pk, _ := previous.Str("kind")
+		pk, _ := previous.Str("type")
 		if pk == kind && s.partTexts[len(s.partTexts)-1] != nil {
 			s.partTexts[len(s.partTexts)-1].WriteString(text)
 			for _, key := range part.Keys {
-				if key != "kind" && key != "text" {
+				if key != "type" && key != "text" {
 					value, _ := part.Get(key)
 					previous.Set(key, DeepClone(value))
 				}

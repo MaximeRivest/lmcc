@@ -62,9 +62,7 @@ func Example() {
 	if err != nil {
 		panic(err)
 	}
-	system := res.Messages[0].(*lmcc.Object).List("content")[0].(*lmcc.Object)
-	text, _ := system.Str("text")
-	fmt.Printf("%q\n", text)
+	fmt.Printf("%q\n", res.System)
 
 	// 5. Parse the reply to typed values.
 	reply := "<think>scattering</think><answer>\nRayleigh scattering.\n</answer>\n<score>\n9\n</score>"

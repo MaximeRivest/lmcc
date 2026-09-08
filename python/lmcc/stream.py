@@ -524,7 +524,7 @@ class Stream:
         if self._finished:
             raise RuntimeError("stream is already finished")
         self._finished = True
-        response: object = {"content": self._materialized_parts()} if self._part_mode \
+        response: object = {"role": "assistant", "parts": self._materialized_parts()} if self._part_mode \
             else "".join(self._pieces)
         # Batch is the final authority. It preserves refusal code, fix,
         # partial, structural order, and typed-read order exactly.
@@ -547,21 +547,21 @@ class Stream:
             if self._pieces:
                 self._append_part(core.text_part("".join(self._pieces)))
         part = self._append_part(dict(delta))
-        text = delta.get("text", "") if delta.get("kind") == "text" else ""
+        text = delta.get("text", "") if delta.get("type") == "text" else ""
         if text:
             self._pieces.append(text)
         return text, part
 
     def _append_part(self, part: dict) -> tuple[str, str | None, bool]:
-        kind = part.get("kind")
+        kind = part.get("type")
         text = part.get("text")
         has_text = isinstance(text, str)
-        if has_text and self._parts and self._parts[-1].get("kind") == kind \
+        if has_text and self._parts and self._parts[-1].get("type") == kind \
                 and self._part_texts[-1] is not None:
             previous = self._parts[-1]
             self._part_texts[-1].append(text)
             for key, value in part.items():
-                if key not in ("kind", "text"):
+                if key not in ("type", "text"):
                     previous[key] = value
             return kind, text, False
         self._parts.append(part)

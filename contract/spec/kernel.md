@@ -1,8 +1,17 @@
 # The LMCC kernel — normative specification
 
-**Version 0.3.0** (kernel). Status: the v3 design (`plans/08`), built with
+**Version 0.4.0** (kernel). Status: the v3 design (`plans/08`), built with
 two implementations (`python/lmcc`, `go/lmcc`) against the corpus. Where
 this document and the corpus disagree, fix the corpus first, then both.
+
+**What 0.4 changes (D-35).** The wire layer *is* the lm15 contract
+(`../LM15_CONTRACT_PIN` names the ratified commit): parts carry `type`,
+messages carry `parts`, `system` is a request field, and what `render`
+produces is an lm15 request minus its model — feedable to any lm15
+implementation without translation. The controls patch is a partial
+lm15 request (`config.<field>`, `tools`), deep-merged and validated
+against the pinned field names. No case expectation changed meaning; the
+bytes were re-spelled in lm15's words.
 
 **What 0.3 changes (D-33).** The kernel is a small mandatory core; any
 behavior outside it is a named, versioned **extension** the artifact
@@ -32,6 +41,14 @@ return. The nouns: **signature, adapter, template, lens, format, part,
 span, role, strategy, capability**; the verb: **bind**. The kernel ships
 no formats and no strategies beyond the defaults §5 names.
 
+**The wire is lm15.** Every message, part, request field and response
+lmcc reads or writes is the lm15 canonical JSON of the contract commit
+in `../LM15_CONTRACT_PIN` — the same bytes lm15's own serde produces in
+every language it exists in. lmcc adds nothing to that vocabulary and
+never renames a field; its own objects (signatures, artifacts, plans,
+refusals, stream *events*) are lmcc's and are the only things spelled in
+lmcc's words.
+
 ---
 
 ## 1. Signature
@@ -52,7 +69,7 @@ other one untouched for formats to use:
 | `{"type": "string" \| "integer" \| "number" \| "boolean"}` | kernel scalar (§5 defaults) |
 | `{"enum": [...]}` | membership; strings or integers |
 | nullable forms `{"type": [T, "null"]}`, `{"anyOf": [S, {"type": "null"}]}` | the scalar/enum plus `null` |
-| `{"media": kind}` | a part of that kind (§5 defaults) |
+| `{"media": type}` | an lm15 part of that `type` (`image`, `document`, `function`, …; §5 defaults) |
 | `{"type": "array", "items"?}` · `{"type": "object", ...}` · anything else | **structured**: needs a format, no default |
 
 `type` is the type's name **as the frontend spells it** (`Person`,
@@ -73,8 +90,9 @@ frontend cannot lower refuses `unmapped-type`, naming the field.
 An adapter is a template, a parse rule, strategies by **role**, and
 formats by **type** — never a field name. That is what lets one adapter
 serve every signature. The template is a message list of `{role, text}`
-and directives `{"directive": "demos" | "history"}`, with exactly three
-constructs:
+(roles `system`, `developer`, `user`, `assistant`; `system` messages
+lead) and directives `{"directive": "demos" | "history"}`, with exactly
+three constructs:
 
 | construct | example | meaning |
 |---|---|---|
@@ -115,20 +133,38 @@ bind), absent on render and parse refusals — and `partial` is what a
 parse recovered. The corpus pins codes and fixes; both kernels emit the
 same fix for the same refusal.
 
-Messages are lm15-shaped: `{"role", "content": [part, …]}`; adjacent
-text parts merge; empty messages drop. A response is a string or
-`{"content": [part, …]}`. **Demos** are field dicts: the user templates
-over the demo's inputs, then one assistant turn written by the lens over
-the outputs the demo supplies (absent outputs are omitted). **History**
-items are messages (verbatim) or `{"fields": {…}}` turns rendered like
-demos; anything else refuses `value-invalid`.
+**Render output** is an lm15 request minus its model:
+`{"system"?: text | [part], "messages": [{"role", "parts"}], "config"?,
+"tools"?}`. The template's `system` messages (which must lead the
+template, contiguous — `entry-malformed` otherwise) fold into `system`:
+one text part becomes the string, anything else the part list. Template
+message roles are `system`, `developer`, `user`, `assistant`; messages
+render as `{"role", "parts": [part, …]}`, adjacent text parts merge,
+empty messages drop. Everything after `messages` is the **patch**: the
+deep merge of every strategy's `controls` and the lens's `patch`, a
+partial lm15 request whose first path segment is `config` or `tools` and
+whose `config` keys are the pinned lm15 `Config` fields (`max_tokens`,
+`temperature`, `top_p`, `top_k`, `stop`, `response_format`,
+`tool_choice`, `reasoning`, `cache`, `service_tier`, `user_id`, `store`,
+`extensions`); anything else refuses `entry-malformed` at the control's
+path. Below those two levels the value is opaque, as in lm15. Two
+sources disagreeing on one leaf is `control-conflict`; agreeing is fine.
+
+**Parse input** is a string (the reply text), an lm15 message
+(`{"role", "parts"}`; the role is not read), or an lm15 response
+(`{"message": {…}, …}`; only `message` is read). **Demos** are field
+dicts: the user templates over the demo's inputs, then one assistant
+turn written by the lens over the outputs the demo supplies (absent
+outputs are omitted). **History** items are lm15 messages (verbatim) or
+`{"fields": {…}}` turns rendered like demos; anything else refuses
+`value-invalid`.
 
 `skeleton()` is what the derived lens knows the reply must contain:
 `{"prefill": text before the first output hole, "stops": [the last
 close or tail]}` (a `grammar` face is a stated gap). `prefix()` is the
-rendered messages that do not depend on inputs (system, demos, history
-turns before the first message with an input slot) — the cache-stable
-bytes.
+rendered request prefix that does not depend on inputs
+(`{"system"?, "messages"}`: system, demos, history turns before the
+first message with an input slot) — the cache-stable bytes.
 
 ## 4. The template is the lens
 
@@ -240,7 +276,7 @@ Strategy = { when?: Predicate, requires?: [fact], visible?: bool = true,
              placement?: {"@role": "controls.<key>" | "message:<role>"},
              routings?: [Routing] }
          | { choose: [{when: Predicate, use: Strategy}…, {else: Strategy}] }
-Routing  = { from: "text" | "channel:<part kind>",
+Routing  = { from: "text" | "channel:<part type>",
              between?: [open, close] | pattern?: regex | line_prefixed?: prefix,
              to: "@role" | "@role.<sub>", consume?: bool }
 Predicate = {capability} | {not} | {all} | {any}
@@ -263,16 +299,17 @@ the name; `visible: false` hides the field from loops and the pattern;
 `placement` writes the field's parts through its format into the request
 patch (`controls.<key>`) or appends them to a message (`message:<role>`)
 instead of a slot; fragments append to the named message (created if
-absent, system first); controls merge into the patch (`control-conflict`).
+absent, system first); controls deep-merge into the patch (§3;
+`control-conflict` on a disagreeing leaf).
 A field both visible and routed is `field-double-covered`.
 
 Batch parse normalizes response parts before routing by the same logical-part
-rule as streaming (§8): adjacent same-kind text-bearing parts coalesce,
-including empty text; a kind change or a part without text ends the run.
-Every response part is an object with a string `kind`; `text`, when present,
+rule as streaming (§8): adjacent same-type text-bearing parts coalesce,
+including empty text; a type change or a part without text ends the run.
+Every response part is an object with a string `type`; `text`, when present,
 is a string. Otherwise batch parse and part-delta `feed` refuse
 `response-malformed`, without a `fix`. A bare string is valid as a text
-response or text delta, but not as an element of a response part list.
+response or text delta, but not as an element of a part list.
 Metadata keys accumulate within a run; the last supplied value of each key
 wins. Normalization does not change the caller's parts.
 
@@ -282,8 +319,9 @@ Routings run **before** the lens. `from: text` scans the reply text —
 syntax, what a match is, and what is captured) — each match becomes a
 text part; `consume` removes the matches from the text the lens sees.
 `between` and `line_prefixed` are core: plain scans, no regex engine.
-`from: channel:<kind>` collects the response parts of that kind. The
-collected parts are the field's **span**; the field's format reads it.
+`from: channel:<type>` collects the response parts of that lm15 part
+type. The collected parts are the field's **span**; the field's format
+reads it.
 `span.text` is the stripped text parts joined by `\n`.
 
 Two contracts, checked at bind: a routing's span kind must be one the
@@ -315,9 +353,9 @@ must match what the format `emits` (`format-placement-mismatch`).
 ### 7b. Kernel default formats
 
 Scalars, enums and nullables write and read by §7a; strings are one
-text part, verbatim. A field whose shape is `{"media": kind}` writes a
-value that is already a part dict as that part (`{"kind": kind, …}`)
-and reads the first part of that kind from its span. Nothing structured
+text part, verbatim. A field whose shape is `{"media": type}` writes a
+value that is already a part dict as that lm15 part (`{"type": type, …}`)
+and reads the first part of that type from its span. Nothing structured
 has a default.
 
 ## 8. Streaming parse (sans-I/O)
@@ -330,8 +368,9 @@ Streaming is a *refinement* of batch parse, never a second parser:
 
 `stream = plan.stream()` creates a pure state machine; it opens no
 connection and owns no I/O. `stream.feed(delta)` accepts either a text
-string or one lm15-shaped part delta `{"kind": string, ...}` and returns
-zero or more structurally fixed events. `field_done.value` is the same
+string or one lm15 part delta `{"type": string, "text"?, …}` (an lm15
+`TextDelta`/`ThinkingDelta` as canonical JSON; `part_index` and other
+keys are metadata) and returns zero or more structurally fixed events. `field_done.value` is the same
 host-typed value as `parse()` (and therefore need not be JSON data).
 `stream.finish()` marks end-of-stream
 and returns `StreamResult(events, values)`: the final events caused by
@@ -342,8 +381,8 @@ be returned by `feed`; this is why `finish` returns both. Calling
 `Refusal`.
 
 Text strings are deltas of the response's `text` channel. Adjacent
-part deltas with the same `kind` and string `text` coalesce into one
-logical part by concatenating `text`; a change of kind closes that
+part deltas with the same `type` and string `text` coalesce into one
+logical part by concatenating `text`; a change of type closes that
 part. A part delta without text is one complete part. Thus a provider
 can pass its text/thinking deltas without inventing part boundaries.
 A malformed delta refuses `response-malformed` at `feed`.
@@ -388,7 +427,7 @@ returning a `LensStream` with `Feed` and `Finish`. Routing behavior is:
 
 - `between` emits a capture after its close arrives;
 - `line_prefixed` emits a capture after its newline arrives (or at EOF);
-- `from: channel:<kind>` streams text from matching part deltas;
+- `from: channel:<type>` streams text from matching part deltas;
 - `pattern` buffers its routed field until `finish` because a later byte
   can change a regex match;
 - a consuming routing passes only stable, non-matching text to the next

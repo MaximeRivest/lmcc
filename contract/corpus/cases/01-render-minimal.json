@@ -4,7 +4,7 @@
  "entry": {
   "name": "sections_v1",
   "versions": {
-   "kernel": "0.3.0",
+   "kernel": "0.4.0",
    "vocab": {}
   },
   "template": [
@@ -58,26 +58,19 @@
   "question": "Why is the sky blue?"
  },
  "expect": {
-  "messages": [
-   {
-    "role": "system",
-    "content": [
-     {
-      "kind": "text",
-      "text": "Answer the question.\n\nReply with EXACTLY these sections:\n<answer>\nshort answer\n<score>\n(integer)\n</done>"
-     }
-    ]
-   },
-   {
-    "role": "user",
-    "content": [
-     {
-      "kind": "text",
-      "text": "== question ==\nWhy is the sky blue?\n"
-     }
-    ]
-   }
-  ],
-  "patch": {}
+  "request": {
+   "system": "Answer the question.\n\nReply with EXACTLY these sections:\n<answer>\nshort answer\n<score>\n(integer)\n</done>",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "== question ==\nWhy is the sky blue?\n"
+      }
+     ]
+    }
+   ]
+  }
  }
 }

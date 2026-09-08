@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# The lm15 bridge's gate: lmcc_lm15 against a real lm15, offline.
+# lm15 is not on PyPI yet: the pin is a git commit (pyproject extra `lm15`).
+# Builds python/.venv-lm15 with uv on first run (network needed once);
+# fails loudly if lm15 cannot be imported — never skips.
+# Local development against a checkout: uv pip install -e ~/Projects/lm15-dev/lm15-python --python .venv-lm15/bin/python
+set -euo pipefail
+cd "$(dirname "$0")/.."
+VENV=.venv-lm15
+LM15_PIN="lm15 @ git+https://github.com/lm15-dev/lm15-python@33a5c52"
+if command -v uv >/dev/null 2>&1; then UV=uv; else UV="nix run nixpkgs#uv --"; fi
+if [ ! -x "$VENV/bin/python" ]; then
+  echo "creating $VENV (lm15 @ pinned commit + pytest) ..."
+  $UV venv -q "$VENV" --python 3.12
+  $UV pip install -q --python "$VENV/bin/python" "$LM15_PIN" pytest
+fi
+"$VENV/bin/python" -c 'import lm15; print("lm15", lm15.__version__)'
+PYTHONPATH=. "$VENV/bin/python" -m pytest -q tests/lm15

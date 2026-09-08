@@ -29,7 +29,7 @@ func TestStructTagsLowerToSignatureCore(t *testing.T) {
 	reg.BindFormat(reflect.TypeOf(photo{}), &FormatSpec{
 		NameValue: "photo", AcceptsSet: []string{"media:image"}, EmitsKind: "parts", Dir: "in",
 		WriteFn: func(v any, f *Field) (any, error) {
-			return []any{Obj("kind", "image", "data", v.(photo).b64, "mime", "image/png")}, nil
+			return []any{Obj("type", "image", "data", v.(photo).b64, "mime", "image/png")}, nil
 		}}, Obj("media", "image"))
 	sig, err := StructSignature("Answer.", qaIn{}, qaOut{}, reg)
 	if err != nil {
@@ -65,8 +65,8 @@ func TestStructTagsLowerToSignatureCore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	user := res.Messages[1].(*Object).List("content")
-	if len(user) != 2 || MarshalJSON(user[1], -1) != `{"kind": "image", "data": "b64", "mime": "image/png"}` {
+	user := res.Messages[0].(*Object).List("parts")
+	if len(user) != 2 || MarshalJSON(user[1], -1) != `{"type": "image", "data": "b64", "mime": "image/png"}` {
 		t.Errorf("media part: %s", MarshalJSON(user, -1))
 	}
 	values, err := baked.Parse("<reasoning>\nhm\n</reasoning><answer>\nParis\n</answer>\n<score>\n9\n</score>\n<ratio>\n0.5\n</ratio>\n<tags>\na, b\n</tags>")

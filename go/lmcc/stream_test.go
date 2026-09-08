@@ -116,15 +116,15 @@ func TestStreamChannelPartDeltasCoalesce(t *testing.T) {
 		t.Fatal(err)
 	}
 	stream := plan.Stream()
-	events, _ := stream.Feed(Obj("kind", "thinking", "text", "  rea"))
+	events, _ := stream.Feed(Obj("type", "thinking", "text", "  rea"))
 	if eventDeltas(events)["reasoning"] != "rea" {
 		t.Fatalf("first part: %s", MarshalJSON(events, -1))
 	}
-	events, _ = stream.Feed(Obj("kind", "thinking", "text", "son  "))
+	events, _ = stream.Feed(Obj("type", "thinking", "text", "son  "))
 	if eventDeltas(events)["reasoning"] != "son" {
 		t.Fatalf("second part: %s", MarshalJSON(events, -1))
 	}
-	_, _ = stream.Feed(Obj("kind", "text", "text", "<answer>\nok\n</answer>"))
+	_, _ = stream.Feed(Obj("type", "text", "text", "<answer>\nok\n</answer>"))
 	result, err := stream.Finish()
 	if err != nil {
 		t.Fatal(err)
@@ -419,24 +419,24 @@ func TestStreamFuzzRandomChunkingRefinesBatch(t *testing.T) {
 				var part *Object
 				switch rng.Intn(3) {
 				case 0:
-					part = Obj("kind", "image", "url", "x")
+					part = Obj("type", "image", "url", "x")
 				case 1:
-					part = Obj("kind", "thinking", "text", genText())
+					part = Obj("type", "thinking", "text", genText())
 				default:
-					part = Obj("kind", "text", "text", genText())
+					part = Obj("type", "text", "text", genText())
 				}
 				text, hasText := part.Str("text")
-				kind, _ := part.Str("kind")
+				kind, _ := part.Str("type")
 				if hasText {
 					for _, piece := range chunk(text) {
-						chunks = append(chunks, Obj("kind", kind, "text", piece))
+						chunks = append(chunks, Obj("type", kind, "text", piece))
 					}
 				} else {
 					chunks = append(chunks, part.Clone())
 				}
 				if n := len(coalesced); n > 0 && hasText {
 					prev := coalesced[n-1].(*Object)
-					pk, _ := prev.Str("kind")
+					pk, _ := prev.Str("type")
 					if pt, ok := prev.Str("text"); ok && pk == kind {
 						prev.Set("text", pt+text)
 						continue
@@ -444,7 +444,7 @@ func TestStreamFuzzRandomChunkingRefinesBatch(t *testing.T) {
 				}
 				coalesced = append(coalesced, part.Clone())
 			}
-			response = Obj("content", coalesced)
+			response = Obj("role", "assistant", "parts", coalesced)
 		} else {
 			text := genText()
 			if rng.Intn(10) < 6 {

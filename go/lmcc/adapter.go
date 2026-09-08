@@ -56,7 +56,14 @@ func newAdapter(name string, template []*Object, parse *Object, strategies, form
 		}
 		role, _ := m.Str("role")
 		text, ok := m.Str("text")
-		if (role != "system" && role != "user" && role != "assistant") || !ok {
+		if role == "system" {
+			for _, prior := range template[:i] {
+				if pr, _ := prior.Str("role"); prior.Has("directive") || (pr != "" && pr != "system") {
+					refuseFixf("entry-malformed", fixEditEntry(where), "%s: system messages lead the template (they become the lm15 request's system field); put later instructions in a developer message", where)
+				}
+			}
+		}
+		if (role != "system" && role != "developer" && role != "user" && role != "assistant") || !ok {
 			refuseFixf("entry-malformed", fixEditEntry(where), "%s: a message is {role, text} or {directive}", where)
 		}
 		a.Template = append(a.Template, m.Clone())

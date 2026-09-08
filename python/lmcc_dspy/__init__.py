@@ -180,9 +180,9 @@ def bind_dspy_types(registry: lmcc.Registry) -> None:
     registry._lmcc_dspy_bound = True
     from lmcc_std import jsontext
 
-    registry.format(Image, write=lambda im: [{"kind": "image", "url": im.url}],
+    registry.format(Image, write=lambda im: [{"type": "image", "url": im.url}],
                     accepts=("media:image",), emits="parts", direction="in")
-    registry.format(Audio, write=lambda au: [{"kind": "audio", "url": getattr(au, "url", None)}],
+    registry.format(Audio, write=lambda au: [{"type": "audio", "url": getattr(au, "url", None)}],
                     accepts=("media:audio",), emits="parts", direction="in")
     registry.format(Tool, write=lambda t: jsontext.dumps(_tool_declaration(t), indent=None),
                     accepts=("Tool", "object"), direction="in")

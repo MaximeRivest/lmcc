@@ -64,7 +64,7 @@ func applyRoutings(text string, parts []any, routings []routing, pattern Pattern
 			kind := from[len("channel:"):]
 			for _, p := range parts {
 				if po, ok := p.(*Object); ok {
-					if k, _ := po.Str("kind"); k == kind {
+					if k, _ := po.Str("type"); k == kind {
 						span.Parts = append(span.Parts, p)
 					}
 				}

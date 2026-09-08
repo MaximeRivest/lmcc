@@ -227,7 +227,7 @@ func emitValue(kind, text string, parts []any) func(*renderBuf) {
 		}
 		for _, p := range parts {
 			po, _ := p.(*Object)
-			if k, _ := po.Str("kind"); k == "text" {
+			if k, _ := po.Str("type"); k == "text" {
 				t, _ := po.Str("text")
 				b.buf.WriteString(t)
 				continue
