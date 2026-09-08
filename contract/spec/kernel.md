@@ -149,6 +149,12 @@ whose `config` keys are the pinned lm15 `Config` fields (`max_tokens`,
 `extensions`); anything else refuses `entry-malformed` at the control's
 path. Below those two levels the value is opaque, as in lm15. Two
 sources disagreeing on one leaf is `control-conflict`; agreeing is fine.
+The plan adds one control of its own: when the model declares
+`stop_sequences` and the lens's skeleton has `stops`, `config.stop` is
+those stops — where the reply ends is the layout's knowledge, not the
+caller's chore. A provider omits the stop sequence from the reply; the
+lens reads a capture to its close *or end of text*, so nothing changes
+in parsing.
 
 **Parse input** is a string (the reply text), an lm15 message
 (`{"role", "parts"}`; the role is not read), or an lm15 response

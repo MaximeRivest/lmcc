@@ -1,0 +1,85 @@
+{
+ "name": "render-stop-sequences",
+ "kind": "render",
+ "entry": {
+  "name": "sections_v1",
+  "versions": {
+   "kernel": "0.4.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n\nReply with EXACTLY these sections:\n{% for f in outputs %}<{f.name}>\n{f.value}\n{% endfor %}</done>"
+   },
+   {
+    "directive": "demos"
+   },
+   {
+    "directive": "history"
+   },
+   {
+    "role": "user",
+    "text": "{% for f in inputs %}== {f.name} ==\n{f.value}\n{% endfor %}"
+   }
+  ],
+  "parse": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Answer the question.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    },
+    "desc": "short answer"
+   },
+   {
+    "name": "score",
+    "direction": "output",
+    "shape": {
+     "type": "integer"
+    }
+   }
+  ]
+ },
+ "capabilities": {
+  "instruct": true,
+  "stop_sequences": true
+ },
+ "inputs": {
+  "question": "Why is the sky blue?"
+ },
+ "expect": {
+  "request": {
+   "system": "Answer the question.\n\nReply with EXACTLY these sections:\n<answer>\nshort answer\n<score>\n(integer)\n</done>",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "== question ==\nWhy is the sky blue?\n"
+      }
+     ]
+    }
+   ],
+   "config": {
+    "stop": [
+     "</done>"
+    ]
+   }
+  }
+ }
+}

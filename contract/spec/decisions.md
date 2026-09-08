@@ -707,3 +707,21 @@ a late `system` message that used to render now refuses; the lm15 pin is
 a commit that must be bumped by hand. Benefits: no translation layer in
 any language; `render().request(m)` is the call; a strategy's patch is a
 valid partial request by construction; every wire word has one owner.
+
+
+**D-36 · The plan asks the provider to stop at its tail.** `skeleton()`
+already knew the reply's last close or tail; forwarding it as a stop
+sequence was a chore left to the caller — the kind of gap the calling
+convention exists to remove. Now, when the model declares the new
+capability fact `stop_sequences` (vocabulary 0.2.0) and the lens's
+skeleton has `stops`, bind merges `config.stop` into the patch as the
+skeleton's control (`control-conflict` if a strategy set a different
+list). Parsing is unchanged: providers omit the stop sequence from the
+reply and the derived lens already reads a capture to its close *or end
+of text*. Gated by a fact rather than assumed because the fact is real:
+OpenAI's Responses API has no stop field and lm15 refuses to omit it
+silently — the live run hit exactly that, so `stop_sequences` is
+declared per model, like every other fact. Case 99 pins the bytes.
+Cost: one more fact to declare; a caller who wants *no* stop on a model
+that supports it leaves the fact out. `prefill` is the same story for
+the other end of the reply and stays a stated gap until lm15 spells it.

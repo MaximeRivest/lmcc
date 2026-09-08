@@ -45,16 +45,18 @@ def run(name, strategy, capabilities, lm, model):
 
     assert batch["answer"] == streamed.values["answer"] == 29, (batch, streamed.values)
     assert batch["reasoning"].strip() and streamed.values["reasoning"].strip()
-    print(f"{name:<18} {model:<18} answer={batch['answer']}  "
-          f"patch={request.config.reasoning or '-'}  stream_events={len(events)}  "
-          f"reasoning={batch['reasoning'][:50]!r}…")
+    print(f"{name:<18} {model:<18} answer={batch['answer']}  stop={request.config.stop}  "
+          f"reasoning_cfg={request.config.reasoning.effort if request.config.reasoning else '-'}  "
+          f"events={len(events)}  reasoning={batch['reasoning'][:40]!r}…")
 
 
 def main():
     openai = OpenAILM(api_key=os.environ["OPENAI_API_KEY"])
     claude = AnthropicLM(api_key=os.environ["ANTHROPIC_API_KEY"])
+    # Capability facts are per model, declared, never sniffed: OpenAI's Responses
+    # API has no stop field (lm15 refuses rather than omit), Claude honors one.
     instruct = {"instruct": True}
-    native = {"instruct": True, "native_reasoning": True}
+    native = {"instruct": True, "native_reasoning": True, "stop_sequences": True}
     auto = lmcc.Strategy(choose=[
         {"when": {"capability": "native_reasoning"}, "use": lmcc_std.strategies.native_reasoning({"effort": "low"})},
         {"else": lmcc_std.strategies.reasoning_tags({})}])

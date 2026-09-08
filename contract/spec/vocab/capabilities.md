@@ -1,4 +1,4 @@
-# The capability vocabulary — version 0.1.0
+# The capability vocabulary — version 0.2.0
 
 Capability facts are **declared, never sniffed**: the caller hands `bake`
 a plain dict of booleans describing the model. Strategies predicate on
@@ -19,6 +19,7 @@ version of this file; changing one's meaning is breaking.
 | `native_citations` | a provider citations channel |
 | `native_structured_output` | the server enforces a JSON schema on the reply (`response_format`) — the gate for `lens/json_object` |
 | `image_input` | accepts image parts |
+| `stop_sequences` | the request honors `config.stop` (lm15 `Config.stop`); the plan then asks to stop at the lens's tail (kernel §3) |
 
 An absent key means **false**. Unknown keys are ignored by predicates
 (they can only be named by the vocabulary above), so declaring extra

@@ -8,7 +8,8 @@ changed meaning; two were hand-edited to be *valid lm15* (66's tool item
 became a `function` tool; 67's placement path a real control path).
 Cases 96–98 pin what 0.4 adds: a control outside the pinned lm15 fields
 refuses (96), a `developer` message renders and `system` folds (97), a
-`system` message that does not lead refuses (98).
+`system` message that does not lead refuses (98). Case 99 (D-36) pins
+`config.stop` from the skeleton when `stop_sequences` is declared.
 
 **Kernel 0.3 (D-33).** Every case pinned `kernel: 0.3.0`; the migration
 changed no expectation's meaning. A case declares everything beyond the

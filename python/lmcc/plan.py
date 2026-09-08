@@ -780,6 +780,10 @@ def bind(adapter: Adapter, sig: core.SignatureCore, capabilities: dict, registry
         validate_control_path(path, where="parse")
         _merge_control(plan, path, value, owner="(lens)", patch_owner=patch_owner,
                        conflict_path=f"strategies[{patch_owner.get(path)!r}].controls[{path!r}]")
+    stops = plan.lens.skeleton().get("stops") or []
+    if capabilities.get("stop_sequences") and stops:
+        _merge_control(plan, "config.stop", list(stops), owner="(skeleton)", patch_owner=patch_owner,
+                       conflict_path=f"strategies[{patch_owner.get('config.stop')!r}].controls['config.stop']")
 
     # 5. template validation + input coverage.
     known = {f.name for f in sig.fields}

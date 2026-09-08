@@ -77,7 +77,7 @@ a decision, derive from these before inventing anything:
 
 | invariant | enforced by |
 |---|---|
-| corpus is byte-exact authority | `contract/harness/runner.py` (98 cases; 6 need `udf:python`, 4 need `pattern/legacy-re2`) |
+| corpus is byte-exact authority | `contract/harness/runner.py` (99 cases; 6 need `udf:python`, 4 need `pattern/legacy-re2`) |
 | the wire is lm15: parts `type`, messages `parts`, `system` a request field, controls a partial lm15 request validated at `config.<field>`/`tools`; `render().request(model)` feeds lm15's `request_from_dict` unchanged | every render case's `expect.request`; cases 96–98; `tests/lm15/test_bridge.py` through a real lm15 at the pinned commit (`./check` step 7) |
 | the contract is portable: an independent Go kernel passes every claimable case byte-exactly, and both kernels raise the same refusal-code set (minus the declared placement-only code) | `./check` step 5 (`runner.py --driver go/bin/lmcc-conform`), `tests/test_coherence.py` |
 | text primitives are portable: ASCII strip, explicit integer/number grammars, ECMAScript number spelling (kernel §7a) | corpus 35–37, 44, 45; `tests/test_text_rules.py`; `go/lmcc/text_test.go` |

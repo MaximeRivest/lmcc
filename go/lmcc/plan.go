@@ -994,6 +994,9 @@ func Bind(a *Adapter, sig *Signature, capabilities *Object, reg *Registry) (p *P
 			p.mergeControl(leaf.path, leaf.value, "(lens)", patchOwner, "strategies['"+patchOwner[leaf.path]+"'].controls['"+leaf.path+"']")
 		}
 	}
+	if stops := p.Lens.Skeleton().List("stops"); capabilities.Bool("stop_sequences", false) && len(stops) > 0 {
+		p.mergeControl("config.stop", append([]any{}, stops...), "(skeleton)", patchOwner, "strategies['"+patchOwner["config.stop"]+"'].controls['config.stop']")
+	}
 
 	// 5. template validation + input coverage.
 	known, inputNames, covered := map[string]bool{}, map[string]bool{}, map[string]bool{}
