@@ -19,5 +19,6 @@ Need a definition? See [docs/reference](../reference/README.md).
 | [08-use-a-dspy-signature.md](08-use-a-dspy-signature.md) | lower a `dspy.Signature` through `lmcc_dspy` |
 | [09-inspect-a-plan.md](09-inspect-a-plan.md) | debug with `describe()` and `explain()` |
 | [10-write-a-vocabulary-pack.md](10-write-a-vocabulary-pack.md) | register a format and a strategy through the sockets |
+| [11-call-tools-and-cite-sources.md](11-call-tools-and-cite-sources.md) | tools and citations, native or text: call turns, `via`, `turns` + probe, the whole-reply pattern |
 
 Go users: [go/README.md](../../go/README.md).
