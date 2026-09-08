@@ -176,6 +176,13 @@ Checklists:
   (`native_extensions()` / `NativeExtensions()`; the coherence test keeps
   the two lists identical) → one decision entry.
 
+## Notebooks and REPLs
+
+`./dev-venv` builds `.venv` (lmcc editable + `lmcc_std` + `lmcc_lm15` with
+the pinned lm15 + IPython) and registers the rat runtime `py@lmcc` on it,
+so every `docs/howto/*.md` runs as an mrmd notebook. Never install `lmcc`
+from PyPI into it — that name is an unrelated package.
+
 ## Verify — one command
 
 ```

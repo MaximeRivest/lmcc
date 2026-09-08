@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# The project venv for notebooks and REPLs: lmcc (editable), the std pack,
+# the lm15 bridge with lm15 at the commit ./check pins, IPython + jedi for
+# rat/mrmd kernels. Then registers the `py@lmcc` rat runtime on it.
+#
+#   ./dev-venv            # create or refresh .venv, register the kernel
+#   rat start py@lmcc     # (mrmd picks it up as the notebook kernel)
+#
+# Note: the notebook's "uv pip install lmcc" button would fetch an unrelated
+# PyPI package of the same name; this script is the right way in.
+set -euo pipefail
+cd "$(dirname "$0")"
+if command -v uv >/dev/null 2>&1; then UV=uv; else UV="nix run nixpkgs#uv --"; fi
+LM15_PIN=$(grep -o '"lm15 @ [^"]*"' python/pyproject.toml | tr -d '"')
+[ -x .venv/bin/python ] || $UV venv -q .venv --python 3.12
+$UV pip install -q --python .venv/bin/python -e ./python "$LM15_PIN" ipython jedi
+.venv/bin/python -c 'import lmcc, lmcc_std, lmcc_lm15, lm15; print("lmcc", lmcc.__version__, "| lm15", lm15.__version__, "| python", __import__("sys").version.split()[0])'
+if command -v rat >/dev/null 2>&1; then
+  rat stop py@lmcc >/dev/null 2>&1 || true
+  rat remove py@lmcc --yes >/dev/null 2>&1 || true
+  rat add py@lmcc "$PWD" --venv "$PWD/.venv" >/dev/null
+  echo "rat runtime py@lmcc -> $PWD/.venv  (rat start py@lmcc)"
+fi

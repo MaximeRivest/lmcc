@@ -21,4 +21,8 @@ Need a definition? See [docs/reference](../reference/README.md).
 | [10-write-a-vocabulary-pack.md](10-write-a-vocabulary-pack.md) | register a format and a strategy through the sockets |
 | [11-call-tools-and-cite-sources.md](11-call-tools-and-cite-sources.md) | tools and citations, native or text: call turns, `via`, `turns` + probe, the whole-reply pattern |
 
+Run a guide as a notebook (mrmd / rat): `./dev-venv` once builds the
+project venv (lmcc editable, the pinned lm15, IPython) and registers the
+`py@lmcc` kernel on it; then open the guide and *run all*.
+
 Go users: [go/README.md](../../go/README.md).

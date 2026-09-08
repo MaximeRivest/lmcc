@@ -44,6 +44,15 @@ weather = Tool("get_weather", "Weather for a city.",
                {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]})
 ```
 
+```output
+Traceback (most recent call last):
+  File "/home/maxime/.cache/rat/kernels/py@lmcc/python-kernel.py", line 805, in run_code
+    exec(compile(tree, "<rat>", "exec"), namespace, namespace)
+     ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<rat>", line 3, in <module>
+ModuleNotFoundError: No module named 'lmcc'
+```
+
 ## 2. One adapter, two strategies, chosen by declared facts
 
 The template puts `history` *after* the user's question: in a tool loop
