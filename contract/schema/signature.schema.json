@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:lmcc:schema:signature:0.4.0",
+  "$id": "urn:lmcc:schema:signature:0.5.0",
   "title": "LMCC signature (SignatureCore)",
   "description": "The frontend-neutral typed contract every language lowers to: instructions plus ordered fields. Uniqueness of field names is enforced by implementations (signature-malformed), not expressible here.",
   "type": "object",

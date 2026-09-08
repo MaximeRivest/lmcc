@@ -59,6 +59,15 @@ func Install(reg *lmcc.Registry) error {
 		func() error { return reg.RegisterStrategy("reasoning_tags", reasoningTags, Version, true) },
 		func() error { return reg.RegisterStrategy("native_reasoning", nativeReasoning, Version, true) },
 		func() error { return reg.RegisterLens("json_object", newJSONObjectLens, Version, true) },
+		func() error { return reg.RegisterFormat("function_tool", newFunctionToolFormat, Version, true) },
+		func() error { return reg.RegisterFormat("tool_catalog", newToolCatalogFormat, Version, true) },
+		func() error { return reg.RegisterFormat("tool_calls", newToolCallsFormat, Version, true) },
+		func() error { return reg.RegisterFormat("citations", newCitationsFormat, Version, true) },
+		func() error { return reg.RegisterFormat("source_list", newSourceListFormat, Version, true) },
+		func() error { return reg.RegisterStrategy("native_tools", nativeTools, Version, true) },
+		func() error { return reg.RegisterStrategy("fenced_tools", fencedTools, Version, true) },
+		func() error { return reg.RegisterStrategy("native_citations", nativeCitations, Version, true) },
+		func() error { return reg.RegisterStrategy("inline_citations", inlineCitations, Version, true) },
 	}
 	for _, step := range steps {
 		if err := step(); err != nil {

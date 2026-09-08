@@ -13,7 +13,7 @@ from dataclasses import dataclass, field as dc_field
 
 from .errors import refuse
 
-_KEYS = ("when", "requires", "visible", "fragments", "controls", "placement", "routings")
+_KEYS = ("when", "requires", "visible", "fragments", "controls", "placement", "via", "routings", "turns")
 _PREDICATE_KEYS = ("capability", "not", "all", "any")
 _TO = re.compile(r"^@role(\.[A-Za-z_][A-Za-z0-9_]*)?$")
 _PLACEMENT = re.compile(r"^(controls\.[a-z_][a-z0-9_.]*|message:(system|developer|user|assistant))$")
@@ -63,6 +63,8 @@ class Strategy:
     controls: dict = dc_field(default_factory=dict)
     placement: dict[str, str] = dc_field(default_factory=dict)
     routings: list[dict] = dc_field(default_factory=list)
+    turns: dict[str, str] = dc_field(default_factory=dict)   # {"call": text, "result": text} (kernel §6)
+    via: dict[str, str] = dc_field(default_factory=dict)     # "@role" -> named format for its placement (kernel §6)
     choose: list[dict] | None = None      # [{"when": P, "use": Strategy}, {"else": Strategy}]
 
     # ------------------------------------------------------------ data
@@ -89,8 +91,12 @@ class Strategy:
             d["controls"] = dict(self.controls)
         if self.placement:
             d["placement"] = dict(self.placement)
+        if self.via:
+            d["via"] = dict(self.via)
         if self.routings:
             d["routings"] = [dict(r) for r in self.routings]
+        if self.turns:
+            d["turns"] = dict(self.turns)
         return d
 
     @classmethod
@@ -129,7 +135,8 @@ class Strategy:
                 visible=bool(data.get("visible", True)),
                 fragments=dict(data.get("fragments", {})), controls=dict(data.get("controls", {})),
                 placement=dict(data.get("placement", {})),
-                routings=[dict(r) for r in data.get("routings", [])])
+                routings=[dict(r) for r in data.get("routings", [])],
+                turns=dict(data.get("turns", {})), via=dict(data.get("via", {})))
         s.validate(where=where)
         return s
 
@@ -151,6 +158,14 @@ class Strategy:
         for _, place in self.placement.items():
             if place.startswith("controls."):
                 validate_control_path(place[len("controls."):], where=f"{where}.placement")
+        for target, name in self.via.items():
+            if target not in self.placement or not isinstance(name, str) or not name:
+                refuse("entry-malformed", f"{where}.via: {target!r} must name a placed field and a format name",
+                       fix={"action": "edit-entry", "path": f"{where}.via"})
+        for k, v in self.turns.items():
+            if k not in ("call", "result") or not isinstance(v, str):
+                refuse("entry-malformed", f"{where}.turns: {k!r} must be 'call' or 'result', text",
+                       fix={"action": "edit-entry", "path": f"{where}.turns"})
         for k, v in self.fragments.items():
             if k not in ("system", "developer", "user", "assistant") or not isinstance(v, str):
                 refuse("entry-malformed", f"{where}.fragments: {k!r} must name a message role, text",
@@ -198,7 +213,26 @@ class Strategy:
                         fragments={k: v.replace("{field}", field_name)
                                    for k, v in self.fragments.items()},
                         controls=dict(self.controls), placement=dict(self.placement),
-                        routings=[dict(r) for r in self.routings])
+                        routings=[dict(r) for r in self.routings], turns=dict(self.turns),
+                        via=dict(self.via))
+
+
+def spell_turn(template: str, slots: dict[str, str]) -> str:
+    """Kernel §6 turns: the closed slot set, ``{{``/``}}`` escapes."""
+    out, i = [], 0
+    while i < len(template):
+        c = template[i]
+        if c == "{" and template.startswith("{{", i):
+            out.append("{"); i += 2; continue
+        if c == "}" and template.startswith("}}", i):
+            out.append("}"); i += 2; continue
+        if c == "{":
+            j = template.find("}", i)
+            name = template[i + 1:j] if j > i else ""
+            if name in slots:
+                out.append(slots[name]); i = j + 1; continue
+        out.append(c); i += 1
+    return "".join(out)
 
 
 def validate_routing(r: dict, *, where: str) -> None:
@@ -212,7 +246,7 @@ def validate_routing(r: dict, *, where: str) -> None:
     if not isinstance(to, str) or not _TO.match(to):
         refuse("entry-malformed", f"{where}: 'to' is '@role' or '@role.<sub>'",
                fix={"action": "edit-entry", "path": where})
-    unknown = set(r) - {"from", "to", "consume", "between", "pattern", "line_prefixed"}
+    unknown = set(r) - {"from", "to", "consume", "between", "pattern", "line_prefixed", "suffices"}
     if unknown:
         refuse("entry-malformed", f"{where}: unknown routing key(s) {sorted(unknown)}",
                fix={"action": "edit-entry", "path": where})

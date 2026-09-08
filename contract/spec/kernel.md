@@ -1,6 +1,6 @@
 # The LMCC kernel — normative specification
 
-**Version 0.4.0** (kernel). Status: the v3 design (`plans/08`), built with
+**Version 0.5.0** (kernel). Status: the v3 design (`plans/08`), built with
 two implementations (`python/lmcc`, `go/lmcc`) against the corpus. Where
 this document and the corpus disagree, fix the corpus first, then both.
 
@@ -179,6 +179,12 @@ the set of output holes in the template — `{f.value}` in one outputs
 loop, or bare output slots — and it must live in one message. Read
 backwards:
 
+- a template whose **only** visible output is a bare slot with no
+  literal before it is the *whole-reply* pattern: the field's capture
+  starts at the reply's first byte and runs to its close, the tail, or
+  end of text (a chat-style adapter; `{instruction}` in the system
+  message and `{answer}` alone in the pattern message). With two or more
+  visible outputs an anchorless hole refuses `not-lensable`;
 - per visible output field, the literal before its hole (loop body
   instantiated with the field's `name`/`desc`/`type`/`schema`/`role`)
   is its **anchor**; the literal after it, up to the next hole, its
@@ -280,11 +286,12 @@ runtimes may legitimately spell the same type differently.
 Strategy = { when?: Predicate, requires?: [fact], visible?: bool = true,
              fragments?: {message role: text}, controls?: {…},
              placement?: {"@role": "controls.<key>" | "message:<role>"},
-             routings?: [Routing] }
+             via?: {"@role": format name}, routings?: [Routing], turns?: Turns }
          | { choose: [{when: Predicate, use: Strategy}…, {else: Strategy}] }
 Routing  = { from: "text" | "channel:<part type>",
              between?: [open, close] | pattern?: regex | line_prefixed?: prefix,
-             to: "@role" | "@role.<sub>", consume?: bool }
+             to: "@role" | "@role.<sub>", consume?: bool, suffices?: bool }
+Turns    = { call?: text, result?: text }        (slots {id} {name} {input} {output})
 Predicate = {capability} | {not} | {all} | {any}
 ```
 
@@ -303,7 +310,8 @@ role, `@role.<sub>` to the field bearing role `<role>.<sub>`
 (`role-ambiguous` if two fields share one); `{field}` in fragments binds
 the name; `visible: false` hides the field from loops and the pattern;
 `placement` writes the field's parts through its format into the request
-patch (`controls.<key>`) or appends them to a message (`message:<role>`)
+patch (`controls.<key>`) or appends them to a message (`message:<role>`,
+after a blank line when the message already has text, like a fragment)
 instead of a slot; fragments append to the named message (created if
 absent, system first); controls deep-merge into the patch (§3;
 `control-conflict` on a disagreeing leaf).
@@ -333,6 +341,38 @@ reads it.
 Two contracts, checked at bind: a routing's span kind must be one the
 format's `read` accepts (`format-span-mismatch`); a placement's kind
 must match what the format `emits` (`format-placement-mismatch`).
+
+**`via`: a placement's own spelling.** Formats resolve by type (§5),
+and one type may need two spellings for two transports — a tool spec is
+an lm15 `function` tool in `Request.tools` and a line of text in a
+system prompt. `via` names, per placed field, the registered format that
+placement writes through, instead of the type's; the format must exist
+(`unknown-format`) and must emit what the placement needs. This is the
+one stated exception to format-by-type, scoped to placement, because
+how a placed value is spelled is inseparable from where it is placed.
+
+**A sufficing routing.** `suffices: true` says a non-empty capture on
+this routing is a complete reply on its own (a tool call instead of an
+answer). When any sufficing routing captured something, visible outputs
+the lens cannot find are *omitted* from the values instead of refusing
+`parse-missing-fields`; everything found is still read and typed.
+Without a capture, nothing changes. Streaming emits no events for an
+omitted field.
+
+**Turns.** A strategy may spell past protocol parts as text for a model
+that has no native channel: `turns.call` renders each `tool_call` part
+of an assistant history message, `turns.result` each `tool_result` part
+of a `tool` history message (whose role becomes `user`); slots `{id}`,
+`{name}`, `{input}` (canonical JSON), `{output}` (the result's text
+parts joined by `\n`), `{{`/`}}` escape a brace; the rest of the message
+is untouched. A strategy without `turns` passes such messages verbatim.
+**The probe:** at bind, a strategy with `turns.call` and a routing to
+`@role.calls` renders `{"id": "probe", "name": "probe", "input":
+{"probe": true}}` through `call`, runs its own text routings on the
+result and reads the span with the field's format; if that does not
+yield one call named `probe` with that input, bind refuses
+`turns-drift` naming the strategy — the template-is-the-lens law, at
+strategy level.
 
 ## 7. Kernel defaults and text rules
 

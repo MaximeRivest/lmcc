@@ -4,7 +4,7 @@
  "entry": {
   "name": "place_v1",
   "versions": {
-   "kernel": "0.4.0",
+   "kernel": "0.5.0",
    "vocab": {}
   },
   "template": [
@@ -80,7 +80,7 @@
  },
  "expect": {
   "request": {
-   "system": "Use tools.\n\nAnswer in exactly this form:\n<answer>\n...\n</answer>\nAnn is 41.",
+   "system": "Use tools.\n\nAnswer in exactly this form:\n<answer>\n...\n</answer>\n\n\nAnn is 41.",
    "messages": [
     {
      "role": "user",

@@ -1,0 +1,101 @@
+{
+ "name": "std-native-citations-parse",
+ "kind": "parse",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "cite_v1",
+  "versions": {
+   "kernel": "0.5.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "role": "user",
+    "text": "{question}"
+   }
+  ],
+  "parse": {
+   "kind": "derived"
+  },
+  "strategies": {
+   "citations": {
+    "use": "native_citations"
+   }
+  },
+  "formats": {
+   "list[Citation]": {
+    "use": "citations"
+   },
+   "list[Source]": {
+    "use": "source_list"
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Answer with sources.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "citations",
+    "direction": "output",
+    "type": "list[Citation]",
+    "shape": {
+     "type": "array",
+     "items": {
+      "type": "object"
+     }
+    },
+    "role": "citations"
+   }
+  ]
+ },
+ "capabilities": {
+  "native_citations": true
+ },
+ "response": {
+  "role": "assistant",
+  "parts": [
+   {
+    "type": "text",
+    "text": "<answer>\nParis\n</answer>"
+   },
+   {
+    "type": "citation",
+    "url": "https://example.com/paris",
+    "title": "Paris",
+    "text": "Paris is the capital"
+   }
+  ]
+ },
+ "expect": {
+  "values": {
+   "answer": "Paris",
+   "citations": [
+    {
+     "url": "https://example.com/paris",
+     "title": "Paris",
+     "text": "Paris is the capital"
+    }
+   ]
+  }
+ }
+}

@@ -11,6 +11,19 @@ refuses (96), a `developer` message renders and `system` folds (97), a
 `system` message that does not lead refuses (98). Case 99 (D-36) pins
 `config.stop` from the skeleton when `stop_sequences` is declared.
 
+**Tools and citations (kernel 0.5, D-37).** Cases 100–112 were
+hand-authored from `spec/vocab/strategy-tools.md` and
+`strategy-citations.md`: native tools render (100), a call turn (101, the
+answer is omitted, never refused), an answer turn (102, empty calls), lm15
+history verbatim (103), the capability refusal (104); fenced tools render
+with the catalog spelled `via` (105), a fenced call with an assigned id
+(106), history spelled through `turns` (107), the probe refusing a
+drifted spelling (108); inline citations render and parse (109–110),
+native citations parse and render (111–112). Cases 113–114 pin the
+whole-reply pattern (a single bare slot with no anchor, kernel §4),
+which search-mode replies made necessary. Case 66's placement now
+appends after a blank line, like a fragment — one deliberate byte change.
+
 **Kernel 0.3 (D-33).** Every case pinned `kernel: 0.3.0`; the migration
 changed no expectation's meaning. A case declares everything beyond the
 core it needs in `requires` (`udf:python`, `pattern/legacy-re2`); drivers

@@ -37,6 +37,7 @@ parameters, is breaking.
 | `format-direction` | bind | `bind-format` | an input-only format on an output field, or the reverse |
 | `format-span-mismatch` | bind | `bind-format` | a routing delivers a span kind the field's format cannot read |
 | `format-placement-mismatch` | bind | `bind-format` | a placement needs parts the field's format does not emit |
+| `turns-drift` | bind | `edit-entry` | a strategy's `turns.call` spelling is not read back by its own routing and format (kernel §6 probe); hint names the strategy |
 | `format-untrusted` | load | `place-udf` | the artifact ships a UDF and this runtime will not place code |
 | `format-not-self-contained` | ship/load | `reship-udf` | a UDF's source reaches into free variables or non-module globals |
 | `udf-tampered` | load | `reship-udf` | a shipped UDF's `sha256` does not match its source |
@@ -101,7 +102,7 @@ guess: the refusal is still the contract.
 **Locators.** `path` is the artifact path as the hint spells it:
 `template[i]`, `parse`, `versions`, `strategies['role']` (then
 `.choose[i]`, `.when`, `.routings[i]`, `.fragments`, `.placement`,
-`.controls['key']`, `.visible`), `formats['key']` (then `.write`,
+`.controls['key']`, `.visible`, `.turns`), `formats['key']` (then `.write`,
 `.read`, `.describe`), `extensions`. Parameters marked `?` are optional;
 every other parameter is present. Parameter values are strings, except
 `predicate`, which is an object.

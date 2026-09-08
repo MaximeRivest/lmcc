@@ -90,12 +90,12 @@ def test_artifact_round_trips_and_loads_with_zero_ambient_state():
 
 
 @pytest.mark.parametrize("entry, code", [
-    ({"versions": {"kernel": "0.4.0"}, "template": {"messages": []}, "parse": {"kind": "derived"}}, "entry-malformed"),
+    ({"versions": {"kernel": "0.5.0"}, "template": {"messages": []}, "parse": {"kind": "derived"}}, "entry-malformed"),
     ({"versions": {"kernel": "9.0.0"}, "template": [], "parse": {"kind": "derived"}}, "version-incompatible"),
-    ({"versions": {"kernel": "0.4.0"}, "template": [], "parse": {"kind": "nope"}}, "unknown-parse-kind"),
-    ({"versions": {"kernel": "0.4.0"}, "template": [], "parse": {"kind": "derived"}, "formats": {"X": {"use": "nope"}}}, "unknown-format"),
-    ({"versions": {"kernel": "0.4.0"}, "template": [], "parse": {"kind": "derived"}, "strategies": {"r": {"use": "nope"}}}, "unknown-strategy"),
-    ({"versions": {"kernel": "0.4.0"}, "template": [], "parse": {"kind": "derived"}, "formats": {"X": {"language": "python"}}}, "entry-malformed"),
+    ({"versions": {"kernel": "0.5.0"}, "template": [], "parse": {"kind": "nope"}}, "unknown-parse-kind"),
+    ({"versions": {"kernel": "0.5.0"}, "template": [], "parse": {"kind": "derived"}, "formats": {"X": {"use": "nope"}}}, "unknown-format"),
+    ({"versions": {"kernel": "0.5.0"}, "template": [], "parse": {"kind": "derived"}, "strategies": {"r": {"use": "nope"}}}, "unknown-strategy"),
+    ({"versions": {"kernel": "0.5.0"}, "template": [], "parse": {"kind": "derived"}, "formats": {"X": {"language": "python"}}}, "entry-malformed"),
 ])
 def test_load_refuses_by_name(entry, code):
     with pytest.raises(lmcc.Refusal) as err:

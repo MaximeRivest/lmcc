@@ -17,7 +17,10 @@ type formatChoice struct {
 	resolvedBy string
 }
 
-type placement struct{ field, place string }
+type placement struct {
+	field, place string
+	via          Format // the placement's own format (kernel §6), or nil
+}
 
 // RenderResult is plain lm15-shaped messages plus a request patch.
 // RenderResult is an lm15 request minus its model (kernel §3): System
@@ -103,8 +106,14 @@ func (p *Plan) replyFormat() string {
 	return p.Lens.Format(ph)
 }
 
-func (p *Plan) write(f *Field, value any) []any {
-	written, err := p.formatFor(f).Write(nativeToPlain(value), f)
+func (p *Plan) write(f *Field, value any) []any { return p.writeVia(f, value, nil) }
+
+func (p *Plan) writeVia(f *Field, value any, via Format) []any {
+	fmt := via
+	if fmt == nil {
+		fmt = p.formatFor(f)
+	}
+	written, err := fmt.Write(nativeToPlain(value), f)
 	if err != nil {
 		if e, ok := err.(*Error); ok {
 			panic(e)
@@ -248,13 +257,13 @@ func (p *Plan) render(inputs *Object, demos, history []*Object, stopAt int) Rend
 		if f.Direction != "input" || !inputs.Has(pl.field) {
 			continue
 		}
-		parts := p.write(f, mustGet(inputs, pl.field))
+		parts := p.writeVia(f, mustGet(inputs, pl.field), pl.via)
 		if strings.HasPrefix(pl.place, "controls.") {
 			setPath(patch, pl.place[len("controls."):], parts)
 		} else {
 			role := pl.place[len("message:"):]
-			if t := findMessage(messages, role); t != nil {
-				t.Set("parts", MergeTextParts(append(t.List("parts"), parts...)))
+			if t := findMessage(messages, role); t != nil { // after a blank line, like a fragment (kernel §6)
+				t.Set("parts", MergeTextParts(append(append(t.List("parts"), TextPart("\n\n")), parts...)))
 			} else {
 				messages = append(messages, MakeMessage(role, parts))
 			}
@@ -378,13 +387,66 @@ func (p *Plan) renderHistory(history []*Object) []any {
 		if (role != "user" && role != "assistant" && role != "tool" && role != "developer") || !ok {
 			refusef("value-invalid", "history item must be an lm15 message {role, parts} or a {fields: {...}} turn; got keys %v", t.Keys)
 		}
-		turns = append(turns, MakeMessage(role, append([]any{}, parts...)))
+		turns = append(turns, p.spellTurn(role, append([]any{}, parts...)))
 	}
 	return turns
 }
 
 // Prefix: the rendered messages that do not depend on inputs (kernel §3).
 // Prefix is the cache-stable request prefix {"system"?, "messages"} (kernel §3).
+func (p *Plan) turns() *Object {
+	for _, r := range p.resolved {
+		if r.strategy.Turns != nil && r.strategy.Turns.Len() > 0 {
+			return r.strategy.Turns
+		}
+	}
+	return nil
+}
+
+// spellTurn: kernel §6 turns — a strategy with `turns` spells tool_call /
+// tool_result parts as text; without one they pass verbatim.
+func (p *Plan) spellTurn(role string, parts []any) *Object {
+	turns := p.turns()
+	if turns == nil {
+		return MakeMessage(role, parts)
+	}
+	call, hasCall := turns.Str("call")
+	result, hasResult := turns.Str("result")
+	out := []any{}
+	for _, raw := range parts {
+		part, _ := raw.(*Object)
+		t, _ := part.Str("type")
+		switch {
+		case t == "tool_call" && hasCall:
+			id, _ := part.Str("id")
+			name, _ := part.Str("name")
+			input, _ := part.Get("input")
+			if input == nil {
+				input = NewObject()
+			}
+			out = append(out, TextPart(spellTurn(call, map[string]string{"id": id, "name": name, "input": MarshalJSON(input, -1)})))
+		case t == "tool_result" && hasResult:
+			id, _ := part.Str("id")
+			name, _ := part.Str("name")
+			var texts []string
+			for _, c := range part.List("content") {
+				if co, ok := c.(*Object); ok {
+					if txt, ok := co.Str("text"); ok {
+						texts = append(texts, txt)
+					}
+				}
+			}
+			out = append(out, TextPart(spellTurn(result, map[string]string{"id": id, "name": name, "output": strings.Join(texts, "\n")})))
+		default:
+			out = append(out, raw)
+		}
+	}
+	if role == "tool" && hasResult {
+		role = "user"
+	}
+	return MakeMessage(role, MergeTextParts(out))
+}
+
 func (p *Plan) Prefix(demos, history []*Object) (out *Object, err error) {
 	defer catch(&err)
 	inputNames := map[string]bool{}
@@ -434,10 +496,21 @@ func (p *Plan) parseWithSpans(response any) (values *Object, spans map[string]Sp
 	for i, f := range p.VisibleOutputs {
 		names[i] = f.Name
 	}
-	raw := p.splitWithLens(text, names)
+	sufficed := false
+	for _, r := range p.routings {
+		if r.spec.Bool("suffices", false) {
+			if span, ok := routed.Get(r.field); ok && len(span.(Span).Parts) > 0 {
+				sufficed = true
+			}
+		}
+	}
+	raw := p.splitSufficing(text, names, sufficed)
 	spans = map[string]Span{}
 	values = NewObject()
 	for _, f := range p.VisibleOutputs {
+		if _, found := raw[f.Name]; !found {
+			continue
+		}
 		span := SpanOfText(raw[f.Name])
 		spans[f.Name] = span
 		values.Set(f.Name, p.read(f, span))
@@ -454,6 +527,29 @@ func (p *Plan) Parse(response any) (values *Object, err error) {
 	defer catch(&err)
 	values, _ = p.parseWithSpans(response)
 	return values, nil
+}
+
+// splitSufficing: a call turn (kernel §6) keeps what the lens found and
+// omits the rest instead of refusing parse-missing-fields.
+func (p *Plan) splitSufficing(text string, names []string, sufficed bool) (raw map[string]string) {
+	if !sufficed {
+		return p.splitWithLens(text, names)
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			if e, ok := r.(*Error); ok && e.Code == "parse-missing-fields" && e.Partial != nil {
+				raw = map[string]string{}
+				for k, v := range e.Partial {
+					if s, ok := v.(string); ok {
+						raw[k] = s
+					}
+				}
+				return
+			}
+			panic(r)
+		}
+	}()
+	return p.splitWithLens(text, names)
 }
 
 func (p *Plan) splitWithLens(text string, names []string) (raw map[string]string) {
@@ -660,7 +756,7 @@ func deriveLens(p *Plan) *DerivedLens {
 		}
 	}
 	for _, a := range anchors {
-		if RStrip(a.Prefix) == "" {
+		if RStrip(a.Prefix) == "" && (len(loops) > 0 || len(anchors) > 1) { // one bare slot may own the whole reply (§4)
 			refuseFixf("not-lensable", Obj("action", "edit-template", "path", here, "field", a.Name), "field %q: no literal text before its hole — nothing anchors the parser; put the field's marker before the hole", a.Name)
 		}
 	}
@@ -909,7 +1005,11 @@ func Bind(a *Adapter, sig *Signature, capabilities *Object, reg *Registry) (p *P
 		for _, ref := range strategy.Placement.Keys {
 			place, _ := strategy.Placement.Str(ref)
 			t := target(ref, "placement")
-			p.placements = append(p.placements, placement{t.Name, place})
+			pl := placement{field: t.Name, place: place}
+			if name, ok := strategy.Via.Str(ref); ok {
+				pl.via = reg.namedFormat(name, NewObject(), "strategies['"+f.Role+"'].via")
+			}
+			p.placements = append(p.placements, pl)
 			hidden[t.Name] = true
 		}
 		for _, msgRole := range strategy.Fragments.Keys {
@@ -1037,5 +1137,57 @@ func Bind(a *Adapter, sig *Signature, capabilities *Object, reg *Registry) (p *P
 			refuseFixf("field-double-covered", fixEditEntry("strategies['"+sig.FieldNamed(r.field).Role+"'].visible"), "field %q is both a parsed section and a routing target — hide it (visible: false) or drop the routing", r.field)
 		}
 	}
+
+	// 7. the turns probe (kernel §6): a strategy that spells calls as text
+	// must read its own spelling back through its own routing and format.
+	for _, r := range p.resolved {
+		call, ok := r.strategy.Turns.Str("call")
+		if !ok {
+			continue
+		}
+		callsField := ""
+		for _, rt := range p.routings {
+			if sig.FieldNamed(rt.field).Role == r.role+".calls" {
+				callsField = rt.field
+			}
+		}
+		if callsField == "" {
+			continue
+		}
+		spelled := spellTurn(call, map[string]string{"id": "probe", "name": "probe", "input": MarshalJSON(Obj("probe", true), -1)})
+		var own []routing
+		for _, rt := range p.routings {
+			if rt.field == callsField {
+				if from, _ := rt.spec.Str("from"); from == "text" {
+					own = append(own, rt)
+				}
+			}
+		}
+		_, routed := applyRoutings(spelled, nil, own, p.patternBinding())
+		var readBack any
+		if span, ok := routed.Get(callsField); ok && len(span.(Span).Parts) > 0 {
+			readBack = p.tryRead(sig.FieldNamed(callsField), span.(Span))
+		}
+		good := false
+		if list, ok := readBack.([]any); ok && len(list) == 1 {
+			if first, ok := list[0].(*Object); ok {
+				name, _ := first.Str("name")
+				input, _ := first.Get("input")
+				good = name == "probe" && Equal(input, Obj("probe", true))
+			}
+		}
+		if !good {
+			refuseFixf("turns-drift", fixEditEntry("strategies['"+r.role+"'].turns"), "role %q: strategy %q: turns.call spells a call as %q, and its own routing/format read back %s — the spelling and the reader disagree", r.role, r.name, spelled, MarshalJSON(readBack, -1))
+		}
+	}
 	return p, nil
+}
+
+func (p *Plan) tryRead(f *Field, span Span) (v any) {
+	defer func() {
+		if r := recover(); r != nil {
+			v = nil
+		}
+	}()
+	return p.read(f, span)
 }

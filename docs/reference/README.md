@@ -75,7 +75,7 @@ Registry and artifact (kernel §5, §6, §9):
 | `lmcc_lm15.parse(plan, response)`, `lmcc_lm15.stream(plan, events)` | typed values from an `lm15.Response`/`Message`; drive the sans-I/O stream from `lm.stream(...)` | §3, §8 |
 | `default_registry` | the registry `lmcc.format` and `Fn.bind` use when none is given | §5 |
 | `dump`, `load` | the artifact ([entry.schema.json](../../contract/schema/entry.schema.json)); `load` never runs a UDF | §5, §9 |
-| `KERNEL_VERSION` | `"0.4.0"` | §9 |
+| `KERNEL_VERSION` | `"0.5.0"` | §9 |
 
 Refusals:
 

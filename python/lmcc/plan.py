@@ -18,7 +18,9 @@ from .errors import Refusal, refuse
 from . import extensions as _extensions
 from .parse import DerivedLens, Lens, apply_routings
 from .serde import KERNEL_VERSION
-from .strategy import Strategy, control_leaves, validate_control_path
+import json
+
+from .strategy import Strategy, control_leaves, spell_turn, validate_control_path
 from .template import Loop, Slot, Text, render_nodes, validate_nodes
 
 
@@ -106,6 +108,7 @@ class Plan:
     resolved: list[_Resolved] = dc_field(default_factory=list)
     routings: list[tuple[str, dict]] = dc_field(default_factory=list)   # (field, routing)
     placements: list[tuple[str, str]] = dc_field(default_factory=list)  # (field, place)
+    via: dict[str, _formats.Format] = dc_field(default_factory=dict)      # field -> the placement's own format (kernel §6)
     fragments: dict[str, str] = dc_field(default_factory=dict)
     patch: dict = dc_field(default_factory=dict)
     formats: dict[str, _FormatChoice] = dc_field(default_factory=dict)
@@ -146,8 +149,8 @@ class Plan:
     def reply_format(self) -> str:
         return self.lens.format([(f.name, self.placeholder(f)) for f in self.visible_outputs])
 
-    def write(self, f: core.Field, value: object) -> list[dict]:
-        fmt = self.format_for(f)
+    def write(self, f: core.Field, value: object, *, fmt: _formats.Format | None = None) -> list[dict]:
+        fmt = fmt or self.format_for(f)
         try:
             written = fmt.write(value, f)
         except Refusal:
@@ -224,7 +227,7 @@ class Plan:
             f = self.signature.field_named(fname)
             if f.direction != "input" or fname not in inputs:
                 continue
-            parts = self.write(f, inputs[fname])
+            parts = self.write(f, inputs[fname], fmt=self.via.get(fname))
             if place.startswith("controls."):
                 _set_path(patch, place[len("controls."):], parts)
             else:
@@ -232,8 +235,9 @@ class Plan:
                 target = next((m for m in messages if m["role"] == role), None)
                 if target is None:
                     messages.append(core.make_message(role, parts))
-                else:
-                    target["parts"] = core.merge_text_parts(target["parts"] + parts)
+                else:   # after a blank line, like a fragment (kernel §6)
+                    target["parts"] = core.merge_text_parts(
+                        target["parts"] + [core.text_part("\n\n")] + parts)
         system_parts = [p for m in messages if m["role"] == "system" for p in m["parts"]]
         system = None
         if system_parts:
@@ -280,8 +284,37 @@ class Plan:
                 refuse("value-invalid",
                        f"history item must be an lm15 message {{role, parts}} or a "
                        f"{{fields: {{...}}}} turn; got keys {sorted(turn)}")
-            turns.append(core.make_message(role, list(parts)))
+            turns.append(self._spell_turn(role, list(parts)))
         return turns
+
+    def _turns(self) -> dict[str, str]:
+        for r in self.resolved:
+            if r.strategy.turns:
+                return r.strategy.turns
+        return {}
+
+    def _spell_turn(self, role: str, parts: list[dict]) -> dict:
+        """Kernel §6 turns: a strategy with ``turns`` spells tool_call /
+        tool_result parts as text; without one they pass verbatim."""
+        turns = self._turns()
+        if not turns:
+            return core.make_message(role, parts)
+        out: list[dict] = []
+        for p in parts:
+            if p.get("type") == "tool_call" and "call" in turns:
+                out.append(core.text_part(spell_turn(turns["call"], {
+                    "id": str(p.get("id", "")), "name": str(p.get("name", "")),
+                    "input": _canonical_json(p.get("input", {}))})))
+            elif p.get("type") == "tool_result" and "result" in turns:
+                output = "\n".join(c.get("text", "") for c in p.get("content", [])
+                                   if isinstance(c, dict) and isinstance(c.get("text"), str))
+                out.append(core.text_part(spell_turn(turns["result"], {
+                    "id": str(p.get("id", "")), "name": str(p.get("name", "")), "output": output})))
+            else:
+                out.append(p)
+        if role == "tool" and "result" in turns:
+            role = "user"
+        return core.make_message(role, core.merge_text_parts(out))
 
     def prefix(self, *, demos: list[dict] | None = None,
                history: list[dict] | None = None) -> dict:
@@ -319,19 +352,25 @@ class Plan:
         """
         text, parts = core.response_text_and_parts(response)
         text, routed = apply_routings(text, parts, self.routings, self.pattern_binding())
+        sufficed = any(r.get("suffices") and routed.get(name) is not None and routed[name].parts
+                       for name, r in self.routings)
         try:
             raw = self.lens.split(text, [f.name for f in self.visible_outputs])
-        except Refusal:
-            raise
+        except Refusal as err:
+            if sufficed and err.code == "parse-missing-fields" and isinstance(err.partial, dict):
+                raw = err.partial   # a call turn: what was found is read, the rest omitted (§6)
+            else:
+                raise
         except Exception as exc:  # noqa: BLE001
             refuse("lens-parse-error",
                    f"lens {self.adapter.parse.get('kind')!r} failed to read the reply: {exc}")
         spans: dict[str, core.Span] = {
-            f.name: core.Span.of_text(raw[f.name]) for f in self.visible_outputs}
+            f.name: core.Span.of_text(raw[f.name]) for f in self.visible_outputs if f.name in raw}
         spans.update(routed)
         values: dict = {}
         for f in self.visible_outputs:
-            values[f.name] = self.read(f, spans[f.name])
+            if f.name in spans:
+                values[f.name] = self.read(f, spans[f.name])
         for name, span in routed.items():
             values[name] = self.read(self.signature.field_named(name), span)
         return values, spans
@@ -414,6 +453,12 @@ def _depends_on_inputs(nodes, input_names: set[str]) -> bool:
         if isinstance(n, Loop) and (n.source == "inputs" or _depends_on_inputs(n.body, input_names)):
             return True
     return False
+
+
+def _canonical_json(value) -> str:
+    """Kernel §6 turns: insertion order, ``, `` and ``: `` separators,
+    non-ASCII verbatim — the spelling both kernels produce."""
+    return json.dumps(value, ensure_ascii=False, separators=(", ", ": "))
 
 
 def _get_path(target: dict, path: str):
@@ -522,7 +567,7 @@ def _derive_lens(plan: Plan) -> DerivedLens:
             post = texts.get(("after", slot.path), "")
             anchors.append((f.name, pre, post))
     for name, prefix, _suffix in anchors:
-        if not core.rstrip(prefix):
+        if not core.rstrip(prefix) and (loops or len(anchors) > 1):   # one bare slot may own the whole reply (§4)
             refuse("not-lensable",
                    f"field {name!r}: no literal text before its hole — nothing anchors the "
                    f"parser; put the field's marker before the hole",
@@ -730,6 +775,9 @@ def bind(adapter: Adapter, sig: core.SignatureCore, capabilities: dict, registry
             t = target(ref, "placement")
             plan.placements.append((t.name, place))
             hidden.add(t.name)
+            if ref in strategy.via:
+                plan.via[t.name] = registry.named_format(
+                    strategy.via[ref], {}, where=f"strategies[{f.role!r}].via")
         for msg_role, text in strategy.fragments.items():
             existing = plan.fragments.get(msg_role)
             plan.fragments[msg_role] = (existing + "\n" + text) if existing else text
@@ -757,7 +805,7 @@ def bind(adapter: Adapter, sig: core.SignatureCore, capabilities: dict, registry
                    fix={"action": "bind-format", "field": fname,
                         "key": core.format_key(sig.field_named(fname).type, sig.field_named(fname).shape)})
     for fname, place in plan.placements:
-        fmt = plan.formats[fname].format
+        fmt = plan.via.get(fname) or plan.formats[fname].format
         if place.startswith("controls.") and fmt.emits != "parts":
             refuse("format-placement-mismatch",
                    f"field {fname!r}: placement {place!r} needs parts, but its format "
@@ -809,5 +857,37 @@ def bind(adapter: Adapter, sig: core.SignatureCore, capabilities: dict, registry
                    f"it (visible: false) or drop the routing",
                    fix={"action": "edit-entry",
                         "path": f"strategies[{sig.field_named(fname).role!r}].visible"})
+
+    # 7. the turns probe (kernel §6): a strategy that spells calls as text
+    # must read its own spelling back through its own routing and format.
+    for r in plan.resolved:
+        if "call" not in r.strategy.turns:
+            continue
+        calls_field = next((name for name, _ in plan.routings
+                            if sig.field_named(name).role == f"{r.role}.calls"), None)
+        if calls_field is None:
+            continue
+        probe = {"id": "probe", "name": "probe", "input": {"probe": True}}
+        spelled = spell_turn(r.strategy.turns["call"], {
+            "id": probe["id"], "name": probe["name"], "input": _canonical_json(probe["input"])})
+        own = [(name, rt) for name, rt in plan.routings if name == calls_field and rt["from"] == "text"]
+        _, routed = apply_routings(spelled, [], own, plan.pattern_binding())
+        read_back = None
+        if routed.get(calls_field) is not None and routed[calls_field].parts:
+            try:
+                read_back = plan.read(sig.field_named(calls_field), routed[calls_field])
+            except Refusal:
+                read_back = None
+        first = read_back[0] if isinstance(read_back, list) and len(read_back) == 1 else None
+        if first is not None and not isinstance(first, dict) and hasattr(first, "__dataclass_fields__"):
+            first = {k: getattr(first, k) for k in first.__dataclass_fields__}
+        ok = (isinstance(first, dict) and first.get("name") == "probe"
+              and first.get("input") == {"probe": True})
+        if not ok:
+            refuse("turns-drift",
+                   f"role {r.role!r}: strategy {r.name!r}: turns.call spells a call as "
+                   f"{spelled!r}, and its own routing/format read back {read_back!r} — the "
+                   f"spelling and the reader disagree",
+                   fix={"action": "edit-entry", "path": f"strategies[{r.role!r}].turns"})
     return plan
 

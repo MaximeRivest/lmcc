@@ -1,5 +1,10 @@
 # Plan 03 — the `turns` face (tool calls/results across exchanges)
 
+**Done (kernel 0.5, D-37).** `turns: {call, result}` with the closed slot
+set `{id} {name} {input} {output}`; `tool` messages become `user` when
+spelled; the probe refuses `turns-drift` at bind. Native turns need no
+face: lm15 messages pass verbatim (case 103).
+
 **Motivation.** A tool exchange spans two calls: the model asks; we run
 the tool; the next prompt must *show* the call and its result. Carrying
 is orchestration (outside lmcc); **spelling is the adapter's** — it
@@ -26,11 +31,11 @@ varies by LM family, not by program. Today lmcc has no home for it.
   provider owns both directions).
 
 **Acceptance criteria.**
-- [ ] `spec/kernel.md` strategies section: the face, the closed slot
+- [x] `spec/kernel.md` strategies section: the face, the closed slot
       set, the probe as normative.
-- [ ] Corpus: one text-style rule (heredoc or XML) rendering a past
+- [x] Corpus: one text-style rule (heredoc or XML) rendering a past
       call+result byte-exact; one native-style case; one refusal case
       for a deliberately drifted rule (probe fires).
-- [ ] Entries with `turns` bump the strategy vocab version; roundtrip
+- [x] Entries with `turns` bump the strategy vocab version; roundtrip
       case pins it.
-- [ ] `./check` green; decision-log entry (carrying vs spelling split).
+- [x] `./check` green; decision-log entry (carrying vs spelling split).

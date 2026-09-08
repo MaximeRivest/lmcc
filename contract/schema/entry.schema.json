@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:lmcc:schema:entry:0.4.0",
+  "$id": "urn:lmcc:schema:entry:0.5.0",
   "title": "LMCC adapter entry",
   "description": "The artifact (kernel.md \u00a72, \u00a75, \u00a76): a template, a parse rule, strategies by role, formats by type \u2014 never a field name.",
   "type": "object",
@@ -184,6 +184,9 @@
         },
         "consume": {
           "type": "boolean"
+        },
+        "suffices": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false
@@ -255,9 +258,34 @@
               },
               "consume": {
                 "type": "boolean"
+              },
+              "suffices": {
+                "type": "boolean"
               }
             },
             "additionalProperties": false
+          }
+        },
+        "turns": {
+          "type": "object",
+          "properties": {
+            "call": {
+              "type": "string"
+            },
+            "result": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "via": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^@role(\\.[A-Za-z_][A-Za-z0-9_]*)?$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
           }
         }
       },

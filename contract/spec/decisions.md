@@ -725,3 +725,59 @@ declared per model, like every other fact. Case 99 pins the bytes.
 Cost: one more fact to declare; a caller who wants *no* stop on a model
 that supports it leaves the fact out. `prefill` is the same story for
 the other end of the reply and stays a stated gap until lm15 spells it.
+
+
+**D-37 · Kernel 0.5: tools and citations are live roles; three kernel
+mechanics they needed; the whole-reply pattern.** Plans 03 and 04, done
+native-first and proven live (two providers, both tiers) before the
+corpus was written. Every value shape is lm15's (`FunctionTool`,
+`ToolCallPart`, `CitationPart`); lmcc invented none.
+
+- **A call turn is a reply, not an error.** A routing may declare
+  `suffices: true`; when it captures, outputs the lens cannot find are
+  omitted instead of refusing `parse-missing-fields`. Rejected: making
+  the caller read `.partial` (hostile), and nullable outputs (weakens
+  every normal reply). Generic data on the routing; the kernel knows no
+  role name.
+- **`via`: a placement's own spelling** — the one stated exception to
+  format-by-type, scoped to placement. A tool spec is an lm15 `function`
+  tool in `Request.tools` and a line of text in a system prompt; one type,
+  two transports, and a `choose` between them in one artifact must work.
+  Rejected: two artifact-level formats for one type (impossible), a
+  format with two `emits` (the kernel checks placement kinds by it).
+- **`turns` + the probe** (plan 03). `turns.call`/`turns.result` spell
+  `tool_call`/`tool_result` parts as text for models without a native
+  channel; `tool` messages become `user`. At bind the kernel renders a
+  synthetic call and reads it back through the strategy's own routing
+  and format — `turns-drift` if they disagree: the lens law at strategy
+  level. Native turns need no face: lm15 messages pass verbatim.
+- **Text-tier ids are assigned** (`call_1`…) because the model has none
+  to give and `Message.tool(id, …)` must still round-trip. Stated.
+- **Native citations = what lm15 returns:** citation parts from provider
+  search; the strategy adds the `web_search` built-in. lm15 exposes no
+  per-document citation flag, so supplied sources
+  (`citations.sources`, formerly reserved as `citable`) go live only
+  through `inline_citations`. Different meaning, different program; not
+  papered over.
+- **The whole-reply pattern.** Search mode ignores reply patterns and
+  answers in prose. "The whole reply is the answer" was inexpressible
+  (a bare slot with no anchor refused `not-lensable`). Now a template
+  whose only visible output is one bare anchorless slot captures the
+  whole reply (§4); loops and multi-field patterns still need anchors
+  (case 33 stands). Cases 113–114.
+- **Placement into a message appends after a blank line**, like a
+  fragment (case 66's bytes changed once, deliberately): the live run
+  showed glued text.
+- **Version 0.5.0**: the new strategy keys make 0.4 loaders refuse these
+  artifacts. Cases 100–114; five formats, four strategies in both packs;
+  `native_tools` and `fenced_tools` are the same program on gpt-4.1-mini
+  and claude-sonnet-4-5 through a real tool loop; `inline_citations` and
+  `native_citations` (web search) likewise.
+
+Costs: three more strategy keys; a placement's format can differ from
+its type's (visible in the artifact as `via`); a call turn's values lack
+fields a caller might expect (they check `calls`); the template order
+for a tool loop is `system, user, history` — the live run showed
+`history` before the question invites a plain reply. Benefits: tools
+and citations are conduct, not names; one program, any model; nothing on
+the wire that lm15 did not define.

@@ -4,7 +4,7 @@
  "entry": {
   "name": "sub_v1",
   "versions": {
-   "kernel": "0.4.0",
+   "kernel": "0.5.0",
    "vocab": {}
   },
   "template": [

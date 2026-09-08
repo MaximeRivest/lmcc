@@ -15,6 +15,8 @@ type Strategy struct {
 	Controls  *Object
 	Placement *Object // "@role" | "@role.<sub>" -> "controls.<key>" | "message:<role>"
 	Routings  []*Object
+	Turns     *Object     // {"call": text, "result": text} (kernel §6)
+	Via       *Object     // "@role" -> named format for its placement (kernel §6)
 	Choose    []chooseAlt // non-nil: this strategy is a choose
 }
 
@@ -24,7 +26,7 @@ type chooseAlt struct {
 }
 
 var (
-	strategyKeys  = []string{"when", "requires", "visible", "fragments", "controls", "placement", "routings"}
+	strategyKeys  = []string{"when", "requires", "visible", "fragments", "controls", "placement", "via", "routings", "turns"}
 	predicateKeys = []string{"capability", "not", "all", "any"}
 	toRE          = regexp.MustCompile(`^@role(\.[A-Za-z_][A-Za-z0-9_]*)?$`)
 	placementRE   = regexp.MustCompile(`^(controls\.(config\.[a-z_]+|tools)|message:(system|developer|user|assistant))$`)
@@ -41,7 +43,7 @@ var (
 )
 
 func NewStrategy() *Strategy {
-	return &Strategy{Fragments: NewObject(), Controls: NewObject(), Placement: NewObject(), Visible: true}
+	return &Strategy{Fragments: NewObject(), Controls: NewObject(), Placement: NewObject(), Turns: NewObject(), Via: NewObject(), Visible: true}
 }
 
 func (s *Strategy) ToJSON() *Object {
@@ -78,6 +80,9 @@ func (s *Strategy) ToJSON() *Object {
 	}
 	if s.Placement.Len() > 0 {
 		out.Set("placement", s.Placement.Clone())
+	}
+	if s.Via != nil && s.Via.Len() > 0 {
+		out.Set("via", s.Via.Clone())
 	}
 	if len(s.Routings) > 0 {
 		list := make([]any, len(s.Routings))
@@ -148,6 +153,12 @@ func strategyFromJSON(data *Object, where string) *Strategy {
 	if p := data.Object("placement"); p != nil {
 		s.Placement = p.Clone()
 	}
+	if v := data.Object("via"); v != nil {
+		s.Via = v.Clone()
+	}
+	if t := data.Object("turns"); t != nil {
+		s.Turns = t.Clone()
+	}
 	for _, r := range data.List("routings") {
 		ro, ok := r.(*Object)
 		if !ok {
@@ -160,6 +171,42 @@ func strategyFromJSON(data *Object, where string) *Strategy {
 }
 
 func mustGet(o *Object, k string) any { v, _ := o.Get(k); return v }
+
+func cloneOrEmpty(o *Object) *Object {
+	if o == nil {
+		return NewObject()
+	}
+	return o.Clone()
+}
+
+// spellTurn: kernel §6 turns — the closed slot set, {{ / }} escapes.
+func spellTurn(template string, slots map[string]string) string {
+	var b strings.Builder
+	for i := 0; i < len(template); {
+		if strings.HasPrefix(template[i:], "{{") {
+			b.WriteByte('{')
+			i += 2
+			continue
+		}
+		if strings.HasPrefix(template[i:], "}}") {
+			b.WriteByte('}')
+			i += 2
+			continue
+		}
+		if template[i] == '{' {
+			if j := strings.IndexByte(template[i:], '}'); j > 0 {
+				if v, ok := slots[template[i+1:i+j]]; ok {
+					b.WriteString(v)
+					i += j + 1
+					continue
+				}
+			}
+		}
+		b.WriteByte(template[i])
+		i++
+	}
+	return b.String()
+}
 
 func (s *Strategy) validate(where string) {
 	if s.Choose != nil {
@@ -175,6 +222,21 @@ func (s *Strategy) validate(where string) {
 		place, ok := s.Placement.Str(target)
 		if !toRE.MatchString(target) || !ok || !placementRE.MatchString(place) {
 			refuseFixf("entry-malformed", fixEditEntry(where+".placement"), "%s.placement: %q: %v — a placement is '@role' or '@role.<sub>' → 'controls.<key>' or 'message:<role>'", where, target, mustGet(s.Placement, target))
+		}
+	}
+	if s.Via != nil {
+		for _, target := range s.Via.Keys {
+			name, ok := s.Via.Str(target)
+			if !s.Placement.Has(target) || !ok || name == "" {
+				refuseFixf("entry-malformed", fixEditEntry(where+".via"), "%s.via: %q must name a placed field and a format name", where, target)
+			}
+		}
+	}
+	if s.Turns != nil {
+		for _, k := range s.Turns.Keys {
+			if _, ok := s.Turns.Str(k); !ok || (k != "call" && k != "result") {
+				refuseFixf("entry-malformed", fixEditEntry(where+".turns"), "%s.turns: %q must be 'call' or 'result', text", where, k)
+			}
 		}
 	}
 	for _, leaf := range controlLeaves(s.Controls, "") {
@@ -205,7 +267,7 @@ func validateRouting(r *Object, where string) {
 		refuseFixf("entry-malformed", fixEditEntry(where), "%s: 'to' is '@role' or '@role.<sub>'", where)
 	}
 	for _, k := range r.Keys {
-		if !contains([]string{"from", "to", "consume", "between", "pattern", "line_prefixed"}, k) {
+		if !contains([]string{"from", "to", "consume", "between", "pattern", "line_prefixed", "suffices"}, k) {
 			refuseFixf("entry-malformed", fixEditEntry(where), "%s: unknown routing key %q", where, k)
 		}
 	}
@@ -364,7 +426,8 @@ func (s *Strategy) selectFor(capabilities *Object, role, name string) *Strategy 
 // bound returns a copy with {field} in fragments bound to the role's field.
 func (s *Strategy) bound(fieldName string) *Strategy {
 	out := &Strategy{When: s.When, Requires: append([]string{}, s.Requires...), Visible: s.Visible,
-		Fragments: NewObject(), Controls: s.Controls.Clone(), Placement: s.Placement.Clone()}
+		Fragments: NewObject(), Controls: s.Controls.Clone(), Placement: s.Placement.Clone(),
+		Turns: cloneOrEmpty(s.Turns), Via: cloneOrEmpty(s.Via)}
 	for _, r := range s.Routings {
 		out.Routings = append(out.Routings, r.Clone())
 	}

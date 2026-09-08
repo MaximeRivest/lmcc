@@ -1,8 +1,10 @@
 # Plan 04 — strategy vocabularies for `tools` and `citations`
 
-**D-31 update:** regex execution is a declared optional extension in the next
-version, not a mandatory engine in every kernel. Plan 10 gates the extension
-contract, migration, and backend choice. Existing 0.2 evidence stays historical.
+**Done (kernel 0.5, D-37).** Shipped as designed, with three changes the
+work forced: the text tier reads fences with `between` (core), not a
+pattern extension; `cli_text` became `fenced_tools` and `xml_blocks` was
+not built (no demand); a tool-call reply is a *call turn* (`suffices`),
+never a missing-fields refusal. Live: `python/integration/lm15_tools_citations.py`.
 
 **Motivation.** `roles.md` reserves `tools`, `citations`, `citable`;
 the mechanics (hide, route, fragments, predicate) already serve any
@@ -24,11 +26,11 @@ conduct.
   sequenced separately.
 
 **Acceptance criteria.**
-- [ ] `spec/vocab/strategy-tools.md` and `strategy-citations.md`
+- [x] `spec/vocab/strategy-tools.md` and `strategy-citations.md`
       (fragments, routings, controls, predicates — exact spellings).
-- [ ] `roles.md` rows flip from *reserved* to *live*.
-- [ ] Corpus: per rule, a render case (fragment bytes) and a parse case
+- [x] `roles.md` rows flip from *reserved* to *live*.
+- [x] Corpus: per rule, a render case (fragment bytes) and a parse case
       (routing recovery); capability-refusal cases for the native pair.
-- [ ] Same signature runs unchanged across all three tool rules in a
+- [x] Same signature runs unchanged across all three tool rules in a
       test (the orthogonality proof).
-- [ ] `./check` green.
+- [x] `./check` green.

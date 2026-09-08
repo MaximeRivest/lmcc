@@ -11,7 +11,7 @@ Install into a registry explicitly::
     lmcc_std.install(my_registry)           # or an explicit one
 """
 
-from . import formats, lenses, strategies
+from . import formats, lenses, strategies, tools
 
 VERSION = "0.1.0"
 
@@ -22,6 +22,7 @@ def install(registry=None, *, exist_ok: bool = True) -> None:
     formats.install(registry, exist_ok=exist_ok)
     strategies.install(registry, exist_ok=exist_ok)
     lenses.install(registry, exist_ok=exist_ok)
+    tools.install(registry, exist_ok=exist_ok)
 
 
-__all__ = ["VERSION", "formats", "install", "lenses", "strategies"]
+__all__ = ["VERSION", "formats", "install", "lenses", "strategies", "tools"]

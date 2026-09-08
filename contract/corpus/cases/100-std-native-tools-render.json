@@ -1,0 +1,143 @@
+{
+ "name": "std-native-tools-render",
+ "kind": "render",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "tools_v1",
+  "versions": {
+   "kernel": "0.5.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "directive": "history"
+   },
+   {
+    "role": "user",
+    "text": "{question}"
+   }
+  ],
+  "parse": {
+   "kind": "derived"
+  },
+  "strategies": {
+   "tools": {
+    "use": "native_tools"
+   }
+  },
+  "formats": {
+   "list[Tool]": {
+    "use": "function_tool"
+   },
+   "list[ToolCall]": {
+    "use": "tool_calls"
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Answer, using tools when needed.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "tools",
+    "direction": "input",
+    "type": "list[Tool]",
+    "shape": {
+     "type": "array",
+     "items": {
+      "type": "object"
+     }
+    },
+    "role": "tools"
+   },
+   {
+    "name": "calls",
+    "direction": "output",
+    "type": "list[ToolCall]",
+    "shape": {
+     "type": "array",
+     "items": {
+      "type": "object"
+     }
+    },
+    "role": "tools.calls"
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "capabilities": {
+  "native_function_calling": true
+ },
+ "inputs": {
+  "question": "Weather in Paris?",
+  "tools": [
+   {
+    "name": "get_weather",
+    "description": "Weather for a city.",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "city": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "city"
+     ]
+    }
+   }
+  ]
+ },
+ "expect": {
+  "request": {
+   "system": "Answer, using tools when needed.\n<answer>\n...\n</answer>\n",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "Weather in Paris?"
+      }
+     ]
+    }
+   ],
+   "tools": [
+    {
+     "type": "function",
+     "name": "get_weather",
+     "description": "Weather for a city.",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "city": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "city"
+      ]
+     }
+    }
+   ]
+  }
+ }
+}

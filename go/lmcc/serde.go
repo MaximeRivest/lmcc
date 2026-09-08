@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-const KernelVersion = "0.4.0"
+const KernelVersion = "0.5.0"
 
 func parseVersion(v any, what string) [3]int {
 	s, ok := v.(string)

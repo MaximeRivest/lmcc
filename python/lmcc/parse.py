@@ -150,6 +150,9 @@ class DerivedLens(Lens):
         boundaries: list[tuple[int, int, str | None, str]] = []
         for name, prefix, suffix in wanted:
             marker = core.rstrip(prefix)
+            if not marker:          # the whole-reply field (kernel §4): anchored at the start
+                boundaries.append((0, 0, name, suffix))
+                continue
             count = text.count(marker)
             if count > 1:
                 refuse("parse-ambiguous",

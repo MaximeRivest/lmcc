@@ -30,7 +30,7 @@ from lm15.serde import config_to_dict, delta_to_dict, message_to_dict, request_f
 from lmcc.plan import Plan, RenderResult
 from lmcc.stream import StreamResult
 
-__all__ = ["request", "parse", "stream", "ConfigConflict"]
+__all__ = ["request", "parse", "stream", "message_to_history", "ConfigConflict"]
 
 
 class ConfigConflict(ValueError):
@@ -84,3 +84,10 @@ def stream(plan: Plan, events: Iterable[object]) -> tuple[list[dict], StreamResu
     result = s.finish()
     out.extend(result.events)
     return out, result
+
+
+def message_to_history(message: Message) -> dict:
+    """An lm15 ``Message`` as a history item (kernel §3): its canonical
+    JSON, verbatim — a tool-call turn or a ``Message.tool(...)`` result
+    goes straight back into the next ``render(history=...)``."""
+    return message_to_dict(message)

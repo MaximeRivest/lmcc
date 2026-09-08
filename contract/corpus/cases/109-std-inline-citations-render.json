@@ -1,0 +1,115 @@
+{
+ "name": "std-inline-citations-render",
+ "kind": "render",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "cite_v1",
+  "versions": {
+   "kernel": "0.5.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "role": "user",
+    "text": "{question}"
+   }
+  ],
+  "parse": {
+   "kind": "derived"
+  },
+  "strategies": {
+   "citations": {
+    "use": "inline_citations"
+   }
+  },
+  "formats": {
+   "list[Citation]": {
+    "use": "citations"
+   },
+   "list[Source]": {
+    "use": "source_list"
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Answer from the sources.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "sources",
+    "direction": "input",
+    "type": "list[Source]",
+    "shape": {
+     "type": "array",
+     "items": {
+      "type": "object"
+     }
+    },
+    "role": "citations.sources"
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "citations",
+    "direction": "output",
+    "type": "list[Citation]",
+    "shape": {
+     "type": "array",
+     "items": {
+      "type": "object"
+     }
+    },
+    "role": "citations"
+   }
+  ]
+ },
+ "capabilities": {
+  "instruct": true
+ },
+ "inputs": {
+  "question": "Capital of France?",
+  "sources": [
+   {
+    "title": "Atlas",
+    "text": "Paris is the capital of France."
+   },
+   {
+    "title": "Guide",
+    "text": "Lyon is a city in France."
+   }
+  ]
+ },
+ "expect": {
+  "request": {
+   "system": "Answer from the sources.\n<answer>\n...\n</answer>\n\n\nCite the numbered sources inline as [n] after each claim they support.",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "Capital of France?\n\n[1] Atlas: Paris is the capital of France.\n[2] Guide: Lyon is a city in France."
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

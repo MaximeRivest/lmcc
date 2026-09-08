@@ -11,8 +11,8 @@ Protocol per plan: spec → corpus (hand-authored bytes) → code →
 |---|---|---|
 | `01-streaming.md` | ✅ sans-I/O reducer; every parse case replayed at every scalar/part split through both kernels | M |
 | `02-parse-combinators.md` | declared recovery pipelines for messy replies (level 1) | M |
-| `03-turns-face.md` | tool calls/results spelled into the next prompt, probe-checked | M |
-| `04-tools-citations-strategies.md` | strategy vocabularies for the reserved roles | M |
+| `03-turns-face.md` | ✅ `turns` face on strategies + the bind-time probe (`turns-drift`); native turns pass verbatim as lm15 messages | M |
+| `04-tools-citations-strategies.md` | ✅ `native_tools`/`fenced_tools`, `native_citations`/`inline_citations`, five formats; roles live; proven live on two providers | M |
 | `05-second-implementation.md` | ✅ Go kernel; harness passes byte-exact (84/90 claimed; 6 `udf:python` cases declared unclaimed) | L |
 | `06-structured-fix-hints.md` | ✅ every pre-render refusal carries a `fix` from a closed action vocabulary; corpus-pinned in both kernels | S |
 | `07-dspy-parity.md` | ✅ any DSPy signature lowers, renders, parses; 16-row catalog vs real DSPy | L |

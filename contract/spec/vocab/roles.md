@@ -26,9 +26,9 @@ limited to what any wire protocol can carry today:
 |---|---|---|---|
 | `plain` | ordinary typed value (the default) | — (text) | — (kernel sections) |
 | `reasoning` | the model's working-out; may leave the token stream | `thinking` | `prefix_cot`, `reasoning_tags`, `native_reasoning` |
-| `tools` | tool invocation and its call format | `tool_call` | *(reserved — no strategies shipped)* |
-| `citations` | claims grounded in supplied sources | `citation` | *(reserved — no strategies shipped)* |
-| `citable` | **input**: a source that citations may point into | — (input-side; pairs with `citations`) | *(reserved)* |
+| `tools` | **input**: what the model may call (`tools`); **output**: what it asked for (`tools.calls`) | `tool_call` | `native_tools`, `fenced_tools` (`strategy-tools.md`) |
+| `citations` | claims grounded in sources | `citation` | `native_citations`, `inline_citations` (`strategy-citations.md`) |
+| `citations.sources` | **input**: sources citations may point into (was reserved as `citable`; spelled as a sub-role like `tools.calls`) | — (input-side; `inline_citations` spells it; lm15 has no per-document citation flag yet, so no native pair) | `inline_citations` |
 
 ## Openness and growth
 

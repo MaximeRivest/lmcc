@@ -195,6 +195,10 @@ func (l *DerivedLens) Split(text string, fieldNames []string) map[string]string 
 			continue
 		}
 		m := RStrip(a.Prefix)
+		if m == "" { // the whole-reply field (kernel §4): anchored at the start
+			bounds = append(bounds, boundary{0, 0, a.Name, Strip(a.Suffix)})
+			continue
+		}
 		if n := strings.Count(text, m); n > 1 {
 			refusef("parse-ambiguous", "anchor %q for field %q appears %d times in the reply — refusing to guess", m, a.Name, n)
 		}

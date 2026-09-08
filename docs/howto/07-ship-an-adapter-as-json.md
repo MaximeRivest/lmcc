@@ -29,7 +29,7 @@ adapter = lmcc.adapter(messages=template, formats={"list[integer]": "json"}, nam
 entry = adapter.dump(registry=std)
 assert entry == {
     "name": "rows_v1",
-    "versions": {"kernel": "0.4.0", "vocab": {"format/json": "0.1.0"}},
+    "versions": {"kernel": "0.5.0", "vocab": {"format/json": "0.1.0"}},
     "template": [
         {"role": "system", "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"},
         {"role": "user", "text": "{text}"}],

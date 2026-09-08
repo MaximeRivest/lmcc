@@ -1,0 +1,62 @@
+{
+ "name": "render-whole-reply-field",
+ "kind": "render",
+ "entry": {
+  "name": "chat_v1",
+  "versions": {
+   "kernel": "0.5.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{answer}"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "parse": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Answer in one sentence.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "q": "Capital of France?"
+ },
+ "expect": {
+  "request": {
+   "system": "Answer in one sentence.\n...",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "Capital of France?"
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

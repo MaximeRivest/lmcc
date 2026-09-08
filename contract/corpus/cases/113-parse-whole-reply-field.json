@@ -1,0 +1,49 @@
+{
+ "name": "parse-whole-reply-field",
+ "kind": "parse",
+ "entry": {
+  "name": "chat_v1",
+  "versions": {
+   "kernel": "0.5.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{answer}"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "parse": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Answer in one sentence.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "response": "  Paris is the capital of France.\n",
+ "expect": {
+  "values": {
+   "answer": "Paris is the capital of France."
+  }
+ }
+}

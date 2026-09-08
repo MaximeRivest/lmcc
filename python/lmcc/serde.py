@@ -17,7 +17,7 @@ from .adapter import Adapter, adapter as make_adapter
 from .errors import refuse
 from .strategy import Strategy
 
-KERNEL_VERSION = "0.4.0"
+KERNEL_VERSION = "0.5.0"
 
 
 def _parse_version(version: object, *, what: str) -> tuple[int, int, int]:

@@ -36,3 +36,12 @@ Current entries (all 0.1.0, provided by `python/lmcc_std` and, byte-identically,
 | `strategy/reasoning_tags` | `strategy-reasoning.md` |
 | `strategy/native_reasoning` | `strategy-reasoning.md` |
 | `lens/json_object` | `lens-json_object.md` |
+| `format/function_tool` | `strategy-tools.md` |
+| `format/tool_catalog` | `strategy-tools.md` |
+| `format/tool_calls` | `strategy-tools.md` |
+| `strategy/native_tools` | `strategy-tools.md` |
+| `strategy/fenced_tools` | `strategy-tools.md` |
+| `format/citations` | `strategy-citations.md` |
+| `format/source_list` | `strategy-citations.md` |
+| `strategy/native_citations` | `strategy-citations.md` |
+| `strategy/inline_citations` | `strategy-citations.md` |

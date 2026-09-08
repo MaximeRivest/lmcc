@@ -1,0 +1,100 @@
+{
+ "name": "std-inline-citations-parse",
+ "kind": "parse",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "cite_v1",
+  "versions": {
+   "kernel": "0.5.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "role": "user",
+    "text": "{question}"
+   }
+  ],
+  "parse": {
+   "kind": "derived"
+  },
+  "strategies": {
+   "citations": {
+    "use": "inline_citations"
+   }
+  },
+  "formats": {
+   "list[Citation]": {
+    "use": "citations"
+   },
+   "list[Source]": {
+    "use": "source_list"
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Answer from the sources.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "sources",
+    "direction": "input",
+    "type": "list[Source]",
+    "shape": {
+     "type": "array",
+     "items": {
+      "type": "object"
+     }
+    },
+    "role": "citations.sources"
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "citations",
+    "direction": "output",
+    "type": "list[Citation]",
+    "shape": {
+     "type": "array",
+     "items": {
+      "type": "object"
+     }
+    },
+    "role": "citations"
+   }
+  ]
+ },
+ "capabilities": {
+  "instruct": true
+ },
+ "response": "<answer>\nParis [1], not Lyon [2] [1] [see above].\n</answer>",
+ "expect": {
+  "values": {
+   "answer": "Paris [1], not Lyon [2] [1] [see above].",
+   "citations": [
+    {
+     "source": 1
+    },
+    {
+     "source": 2
+    }
+   ]
+  }
+ }
+}
