@@ -384,7 +384,7 @@ for bad in ("{instruction}\n<answer>\n{answer}\n</answer>",                    #
 lmcc lays out one call and reads one reply. Running the tool and calling again is the caller's — with lm15 it is four lines:
 
 ```python
-a# request  = lmcc_lm15.request(plan.render(question=q, tools=[weather], history=history), model=...)
+# request  = lmcc_lm15.request(plan.render(question=q, tools=[weather], history=history), model=...)
 # response = lm.complete(request)
 # values   = lmcc_lm15.parse(plan, response)
 # if values.get("calls"): run them, then

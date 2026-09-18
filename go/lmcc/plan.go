@@ -54,21 +54,22 @@ func (r RenderResult) Request(model string) *Object {
 
 // Plan is the bound adapter × signature × capabilities: pure faces only.
 type Plan struct {
-	Adapter        *Adapter
-	Signature      *Signature
-	Capabilities   *Object
-	Registry       *Registry
-	VisibleInputs  []*Field
-	VisibleOutputs []*Field
-	resolved       []resolvedRole
-	routings       []routing
-	placements     []placement
-	Fragments      *Object
-	PatchData      *Object
-	formats        map[string]formatChoice
-	Lens           Lens
-	lensKind       string
-	extensions     map[string]resolvedExtension // kernel §10
+	Adapter          *Adapter
+	Signature        *Signature
+	Capabilities     *Object
+	Registry         *Registry
+	VisibleInputs    []*Field
+	VisibleOutputs   []*Field
+	resolved         []resolvedRole
+	routings         []routing
+	placements       []placement
+	Fragments        *Object
+	PatchData        *Object
+	formats          map[string]formatChoice
+	Lens             Lens
+	lensKind         string
+	extensions       map[string]resolvedExtension // kernel §10
+	turnInputFormats map[string]Format            // role -> bound argument writer
 }
 
 // ------------------------------------------------------------------ spell
@@ -394,10 +395,11 @@ func (p *Plan) renderHistory(history []*Object) []any {
 
 // Prefix: the rendered messages that do not depend on inputs (kernel §3).
 // Prefix is the cache-stable request prefix {"system"?, "messages"} (kernel §3).
-func (p *Plan) turns() *Object {
-	for _, r := range p.resolved {
+func (p *Plan) turns() *resolvedRole {
+	for i := range p.resolved {
+		r := &p.resolved[i]
 		if r.strategy.Turns != nil && r.strategy.Turns.Len() > 0 {
-			return r.strategy.Turns
+			return r
 		}
 	}
 	return nil
@@ -406,11 +408,12 @@ func (p *Plan) turns() *Object {
 // spellTurn: kernel §6 turns — a strategy with `turns` spells tool_call /
 // tool_result parts as text; without one they pass verbatim.
 func (p *Plan) spellTurn(role string, parts []any) *Object {
-	turns := p.turns()
-	if turns == nil {
+	resolved := p.turns()
+	if resolved == nil {
 		return MakeMessage(role, parts)
 	}
-	call, hasCall := turns.Str("call")
+	turns := resolved.strategy.Turns
+	_, hasCall := turns.Str("call")
 	result, hasResult := turns.Str("result")
 	out := []any{}
 	for _, raw := range parts {
@@ -418,13 +421,7 @@ func (p *Plan) spellTurn(role string, parts []any) *Object {
 		t, _ := part.Str("type")
 		switch {
 		case t == "tool_call" && hasCall:
-			id, _ := part.Str("id")
-			name, _ := part.Str("name")
-			input, _ := part.Get("input")
-			if input == nil {
-				input = NewObject()
-			}
-			out = append(out, TextPart(spellTurn(call, map[string]string{"id": id, "name": name, "input": MarshalJSON(input, -1)})))
+			out = append(out, TextPart(p.callText(*resolved, part)))
 		case t == "tool_result" && hasResult:
 			id, _ := part.Str("id")
 			name, _ := part.Str("name")
@@ -638,12 +635,26 @@ func (p *Plan) Describe() *Object {
 	if n, ok := p.Registry.lenses[p.lensKind]; ok {
 		vocab.Set("lens/"+p.lensKind, n.version)
 	}
-	return Obj("adapter", p.Adapter.Name, "lens", lens, "capabilities", p.Capabilities.Clone(),
+	turnInfo := NewObject()
+	for _, r := range p.resolved {
+		if p.turnInputFormats[r.role] != nil {
+			ref := r.strategy.Turns.Object("input_format")
+			name, _ := ref.Str("use")
+			version := p.Registry.formats[name].version
+			vocab.Set("format/"+name, version)
+			turnInfo.Set(r.role, Obj("input_format", DeepClone(ref), "version", version))
+		}
+	}
+	out := Obj("adapter", p.Adapter.Name, "lens", lens, "capabilities", p.Capabilities.Clone(),
 		"inputs", inputs, "outputs", outputs, "hidden", hidden, "strategies", strategies,
 		"extensions", extensions, "routings", routings, "placements", placements, "fragments", p.Fragments.Clone(),
 		"patch", DeepClone(p.PatchData), "skeleton", p.Skeleton(),
 		"streaming", p.DescribeStreaming(),
 		"versions", Obj("kernel", KernelVersion, "vocab", vocab))
+	if turnInfo.Len() > 0 {
+		out.Set("turns", turnInfo)
+	}
+	return out
 }
 
 func nameOr(f Format) string {
@@ -1166,8 +1177,21 @@ func Bind(a *Adapter, sig *Signature, capabilities *Object, reg *Registry) (p *P
 
 	// 7. the turns probe (kernel §6): a strategy that spells calls as text
 	// must read its own spelling back through its own routing and format.
+	var turnOwners []resolvedRole
+	formatted := false
 	for _, r := range p.resolved {
-		call, ok := r.strategy.Turns.Str("call")
+		if r.strategy.Turns.Len() > 0 {
+			turnOwners = append(turnOwners, r)
+			formatted = formatted || r.strategy.Turns.Has("input_format") || r.strategy.Turns.Has("probe")
+		}
+	}
+	if len(turnOwners) > 1 && formatted {
+		where := "strategies['" + turnOwners[1].role + "'].turns"
+		refuseFixf("entry-malformed", fixEditEntry(where), "%s: competing history writers; bind one turns strategy", where)
+	}
+	p.turnInputFormats = map[string]Format{}
+	for _, r := range p.resolved {
+		_, ok := r.strategy.Turns.Str("call")
 		if !ok {
 			continue
 		}
@@ -1177,10 +1201,31 @@ func Bind(a *Adapter, sig *Signature, capabilities *Object, reg *Registry) (p *P
 				callsField = rt.field
 			}
 		}
+		ref := r.strategy.Turns.Object("input_format")
+		if ref != nil {
+			where := "strategies['" + r.role + "'].turns.input_format"
+			name, _ := ref.Str("use")
+			fmt := reg.namedFormat(name, cloneOrEmpty(ref.Object("options")), where)
+			if fmt.Emits() != "text" || (fmt.Direction() != "in" && fmt.Direction() != "both") || !formatAccepts(fmt, turnInputField()) {
+				refuseFixf("entry-malformed", fixEditEntry(where), "%s: must write an object as text", where)
+			}
+			p.turnInputFormats[r.role] = fmt
+		}
 		if callsField == "" {
+			if ref != nil || r.strategy.Turns.Has("probe") {
+				refuseFixf("turns-drift", fixEditEntry("strategies['"+r.role+"'].turns"), "role %q: formatted turns need an @role.calls target", r.role)
+			}
 			continue
 		}
-		spelled := spellTurn(call, map[string]string{"id": "probe", "name": "probe", "input": MarshalJSON(Obj("probe", true), -1)})
+		probe := r.strategy.Turns.Object("probe")
+		if probe == nil {
+			probe = Obj("name", "probe", "input", Obj("probe", true))
+		}
+		probe = probe.Clone()
+		if !probe.Has("id") {
+			probe.Set("id", "probe")
+		}
+		probeName, _ := probe.Str("name")
 		var own []routing
 		for _, rt := range p.routings {
 			if rt.field == callsField {
@@ -1189,17 +1234,13 @@ func Bind(a *Adapter, sig *Signature, capabilities *Object, reg *Registry) (p *P
 				}
 			}
 		}
-		_, routed := applyRoutings(spelled, nil, own, p.patternBinding())
-		var readBack any
-		if span, ok := routed.Get(callsField); ok && len(span.(Span).Parts) > 0 {
-			readBack = p.tryRead(sig.FieldNamed(callsField), span.(Span))
-		}
+		spelled, readBack := p.turnProbe(r, probe, own, callsField)
 		good := false
 		if list, ok := readBack.([]any); ok && len(list) == 1 {
 			if first, ok := list[0].(*Object); ok {
 				name, _ := first.Str("name")
 				input, _ := first.Get("input")
-				good = name == "probe" && Equal(input, Obj("probe", true))
+				good = name == probeName && Equal(input, mustGet(probe, "input"))
 			}
 		}
 		if !good {
@@ -1207,13 +1248,4 @@ func Bind(a *Adapter, sig *Signature, capabilities *Object, reg *Registry) (p *P
 		}
 	}
 	return p, nil
-}
-
-func (p *Plan) tryRead(f *Field, span Span) (v any) {
-	defer func() {
-		if r := recover(); r != nil {
-			v = nil
-		}
-	}()
-	return p.read(f, span)
 }

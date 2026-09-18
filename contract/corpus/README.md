@@ -1,5 +1,17 @@
 # The corpus
 
+**Formatted turns (kernel 0.6, D-38).** Cases 116–127 were authored from
+kernel §6 and `spec/vocab/format-code.md` before implementing the feature.
+They pin exact history bytes and raw-code parsing (including indentation,
+CRLF, Unicode and trailing newlines), mismatched writers, unavailable
+formats, invalid sample structure, named and inline-choice serialization,
+marker collisions at render, sample write failure at bind, writer-version
+mismatch, empty code, and competing history writers. Every parse case is
+replayed through the normal split/stream harness. Earlier cases change only
+the kernel version pin (and case 13's provided-version fix); no old expected
+text was regenerated. Deliberately malformed-entry load refusals may violate
+the entry schema; their case and refusal schemas still validate.
+
 **Kernel 0.4 (D-35).** The wire is lm15: every render expectation is
 `expect.request`, an lm15 request minus its model; responses are lm15
 messages; parts carry `type`. The bytes of 01–95 were re-spelled by

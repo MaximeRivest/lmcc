@@ -91,6 +91,9 @@ func (s *Strategy) ToJSON() *Object {
 		}
 		out.Set("routings", list)
 	}
+	if s.Turns != nil && s.Turns.Len() > 0 {
+		out.Set("turns", DeepClone(s.Turns))
+	}
 	return out
 }
 
@@ -156,7 +159,11 @@ func strategyFromJSON(data *Object, where string) *Strategy {
 	if v := data.Object("via"); v != nil {
 		s.Via = v.Clone()
 	}
-	if t := data.Object("turns"); t != nil {
+	if data.Has("turns") {
+		t := data.Object("turns")
+		if t == nil {
+			refuseFixf("entry-malformed", fixEditEntry(where+".turns"), "%s.turns: must be an object", where)
+		}
 		s.Turns = t.Clone()
 	}
 	for _, r := range data.List("routings") {
@@ -210,6 +217,9 @@ func spellTurn(template string, slots map[string]string) string {
 
 func (s *Strategy) validate(where string) {
 	if s.Choose != nil {
+		for i, alt := range s.Choose {
+			alt.Use.validate(where + ".choose[" + strconv.Itoa(i) + "]")
+		}
 		return
 	}
 	if s.When != nil {
@@ -232,13 +242,7 @@ func (s *Strategy) validate(where string) {
 			}
 		}
 	}
-	if s.Turns != nil {
-		for _, k := range s.Turns.Keys {
-			if _, ok := s.Turns.Str(k); !ok || (k != "call" && k != "result") {
-				refuseFixf("entry-malformed", fixEditEntry(where+".turns"), "%s.turns: %q must be 'call' or 'result', text", where, k)
-			}
-		}
-	}
+	validateTurns(s.Turns, where+".turns")
 	for _, leaf := range controlLeaves(s.Controls, "") {
 		validateControlPath(leaf.path, where+".controls['"+leaf.path+"']")
 	}

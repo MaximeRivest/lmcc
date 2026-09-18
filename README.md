@@ -294,7 +294,7 @@ loads it lays out the same bytes.
 contract/          the authority (no code)
   spec/            kernel.md (the convention), errors.md, vocab/ specs
   schema/          entry, signature, case — JSON Schema
-  corpus/          114 byte-exact cases — the real source of truth
+  corpus/          127 byte-exact cases — the real source of truth
   LM15_CONTRACT_PIN the lm15 contract commit the wire layer is
   harness/         runs any implementation against the corpus
 python/
@@ -354,6 +354,15 @@ complete one. `registry.describe()["extensions"]` says what a host binds;
 capabilities and host execution support stay separate vocabularies. See
 [portability](contract/spec/portability.md), kernel §10, and
 [the extension index](contract/spec/extensions/README.md).
+
+Raw-code tool calls are covered in the runnable
+[conversational heredoc notebook](docs/howto/12-conversational-heredoc-tools.md).
+`heredoc_tools` supplies the envelope and history spelling; `code_arguments`
+writes the body without escaping or trimming; `code_calls` reads it back.
+`turns.input_format` and `turns.probe` let custom transports use the same
+writer for history and a representative bind-time round-trip check. This is
+kernel 0.6: update older artifact kernel pins deliberately; the old turns
+syntax keeps its meaning. No code is executed by binding or by the notebook.
 
 ## 12. What lmcc refuses to be
 

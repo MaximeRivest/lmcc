@@ -63,7 +63,7 @@ class Strategy:
     controls: dict = dc_field(default_factory=dict)
     placement: dict[str, str] = dc_field(default_factory=dict)
     routings: list[dict] = dc_field(default_factory=list)
-    turns: dict[str, str] = dc_field(default_factory=dict)   # {"call": text, "result": text} (kernel §6)
+    turns: dict = dc_field(default_factory=dict)   # call/result templates, input_format, probe (§6)
     via: dict[str, str] = dc_field(default_factory=dict)     # "@role" -> named format for its placement (kernel §6)
     choose: list[dict] | None = None      # [{"when": P, "use": Strategy}, {"else": Strategy}]
 
@@ -131,6 +131,9 @@ class Strategy:
             refuse("entry-malformed",
                    f"{where}: unknown strategy key(s) {sorted(unknown)}; known keys are {list(_KEYS)}",
                    fix={"action": "edit-entry", "path": where})
+        if "turns" in data and not isinstance(data["turns"], dict):
+            refuse("entry-malformed", f"{where}.turns: must be an object",
+                   fix={"action": "edit-entry", "path": f"{where}.turns"})
         s = cls(when=data.get("when"), requires=list(data.get("requires", [])),
                 visible=bool(data.get("visible", True)),
                 fragments=dict(data.get("fragments", {})), controls=dict(data.get("controls", {})),
@@ -142,6 +145,8 @@ class Strategy:
 
     def validate(self, *, where: str) -> None:
         if self.choose is not None:
+            for i, alt in enumerate(self.choose):
+                (alt.get("else") or alt["use"]).validate(where=f"{where}.choose[{i}]")
             return
         if self.when is not None:
             validate_predicate(self.when, where=f"{where}.when")
@@ -162,10 +167,7 @@ class Strategy:
             if target not in self.placement or not isinstance(name, str) or not name:
                 refuse("entry-malformed", f"{where}.via: {target!r} must name a placed field and a format name",
                        fix={"action": "edit-entry", "path": f"{where}.via"})
-        for k, v in self.turns.items():
-            if k not in ("call", "result") or not isinstance(v, str):
-                refuse("entry-malformed", f"{where}.turns: {k!r} must be 'call' or 'result', text",
-                       fix={"action": "edit-entry", "path": f"{where}.turns"})
+        validate_turns(self.turns, where=f"{where}.turns")
         for k, v in self.fragments.items():
             if k not in ("system", "developer", "user", "assistant") or not isinstance(v, str):
                 refuse("entry-malformed", f"{where}.fragments: {k!r} must name a message role, text",
@@ -215,6 +217,47 @@ class Strategy:
                         controls=dict(self.controls), placement=dict(self.placement),
                         routings=[dict(r) for r in self.routings], turns=dict(self.turns),
                         via=dict(self.via))
+
+
+def validate_turns(turns, *, where: str) -> None:
+    valid = isinstance(turns, dict)
+    if valid:
+        valid = not (set(turns) - {"call", "result", "input_format", "probe"})
+        valid &= all(isinstance(turns[k], str) for k in ("call", "result") if k in turns)
+        if "input_format" in turns:
+            ref = turns["input_format"]
+            valid &= ("call" in turns and isinstance(ref, dict)
+                      and not (set(ref) - {"use", "options"})
+                      and isinstance(ref.get("use"), str) and bool(ref["use"])
+                      and isinstance(ref.get("options", {}), dict))
+        if "probe" in turns:
+            probe = turns["probe"]
+            valid &= ("call" in turns and isinstance(probe, dict)
+                      and not (set(probe) - {"id", "name", "input"})
+                      and isinstance(probe.get("name"), str) and bool(probe["name"])
+                      and isinstance(probe.get("input"), dict)
+                      and isinstance(probe.get("id", "probe"), str) and bool(probe.get("id", "probe")))
+    if not valid:
+        refuse("entry-malformed", f"{where}: expected call/result text, input_format {{use, options?}}, "
+               "and probe {name, input: object, id?}; formatter and probe require call",
+               fix={"action": "edit-entry", "path": where})
+
+
+def turn_format_refs(adapter, registry):
+    """All referenced argument writers, including inactive choose branches."""
+    def walk(strategy, where):
+        if strategy.choose is not None:
+            for i, alt in enumerate(strategy.choose):
+                yield from walk(alt.get("else") or alt["use"], f"{where}.choose[{i}]")
+        else:
+            validate_turns(strategy.turns, where=f"{where}.turns")
+            if "input_format" in strategy.turns:
+                yield f"{where}.turns.input_format", strategy.turns["input_format"]
+    for role, binding in adapter.strategies.items():
+        where = f"strategies[{role!r}]"
+        strategy = (binding if isinstance(binding, Strategy) else
+                    registry.strategy(binding["use"], binding.get("options"), where=where))
+        yield from walk(strategy, where)
 
 
 def spell_turn(template: str, slots: dict[str, str]) -> str:

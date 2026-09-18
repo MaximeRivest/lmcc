@@ -40,14 +40,18 @@ for f in sorted(glob.glob("contract/corpus/cases/*.json")):
     jsonschema.validate(case, case_schema)
     if "fix" in case.get("expect", {}):
         jsonschema.validate(case["expect"]["fix"], fix_schema)
-    jsonschema.validate(case["entry"], entry)
+    try:
+        jsonschema.validate(case["entry"], entry)
+    except jsonschema.ValidationError:
+        # Only authored malformed-entry load refusals may violate the entry
+        # schema. The case and its refusal/fix still validate normally.
+        if not (case["kind"] == "refuse" and case["expect"].get("at") == "load"
+                and case["expect"].get("code") == "entry-malformed"):
+            raise
     if "entry" in case.get("expect", {}):
         jsonschema.validate(case["expect"]["entry"], entry)
     if "signature" in case and case["expect"].get("code") != "signature-malformed":
         jsonschema.validate(case["signature"], signature)
-    if case["kind"] == "refuse" and case["expect"]["at"] == "load":
-        pass  # a refuse-at-load entry may be deliberately malformed for the schema too
-
     n += 1
 print(n, "cases validate against the case, entry, signature and fix schemas")
 '

@@ -114,6 +114,7 @@ class Plan:
     formats: dict[str, _FormatChoice] = dc_field(default_factory=dict)
     lens: Lens | None = None
     extensions: dict = dc_field(default_factory=dict)   # name -> extensions.Resolved (kernel §10)
+    turn_input_formats: dict = dc_field(default_factory=dict)   # role -> bound argument writer
 
     def pattern_binding(self):
         """The bound ``pattern/*`` binding, or None when the artifact declares none."""
@@ -287,24 +288,36 @@ class Plan:
             turns.append(self._spell_turn(role, list(parts)))
         return turns
 
-    def _turns(self) -> dict[str, str]:
-        for r in self.resolved:
-            if r.strategy.turns:
-                return r.strategy.turns
-        return {}
+    def _call_text(self, resolved, call: dict) -> str:
+        """One call writer, used for history and the bind-time sample."""
+        fmt = self.turn_input_formats.get(resolved.role)
+        if fmt is None:
+            body = _canonical_json(call.get("input", {}))
+        else:
+            try:
+                parts = core.as_parts(fmt.write(call.get("input", {}),
+                    core.Field("input", "input", {"type": "object"})), where="turns.input_format")
+                if any(p.get("type") != "text" or not isinstance(p.get("text"), str) for p in parts):
+                    raise ValueError("argument writer must return only text parts")
+                body = "".join(p["text"] for p in parts)
+            except Refusal:
+                raise
+            except Exception as exc:
+                refuse("format-write-error", f"turns.input_format on role {resolved.role!r}: {exc}")
+        return spell_turn(resolved.strategy.turns["call"], {
+            "id": str(call.get("id", "")), "name": str(call.get("name", "")), "input": body})
 
     def _spell_turn(self, role: str, parts: list[dict]) -> dict:
         """Kernel §6 turns: a strategy with ``turns`` spells tool_call /
         tool_result parts as text; without one they pass verbatim."""
-        turns = self._turns()
-        if not turns:
+        resolved = next((r for r in self.resolved if r.strategy.turns), None)
+        if resolved is None:
             return core.make_message(role, parts)
+        turns = resolved.strategy.turns
         out: list[dict] = []
         for p in parts:
             if p.get("type") == "tool_call" and "call" in turns:
-                out.append(core.text_part(spell_turn(turns["call"], {
-                    "id": str(p.get("id", "")), "name": str(p.get("name", "")),
-                    "input": _canonical_json(p.get("input", {}))})))
+                out.append(core.text_part(self._call_text(resolved, p)))
             elif p.get("type") == "tool_result" and "result" in turns:
                 output = "\n".join(c.get("text", "") for c in p.get("content", [])
                                    if isinstance(c, dict) and isinstance(c.get("text"), str))
@@ -427,6 +440,15 @@ class Plan:
         named = self.registry.lenses.get(self.adapter.parse.get("kind"))
         if named is not None:
             vocab[f"lens/{self.adapter.parse.get('kind')}"] = named.version
+        turn_info = {}
+        for r in self.resolved:
+            if r.role in self.turn_input_formats:
+                ref = r.strategy.turns["input_format"]
+                version = self.registry.formats[ref["use"]].version
+                vocab[f"format/{ref['use']}"] = version
+                turn_info[r.role] = {"input_format": _deep_copy(ref), "version": version}
+        if turn_info:
+            out["turns"] = turn_info
         out["versions"] = {"kernel": KERNEL_VERSION, "vocab": vocab}
         _ = placed
         return out
@@ -866,29 +888,47 @@ def bind(adapter: Adapter, sig: core.SignatureCore, capabilities: dict, registry
 
     # 7. the turns probe (kernel §6): a strategy that spells calls as text
     # must read its own spelling back through its own routing and format.
+    turn_owners = [r for r in plan.resolved if r.strategy.turns]
+    if len(turn_owners) > 1 and any(
+            "input_format" in r.strategy.turns or "probe" in r.strategy.turns for r in turn_owners):
+        where = f"strategies[{turn_owners[1].role!r}].turns"
+        refuse("entry-malformed", f"{where}: competing history writers; bind one turns strategy",
+               fix={"action": "edit-entry", "path": where})
     for r in plan.resolved:
         if "call" not in r.strategy.turns:
             continue
         calls_field = next((name for name, _ in plan.routings
                             if sig.field_named(name).role == f"{r.role}.calls"), None)
+        ref = r.strategy.turns.get("input_format")
+        if ref is not None:
+            where = f"strategies[{r.role!r}].turns.input_format"
+            fmt = registry.named_format(ref["use"], ref.get("options"), where=where)
+            if (fmt.emits != "text" or fmt.direction not in ("in", "both")
+                    or not _formats.accepts(fmt, core.Field("input", "input", {"type": "object"}))):
+                refuse("entry-malformed", f"{where}: must write an object as text",
+                       fix={"action": "edit-entry", "path": where})
+            plan.turn_input_formats[r.role] = fmt
         if calls_field is None:
+            if ref is not None or "probe" in r.strategy.turns:
+                refuse("turns-drift", f"role {r.role!r}: formatted turns need an @role.calls target",
+                       fix={"action": "edit-entry", "path": f"strategies[{r.role!r}].turns"})
             continue
-        probe = {"id": "probe", "name": "probe", "input": {"probe": True}}
-        spelled = spell_turn(r.strategy.turns["call"], {
-            "id": probe["id"], "name": probe["name"], "input": _canonical_json(probe["input"])})
+        probe = {"id": "probe", **r.strategy.turns.get("probe", {
+            "name": "probe", "input": {"probe": True}})}
         own = [(name, rt) for name, rt in plan.routings if name == calls_field and rt["from"] == "text"]
-        _, routed = apply_routings(spelled, [], own, plan.pattern_binding())
-        read_back = None
-        if routed.get(calls_field) is not None and routed[calls_field].parts:
-            try:
+        read_back, spelled = None, "(writer refused)"
+        try:
+            spelled = plan._call_text(r, probe)
+            _, routed = apply_routings(spelled, [], own, plan.pattern_binding())
+            if routed.get(calls_field) is not None and routed[calls_field].parts:
                 read_back = plan.read(sig.field_named(calls_field), routed[calls_field])
-            except Refusal:
-                read_back = None
+        except Refusal:
+            read_back = None
         first = read_back[0] if isinstance(read_back, list) and len(read_back) == 1 else None
         if first is not None and not isinstance(first, dict) and hasattr(first, "__dataclass_fields__"):
             first = {k: getattr(first, k) for k in first.__dataclass_fields__}
-        ok = (isinstance(first, dict) and first.get("name") == "probe"
-              and first.get("input") == {"probe": True})
+        ok = (isinstance(first, dict) and first.get("name") == probe["name"]
+              and first.get("input") == probe["input"])
         if not ok:
             refuse("turns-drift",
                    f"role {r.role!r}: strategy {r.name!r}: turns.call spells a call as "

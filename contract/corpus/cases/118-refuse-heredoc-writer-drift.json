@@ -1,0 +1,133 @@
+{
+ "name": "refuse-heredoc-writer-drift",
+ "kind": "refuse",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "tools_v1",
+  "versions": {
+   "kernel": "0.6.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "directive": "history"
+   },
+   {
+    "role": "user",
+    "text": "{question}"
+   }
+  ],
+  "parse": {
+   "kind": "derived"
+  },
+  "strategies": {
+   "tools": {
+    "requires": [
+     "instruct"
+    ],
+    "visible": false,
+    "placement": {
+     "@role": "message:system"
+    },
+    "via": {
+     "@role": "tool_catalog"
+    },
+    "routings": [
+     {
+      "from": "text",
+      "between": [
+       "run_python <<'PY_END'\n",
+       "\nPY_END"
+      ],
+      "to": "@role.calls",
+      "consume": true,
+      "suffices": true
+     }
+    ],
+    "turns": {
+     "call": "{name} <<'PY_END'\n{input}\nPY_END",
+     "input_format": {
+      "use": "json",
+      "options": {
+       "indent": null
+      }
+     },
+     "probe": {
+      "name": "run_python",
+      "input": {
+       "code": "print(6 * 7)\n"
+      }
+     }
+    }
+   }
+  },
+  "formats": {
+   "list[Tool]": {
+    "use": "function_tool"
+   },
+   "list[ToolCall]": {
+    "use": "code_calls"
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Answer, using tools when needed.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "tools",
+    "direction": "input",
+    "type": "list[Tool]",
+    "shape": {
+     "type": "array",
+     "items": {
+      "type": "object"
+     }
+    },
+    "role": "tools"
+   },
+   {
+    "name": "calls",
+    "direction": "output",
+    "type": "list[ToolCall]",
+    "shape": {
+     "type": "array",
+     "items": {
+      "type": "object"
+     }
+    },
+    "role": "tools.calls"
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "capabilities": {
+  "instruct": true
+ },
+ "expect": {
+  "code": "turns-drift",
+  "fix": {
+   "action": "edit-entry",
+   "path": "strategies['tools'].turns"
+  },
+  "at": "bind"
+ }
+}

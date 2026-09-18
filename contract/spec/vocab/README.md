@@ -39,6 +39,9 @@ Current entries (all 0.1.0, provided by `python/lmcc_std` and, byte-identically,
 | `format/function_tool` | `strategy-tools.md` |
 | `format/tool_catalog` | `strategy-tools.md` |
 | `format/tool_calls` | `strategy-tools.md` |
+| `format/code_arguments` | `format-code.md` |
+| `format/code_calls` | `format-code.md` |
+| `strategy/heredoc_tools` | `format-code.md` |
 | `strategy/native_tools` | `strategy-tools.md` |
 | `strategy/fenced_tools` | `strategy-tools.md` |
 | `format/citations` | `strategy-citations.md` |

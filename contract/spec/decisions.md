@@ -781,3 +781,49 @@ for a tool loop is `system, user, history` — the live run showed
 `history` before the question invites a plain reply. Benefits: tools
 and citations are conduct, not names; one program, any model; nothing on
 the wire that lm15 did not define.
+
+
+**D-38 · Formatted turns and representative samples; raw-code heredocs.**
+A JSON `{input}` slot cannot spell raw code, and the universal sample
+`probe({probe: true})` cannot test a single-tool code reader. Kernel 0.6
+adds two declarations: `turns.input_format` (a named format reference) and
+`turns.probe` (a representative `{name, input, id?}` call). No declaration
+means the old JSON writer and sample, unchanged.
+
+The format owns body spelling; the strategy owns the envelope. History and
+the bind-time sample call the same bound writer. References in every choice
+branch resolve at load; dump pins their vocabulary versions. A writer must
+accept an object input and emit text. A sample write or read refusal becomes
+`turns-drift` at bind; a real history write fails at render with its ordinary
+format error or `value-collides`. Competing history writers in a formatted
+plan refuse rather than silently choosing the first. Plan inspection names
+the selected argument format and version.
+
+Rejected: adding arbitrary expressions such as `{input.code}` to the
+kernel template language (duplicates format work and couples syntax to
+argument schemas); bypassing the probe for raw code (conceals drift); or
+pretending that one synthetic sample proves all round trips. Equality
+covers name and input, not transport-generated IDs. More samples and fuzz
+cases belong in tests, not a claim that the bind-time sample proves all
+programs.
+
+The std pack ships `code_arguments`, `code_calls`, and `heredoc_tools`.
+The calls reader delegates to the same raw-code argument format, using raw
+captured text rather than the stripped `Span.text`. Indentation, CRLF,
+Unicode, empty code and trailing newlines are preserved. Marker occurrence
+anywhere in code is rejected on writing: this is deliberately more
+restrictive than a real shell heredoc. The existing core `between` extractor
+remains a literal scan, not a strict shell grammar or truncated-block
+validator. The application must never execute unparsed reply text.
+
+Costs: a breaking minor pin while major is zero (0.6), one configured tool
+per shipped heredoc strategy, IDs unique only within a reply, conservative
+marker exclusion, and two format references/options to keep aligned. The
+probe catches configuration drift rather than guessing missing options.
+A malformed/incomplete reply may remain prose; sandboxing, permissions,
+call validation and loop limits remain with the application. The runnable
+notebook uses simulated replies/results and does not execute generated code.
+
+Evidence: corpus 116–127, Python and Go regression tests and every-split
+stream replay. The previous Go serializer dropped inline `turns`; preserving
+those declarations is now pinned by the nested-choice roundtrip case.

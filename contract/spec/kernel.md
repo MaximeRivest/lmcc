@@ -1,6 +1,6 @@
 # The LMCC kernel — normative specification
 
-**Version 0.5.0** (kernel). Status: the v3 design (`plans/08`), built with
+**Version 0.6.0** (kernel). Status: the v3 design (`plans/08`), built with
 two implementations (`python/lmcc`, `go/lmcc`) against the corpus. Where
 this document and the corpus disagree, fix the corpus first, then both.
 
@@ -292,7 +292,8 @@ Strategy = { when?: Predicate, requires?: [fact], visible?: bool = true,
 Routing  = { from: "text" | "channel:<part type>",
              between?: [open, close] | pattern?: regex | line_prefixed?: prefix,
              to: "@role" | "@role.<sub>", consume?: bool, suffices?: bool }
-Turns    = { call?: text, result?: text }        (slots {id} {name} {input} {output})
+Turns    = { call?: text, result?: text, input_format?: {use, options?},
+             probe?: {name, input, id?} }        (slots {id} {name} {input} {output})
 Predicate = {capability} | {not} | {all} | {any}
 ```
 
@@ -374,6 +375,38 @@ result and reads the span with the field's format; if that does not
 yield one call named `probe` with that input, bind refuses
 `turns-drift` naming the strategy — the template-is-the-lens law, at
 strategy level.
+
+**Formatted arguments (0.6).** `turns.input_format` is a normal named
+format reference (`{use, options?}`), governing only the `{input}` slot.
+Without it the existing JSON spelling remains. With it, the bound format
+writes the call's input object using a synthetic input field named `input`,
+shape `{"type":"object"}`. It must accept that field, write inputs and
+emit text; otherwise bind refuses `entry-malformed` at the strategy's
+`.turns.input_format`. References resolve at load (including all `choose`
+branches and named strategies), and at bind for code-built adapters; unknown
+names, bad options and version mismatch use the existing format refusals.
+Dump pins their `format/<name>` versions in `versions.vocab`.
+
+`turns.probe` supplies a representative call: nonempty string `name`,
+object `input`, optional nonempty string `id` (default `probe`), no other
+keys. It requires `turns.call`; so does `input_format`. Invalid structure
+refuses `entry-malformed` at `.turns`. The default sample remains unchanged.
+A formatted call writer requires exactly one bound `@role.calls` target
+and a text routing to it; lack of either refuses `turns-drift` at `.turns`.
+A plan using a formatted writer or explicit sample may have only one active
+`turns` strategy: two competing history spellings refuse `entry-malformed`
+at the second strategy's `.turns` in signature order, rather than choosing
+one silently. The probe and history rendering use **the same bound writer**. The probe
+compares the recovered name and full input object with its sample, ignoring
+IDs (text transports may assign them). A refusal while spelling or reading
+the sample becomes `turns-drift`, never a render-time refusal at bind.
+This is a sample check, not proof of arbitrary round trips or safe execution.
+
+History write failures are `format-write-error`; delimiter collisions may
+refuse `value-collides`. A format's output is inserted verbatim, never
+reparsed as template syntax. Plans expose the input-format reference and
+version in their `turns` inspection. No sample or formatter is inferred
+from a tool's name or from the model.
 
 ## 7. Kernel defaults and text rules
 

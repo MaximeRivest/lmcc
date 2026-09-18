@@ -15,9 +15,9 @@ from . import extensions as _extensions
 from . import formats as _formats
 from .adapter import Adapter, adapter as make_adapter
 from .errors import refuse
-from .strategy import Strategy
+from .strategy import Strategy, turn_format_refs
 
-KERNEL_VERSION = "0.5.0"
+KERNEL_VERSION = "0.6.0"
 
 
 def _parse_version(version: object, *, what: str) -> tuple[int, int, int]:
@@ -140,6 +140,9 @@ def load(entry: dict, *, registry=None) -> Adapter:
                         formats=formats, name=entry.get("name", "adapter"),
                         extensions=entry.get("extensions"), declare_defaults=False)
     _extensions.resolve(adp, registry)   # kernel §10: refuse here, before any plan
+    for where, ref in turn_format_refs(adp, registry):
+        registry.named_format(ref["use"], ref.get("options"), where=where)
+        _check_vocab_version(f"format/{ref['use']}", vocab_versions, registry.formats[ref["use"]].version)
     return adp
 
 
@@ -161,6 +164,9 @@ def dump(adp: Adapter, registry) -> dict:
                        fix={"action": "install-vocabulary", "kind": "strategy", "name": binding["use"]})
             vocab[f"strategy/{binding['use']}"] = named.version
             strategies[role] = _ref(binding)
+    for where, ref in turn_format_refs(adp, registry):
+        registry.named_format(ref["use"], ref.get("options"), where=where)
+        vocab[f"format/{ref['use']}"] = registry.formats[ref["use"]].version
     formats: dict[str, dict] = {}
     for key, binding in adp.formats.items():
         if isinstance(binding, dict) and "use" in binding:

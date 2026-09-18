@@ -1,0 +1,165 @@
+{
+ "name": "render-heredoc-history",
+ "kind": "render",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "tools_v1",
+  "versions": {
+   "kernel": "0.6.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "directive": "history"
+   },
+   {
+    "role": "user",
+    "text": "{question}"
+   }
+  ],
+  "parse": {
+   "kind": "derived"
+  },
+  "strategies": {
+   "tools": {
+    "use": "heredoc_tools"
+   }
+  },
+  "formats": {
+   "list[Tool]": {
+    "use": "function_tool"
+   },
+   "list[ToolCall]": {
+    "use": "code_calls"
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Answer, using tools when needed.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "tools",
+    "direction": "input",
+    "type": "list[Tool]",
+    "shape": {
+     "type": "array",
+     "items": {
+      "type": "object"
+     }
+    },
+    "role": "tools"
+   },
+   {
+    "name": "calls",
+    "direction": "output",
+    "type": "list[ToolCall]",
+    "shape": {
+     "type": "array",
+     "items": {
+      "type": "object"
+     }
+    },
+    "role": "tools.calls"
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "capabilities": {
+  "instruct": true
+ },
+ "inputs": {
+  "question": "Calculate.",
+  "tools": [
+   {
+    "name": "run_python",
+    "parameters": {
+     "type": "object"
+    }
+   }
+  ]
+ },
+ "history": [
+  {
+   "role": "assistant",
+   "parts": [
+    {
+     "type": "tool_call",
+     "id": "c1",
+     "name": "run_python",
+     "input": {
+      "code": "    # café\r\n    print(6 * 7)\r\n"
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "parts": [
+    {
+     "type": "tool_result",
+     "id": "c1",
+     "name": "run_python",
+     "content": [
+      {
+       "type": "text",
+       "text": "42"
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "expect": {
+  "request": {
+   "system": "Answer, using tools when needed.\n<answer>\n...\n</answer>\n\n\nTo request run_python, emit this heredoc and wait for its result:\nrun_python <<'PY_END'\n<code>\nPY_END\nDo not put PY_END anywhere in the code. Otherwise reply normally.\n\n- run_python({\"type\": \"object\"})",
+   "messages": [
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "run_python <<'PY_END'\n    # café\r\n    print(6 * 7)\r\n\nPY_END"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "Result of run_python (c1):\n42"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "Calculate."
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

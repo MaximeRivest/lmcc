@@ -25,4 +25,8 @@ Run a guide as a notebook (mrmd / rat): `./dev-venv` once builds the
 project venv (lmcc editable, the pinned lm15, IPython) and registers the
 `py@lmcc` kernel on it; then open the guide and *run all*.
 
+The raw-code continuation is [12-conversational-heredoc-tools.md](12-conversational-heredoc-tools.md):
+ordinary replies, reasoning, raw-code tool calls, and the same argument writer
+used by history and the bind-time probe. It is offline and never executes code.
+
 Go users: [go/README.md](../../go/README.md).

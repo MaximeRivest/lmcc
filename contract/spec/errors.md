@@ -37,7 +37,7 @@ parameters, is breaking.
 | `format-direction` | bind | `bind-format` | an input-only format on an output field, or the reverse |
 | `format-span-mismatch` | bind | `bind-format` | a routing delivers a span kind the field's format cannot read |
 | `format-placement-mismatch` | bind | `bind-format` | a placement needs parts the field's format does not emit |
-| `turns-drift` | bind | `edit-entry` | a strategy's `turns.call` spelling is not read back by its own routing and format (kernel §6 probe); hint names the strategy |
+| `turns-drift` | bind | `edit-entry` | the representative `turns.probe` (or default sample) cannot be written by `turns.call`/`input_format` and read back through its text routing and calls format with the same name and input; a formatted writer with no calls target also refuses (kernel §6); hint names the strategy |
 | `format-untrusted` | load | `place-udf` | the artifact ships a UDF and this runtime will not place code |
 | `format-not-self-contained` | ship/load | `reship-udf` | a UDF's source reaches into free variables or non-module globals |
 | `udf-tampered` | load | `reship-udf` | a shipped UDF's `sha256` does not match its source |

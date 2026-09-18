@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-const KernelVersion = "0.5.0"
+const KernelVersion = "0.6.0"
 
 func parseVersion(v any, what string) [3]int {
 	s, ok := v.(string)
@@ -176,6 +176,11 @@ func Load(entry *Object, reg *Registry) (a *Adapter, err error) {
 		panic(err)
 	}
 	resolveExtensions(a, reg) // kernel §10: refuse here, before any plan
+	for _, item := range turnFormatRefs(a, reg) {
+		name, _ := item.ref.Str("use")
+		reg.namedFormat(name, cloneOrEmpty(item.ref.Object("options")), item.where)
+		checkVocabVersion("format/"+name, vocab, reg.formats[name].version)
+	}
 	return a, nil
 }
 
@@ -197,6 +202,11 @@ func Dump(a *Adapter, reg *Registry) (entry *Object, err error) {
 			vocab.Set("strategy/"+name, named.version)
 			strategies.Set(role, refJSON(b))
 		}
+	}
+	for _, item := range turnFormatRefs(a, reg) {
+		name, _ := item.ref.Str("use")
+		reg.namedFormat(name, cloneOrEmpty(item.ref.Object("options")), item.where)
+		vocab.Set("format/"+name, reg.formats[name].version)
 	}
 	formats := NewObject()
 	for _, key := range a.Formats.Keys {
