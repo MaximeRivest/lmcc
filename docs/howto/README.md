@@ -20,6 +20,8 @@ Need a definition? See [docs/reference](../reference/README.md).
 | [09-inspect-a-plan.md](09-inspect-a-plan.md) | debug with `describe()` and `explain()` |
 | [10-write-a-vocabulary-pack.md](10-write-a-vocabulary-pack.md) | register a format and a strategy through the sockets |
 | [11-call-tools-and-cite-sources.md](11-call-tools-and-cite-sources.md) | tools and citations, native or text: call turns, `via`, `turns` + probe, the whole-reply pattern |
+| [12-conversational-heredoc-tools.md](12-conversational-heredoc-tools.md) | raw-code tool calls, history writers and representative probes |
+| [13-research-tool-reasoning-cross-design.md](13-research-tool-reasoning-cross-design.md) | build a 3 × 3 tool-transport/reasoning experiment from scratch, using only the kernel and Python's standard library |
 
 Run a guide as a notebook (mrmd / rat): `./dev-venv` once builds the
 project venv (lmcc editable, the pinned lm15, IPython) and registers the
