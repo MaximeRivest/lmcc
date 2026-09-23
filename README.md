@@ -9,7 +9,7 @@ lmcc is its calling convention.
 signature (your typed function)
         │  write: each value → its place on the wire
         ▼
-   the wire: messages, parts, request request_settings        ← the adapter lays this out
+   the wire: messages, parts, request settings        ← the adapter lays this out
         │  read: the reply → each typed value
         ▼
 your typed return value
@@ -176,7 +176,7 @@ given. Kernel §3a has the whole contract.
 ## 5. Formats: how a type is written and read
 
 A **format** is how one type crosses: `write` (value → what the model
-sees) and `read` (the captured capture → value). It is the only mechanism
+sees) and `read` (the capture → value). It is the only mechanism
 for values. Scalars, enums and `Optional[...]` have kernel defaults;
 anything with structure needs a format or refuses `no-format` — never a
 silent `str()`.

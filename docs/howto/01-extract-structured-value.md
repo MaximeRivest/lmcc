@@ -81,7 +81,7 @@ assert plan.parse('<extract>\n{"name": "Ann", "age": 41}\n</extract>') == {"extr
 ```
 
 `describe` is what the model sees in the output slot. `read` gets the
-captured capture; `capture.text` is the stripped text between the markers.
+capture; `capture.text` is the stripped text between the markers.
 
 ## 4. Way two: a format in the artifact
 

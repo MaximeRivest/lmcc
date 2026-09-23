@@ -4,7 +4,7 @@ The point of shipping three is the point of the whole design: the same
 signature, the same program, three inference behaviors — chosen at bake
 by the model's declared facts, never by editing the program.
 
-- ``prefix_cot``: the classic. The reasoning field stays a in_template section
+- ``prefix_cot``: the classic. The reasoning field stays a visible section
   the model writes before the others.
 - ``reasoning_tags``: interleaved thinking on any instruct model — pure
   prompt + parse data. The field leaves the sections; ``<think>`` captures
@@ -48,7 +48,7 @@ def reasoning_tags(options: dict) -> Transport:
 def native_reasoning(options: dict) -> Transport:
     """Options: ``effort`` (lm15 ``Reasoning.effort`` word; default
     ``medium``) and optional ``thinking_budget`` (int). The transport both
-    *asks* for thinking (``config.reasoning`` in the request request_settings) and
+    *asks* for thinking (``config.reasoning`` in the request settings) and
     *reads* it back (``part:thinking``)."""
     reasoning: dict = {"effort": options.get("effort", "medium")}
     if "thinking_budget" in options:

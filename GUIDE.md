@@ -236,9 +236,11 @@ assert p.skeleton() == {"prefill": '{"title": "', "stops": ["}"]}
 ## 7. Transports: how a meaning travels, as data
 
 Mark a field with a purpose; bind a transport to the purpose. A transport is
-plain data: a predicate over declared capability facts, prompt
-tell, request request_settings, find rules that recover the value from where
-it actually arrives, and a `choose` list to pick among alternatives:
+plain data: a predicate over declared capability facts, `tell` text for
+the prompt, request settings, find rules that recover the value from where
+it actually arrives, and a `choose` list to pick among alternatives.
+`lmcc.when` and `lmcc.find` build the pieces so your editor can suggest
+them; each returns plain data:
 
 ```python
 @dataclasses.dataclass
@@ -251,10 +253,14 @@ def cot(question: str) -> Solution:
     """Answer the question."""
 
 think_aloud = lmcc.Transport(
-    when={"not": {"capability": "native_reasoning"}},
+    when=lmcc.when.lacks("native_reasoning"),
     tell={"system": "Wrap every thought in <think>...</think>."},
-    find=[{"from": "text", "between": ["<think>", "</think>"], "to": "@purpose", "remove": True}],
+    find=[lmcc.find.between("<think>", "</think>", remove=True)],
     in_template=False)          # the field leaves the token stream entirely
+
+# the helpers are only data:
+assert lmcc.find.between("<think>", "</think>", remove=True) == \
+    {"from": "text", "between": ["<think>", "</think>"], "to": "@purpose", "remove": True}
 
 cot_adapter = lmcc.adapter(messages=[
     lmcc.system("{instruction}\n\nAnswer in exactly this form:\n"
@@ -269,8 +275,9 @@ assert cp.parse("<think>easy one</think><answer>\nParis\n</answer>") == {"reason
 ```
 
 Same signature on a native-reasoning model? A transport with
-`requires=["native_reasoning"]` and a find rule `{"from": "part:thinking",
-"to": "@purpose"}` — the program does not change. The capability dict you
+`requires=["native_reasoning"]` and `find=[lmcc.find.part("thinking")]`,
+chosen with `lmcc.choose((lmcc.when.has("native_reasoning"), native),
+otherwise=think_aloud)` — the program does not change. The capability dict you
 pass to `bind` is **declared, never sniffed**; its legal words live in
 `contract/spec/vocab/capabilities.md`.
 

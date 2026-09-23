@@ -856,7 +856,7 @@ _MISSING = object()
 
 
 def _merge_setting(plan, path: str, value, *, owner: str, setting_owner: dict, conflict_path: str):
-    """Deep-merge one control leaf into the request_settings (kernel §3): the same
+    """Deep-merge one setting leaf into the request settings (kernel §3): the same
     value from two sources is fine; a different one is `setting-conflict`,
     fixed at the later source's path."""
     existing = _get_path(plan.request_settings, path)

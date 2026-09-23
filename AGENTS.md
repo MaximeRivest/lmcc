@@ -1,7 +1,7 @@
 # LMCC — agent operating manual
 
 You are an agent working in this repository. This file is your cockpit:
-the map, the physics, the request_settings, and the protocol. Read it first;
+the map, the physics, the controls, and the protocol. Read it first;
 verify it second (`./check`); trust it only after it runs green.
 
 **One sentence.** LMCC is the calling convention for calling a model:
@@ -82,7 +82,7 @@ a decision, derive from these before inventing anything:
 | one record, the turn, replaces demos and history (kernel §3a): examples, past exchanges and the exchange in progress are written by the plan's own writers; a recorded reply this plan reads back without a marker repair is replayed verbatim; hidden fields have derived or declared writers checked at bind; call ids stay unique; a tool's images survive text transports | corpus 03, 53, 54, 103, 107, 116, 122, 128–148; `tests/test_turns.py` |
 | formatted turns use the same argument writer for past calls and the representative bind probe; raw-code whitespace is preserved and marker collisions refuse | corpus 116–127; `tests/test_heredoc_turns.py`; notebook `docs/howto/12-conversational-heredoc-tools.md` |
 | tools and citations are live purposes: the same program runs native (lm15 `tool_call`/`citation` parts, `Request.tools`) and as text (`fenced_tools`, `inline_citations`); a call turn is a reply (`complete_reply`); a text spelling of a past call must read back through its own find rule (`turns` probe, `spelling-drift`) | corpus 100–112; `tests/test_tools_citations.py`; `python/integration/lm15_tools_citations.py` (live, by hand) |
-| the wire is lm15: parts `type`, messages `parts`, `system` a request field, request_settings a partial lm15 request validated at `config.<field>`/`tools`; `render().request(model)` feeds lm15's `request_from_dict` unchanged | every render case's `expect.request`; cases 96–98; `tests/lm15/test_bridge.py` through a real lm15 at the pinned commit (`./check` step 6) |
+| the wire is lm15: parts `type`, messages `parts`, `system` a request field, request settings a partial lm15 request validated at `config.<field>`/`tools`; `render().request(model)` feeds lm15's `request_from_dict` unchanged | every render case's `expect.request`; cases 96–98; `tests/lm15/test_bridge.py` through a real lm15 at the pinned commit (`./check` step 6) |
 | the contract is portable and one implementation holds it: the Python kernel passes every claimable case byte-exactly in process *and* through the language-neutral driver protocol, stream traces included; every documented code is raised and every raised code documented. Other languages are rebuilt from the contract later; the Go kernel that passed 0.6 is at the tag `kernel-0.6` (D-41) | `./check` steps 1–2, `tests/test_driver_protocol.py`, `tests/test_coherence.py` |
 | the derived reader repairs misspelled markers by one rule (ASCII case, spaces, `*`/`_`/`#`, never across a line), opted-in find rule delimiters and value slips too (`strict` turns all off), the exact spelling wins, overlapping repairs refuse, every repair and tolerance is reported in a fixed order, and a reply cut at its length limit never reads as finished (kernel §4a) | corpus 149–169; `tests/test_repairs.py` (including a streaming fuzz of misspelled replies against batch) |
 | text primitives are portable: ASCII strip, explicit integer/number grammars, ECMAScript number spelling (kernel §7a) | corpus 35–37, 44, 45; `tests/test_text_rules.py` |

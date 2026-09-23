@@ -21,7 +21,7 @@ against a real DSPy, is:
 What is *not* claimed: DSPy's prompt bytes (LMCC renders its own way),
 lenient parsing (``json_repair``; LMCC refuses instead), and native
 tool/citation channels (plan 04) — those purposes lower and render as
-plain in_template fields until a transport is bound.
+plain visible fields until a transport is bound.
 
 Kernel stays stdlib-only; this package imports ``dspy`` and ``pydantic``.
 """

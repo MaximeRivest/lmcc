@@ -16,6 +16,7 @@ from .fn import Fn, One, Purpose, fn
 from .formats import Format, make as make_format, ship
 from .reader import Reader
 from .plan import Plan, Reading, RenderResult, bind
+from .helpers import choose, find, put, when
 from .registry import Registry, default_registry
 from .serde import KERNEL_VERSION, dump, load
 from .transport import Transport
@@ -38,7 +39,7 @@ __all__ = [
     "ModelStep", "One", "PatternBinding", "Plan", "Reading",
     "Refusal", "Registry", "RenderResult", "Purpose", "SignatureCore", "Capture", "Transport",
     "Stream", "StreamResult", "ToolStep", "Turn",
-    "adapter", "assistant", "bind", "default_registry", "developer", "dump",
+    "adapter", "assistant", "bind", "choose", "find", "put", "when", "default_registry", "developer", "dump",
     "field", "fn", "format", "load", "make_format", "message", "native_extensions",
     "refuse", "ship", "signature", "signature_fingerprint",
     "signature_from_dict", "signature_to_dict", "system", "turns", "typename", "use", "user",

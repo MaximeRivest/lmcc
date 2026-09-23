@@ -19,7 +19,7 @@ _PREDICATE_KEYS = ("capability", "not", "all", "any")
 _TO = re.compile(r"^@purpose(\.[A-Za-z_][A-Za-z0-9_]*)?$")
 _PUT = re.compile(r"^(request\.[a-z_][a-z0-9_.]*|message:(system|developer|user|assistant))$")
 
-# The request_settings request_settings is a partial lm15 request (kernel §3): the first path
+# The request settings are a partial lm15 request (kernel §3): the first path
 # segment is `config` or `tools`; `config` keys are the pinned lm15 Config
 # fields (contract/LM15_CONTRACT_PIN). Below that the value is opaque.
 LM15_CONFIG_FIELDS = frozenset((
@@ -34,7 +34,7 @@ def validate_setting_path(path: str, *, where: str) -> None:
                                     and segments[1] in LM15_CONFIG_FIELDS)
     if not ok:
         refuse("entry-malformed",
-               f"{where}: {path!r} is not a field of an lm15 request — request_settings request_settings "
+               f"{where}: {path!r} is not a field of an lm15 request — request settings "
                f"'config.<field>' ({', '.join(sorted(LM15_CONFIG_FIELDS))}) or 'tools'; "
                f"provider-native knobs go under config.extensions",
                fix={"action": "edit-entry", "path": where})

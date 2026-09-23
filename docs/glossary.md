@@ -43,6 +43,7 @@ Every LMCC word, one sentence each, in the order you need them. If a sentence he
 | **transport** | How fields of one purpose travel: where they go, where they are found, what the model is told. |
 | **in_template** | `False` takes the field out of the template; the transport then carries it instead. |
 | **put** | Where an input goes instead of a template slot: `request.tools` (a request setting) or `message:system` (into a message). |
+| **`lmcc.find`, `put`, `when`, `choose`** | Helpers that build find rules, puts, predicates and `choose` lists; each returns the plain data you could write by hand. |
 | **find** | Rules for where an output is found in the reply: `between` two markers, on lines starting with a prefix (`line_prefixed`), or in parts of one type (`from: "part:thinking"`). |
 | **remove** | Cut what `find` took out of the text, so the rest of the reply does not contain it. |
 | **complete_reply** | A value found this way (a tool call) is a whole reply; missing answer fields are fine. |

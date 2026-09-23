@@ -238,7 +238,7 @@ def render_nodes(nodes: list[Node], env, out: list[dict], buf: list[str],
     """Render an AST into message parts.
 
     ``env`` must provide: ``instruction`` (str), ``loop_fields(source)``
-    (in_template fields for a loop), ``value_of(field)`` returning
+    (the fields a loop writes), ``value_of(field)`` returning
     ``("text", str)`` or ``("part", dict)``, ``schema_of(field)``,
     ``field_named(name)``, ``turn_messages(slot)`` (the slot's written
     messages as ``(role, kind, text)``) and ``slot_filled(slot)``.

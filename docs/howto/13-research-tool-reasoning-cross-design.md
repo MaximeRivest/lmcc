@@ -397,7 +397,7 @@ for key in (("native", "native"), ("heredoc", "code_comments")):
     show(request)
 ```
 
-**Real-endpoint warning:** requesting native thinking does not guarantee the provider exposes its text. Simply omitting `config.reasoning` may not turn native thinking off, so we explicitly request `off` for tags and comments. These request_settings are part of our treatment. Verify the endpoint supports the required on/off settings; if it does not, mark the affected cells unsupported rather than silently dropping the control. Uncontrollable native reasoning is a confound. All nine adapters binding is not proof of endpoint support.
+**Real-endpoint warning:** requesting native thinking does not guarantee the provider exposes its text. Simply omitting `config.reasoning` may not turn native thinking off, so we explicitly request `off` for tags and comments. These request settings are part of our treatment. Verify the endpoint supports the required on/off settings; if it does not, mark the affected cells unsupported rather than silently dropping the control. Uncontrollable native reasoning is a confound. All nine adapters binding is not proof of endpoint support.
 
 ## 9. Create independently authored fixture replies
 
@@ -546,7 +546,7 @@ except lmcc.Refusal as error:
 
 ## 12. Save the treatments, not just their labels
 
-An artifact contains the selected layout, transports, format references and versions. The custom factories still need to be registered on the loading host: dumping references does not bundle their Python implementation. For a real study, archive these artifacts **and** this notebook/source commit, provider/model version, task data, endpoint request_settings, results and evaluation policy. A name such as `heredoc + comments` is not enough to reproduce a run.
+An artifact contains the selected layout, transports, format references and versions. The custom factories still need to be registered on the loading host: dumping references does not bundle their Python implementation. For a real study, archive these artifacts **and** this notebook/source commit, provider/model version, task data, endpoint settings, results and evaluation policy. A name such as `heredoc + comments` is not enough to reproduce a run.
 
 ```python
 artifacts = {f"{call_style}/{style}": adapter.dump(registry=registry)

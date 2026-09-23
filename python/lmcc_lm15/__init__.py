@@ -10,7 +10,7 @@ nothing here can drift from what lm15 says a request or a response is.
   plan's request_settings (what the adapter *needs*: ``config.reasoning`` for a
   native thinking transport, ``config.response_format`` for a JSON reader,
   ``tools`` for a put) is the base; the caller's ``Config`` fills
-  the rest. A caller value that *contradicts* the request_settings raises — the
+  the rest. A caller value that *contradicts* the request settings raises — the
   request_settings is part of the calling convention, not a suggestion — unless
   ``override=True`` says the caller knows better.
 - ``parse(plan, response)`` → typed values from an ``lm15.Response`` (or

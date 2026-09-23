@@ -41,6 +41,7 @@ Adapters and templates (kernel §2):
 | `Plan.turn`, `Plan.example`, `Plan.load_turn` | a new turn, an example turn, a turn from JSON with typed values | §3a |
 | `RenderResult.step` | parse a reply and record it as the turn's next model step | §3a |
 | `signature_fingerprint` | the `sha256:` identity a turn carries | §3a |
+| `find`, `put`, `when`, `choose` | helpers that return kernel §6 data: `find.between/lines/pattern/part`, `put.system/user/developer/request`, `when.has/lacks/all/any`, `choose((predicate, transport), …, otherwise=)` | §6, plan 13 |
 | `use` | `use(name, **options)`: a reference to a named format or transport | §5, §6 |
 
 Bind, render, parse, stream (kernel §3, §4, §8):
