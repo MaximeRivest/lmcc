@@ -108,11 +108,7 @@ class Adapter:
                            fix={"action": "edit-template", "path": f"template[{i}]"})
                 slots[name] = (form, i)
             guards += [(g, i) for g in guarded]
-        for name, i in guards:
-            if name not in slots:
-                refuse("template-syntax",
-                       f"template[{i}]: {{% if {name} %}} names no turn slot this template places",
-                       fix={"action": "edit-template", "path": f"template[{i}]"})
+        self._guards = guards    # checked at bind: a guard may name an input (kernel §3a)
         return slots
 
 

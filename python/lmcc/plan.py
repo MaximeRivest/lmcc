@@ -106,7 +106,13 @@ class _Env:
         return self.texts.get(slot, [])
 
     def slot_filled(self, slot: str) -> bool:
-        return slot in self.filled
+        """A guard's condition (kernel §3a): a placed slot with turns, or an
+        input with a value (not null, "" or [])."""
+        if slot in self.filled:
+            return True
+        if slot in self.values and self.plan.signature.field_named(slot).direction == "input":
+            return self.values[slot] not in (None, "", [])
+        return False
 
     @property
     def instruction(self) -> str:
@@ -827,7 +833,7 @@ def _depends_on_inputs(nodes, input_names: set[str]) -> bool:
         if isinstance(n, Loop) and not n.over_turns and (
                 n.source == "inputs" or _depends_on_inputs(n.body, input_names)):
             return True
-        if isinstance(n, Guard) and _depends_on_inputs(n.body, input_names):
+        if isinstance(n, Guard) and (n.slot in input_names or _depends_on_inputs(n.body, input_names)):
             return True
     return False
 
@@ -1265,7 +1271,7 @@ def bind(adapter: Adapter, sig: core.SignatureCore, capabilities: dict, registry
     for i, (msg, nodes) in enumerate(adapter.compiled_messages()):
         if nodes is not None:
             covered |= validate_nodes(nodes, known_fields=known, input_fields=input_names,
-                                      where=f"template[{i}]")
+                                      where=f"template[{i}]", slots=set(adapter.turn_slots()))
     uncovered = input_names - covered
     if uncovered:
         refuse("field-uncovered",

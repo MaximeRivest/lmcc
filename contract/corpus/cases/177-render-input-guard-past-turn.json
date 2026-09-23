@@ -1,0 +1,107 @@
+{
+ "name": "render-input-guard-past-turn",
+ "kind": "render",
+ "entry": {
+  "name": "rag_v1",
+  "versions": {
+   "kernel": "0.8.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n<answer>{answer}</answer>"
+   },
+   {
+    "directive": "turns"
+   },
+   {
+    "role": "user",
+    "text": "{% if context %}Context: {context}\n\n{% endif %}Question: {question}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Answer from the context.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "context",
+    "direction": "input",
+    "shape": {
+     "type": [
+      "string",
+      "null"
+     ]
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "question": "And its population?",
+  "context": "Paris has 2.1 million people."
+ },
+ "turns": {
+  "turns": [
+   {
+    "inputs": {
+     "question": "Capital of France?"
+    },
+    "steps": [],
+    "outputs": {
+     "answer": "Paris"
+    }
+   }
+  ]
+ },
+ "expect": {
+  "request": {
+   "system": "Answer from the context.\n<answer>...</answer>",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "Question: Capital of France?"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "<answer>Paris</answer>"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "Context: Paris has 2.1 million people.\n\nQuestion: And its population?"
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

@@ -6,8 +6,8 @@
 #   ./dev-venv            # create or refresh .venv, register the kernel
 #   rat start py@lmcc     # (mrmd picks it up as the notebook kernel)
 #
-# Note: the notebook's "uv pip install lmcc" button would fetch an unrelated
-# PyPI package of the same name; this script is the right way in.
+# Note: lmcc is not on PyPI yet (checked 2026-09-23); this script installs
+# it editable from ./python.
 set -euo pipefail
 cd "$(dirname "$0")"
 if command -v uv >/dev/null 2>&1; then UV=uv; else UV="nix run nixpkgs#uv --"; fi

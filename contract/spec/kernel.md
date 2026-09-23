@@ -284,11 +284,18 @@ is a program value.
   text and `m.` attributes only;
 - **guard**: `{% if name %} … {% endif %}` renders its body when the slot
   has at least one turn (for `steps`, one step). It does not place the
-  slot; it names a slot the template places.
+  slot; it names a slot the template places. A guard may instead name an
+  **input** field: its body renders when that input has a value that is
+  not null, `""` or `[]`. So `{% if context %}Context: {context}{% endif %}`
+  lets a past turn be written without its bulky input, where a bare
+  `{context}` would refuse `missing-input` (case 177). An output pattern
+  inside any guard is `not-readable`, as before.
 
 Slot names are ASCII identifiers other than `inputs`, `outputs`,
-`instruction` and `format`; placing a slot twice, a guard naming no
-placed slot, or any other attribute in a turn loop is `template-syntax`.
+`instruction` and `format`; placing a slot twice or any other attribute
+in a turn loop is `template-syntax`. A guard naming neither a placed
+slot nor an input field refuses `unknown-slot` at bind (the signature is
+known only then).
 A slot named like a signature field refuses `turns-layout` at bind.
 
 `steps` is reserved: the current turn's own steps. A template that

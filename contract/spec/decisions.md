@@ -1077,3 +1077,21 @@ with the custom regex work: E6 (D-31). Fixed now, each with a case:
 Costs, stated: artifacts naming private facts in predicates now refuse;
 `scaled_number` moves to 0.2.0; templates that both slot and put one
 input now refuse instead of sending it twice.
+
+**D-45 · A guard may name an input (kernel 0.8).** `{% if context %} …
+{% endif %}` renders its body when the input has a value (not null, `""`
+or `[]`). Ratified with the maintainer on 2026-09-23 as the kernel half of
+"leave bulky inputs out of past turns": the session layer decides what a
+past turn keeps (the policy), the template says how a turn without that
+input reads (the mechanism). Before this, a past turn without its
+documents refused `missing-input`, so a conversation over retrieved
+context could not trim old context at all.
+
+Costs, stated: a guard naming neither a placed slot nor an input now
+refuses `unknown-slot` at bind instead of `template-syntax` at construct,
+because only bind knows the signature (no case pinned the old timing; one
+unit test moved). A guarded input also makes its message input-dependent
+for `prefix()`. The guard tests presence, not truth: a boolean input
+`false` still renders the body. Rejected: an expression language
+(`{% if x and not y %}`), and conditionals on outputs (the reply's shape
+must not depend on values, §4).

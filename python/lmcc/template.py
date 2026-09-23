@@ -185,7 +185,7 @@ def _check_literal(literal: str, where: str) -> None:
 
 def validate_nodes(nodes: list[Node], *, known_fields: set[str],
                    input_fields: set[str], where: str,
-                   in_loop_var: str | None = None) -> set[str]:
+                   in_loop_var: str | None = None, slots=frozenset()) -> set[str]:
     """Check every slot resolves against the signature. Returns the set of
     input field names this template covers directly (bare slots)."""
     covered: set[str] = set()
@@ -216,13 +216,18 @@ def validate_nodes(nodes: list[Node], *, known_fields: set[str],
         elif isinstance(node, Loop) and node.over_turns:
             continue     # checked at compile: text and m.role/m.kind/m.text only
         elif isinstance(node, Guard):
-            covered |= validate_nodes(node.body, known_fields=known_fields,
+            if node.slot not in slots and node.slot not in input_fields:
+                refuse("unknown-slot",
+                       f"{where}: {{% if {node.slot} %}} names neither a turn slot this template "
+                       f"places nor an input field",
+                       fix={"action": "edit-template", "path": where, "slot": node.slot})
+            covered |= validate_nodes(node.body, known_fields=known_fields, slots=slots,
                                       input_fields=input_fields, where=where,
                                       in_loop_var=in_loop_var)
         elif isinstance(node, Loop):
             covered |= validate_nodes(
                 node.body, known_fields=known_fields, input_fields=input_fields,
-                where=where, in_loop_var=node.var)
+                where=where, in_loop_var=node.var, slots=slots)
             if node.source == "inputs":
                 covered |= input_fields
     return covered

@@ -189,10 +189,11 @@ def test_steps_need_a_slot_and_slots_need_names():
         with pytest.raises(lmcc.Refusal) as err:
             heredoc([lmcc.system("{instruction}\n{reply}"), bad, lmcc.user("{message}")])
         assert err.value.code == code
+    # a guard naming nothing is known only at bind, where inputs are known (kernel §3a)
     with pytest.raises(lmcc.Refusal) as err:
-        lmcc.adapter(messages=[lmcc.system("{% if examples %}x{% endif %}{instruction}\n{reply}"),
-                               lmcc.user("{message}")])
-    assert err.value.code == "template-syntax"
+        heredoc([lmcc.system("{% if examples %}x{% endif %}{instruction}\n{reply}"),
+                 lmcc.user("{message}")])
+    assert err.value.code == "unknown-slot"
 
 
 def test_the_output_pattern_cannot_hide_behind_a_guard():
