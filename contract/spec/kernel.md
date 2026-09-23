@@ -1029,6 +1029,41 @@ by definition, what 0.2 did (`spec/extensions/pattern-legacy-re2.md`),
 so the meaning is preserved exactly; nothing is relabeled silently
 because nothing is assumed: an undeclared `pattern` refuses.
 
+## Clarifications from the clean-room audit (plan 09, Bin 2)
+
+Behaviors the reference always had but this document did not state,
+pinned in `tests/test_audit_holes.py` (audit IDs in brackets). Each is
+normative.
+
+- §9 — `dump` records the running kernel version and, for each referenced
+  vocabulary entry, its registered version; loading ignores the patch
+  number and pins for entries the artifact never references [C2, G22,
+  G23]. Load checks the kernel version before resolving references [I1].
+- §7a — an integer is written from an integer value; an integral float
+  (`3.0`) refuses `value-invalid` [E4].
+- §4 — the tail is found on the first non-empty line after the outputs
+  loop; a tail found twice refuses `parse-ambiguous` [F7, F8]. Structural
+  checks (ambiguity, missing sections) come before any typed read [I3].
+- §2 — a hidden output in a bare slot renders its placeholder there and
+  is not read from there [F13]. An unknown attribute in an inputs loop
+  refuses `unknown-slot` [F26].
+- §5 — structural keys are computed from a nullable's base shape [G1]; an
+  enum resolves through `enum`, never through its members' scalar key [G2].
+  Placeholders are mechanical: `(integer)`, `(number)`, `(boolean)`,
+  `one of: a, b` for an enum, `(<kind>)` for media, `...` for a string [F17, F18].
+- §6 — a `between` rule whose close never comes captures nothing and
+  removes nothing; its field reads the empty capture [G17, G18, G26]. A
+  removed `line_prefixed` line leaves its line feed [G19]. A message `put`
+  accepts parts, so an image joins the message [G12]. Equal settings from
+  two transports merge once [G14]. A transport's `when` is checked before
+  its `requires`, and the first missing required fact is the one named
+  [G20, I4, G21].
+- §3 — the reply text is the concatenation of every text part in response
+  order, across parts of other types [H4]. A `parse-missing-fields`
+  refusal's `partial` holds raw text, before typed reads [F11].
+- §3 — the skeleton's stop is the stripped tail, else the stripped last
+  close; an empty one is omitted [A5].
+
 ## Deliberate gaps (0.8)
 
 Repairs of `line_prefixed` prefixes and of provider parts; the `grammar` face of `skeleton()`, declared parse

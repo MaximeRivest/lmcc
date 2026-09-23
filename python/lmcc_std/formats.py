@@ -156,6 +156,10 @@ class TableFormat(Format):
     def read(self, capture, field):
         item_props = (field.shape.get("items") or {}).get("properties", {})
         out = []
+        rows = [ln for ln in capture.text.split("\n") if core.strip(ln).startswith(self.delimiter)]
+        if not rows and core.strip(capture.text):
+            raise ValueError(f"no table row (a line starting with {self.delimiter!r}) in "
+                             f"{core.strip(capture.text)[:60]!r}; an empty table is written as nothing")
         for line in capture.text.split("\n"):
             line = core.strip(line)
             if not line.startswith(self.delimiter):
@@ -199,6 +203,7 @@ class TableFormat(Format):
         return cells
 
 SCALED_NUMBER_VERSION = "0.2.0"   # 0.2: round_trip is false with `round`
+TABLE_VERSION = "0.2.0"           # 0.2: text with no table row refuses instead of reading []
 
 
 class ScaledNumberFormat(Format):
@@ -245,6 +250,6 @@ def _read(shape: dict, text: str, where: str):
 
 def install(registry, *, exist_ok: bool = True) -> None:
     registry.register_format("json", JsonFormat, version=VERSION, exist_ok=exist_ok)
-    registry.register_format("table", TableFormat, version=VERSION, exist_ok=exist_ok)
+    registry.register_format("table", TableFormat, version=TABLE_VERSION, exist_ok=exist_ok)
     registry.register_format("scaled_number", ScaledNumberFormat, version=SCALED_NUMBER_VERSION,
                              exist_ok=exist_ok)

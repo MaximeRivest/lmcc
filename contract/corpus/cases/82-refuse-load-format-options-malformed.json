@@ -9,7 +9,7 @@
   "versions": {
    "kernel": "0.8.0",
    "vocab": {
-    "format/table": "0.1.0"
+    "format/table": "0.2.0"
    }
   },
   "template": [

@@ -514,3 +514,31 @@ Probe construction files under `/tmp/probe/` are review aids, not future corpus 
 
 | `09-audit-triage.md` | classify 114 audit findings; ratify policy gates, then pin defects and missing contract rules | XL |
 
+
+## Recheck of Bins 2 and 3 (2026-09-23, kernel 0.8)
+
+**Bin 2, pinned** (`python/tests/test_audit_holes.py`, one test per row;
+the normative sentences are kernel.md "Clarifications from the clean-room
+audit"): C2, G22, G23, E4, F7, F8, F13, F26, G1, G2, G17/G18/G26, G19, I1,
+I3, A5/DOC-2, F11/DOC-3, F17, F18, G12, G14, G20/I4, G21, H4, G5, G6, F15,
+B4, F24, G9. All held as the audit described; none needed a code change.
+One new defect was found on the way: `format/table` read prose with no
+table row as an empty list; it now refuses (`table` 0.2.0).
+
+**Bin 2, made obsolete by turns (0.7)**: F1/J3, F2, F3, F6 (demos are
+turns: the user side and subsets are §3a, pinned by cases 53 and
+116–127); G13 (controls became `request_settings`, whose paths are the
+pinned lm15 fields).
+
+**Bin 2, covered by existing cases**: F4, F5 (`tell` and `put` placement,
+cases 66, 143), J1 (digests, cases 57–62).
+
+**Bin 2, still open, stated**: I2/I7 (the order of bind refusals when
+several apply is not pinned beyond what single-refusal cases imply), G16
+(which side a reader/transport setting conflict names is implemented but
+not pinned), the F19 note (a vocabulary reader without a skeleton face
+returns `{}`, implemented, not pinned), E8 and E9 (belong to the
+`pattern/legacy-re2` extension, plan 10).
+
+**Bin 3** (accepted as is) and **Bin 0** (rejected) need no work; their
+reasons above still hold.

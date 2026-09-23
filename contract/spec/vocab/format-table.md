@@ -1,4 +1,4 @@
-# format/table — 0.1.0
+# format/table — 0.2.0
 
 Spells a list of flat objects as a delimiter table. Exists because small
 models often nail rows where they fumble JSON — a token-lean spelling worth
@@ -21,14 +21,18 @@ spelling rules (`kernel.md` §7a: `3`, `0.5`, `true`); nested containers
 are a format error (→ `format-write-error`). Then the escape character is
 doubled and the delimiter prefixed with the escape.
 
-**read.** Consider only lines that (after trimming) start with the
-delimiter. Split on unescaped delimiters; unescape; trim each cell. A row
+**read.** A capture with text but no line that (after trimming) starts
+with the delimiter is a format error: an empty table is written as
+nothing, so prose there is not an empty list (0.2.0; found in the plan 09
+recheck). Otherwise consider only lines that start with the delimiter. Split on unescaped delimiters; unescape; trim each cell. A row
 whose cells equal `columns` is a header and is skipped. A row with the
 wrong cell count is a format error (→ `format-read-error`, naming the
 field). A cell equal to `null` reads as null. Other cells read through
 the item schema's property shape with the kernel scalar rules
 (`integer`, `number`, `boolean`, `enum`; default string) — a cell that
-fails its rule is a format error, never a silent default.
+fails its rule is a format error, never a silent default. A row may omit
+its final delimiter (`| ann | 3` reads as two cells); a missing property
+writes as the `null` cell text.
 
 **Corpus.** `17-std-table-format-demo-reader.json` (render incl. escaping via
 an example turn), `18-std-table-format-parse.json` (header skip + coercion),
