@@ -74,6 +74,13 @@ class Adapter:
         from .registry import default_registry
         return _dump(self, registry or default_registry)
 
+    @property
+    def prefill(self) -> str | None:
+        """The template's last message when it is an assistant message: the
+        beginning of the reply, written for the model (kernel §3)."""
+        last = self.template[-1] if self.template else {}
+        return last.get("text") if last.get("role") == "assistant" else None
+
     def compiled_messages(self) -> list[tuple[dict, list | None]]:
         cached = getattr(self, "_compiled", None)
         if cached is not None and cached[0] == self.template:
@@ -209,6 +216,13 @@ def adapter(*, messages: list[dict] | None = None, template: list[dict] | dict |
     adp = Adapter(template=list(messages), reader=dict(reader), transports=s_bindings,
                   formats=f_bindings, name=name, extensions=declared, replay=replay,
                   strict=strict)
-    adp.compiled_messages()  # surface template syntax errors immediately
+    compiled = adp.compiled_messages()  # surface template syntax errors immediately
+    last, nodes = compiled[-1] if compiled else ({}, None)
+    if last.get("role") == "assistant" and nodes is not None and \
+            any(type(n).__name__ != "Text" for n in nodes):
+        refuse("template-syntax",
+               f"template[{len(compiled) - 1}]: a last assistant message is the reply's prefill "
+               f"(kernel §3) and holds literal text only, no slots, loops or guards",
+               fix={"action": "edit-template", "path": f"template[{len(compiled) - 1}]"})
     adp.turn_slots()         # and turn-slot put errors
     return adp

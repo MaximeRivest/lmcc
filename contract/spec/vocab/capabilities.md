@@ -1,4 +1,4 @@
-# The capability vocabulary — version 0.2.0
+# The capability vocabulary — version 0.3.0
 
 Capability facts are **declared, never sniffed**: the caller hands `bake`
 a plain dict of booleans describing the model. Transports predicate on
@@ -19,6 +19,7 @@ version of this file; changing one's meaning is breaking.
 | `native_citations` | a provider citations channel |
 | `native_structured_output` | the server enforces a JSON schema on the reply (`response_format`) — the gate for `reader/json_object` |
 | `image_input` | accepts image parts |
+| `assistant_prefill` | the provider continues a request's last `assistant` message as the start of its reply; the plan then sends the template's prefill (kernel §3). Anthropic does for models without extended thinking; OpenAI's Responses API does not |
 | `stop_sequences` | the request honors `config.stop` (lm15 `Config.stop`); the plan then asks to stop at the reader's tail (kernel §3) |
 
 An absent key means **false**. A predicate or `requires` naming a fact

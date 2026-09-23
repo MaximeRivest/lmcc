@@ -1095,3 +1095,30 @@ for `prefix()`. The guard tests presence, not truth: a boolean input
 `false` still renders the body. Rejected: an expression language
 (`{% if x and not y %}`), and conditionals on outputs (the reply's shape
 must not depend on values, §4).
+
+**D-46 · The prefill: a template's last assistant message (kernel 0.8,
+§3).** Ratified with the maintainer on 2026-09-23. Using a prefill is an
+adapter author's choice, but 0.8 could not express it: a trailing
+assistant message was sent, and the reply that continued it could not be
+read (`parse-missing-fields`); nor could an adapter say which models
+accept one (no fact). The language now owns exactly those two things.
+
+- The template's last message, when `assistant`, is the prefill: literal
+  text, sent last (after the current turn's steps), trailing whitespace
+  never sent. Every read of the reply reads the prefill as sent plus the
+  reply; a recorded step stores the whole message and is read whole.
+- It is sent only under the new fact `assistant_prefill` (capabilities
+  0.3.0), and otherwise simply not sent, with reading unchanged. Chosen
+  over refusing at bind because a prefill changes no meaning — the reply
+  is readable either way — exactly like `config.stop` under
+  `stop_sequences` (D-36); refusing would force two adapters for one
+  layout. `describe()["prefill"]` says whether it is sent.
+
+Found live: Anthropic rejects a prefill ending in whitespace (HTTP 400),
+hence the strip. Checked live on claude-haiku-4-5, llama-3.2-3b and
+qwen-2.5-7b, with and without prefill. Costs, stated: a template that
+ended with an assistant message for another purpose now means a prefill
+(no such template in the corpus or the docs); on a model not declaring
+the fact, the author's message is silently not sent — visible in
+`describe()`, not in the request. Whether a prefill helps a given model is
+the adapter author's question, not measured here.

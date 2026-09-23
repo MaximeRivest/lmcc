@@ -647,6 +647,10 @@ class Stream:
                              else make_reader_stream(names))
         self._reader_prefixes: dict[str, str] = {}
         self._reader_final_names: set[str] | None = None
+        self._opening: list[dict] = []
+        if plan.prefill:     # the reply continues the prefill (kernel §3): read it first
+            self._run(plan.prefill, None, final=False)
+            self._opening = self._events(final=False)
 
     # ------------------------------------------------------------ input
 
@@ -655,7 +659,8 @@ class Stream:
             raise RuntimeError("stream is already finished")
         text, part = self._append(delta)
         self._run(text, part, final=False)
-        return self._events(final=False)
+        opening, self._opening = self._opening, []
+        return opening + self._events(final=False)
 
     def finish(self, finish_reason: str | None = None) -> StreamResult:
         """End of stream. ``finish_reason`` is the lm15 stream end's; with

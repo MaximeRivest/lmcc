@@ -483,7 +483,8 @@ def read_value(shape: dict, text: str, *, where: str) -> object:
 # tests/test_coherence.py checks this set equals that table.
 CAPABILITY_FACTS = frozenset({
     "instruct", "completion", "native_reasoning", "native_function_calling",
-    "native_citations", "native_structured_output", "image_input", "stop_sequences"})
+    "native_citations", "native_structured_output", "image_input", "stop_sequences",
+    "assistant_prefill"})
 
 QUOTES = ("\"", "'", "`")
 

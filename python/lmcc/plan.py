@@ -70,6 +70,9 @@ class RenderResult:
         (kernel §3a). Pure."""
         message = as_message(reply)
         values = self.plan.parse(reply)   # a response's finish_reason counts (§4a)
+        if self.plan.prefill:             # record the whole assistant message (§3)
+            message = {**message, "parts": [core.text_part(self.plan.prefill)] + message["parts"]}
+            message["parts"] = core.merge_text_parts(message["parts"])
         return self.turn.with_step(ModelStep(values, message, sha256(self.request()),
                                              self.plan.calls_field))
 
@@ -162,6 +165,7 @@ class Plan:
     request_settings: dict = dc_field(default_factory=dict)
     formats: dict[str, _FormatChoice] = dc_field(default_factory=dict)
     reader: Reader | None = None
+    prefill: str = ""                                       # sent prefill (§3), "" when none
     find_repairable: list = dc_field(default_factory=list)   # §4a pass 1 delimiters
     find_unrepaired: list = dc_field(default_factory=list)
     extensions: dict = dc_field(default_factory=dict)   # name -> extensions.Resolved (kernel §10)
@@ -360,7 +364,10 @@ class Plan:
         own: list[dict] = []    # the template's own messages: tell and puts land here
         sys_tell = self.tell.get("system")
         tell_done = sys_tell is None
-        for i, (msg, nodes) in enumerate(self.adapter.compiled_messages()):
+        compiled = self.adapter.compiled_messages()
+        if self.adapter.prefill is not None:
+            compiled = compiled[:-1]       # the prefill is written last, below
+        for i, (msg, nodes) in enumerate(compiled):
             if stop_at is not None and i >= stop_at:
                 break
             if nodes is None:
@@ -405,6 +412,8 @@ class Plan:
                 else:   # after a blank line, like tell text (kernel §6)
                     target["parts"] = core.merge_text_parts(
                         target["parts"] + [core.text_part("\n\n")] + parts)
+        if self.prefill and stop_at is None:
+            messages.append(core.make_message("assistant", [core.text_part(self.prefill)]))
         system_parts = [p for m in messages if m["role"] == "system" for p in m["parts"]]
         system = None
         if system_parts:
@@ -477,7 +486,8 @@ class Plan:
         written = None
         if self.adapter.replay == "recorded" and step.message is not None:
             try:
-                reading = self.read(step.message)
+                values, _c, reps = self._parse_with_captures(step.message, continued=False)
+                reading = Reading(values, reps)
                 same = to_json(reading.values) == to_json(step.outputs) and not any(
                     r["repair"] in ("marker", "unclosed", "value") for r in reading.repairs)
             except Refusal:
@@ -626,7 +636,8 @@ class Plan:
 
     # ------------------------------------------------------------ parse
 
-    def _parse_with_captures(self, response: object) -> tuple[dict, dict[str, core.Capture], list[dict]]:
+    def _parse_with_captures(self, response: object, *, continued: bool = True
+                             ) -> tuple[dict, dict[str, core.Capture], list[dict]]:
         """The one batch parse path, shared by ``read``, ``parse`` and
         stream EOF: (values, captures, repairs).
 
@@ -635,6 +646,8 @@ class Plan:
         """
         cut = core.finish_reason(response) == "length"
         text, parts = core.response_text_and_parts(response)
+        if continued and self.prefill:   # the reply continues the prefill (§3)
+            text = self.prefill + text
         repairs: list[dict] = []
         if self.find_repairable:        # §4a, pass 1: delimiters of repairing find rules
             text, repairs = repair_markers(text, self.find_repairable)
@@ -752,6 +765,8 @@ class Plan:
             "tell": dict(self.tell),
             "request_settings": _deep_copy(self.request_settings),
             "strict": self.adapter.strict,
+            **({"prefill": {"text": core.rstrip(self.adapter.prefill), "sent": bool(self.prefill)}}
+               if self.adapter.prefill is not None else {}),
             "skeleton": self.skeleton(),
         }
         from .stream import describe_streaming
@@ -1356,6 +1371,10 @@ def bind(adapter: Adapter, sig: core.SignatureCore, capabilities: dict, registry
 
     # 8. turn slots (kernel §3a): layout, then a writer for every hidden output.
     plan.slots = adapter.turn_slots()
+    # the reply's prefill (§3): sent only to a model that continues one
+    # trailing whitespace is not sent: providers reject it (Anthropic, live) and it
+    # splits the model's next token; the reply is read as continuing what was sent
+    plan.prefill = core.rstrip(adapter.prefill or "") if capabilities.get("assistant_prefill") else ""
     _bind_turns(plan)
     return plan
 

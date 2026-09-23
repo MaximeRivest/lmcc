@@ -335,7 +335,7 @@ loads it lays out the same bytes.
 contract/          the authority (no code)
   spec/            kernel.md (the convention), errors.md, vocab/ specs
   schema/          entry, signature, case — JSON Schema
-  corpus/          178 byte-exact cases — the real source of truth
+  corpus/          183 byte-exact cases — the real source of truth
   LM15_CONTRACT_PIN the lm15 contract commit the wire layer is
   harness/         runs any implementation against the corpus (a driver
                    in any language speaks JSON Lines; python_driver.py

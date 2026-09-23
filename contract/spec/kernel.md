@@ -202,6 +202,24 @@ caller's chore. A provider omits the stop sequence from the reply; the
 reader reads a capture to its close *or end of text*, so nothing changes
 in parsing.
 
+**The prefill.** When the template's last message is an `assistant`
+message, it is the **prefill**: the beginning of the reply, written for
+the model. It holds literal text only (`template-syntax` otherwise, at
+construct). Its trailing whitespace (§7a) is never sent: providers reject
+it (Anthropic answered HTTP 400 in the first live run) and it splits the
+model's next token; an empty prefill is not sent at all. It is sent only
+when the model declares `assistant_prefill`:
+then it is the request's last message, after the current turn's steps,
+and every read of this plan's reply (`parse`, `read`, `stream`, truncation)
+reads the prefill as sent followed by the reply, as one text, before the find
+rules. Without the fact it is not sent, the reply is read alone, and
+nothing else changes, so one adapter serves both kinds of model; like
+`config.stop` under `stop_sequences`, the layout offers it and the model's
+declared facts decide. `rendered.step(reply)` records the whole assistant
+message (prefill, then the reply), so a replayed turn shows what the model
+effectively wrote; a recorded message is read whole, never re-prefixed.
+`describe()["prefill"]` is `{"text", "sent"}` (D-46; cases 179–182).
+
 **Parse input** is a string (the reply text), an lm15 message
 (`{"role", "parts"}`; the role is not read), or an lm15 response
 (`{"message": {…}, "finish_reason"?, …}`; only `message` and
