@@ -17,8 +17,9 @@ your typed return value
 
 lmcc never touches the network. It lays out the call and reads the
 return. You send. Every code block below runs in the test suite; every
-claim is a corpus case that two independent implementations (Python,
-Go) pass byte for byte.
+claim is a corpus case the Python implementation passes byte for byte.
+The contract is written so other languages can pass the same cases; for
+now Python is the one implementation, while the language is designed.
 
 ## 1. A signature
 
@@ -323,26 +324,26 @@ loads it lays out the same bytes.
 contract/          the authority (no code)
   spec/            kernel.md (the convention), errors.md, vocab/ specs
   schema/          entry, signature, case — JSON Schema
-  corpus/          127 byte-exact cases — the real source of truth
+  corpus/          148 byte-exact cases — the real source of truth
   LM15_CONTRACT_PIN the lm15 contract commit the wire layer is
-  harness/         runs any implementation against the corpus
+  harness/         runs any implementation against the corpus (a driver
+                   in any language speaks JSON Lines; python_driver.py
+                   is the template)
 python/
   lmcc/            the reference kernel, stdlib only
   lmcc_std/        formats json/table/scaled_number, reader json_object,
                    reasoning transports — a pack like anyone's
   lmcc_dspy/       any dspy.Signature → a signature (16-row catalog)
   lmcc_lm15/       typed face over the shared wire: lm15 Request in, Response out
-go/
-  lmcc/, lmccstd/  an independent Go implementation of both
-  cmd/lmcc-conform the corpus driver the harness runs it through
 ```
 
-`./check` runs everything: Python tests, the corpus through both
-kernels, the schemas, this README verbatim, the DSPy catalog, and the
+`./check` runs everything: Python tests, the corpus (in process and
+through the driver protocol), the schemas, this README verbatim, the DSPy catalog, and the
 lm15 bridge against a pinned lm15. What
-"portable" means here, exactly: the artifact is data and travels
-anywhere; the layout is byte-exact across implementations; a named
-format is byte-exact where both runtimes ship the name; a shipped UDF
+"portable" is designed to mean, exactly: the artifact is data and
+travels anywhere; the layout is byte-exact in every implementation that
+passes the corpus; a named format is byte-exact where the runtime ships
+the name; a shipped UDF
 runs where its language can be placed and is declared *unclaimed* where
 it cannot. That boundary is the contract's, not an accident.
 

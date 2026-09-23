@@ -24,7 +24,7 @@ bind for an adapter built in code), with fix `edit-entry`.
 
 The exclusion check is lexical, on the regex with its escaped characters
 removed (`\` followed by anything but `1`–`9` or `k`); that is exactly
-what both kernels do (`_NON_RE2` / `nonRE2`).
+what the kernel does (`_NON_RE2`).
 
 ## Matching
 
@@ -47,10 +47,10 @@ what both kernels do (`_NON_RE2` / `nonRE2`).
 
 ## Limits — stated, not hidden
 
-The two reference bindings are `python:re` (Python's `re` with
-`re.DOTALL`) and `go:regexp` (Go's RE2 with `(?s)`). They agree on every
-corpus case that requires this contract; **full equivalence is not
-claimed**. The independent clean-room audit (plan 09) found dialect
+The reference binding is `python:re` (Python's `re` with `re.DOTALL`).
+A second binding, `go:regexp` (Go's RE2 with `(?s)`, at the tag
+`kernel-0.6`), agreed with it on every corpus case that required this
+contract; **full equivalence is not claimed**. The independent clean-room audit (plan 09) found dialect
 gaps beyond the cases — Unicode classes, POSIX classes, `\Q…\E`, some
 escapes, `\b` semantics, capture priority under repetition — and the
 experiment that closed them (a custom matcher) was withdrawn (D-32).

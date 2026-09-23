@@ -65,7 +65,7 @@ A `fix` is the one next action that repairs the refusal, as plain data:
 parameter is a name the caller can act on (a field, a purpose, a fact, a
 vocabulary name, a locator into the artifact) — never prose. The
 vocabulary is closed; a fix whose `action` or parameter set is not in
-this table is a bug in the implementation. Both kernels emit the same
+this table is a bug in the implementation. Every implementation emits the same
 fix for the same refusal (the corpus pins it, `expect.fix`).
 
 **Which refusals carry one.** Every refusal that fires *before render*
@@ -91,7 +91,7 @@ guess: the refusal is still the contract.
 | `install-vocabulary` | `kind` (`format` \| `transport` \| `reader`), `name` | register `name` in the registry (install the pack that provides it), or replace the reference with inline data / a shipped format |
 | `match-version` | `entry` (`kernel`, `<kind>/<name>`, or `<family>/<name>`), `needs`, `provides` | run this artifact on a runtime that provides `needs`, or re-dump it from one that provides `provides` |
 | `declare-extension` | `family`, `path` | add an entry of family `family` to the artifact's `extensions` (the contract that governs the construct at `path`), or rewrite the construct in core terms (`between`, `line_prefixed`) |
-| `bind-extension` | `name`, `needs` | bind an implementation of extension `name` compatible with `needs` in this runtime (Python: `Registry(extensions=[...])` or `register_extension`; Go: `NewRegistry()` or `RegisterExtension`), or run the artifact where one is bound, or rewrite the construct in core terms |
+| `bind-extension` | `name`, `needs` | bind an implementation of extension `name` compatible with `needs` in this runtime (Python: `Registry(extensions=[...])` or `register_extension`), or run the artifact where one is bound, or rewrite the construct in core terms |
 | `place-udf` | `language`, `path` | allow and place code of `language` in this runtime (Python: `Registry(allow_udf=True)`), or bind a runtime format for that type instead |
 | `reship-udf` | `path` | correct the shipped source (self-contained; deps declared), then `ship` it again — the hash is recomputed |
 | `edit-entry` | `path` | correct the artifact at `path` |

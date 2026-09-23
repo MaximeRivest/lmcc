@@ -1,6 +1,6 @@
 """Fix hints (spec/errors.md, Fix actions): every refusal that fires
 before render carries a machine-actionable ``fix``; render and parse
-refusals carry none. The corpus pins the fixes both kernels emit; this
+refusals carry none. The corpus pins the fixes every implementation emits; this
 file drives the Python surface (``@lmcc.fn``, ``Registry``, ``ship``)
 that the corpus cannot reach and validates every fix against
 ``fix.schema.json`` with a validator small enough to need no library.

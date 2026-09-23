@@ -1,6 +1,7 @@
 # Reference index
 
-**Version scope.** Kernel 0.7 (Python). Words: [the glossary](../glossary.md). The core needs no regex; a `pattern`
+**Version scope.** Kernel 0.7. Python is the one implementation; the
+Go kernel that passed 0.6 is at the git tag `kernel-0.6` (D-41). Words: [the glossary](../glossary.md). The core needs no regex; a `pattern`
 find rule declares its dialect as an extension (kernel §10,
 [portability](../../contract/spec/portability.md)) and the host binds or refuses.
 
@@ -101,8 +102,8 @@ Facts: [capabilities.md](../../contract/spec/vocab/capabilities.md).
 Purposes: [purposes.md](../../contract/spec/vocab/purposes.md). Every word: [the glossary](../glossary.md). How an entry
 graduates: [vocab/README.md](../../contract/spec/vocab/README.md).
 
-The std pack (`python/lmcc_std`, `go/lmccstd`; install with
-`lmcc_std.install(registry)` / `lmccstd.Install(reg)`):
+The std pack (`python/lmcc_std`; install with
+`lmcc_std.install(registry)`):
 
 | entry | spec |
 |---|---|
@@ -117,54 +118,8 @@ The DSPy frontend (`python/lmcc_dspy`): `lower(signature, registry=)`,
 `adapter(registry)`, `entry()`, `bind_dspy_types(registry)`. Claimed
 features: `python/tests/dspy/test_catalog.py`.
 
-## Go: package `lmcc` (`go doc ./lmcc`)
-
-**The Go kernel is at 0.6** and still uses the 0.6 words (`Strategy`, `Lens`,
-`Span`, `routings`, `role`, …; the mapping is in [the glossary](../glossary.md)
-and D-40). Porting it to 0.7 is plan 12's first open item.
-
-User guide: [go/README.md](../../go/README.md). Full listing:
-`go doc -all ./lmcc` in `go/`.
-
-| name | what | section |
-|---|---|---|
-| `StructSignature(instructions, in, out, reg)` | lower two structs by `lmcc:"name,role=,desc="` tags | §1 |
-| `SignatureOf(instructions, inputs, outputs, reg)` | lower from `*Object` entries of types, samples, shapes, or `Spec` | §1 |
-| `SignatureFromJSON`, `SignatureToJSON` | the plain-data form | §1 |
-| `Signature`, `Field`, `Spec` | the lowered form; `Inputs()`, `Outputs()`, `FieldNamed()` | §1 |
-| `NewAdapter(name, template, parse, strategies, formats, extensions)` | build from data; template syntax and the extension declaration validated | §2, §10 |
-| `NewRegistry()`, `NewCoreRegistry()`, `RegisterExtension(b, existOK)`, `NativeExtensions()` | what this host binds beyond the core; core-only binds nothing | §10 |
-| `Adapter` | `.Bind(sig, caps, reg)`, `.Dump(reg)` | §2 |
-| `Bind(adapter, sig, caps, reg)` | every refusal fires here | §3 |
-| `Plan` | `Render`, `Parse`, `Stream`, `Describe`, `DescribeStreaming`, `Explain`, `Skeleton`, `Prefix` | §3 |
-| `RenderResult` | `.Messages`, `.Patch` | §3 |
-| `Stream`, `StreamResult` | `Feed(delta)`, `Finish()`; `.Events`, `.Values` | §8 |
-| `Lens`, `BaseLens`, `DerivedLens`, `Anchor`, `Spelled` | one document form; the template read backwards; a `{Name, Text}` pair | §4 |
-| `StreamingLens`, `LensStreamReducer` | the optional streaming face of a vocabulary lens | §8 |
-| `Format`, `FormatSpec`, `FormatFactory`, `LensFactory` | the format protocol; a function-built format; named factories | §5 |
-| `Strategy`, `NewStrategy`, `StrategyFactory` | how a meaning travels, as data | §6 |
-| `Registry`, `NewRegistry` | `RegisterFormat`, `RegisterStrategy`, `RegisterLens`, `BindFormat`, `BindFormatByName`, `Describe`; `.AllowUDF` | §5, §6 |
-| `Load(entry, reg)`, `Dump(adapter, reg)` | the artifact; `Load` never runs a UDF | §5, §9 |
-| `Error`, `AsError` | a refusal: `.Code`, `.Detail`, `.Fix`, `.Partial`, `.Describe()` | [errors.md](../../contract/spec/errors.md) |
-| `Object`, `NewObject`, `Obj` | an insertion-ordered JSON object: `Get`, `Set`, `Str`, `List`, `Object`, `Keys` | — |
-| `Span`, `SpanOfText` | what a routing or the lens captured: `.Text()`, `.Of(kind)` | §5, §6 |
-| `MarshalJSON`, `ParseJSON`, `Equal`, `DeepClone` | JSON text and JSON equality over plain values | §9 |
-| `Strip`, `RStrip`, `ReadInteger`, `ReadNumber`, `ReadBoolean`, `ReadValue`, `SpellValue`, `FormatNumber`, `RoundHalfEven` | the §7a text rules | §7a |
-| `TypeName`, `StructuralKeys`, `FormatKey`, `IsStructured`, `IsMedia`, `NullableBase`, `ShapeSummary` | shapes and resolution keys | §1, §5 |
-| `MakeMessage`, `TextPart`, `MergeTextParts`, `AsParts`, `ResponseTextAndParts` | messages and parts | §3 |
-| `Digest`, `QuoteJSON`, `Members`, `Member`, `IsIdentifier`, `KernelVersion` | the UDF hash rule; JSON helpers; the version | §5, §9 |
-
-## Go: package `lmccstd` (`go doc ./lmccstd`)
-
-| name | what |
-|---|---|
-| `Install(reg)` | register the whole pack |
-| `JSONFormat`, `TableFormat`, `ScaledNumberFormat` | `format/json`, `format/table`, `format/scaled_number` |
-| `JSONObjectLens` | `lens/json_object` |
-| `Version` | `"0.1.0"` |
-
 ## Conformance
 
 The corpus: [contract/corpus/README.md](../../contract/corpus/README.md).
-The harness and driver protocol: [contract/harness/runner.py](../../contract/harness/runner.py), kernel.md §9.
+The harness and driver protocol: [contract/harness/runner.py](../../contract/harness/runner.py), kernel.md §9; a reference driver to copy: [python_driver.py](../../contract/harness/python_driver.py).
 One command: `./check`.

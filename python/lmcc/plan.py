@@ -724,7 +724,7 @@ def _depends_on_inputs(nodes, input_names: set[str]) -> bool:
 
 def _canonical_json(value) -> str:
     """Kernel §6 turns: insertion order, ``, `` and ``: `` separators,
-    non-ASCII verbatim — the spelling both kernels produce."""
+    non-ASCII verbatim — the spelling every implementation produces."""
     return json.dumps(value, ensure_ascii=False, separators=(", ", ": "))
 
 

@@ -14,10 +14,10 @@ normative form.
 
 ```
   L5  programs            your code: @lmcc.fn signatures + values in, values out
-  L4  vocabulary packs    python/lmcc_std, go/lmccstd (+ anyone's): formats,
+  L4  vocabulary packs    python/lmcc_std (+ anyone's): formats,
                           transports, readers — plugged into sockets, zero privilege
-      frontends           python/lmcc_dspy (any dspy.Signature), Go struct tags,
-                          @lmcc.fn; any syntax lowers, none is the contract
+      frontends           python/lmcc_dspy (any dspy.Signature), @lmcc.fn;
+                          any syntax lowers, none is the contract
   L3  the plan            bind(adapter × signature × capabilities) → Plan
                           all refusals fire HERE, before any money is spent
   L2  the artifact        template + reader + transports by purpose + formats by
@@ -26,9 +26,10 @@ normative form.
                           lm15 message/response (contract/LM15_CONTRACT_PIN);
                           a shipped format is the one place it carries code,
                           declared (language, deps, sha256, author)
-  L1  kernel mechanics    python/lmcc/ (reference) and go/lmcc/ (independent)
+  L1  kernel mechanics    python/lmcc/ (the one implementation, while the
+                          language is designed; others are rebuilt from L0)
                           — core (signature, shapes, text rules, parts, captures),
-                          template (3 constructs), reader (derived), formats
+                          template (4 constructs), reader (derived), formats
                           (defaults, resolution, UDF admission), transport,
                           plan (bind/render/parse/skeleton/prefix), serde
   L0  the contract        contract/ — spec (meaning), schema (form),
@@ -36,7 +37,7 @@ normative form.
 ```
 
 L0 outranks everything. If code and corpus disagree, the code is wrong.
-If spec and corpus disagree, fix the corpus first, deliberately, then both.
+If spec and corpus disagree, fix the corpus first, deliberately, then the code.
 
 ## Portability: core + declared extensions (D-31, D-33)
 
@@ -79,25 +80,25 @@ a decision, derive from these before inventing anything:
 |---|---|
 | corpus is byte-exact authority | `contract/harness/runner.py` (148 cases; 6 need `udf:python`, 9 need `pattern/legacy-re2`) |
 | one record, the turn, replaces demos and history (kernel §3a): examples, past exchanges and the exchange in progress are written by the plan's own writers; a recorded reply this plan reads back is replayed verbatim; hidden fields have derived or declared writers checked at bind; call ids stay unique; a tool's images survive text transports | corpus 03, 53, 54, 103, 107, 116, 122, 128–148; `tests/test_turns.py` |
-| formatted turns use the same argument writer for past calls and the representative bind probe; raw-code whitespace is preserved and marker collisions refuse | corpus 116–127; `tests/test_heredoc_turns.py`; `go/lmccstd/code_test.go`; notebook `docs/howto/12-conversational-heredoc-tools.md` |
+| formatted turns use the same argument writer for past calls and the representative bind probe; raw-code whitespace is preserved and marker collisions refuse | corpus 116–127; `tests/test_heredoc_turns.py`; notebook `docs/howto/12-conversational-heredoc-tools.md` |
 | tools and citations are live purposes: the same program runs native (lm15 `tool_call`/`citation` parts, `Request.tools`) and as text (`fenced_tools`, `inline_citations`); a call turn is a reply (`complete_reply`); a text spelling of a past call must read back through its own find rule (`turns` probe, `spelling-drift`) | corpus 100–112; `tests/test_tools_citations.py`; `python/integration/lm15_tools_citations.py` (live, by hand) |
-| the wire is lm15: parts `type`, messages `parts`, `system` a request field, request_settings a partial lm15 request validated at `config.<field>`/`tools`; `render().request(model)` feeds lm15's `request_from_dict` unchanged | every render case's `expect.request`; cases 96–98; `tests/lm15/test_bridge.py` through a real lm15 at the pinned commit (`./check` step 7) |
-| the contract is portable: an independent Go kernel passes every claimable case byte-exactly, and both kernels raise the same refusal-code set (minus the declared put-only code). **Go is at kernel 0.6**: it is held to the `kernel-0.6` corpus, and its gap to 0.7 is a declared, exact list (plan 12) | `./check` step 5 (`runner.py --driver go/bin/lmcc-conform --cases <kernel-0.6 corpus>`), `tests/test_coherence.py` (`GO_AT_06_*`) |
-| text primitives are portable: ASCII strip, explicit integer/number grammars, ECMAScript number spelling (kernel §7a) | corpus 35–37, 44, 45; `tests/test_text_rules.py`; `go/lmcc/text_test.go` |
-| the core needs no regex: a `pattern` find rule requires a declared `pattern/*` extension; a core-only host refuses before model I/O; both kernels bind the same natives at the same versions; every native has an indexed spec | corpus 40, 42, 91–95; `tests/test_extensions.py`; `go/lmcc/extensions_test.go`; `tests/test_coherence.py` |
+| the wire is lm15: parts `type`, messages `parts`, `system` a request field, request_settings a partial lm15 request validated at `config.<field>`/`tools`; `render().request(model)` feeds lm15's `request_from_dict` unchanged | every render case's `expect.request`; cases 96–98; `tests/lm15/test_bridge.py` through a real lm15 at the pinned commit (`./check` step 6) |
+| the contract is portable and one implementation holds it: the Python kernel passes every claimable case byte-exactly in process *and* through the language-neutral driver protocol, stream traces included; every documented code is raised and every raised code documented. Other languages are rebuilt from the contract later; the Go kernel that passed 0.6 is at the tag `kernel-0.6` (D-41) | `./check` steps 1–2, `tests/test_driver_protocol.py`, `tests/test_coherence.py` |
+| text primitives are portable: ASCII strip, explicit integer/number grammars, ECMAScript number spelling (kernel §7a) | corpus 35–37, 44, 45; `tests/test_text_rules.py` |
+| the core needs no regex: a `pattern` find rule requires a declared `pattern/*` extension; a core-only host refuses before model I/O; every native binding has an indexed spec | corpus 40, 42, 91–95; `tests/test_extensions.py`; `tests/test_coherence.py` |
 | `split(join(x)) == x` for marker-free, trimmed `x`; `join` refuses collisions (`value-collides`) | `tests/test_kernel.py`, `test_text_rules.py`; corpus 38 |
 | the artifact never names a field: transports by purpose, formats by type/structural key | `schema/entry.schema.json`; corpus 55 |
 | resolution order: artifact type → structural key → runtime binding → kernel default → `*` → `no-format` | `tests/test_formats.py`; corpus 48–50, 55–56 |
-| shipped formats are admitted (hash, self-containment, put) and never run by `load` | `tests/test_formats.py`; corpus 57–62; Go answers `unclaimed` |
-| streaming refines batch: every text/part split has identical final values or full refusal; field deltas concatenate independently of chunking; both kernels write the same events at the same feeds; per-feed work does not grow with the reply | corpus harness replays every parse and parse-refusal case whole, one scalar at a time, and at every split through both kernels and compares the Go stream trace with the reference; seeded random multi-chunk fuzz, marker-overlap and scaling tests in `tests/test_streaming.py` and `go/lmcc/stream_test.go` |
+| shipped formats are admitted (hash, self-containment, put) and never run by `load` | `tests/test_formats.py`; corpus 57–62 |
+| streaming refines batch: every text/part split has identical final values or full refusal; field deltas concatenate independently of chunking; the one-scalar event trace is pinned through the driver protocol; per-feed work does not grow with the reply | corpus harness replays every parse and parse-refusal case whole, one scalar at a time, and at every split, and compares the stream trace sent through the driver protocol with the reference; seeded random multi-chunk fuzz, marker-overlap and scaling tests in `tests/test_streaming.py` |
 | all refusals fire at bind, never mid-render | refuse-corpus cases (`at: bind`) |
-| every refusal before render carries a `fix` from the closed action vocabulary; both kernels write the same one; render/parse refusals carry none | `spec/errors.md` (code → fix column, action table), `schema/fix.schema.json`, every pre-render refuse case pins `expect.fix`, `tests/test_coherence.py` (call-site rule in both kernels), `tests/test_fix_hints.py` |
+| every refusal before render carries a `fix` from the closed action vocabulary; the corpus pins which one; render/parse refusals carry none | `spec/errors.md` (code → fix column, action table), `schema/fix.schema.json`, every pre-render refuse case pins `expect.fix`, `tests/test_coherence.py` (call-site rule), `tests/test_fix_hints.py` |
 | data-only entries load with zero registrations | corpus case 08 + empty-registry harness default |
 | kernel imports stdlib only, ships zero vocabulary | `tests/test_agent_surface.py` |
 | artifacts never contain signatures | `schema/entry.schema.json` |
 | duplicated anchors, closes, tails, and JSON keys refuse, never guess | corpus cases 32, 39, 46 |
 | signatures and cases are schema-valid data | `./check` step 3 (`schema/signature.schema.json`, `schema/case.schema.json`); corpus 43 |
-| any DSPy signature lowers (losing only DSPy's declared no-ops), bakes, renders and parses | `./check` step 6 (`tests/dspy/test_catalog.py` against real DSPy); D-23 |
+| any DSPy signature lowers (losing only DSPy's declared no-ops), bakes, renders and parses | `./check` step 5 (`tests/dspy/test_catalog.py` against real DSPy); D-23 |
 | the kernel's shape set is closed: uninterpreted shapes need a codec; `@structured` gives one per entry | corpus 48–50; D-19, D-20 |
 | plans and registries are JSON-serializable data | `tests/test_agent_surface.py` |
 | docs cannot drift from code: every raised error code is in `spec/errors.md`, every registered vocab entry is indexed with a real spec file, case files match their declared names, std predicates only name declared facts, plans carry acceptance criteria | `tests/test_coherence.py` |
@@ -145,28 +146,28 @@ Checklists:
   version bump) → a corpus case that predicates on it.
 - **new error code**: row in `spec/errors.md` (with its fix action, or
   `—` if it fires at render/parse) → a refuse-corpus case asserting it
-  and, before render, its `fix` → raised in **both** kernels (the
-  coherence test requires identical code sets and checks every call
-  site carries a fix exactly when the table says so). Changing *when* a
+  and, before render, its `fix` → raised in the kernel (the coherence
+  test requires every documented code to be raised, every raised code to
+  be documented, and every call site to carry a fix exactly when the
+  table says so). Changing *when* a
   code fires is breaking.
 - **new fix action**: row in the action table of `spec/errors.md` →
-  branch in `schema/fix.schema.json` → a corpus case pinning it → both
-  kernels write it. Renaming an action or a parameter is breaking.
+  branch in `schema/fix.schema.json` → a corpus case pinning it → the kernel
+  writes it. Renaming an action or a parameter is breaking.
 - **kernel change**: touches `spec/kernel.md` first; expect corpus
-  changes to be reviewed as contract changes; implement in `python/`
-  and `go/` — the corpus will not pass until both agree.
+  changes to be reviewed as contract changes; implement in `python/` —
+  the corpus decides; code never rewrites a case to match itself.
 - **anything that touches streaming**: preserve the §8 refinement law;
-  add every-split tests in both harness drivers; never write a prefix a
+  add every-split tests (the harness replays every split); never write a prefix a
   later delta can revise; make every forced buffer visible in
   `plan.describe()["streaming"]`.
 - **anything that touches the wire** (a part, a message, a request field):
   the word is lm15's, never a synonym; a new lm15 field the request settings may
-  set goes into the pinned `Config` list in both kernels *and* the spec,
+  set goes into the pinned `Config` list in the kernel *and* the spec,
   with the contract pin bumped deliberately. lmcc's own objects (events,
   refusals, plans) stay in lmcc's words.
 - **anything that touches model text**: use the §7a primitives
-  (`core.strip`, `read_integer`, `format_number` / `lmcc.Strip`,
-  `ReadInteger`, `FormatNumber`), never the host language's own
+  (`core.strip`, `read_integer`, `format_number`), never the host language's own
   `strip`/`int`/`float`/`repr`. That is where cross-language drift hides.
 - **a case that needs anything beyond the core**: declare it in
   `requires` (`udf:python`, `pattern/legacy-re2`); drivers bind exactly
@@ -174,9 +175,9 @@ Checklists:
   `unclaimed`, never a false pass.
 - **new extension**: spec file in `contract/spec/extensions/` pinning
   every observable outcome and its limits → row in the index → corpus
-  cases that `requires` it → a binding in each kernel that claims it
-  (`native_extensions()` / `NativeExtensions()`; the coherence test keeps
-  the two lists identical) → one decision entry.
+  cases that `requires` it → a binding in the kernel
+  (`native_extensions()`; the coherence test checks it is indexed at its
+  version) → one decision entry.
 
 ## Notebooks and REPLs
 
@@ -188,9 +189,9 @@ from PyPI into it — that name is an unrelated package.
 ## Verify — one command
 
 ```
-./check     # python tests + harness + schemas + README-verbatim
-            # + go/check + the Go binary through the harness
-            # + the DSPy catalog against a real DSPy; green = holds
+./check     # python tests + harness (in process and via the driver
+            # protocol) + schemas + README-verbatim + the DSPy catalog
+            # against a real DSPy + the lm15 bridge; green = holds
 ```
 
 Run it before you start (baseline), after every meaningful change, and

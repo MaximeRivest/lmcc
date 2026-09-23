@@ -918,3 +918,28 @@ change: 0.7 was never published). Longer names in a few places
 keeps every old word until it is ported; its codes are mapped exactly in
 `tests/test_coherence.py`. Not yet done: the check that someone new can
 predict each setting from its name alone (plan 12, open item).
+
+**D-41 · Python is the one implementation while the language is designed.**
+The Go kernel is removed from the tree. It proved the contract portable up
+to kernel 0.6 (a second, independent kernel passing the corpus byte for
+byte, D-18 onward), and that code is kept whole at the git tag `kernel-0.6`,
+with the corpus it passed. Kernel 0.7 changed the language twice (turns,
+D-39; vocabulary, D-40), and more changes are expected from real use; a
+second kernel frozen at 0.6 only added upkeep and old words. TypeScript
+stays on its branch (`ts/cleanroom`). Other languages are rebuilt from the
+contract when it settles.
+
+What stays language-neutral: the spec, schemas and corpus; the ASCII text
+rules; the harness's driver protocol, now exercised by a Python driver
+(`contract/harness/python_driver.py`, `tests/test_driver_protocol.py`)
+that runs the whole corpus through a subprocess and compares its stream
+traces with the reference, and that a port copies.
+
+Cost, stated: nothing now proves the contract implementable twice. The
+cross-kernel code-set comparison is replaced by a one-sided pair of checks
+(every documented code is raised; every raised code is documented), which
+catches dead or undocumented codes but not a rule only Python can follow.
+Host-language assumptions can creep in unnoticed until the next port; the
+port is the test. Removed with Go: `./check`'s Go step, the `--cases`
+harness option, the Go sections of the reference, and the `GO_AT_06`
+declarations.

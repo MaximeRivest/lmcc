@@ -65,7 +65,7 @@ Every LMCC word, one sentence each, in the order you need them. If a sentence he
 
 ## Old words (kernel 0.6)
 
-The Go kernel, older notes and `decisions.md` before D-40 use these.
+Older notes, `decisions.md` before D-40, and the Go kernel at the tag `kernel-0.6` use these.
 
 | 0.6 | 0.7 |
 |---|---|

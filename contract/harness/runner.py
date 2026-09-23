@@ -20,7 +20,7 @@ implement the same four calls behind a JSON Lines stdin/stdout protocol
 per line in, one ``{"ok": bool, "detail": str}`` per line out, in order.
 
     python runner.py                     # the Python reference
-    python runner.py --driver 'go run ./cmd/lmcc-conform'   # any other
+    python runner.py --driver 'path/to/driver'   # any other implementation
 """
 
 from __future__ import annotations
@@ -338,7 +338,7 @@ class Report:
         return self.failed == 0
 
 
-def run_corpus(driver=None, cases_dir: Path = CASES_DIR, *, compare_traces: bool = True) -> Report:
+def run_corpus(driver=None, cases_dir: Path = CASES_DIR) -> Report:
     driver = driver or PythonDriver()
     # The reference kernel is needed only to judge a driver's stream trace
     # (D-27). A driver that sends none runs against the corpus alone, so a
@@ -349,8 +349,7 @@ def run_corpus(driver=None, cases_dir: Path = CASES_DIR, *, compare_traces: bool
         for path in sorted(cases_dir.glob("*.json")):
             case = json.loads(path.read_text(encoding="utf-8"))
             result = driver.run(case)
-            if (compare_traces and result.get("ok") and not isinstance(driver, PythonDriver)
-                    and "stream_trace" in result):
+            if result.get("ok") and not isinstance(driver, PythonDriver) and "stream_trace" in result:
                 if reference is None:
                     reference = PythonDriver()
                 expected = reference.run(case).get("stream_trace")
@@ -381,24 +380,16 @@ def main(argv: list[str] | None = None) -> int:
                     help="run CMD as a JSON Lines driver instead of the "
                          "in-process Python reference")
     ap.add_argument("--cwd", metavar="DIR", help="working directory for CMD")
-    ap.add_argument("--cases", metavar="DIR",
-                    help="run the corpus in DIR instead of contract/corpus/cases (an "
-                         "implementation held to an earlier kernel runs that kernel's corpus)")
     args = ap.parse_args(argv)
     if args.driver:
         driver = SubprocessDriver(args.driver, cwd=Path(args.cwd) if args.cwd else None)
     else:
         driver = PythonDriver()
-    # Stream traces are judged against the reference kernel, which runs the
-    # live corpus; another kernel's corpus is judged on its own expectations.
-    report = run_corpus(driver, Path(args.cases) if args.cases else CASES_DIR,
-                        compare_traces=not args.cases)
+    report = run_corpus(driver)
     for name, detail in report.failures:
         print(f"FAIL {name}\n{detail}\n")
     note = f", {len(report.unclaimed)} unclaimed ({', '.join(sorted({u for _, u in report.unclaimed}))})" if report.unclaimed else ""
-    if args.driver and args.cases:
-        note += f" (corpus {args.cases}; stream traces not compared: the reference runs the live kernel)"
-    elif args.driver:
+    if args.driver:
         note += f", {report.traced} stream traces match the reference kernel"
     print(f"[{driver.name}] {report.passed} passed, {report.failed} failed{note}")
     return 0 if report.ok else 1

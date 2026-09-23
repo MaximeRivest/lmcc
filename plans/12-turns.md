@@ -16,7 +16,7 @@
 
 ### Still open
 
-1. **Go port to 0.7** (Go is held to the `kernel-0.6` corpus; the exact code gap is declared in `tests/test_coherence.py`). TypeScript is further behind.
+1. **Other languages** are rebuilt from the contract once the language settles (D-41). The Go kernel that passed 0.6 is at the tag `kernel-0.6`; TypeScript is on the branch `ts/cleanroom`.
 2. **Live providers**: verify id qualification and verbatim replay (thinking signatures, tool-call continuation data) against real endpoints through lm15.
 3. **dspy_session on turns**: sessions, memory policy and training data built on `Turn`, outside the kernel.
 4. **Field-level text layout** of a turn (`{% for f in t.inputs %}`) — deferred.

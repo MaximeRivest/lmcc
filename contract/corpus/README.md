@@ -22,7 +22,7 @@ kernel §3a; honestly stated, the Python kernel existed when they were
 written, and none of their expectations was produced by running it. Every
 new rule was checked by breaking the kernel on purpose: each break must
 fail at least one case (the projection rule needed case 148 to be caught).
-The Go kernel is held to the `kernel-0.6` tag's corpus until it is ported.
+The Go kernel was held to the `kernel-0.6` tag's corpus, then removed (D-41).
 
 **Formatted turns (kernel 0.6, D-38).** Cases 116–127 were authored from
 kernel §6 and `spec/vocab/format-code.md` before implementing the feature.
@@ -166,6 +166,7 @@ Comparison is deep equality — byte-exact text, exact numbers, exact error
 codes. Objects compare unordered, arrays ordered, numbers by value.
 
 **Running another implementation.** `harness/runner.py --driver CMD`
-starts CMD once and streams cases as JSON Lines (`spec/kernel.md` §10);
-`go/cmd/lmcc-conform` is the Go driver. The case format itself is
+starts CMD once and streams cases as JSON Lines (`spec/kernel.md` §9);
+`harness/python_driver.py` is the reference driver and the template for
+another language's. The case format itself is
 `schema/case.schema.json`.

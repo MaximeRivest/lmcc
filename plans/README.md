@@ -7,6 +7,10 @@ for "done"). A plan without acceptance criteria is a wish.
 Protocol per plan: spec → corpus (hand-authored bytes) → code →
 `./check` green → decision-log entry if a rule changed.
 
+Python is the one implementation while the language is designed (D-41).
+Plans that mention the Go kernel describe work done at kernel ≤ 0.6; that
+code is at the git tag `kernel-0.6`.
+
 | plan | one line | size |
 |---|---|---|
 | `01-streaming.md` | ✅ sans-I/O reducer; every parse case replayed at every scalar/part split through both kernels | M |

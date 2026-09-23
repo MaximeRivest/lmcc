@@ -31,4 +31,3 @@ The raw-code continuation is [12-conversational-heredoc-tools.md](12-conversatio
 ordinary replies, reasoning, raw-code tool calls recorded as a turn, and the
 same argument writer used for past calls and the bind-time probe. It is offline and never executes code.
 
-Go users: [go/README.md](../../go/README.md).

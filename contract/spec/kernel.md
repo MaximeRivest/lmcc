@@ -1,8 +1,12 @@
 # The LMCC kernel — normative specification
 
-**Version 0.7.0** (kernel). Status: the v3 design (`plans/08`), built with
-two implementations (`python/lmcc`, `go/lmcc`) against the corpus. Where
-this document and the corpus disagree, fix the corpus first, then both.
+**Version 0.7.0** (kernel). Status: the v3 design (`plans/08`). One
+implementation, `python/lmcc`, passes the corpus; it is the reference while
+the language is being designed. Other languages are rebuilt from this
+document and the corpus, and join through the driver protocol (§9); the
+Go kernel that passed kernel 0.6 is kept at the git tag `kernel-0.6`
+(D-41). Where this document and the corpus disagree, fix the corpus first,
+then the implementation.
 
 **What 0.7 changes (D-39).** One record, the **turn**, replaces demos
 and history. A turn is one call of one signature: the inputs, the steps
@@ -97,7 +101,7 @@ name only. `purpose` is what the field is for in the exchange
 
 **Frontends.** `@lmcc.fn` (Python: parameters → inputs, return type →
 outputs, dataclass return for several, docstring → instructions,
-`Purpose["reasoning", T]` for purposes), Go struct tags, `lmcc_dspy`, JSON —
+`Purpose["reasoning", T]` for purposes), `lmcc_dspy`, JSON, or a host language's own syntax —
 every syntax lowers to this form; none is the contract. A type a
 frontend cannot lower refuses `unmapped-type`, naming the field.
 
@@ -153,7 +157,7 @@ A refusal is `Refusal(code, hint, fix, partial)`: `code` is stable
 next action as data from the closed action vocabulary of `errors.md` —
 present on every refusal that fires before render (signature, load,
 bind), absent on render and parse refusals — and `partial` is what a
-parse recovered. The corpus pins codes and fixes; both kernels emit the
+parse recovered. The corpus pins codes and fixes; every implementation emits the
 same fix for the same refusal.
 
 **Render output** is an lm15 request minus its model:
@@ -707,8 +711,7 @@ provide the optional streaming face
 left by find rules. Prefixes must only grow; `finish` checks them against
 the batch reader and a disagreement is an implementation bug. A reader
 without this face (the base method returns `None`) buffers and produces all events
-at `finish`. In Go the same optional face is `StreamingLens.NewStream`
-returning a `LensStream` with `Feed` and `Finish`. Find rule behavior is:
+at `finish`. Find rule behavior is:
 
 - `between` emits a capture after its close arrives;
 - `line_prefixed` emits a capture after its newline arrives (or at EOF);
@@ -853,5 +856,4 @@ because nothing is assumed: an undeclared `pattern` refuses.
 The `grammar` face of `skeleton()`, parse combinators (plan 02), a
 rigorously specified pattern dialect with library evidence (plan 10,
 remaining items), and field-level layouts of a turn in the text form
-(`{% for f in t.inputs %}`; plan 12). The Go kernel is at 0.6 (plan 12
-lists what it must gain). Each lands as a versioned addition.
+(`{% for f in t.inputs %}`; plan 12). Each lands as a versioned addition.

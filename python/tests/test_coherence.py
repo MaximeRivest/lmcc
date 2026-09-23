@@ -75,6 +75,14 @@ def test_every_raised_code_is_documented():
         f"{sorted(undocumented)}")
 
 
+def test_every_documented_code_is_raised():
+    """The other direction: a code in spec/errors.md that no source raises
+    is dead contract. (Fix actions share the table form; they are checked
+    by the fix-action tests.)"""
+    dead = _documented_codes() - set(_documented_actions()) - _raised_codes()
+    assert not dead, f"codes documented in spec/errors.md but never raised: {sorted(dead)}"
+
+
 def _fix_action(fix_node) -> str | None:
     """The action literal of a fix expression when it is one statically:
     a dict literal, ``{**base, ...}`` over one, or a helper call whose
@@ -178,11 +186,11 @@ def test_vocab_index_is_complete_and_spec_files_exist():
             f"index row {entry} points at missing spec file {spec_file}")
 
 
-def test_extension_index_is_complete_and_both_kernels_bind_the_same_natives():
-    """Every extension the Python kernel binds natively has an index row
-    with a real spec file (kernel §10, spec/extensions/README.md); the Go
-    kernel's native list names the same contracts at the same versions,
-    so a "core + these" claim means one thing in both."""
+def test_extension_index_is_complete():
+    """Every extension the kernel binds natively has an index row with a
+    real spec file at the same version (kernel §10,
+    spec/extensions/README.md), so a "core + these" claim means one thing
+    for any implementation that makes it."""
     index = (SPEC / "extensions" / "README.md").read_text()
     rows = {name: (version, spec_file) for name, version, spec_file in re.findall(
         r"^\| `[a-z_]+` \| [^|]+ \| `([a-z0-9_/-]+)` \| ([0-9.]+) \| `([a-z0-9_.-]+\.md)` \|",
@@ -194,14 +202,6 @@ def test_extension_index_is_complete_and_both_kernels_bind_the_same_natives():
     python = {b.extension: b.version for b in lmcc.native_extensions()}
     for name, version in python.items():
         assert name in rows and rows[name][0] == version, f"{name} {version} is not indexed"
-    go = {}
-    for go_file in (ROOT / "go" / "lmcc").glob("*.go"):
-        text = go_file.read_text()
-        for name, version in re.findall(
-                r'Extension\(\) string \{ return "([a-z0-9_/-]+)" \}\nfunc \(\*\w+\) Version\(\) string +\{ return "([0-9.]+)" \}',
-                text):
-            go[name] = version
-    assert go == python, f"native extensions differ: go={go} python={python}"
 
 
 def test_capability_facts_used_by_std_are_in_the_vocabulary():
@@ -228,74 +228,3 @@ def test_plans_have_acceptance_criteria():
     for plan in plans:
         text = plan.read_text().lower()
         assert "acceptance" in text, f"{plan.name} has no acceptance criteria"
-
-
-def _go_refuse_calls():
-    """Every refusal the Go implementation can raise: (file:line, code,
-    carries_fix). refuseFix/refuseFixf carry one; refuse/refusef/
-    refusePartial and literal Error{Code: ...} do not."""
-    for go in sorted((ROOT / "go").rglob("*.go")):
-        if go.name.endswith("_test.go"):
-            continue
-        for i, line in enumerate(go.read_text().splitlines(), 1):
-            for fn, code in re.findall(r'(refuseFixf?|refusef?|refusePartial)\("([a-z0-9-]+)"', line):
-                yield f"{go.name}:{i}", code, fn.startswith("refuseFix")
-            for code in re.findall(r'Code:\s*"([a-z0-9-]+)"', line):
-                yield f"{go.name}:{i}", code, False
-
-
-def _go_raised_codes() -> set[str]:
-    return {code for _, code, _ in _go_refuse_calls()}
-
-
-def test_go_pre_render_refusals_carry_a_fix():
-    """The same rule as the Python kernel, on the Go call sites."""
-    fixes = _documented_fixes()
-    for where, code, has_fix in _go_refuse_calls():
-        code = RENAMED_IN_07.get(code, code)
-        if fixes.get(code):
-            assert has_fix, f"{where}: {code!r} must use refuseFix/refuseFixf (errors.md gives it a fix)"
-        else:
-            assert not has_fix, f"{where}: {code!r} carries a fix, but errors.md says it carries none"
-    actions = set()
-    for go in sorted((ROOT / "go" / "lmcc").glob("*.go")):
-        actions |= set(re.findall(r'"action", "([a-z-]+)"', go.read_text()))
-    actions = {GO_AT_06_ACTIONS.get(a, a) for a in actions}
-    assert actions == set(_documented_actions()), (
-        f"Go writes {sorted(actions)}; errors.md documents {sorted(_documented_actions())}")
-
-
-def test_go_implementation_raises_only_documented_codes():
-    """The second implementation lives under the same rule as the first:
-    a code it can raise must be in spec/errors.md."""
-    raised = _go_raised_codes()
-    assert raised, "the Go implementation exists and raises codes"
-    undocumented = raised - _documented_codes() - GO_AT_06_EXTRA
-    assert not undocumented, (
-        f"codes raised in go/ but missing from spec/errors.md: {sorted(undocumented)}")
-
-
-# Codes only a runtime that places code can raise; the Go kernel places
-# none (kernel §5, plan 08 V3-6). Everything else must match exactly.
-PYTHON_ONLY = {"format-not-self-contained"}
-
-# The Go kernel is at 0.6 (plans/12-turns.md): it lacks the 0.7 turn codes and
-# still raises the 0.6 names of the codes 0.7 renamed (D-40). Declared exactly,
-# so the gap can only shrink. RENAMED_IN_07 maps each 0.6 name to its 0.7 name.
-RENAMED_IN_07 = {
-    "demo-not-renderable": "turn-not-renderable", "unknown-parse-kind": "unknown-reader",
-    "unknown-strategy": "unknown-transport", "lens-parse-error": "reader-error",
-    "not-lensable": "not-readable", "role-ambiguous": "purpose-ambiguous",
-    "control-conflict": "setting-conflict", "format-span-mismatch": "format-capture-mismatch",
-    "format-placement-mismatch": "format-put-mismatch", "turns-drift": "spelling-drift",
-}
-GO_AT_06_LACKS = {"turn-invalid", "turns-layout", "turns-unplaced"} | set(RENAMED_IN_07.values())
-GO_AT_06_EXTRA = set(RENAMED_IN_07)
-GO_AT_06_ACTIONS = {"assign-role": "assign-purpose"}
-
-
-def test_both_implementations_raise_the_same_codes():
-    """Neither kernel may have a refusal the other cannot produce — a
-    one-sided code is a behavior the corpus cannot pin across languages
-    (except the declared put-only codes)."""
-    assert _go_raised_codes() - GO_AT_06_EXTRA == _raised_codes() - PYTHON_ONLY - GO_AT_06_LACKS

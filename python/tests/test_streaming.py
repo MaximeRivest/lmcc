@@ -261,8 +261,8 @@ def test_stream_state_misuse_is_not_a_contract_refusal():
 #
 # The harness replays every corpus response at every single split. These
 # tests add random multi-chunk splits over random replies, including
-# marker tell and Unicode, against the same plan set the Go kernel
-# fuzzes (go/lmcc/stream_test.go): names, templates and find_rules match.
+# marker overlap and Unicode, over a fixed set of plans (names, templates
+# and find rules) that a port can reuse as its own fuzz set.
 
 import random
 import time
