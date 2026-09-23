@@ -7,9 +7,9 @@
  "entry": {
   "name": "sections_v1",
   "versions": {
-   "kernel": "0.6.0",
+   "kernel": "0.7.0",
    "vocab": {
-    "strategy/reasoning_tags": "0.1.0"
+    "transport/reasoning_tags": "0.2.0"
    }
   },
   "template": [
@@ -18,20 +18,17 @@
     "text": "{instruction}\n\nReply with EXACTLY these sections:\n{% for f in outputs %}<{f.name}>\n{f.value}\n{% endfor %}</done>"
    },
    {
-    "directive": "demos"
-   },
-   {
-    "directive": "history"
+    "directive": "turns"
    },
    {
     "role": "user",
     "text": "{% for f in inputs %}== {f.name} ==\n{f.value}\n{% endfor %}"
    }
   ],
-  "parse": {
+  "reader": {
    "kind": "derived"
   },
-  "strategies": {
+  "transports": {
    "reasoning": {
     "use": "reasoning_tags"
    }
@@ -53,7 +50,7 @@
     "shape": {
      "type": "string"
     },
-    "role": "reasoning"
+    "purpose": "reasoning"
    },
    {
     "name": "answer",

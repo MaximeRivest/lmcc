@@ -1,14 +1,14 @@
 """The sockets: where everything with an opinion plugs in.
 
 The kernel ships no formats beyond its scalar/media defaults and no
-strategies. This module defines what a runtime registers:
+transports. This module defines what a runtime registers:
 
 - **named formats**: ``factory(options) -> Format`` under a name the
   artifact can reference (``{"use": "json"}``), with a version;
 - **type bindings**: a host type → a Format (or a named format), per
   runtime, never serialized — the ``lmcc.format(Person, ...)`` surface;
-- **strategies**: named factories ``factory(options) -> Strategy``;
-- **lenses**: named factories ``factory(parse_spec) -> Lens``
+- **transports**: named factories ``factory(options) -> Transport``;
+- **readers**: named factories ``factory(reader_spec) -> Reader``
   (``derived`` is kernel grammar, never registered).
 
 ``allow_udf`` decides whether this runtime will place shipped Python
@@ -27,8 +27,8 @@ from . import core
 from .errors import Refusal, refuse
 from .extensions import ExtensionBinding, native_extensions
 from .formats import Format, make
-from .parse import Lens
-from .strategy import Strategy
+from .reader import Reader
+from .transport import Transport
 
 
 @dataclass
@@ -42,8 +42,8 @@ class Registry:
                  extensions: "list[str] | tuple[str, ...] | None" = None) -> None:
         self.formats: dict[str, _Named] = {}
         self.type_bindings: list[tuple[object, Format | dict]] = []
-        self.strategies: dict[str, _Named] = {}
-        self.lenses: dict[str, _Named] = {}
+        self.transports: dict[str, _Named] = {}
+        self.readers: dict[str, _Named] = {}
         self.allow_udf = allow_udf
         self.extensions: dict[str, ExtensionBinding] = {}
         natives = {b.extension: b for b in native_extensions()}
@@ -122,64 +122,64 @@ class Registry:
                 return binding
         return None
 
-    # ---------------------------------------------------------- strategies
+    # ---------------------------------------------------------- transports
 
-    def register_strategy(self, name: str, factory, *, version: str = "0.1.0",
+    def register_transport(self, name: str, factory, *, version: str = "0.1.0",
                           exist_ok: bool = False) -> None:
-        if name in self.strategies and not exist_ok:
-            refuse("already-registered", f"strategy {name!r} is already registered")
-        self.strategies[name] = _Named(factory, version)
+        if name in self.transports and not exist_ok:
+            refuse("already-registered", f"transport {name!r} is already registered")
+        self.transports[name] = _Named(factory, version)
 
-    def strategy(self, name: str, options: dict | None, *, where: str | None = None):
+    def transport(self, name: str, options: dict | None, *, where: str | None = None):
         """Resolve a ``{"use": name, "options"}`` reference. What the factory
         returns is checked by the kernel's own rules exactly as inline data
         (kernel §6): a pack has no privilege. A failing factory or a
         malformed result is ``entry-malformed`` at ``where``."""
-        entry = self.strategies.get(name)
+        entry = self.transports.get(name)
         if entry is None:
-            refuse("unknown-strategy",
-                   f"strategy {name!r} is not registered — install the package that "
-                   f"provides it, or inline the strategy as data",
-                   fix={"action": "install-vocabulary", "kind": "strategy", "name": name})
-        where = where or f"strategy {name!r}"
+            refuse("unknown-transport",
+                   f"transport {name!r} is not registered — install the package that "
+                   f"provides it, or inline the transport as data",
+                   fix={"action": "install-vocabulary", "kind": "transport", "name": name})
+        where = where or f"transport {name!r}"
         try:
-            strategy = entry.factory(options or {})
+            transport = entry.factory(options or {})
         except Refusal:
             raise
         except Exception as exc:  # noqa: BLE001 — the socket owns this boundary
-            refuse("entry-malformed", f"{where}: strategy {name!r} rejects its options: {exc}",
+            refuse("entry-malformed", f"{where}: transport {name!r} rejects its options: {exc}",
                    fix={"action": "edit-entry", "path": where})
-        if not isinstance(strategy, Strategy):
+        if not isinstance(transport, Transport):
             refuse("entry-malformed",
-                   f"{where}: strategy {name!r} returned {type(strategy).__name__}, not a Strategy",
+                   f"{where}: transport {name!r} returned {type(transport).__name__}, not a Transport",
                    fix={"action": "edit-entry", "path": where})
         try:
-            strategy.validate(where=where)
+            transport.validate(where=where)
         except Refusal as r:
             if r.code != "entry-malformed":
                 raise
-            refuse("entry-malformed", f"{where}: strategy {name!r} built malformed data — {r.hint}",
+            refuse("entry-malformed", f"{where}: transport {name!r} built malformed data — {r.hint}",
                    fix={"action": "edit-entry", "path": where})
-        return strategy
+        return transport
 
-    # -------------------------------------------------------------- lenses
+    # -------------------------------------------------------------- readers
 
-    def register_lens(self, name: str, factory, *, version: str = "0.1.0",
+    def register_reader(self, name: str, factory, *, version: str = "0.1.0",
                       exist_ok: bool = False) -> None:
         if name == "derived":
-            refuse("already-registered", "lens 'derived' is kernel grammar and cannot be replaced")
-        if name in self.lenses and not exist_ok:
-            refuse("already-registered", f"lens {name!r} is already registered")
-        self.lenses[name] = _Named(factory, version)
+            refuse("already-registered", "reader 'derived' is kernel grammar and cannot be replaced")
+        if name in self.readers and not exist_ok:
+            refuse("already-registered", f"reader {name!r} is already registered")
+        self.readers[name] = _Named(factory, version)
 
-    def lens(self, spec: dict) -> Lens:
+    def reader(self, spec: dict) -> Reader:
         kind = spec.get("kind")
-        entry = self.lenses.get(kind)
+        entry = self.readers.get(kind)
         if entry is None:
-            refuse("unknown-parse-kind",
-                   f"parse kind {kind!r} is neither the kernel lens 'derived' nor a "
-                   f"registered lens — install the package that provides it",
-                   fix={"action": "install-vocabulary", "kind": "lens", "name": str(kind)})
+            refuse("unknown-reader",
+                   f"reader kind {kind!r} is neither the kernel reader 'derived' nor a "
+                   f"registered reader — install the package that provides it",
+                   fix={"action": "install-vocabulary", "kind": "reader", "name": str(kind)})
         return entry.factory(spec)
 
     # ------------------------------------------------------------ describe
@@ -191,9 +191,9 @@ class Registry:
                 {"type": core.typename(t), "format": (b["use"] if isinstance(b, dict)
                                                      else b.name or "(inline)")}
                 for t, b in self.type_bindings],
-            "strategies": {n: e.version for n, e in sorted(self.strategies.items())},
-            "lenses": {"derived": "kernel",
-                       **{n: e.version for n, e in sorted(self.lenses.items())}},
+            "transports": {n: e.version for n, e in sorted(self.transports.items())},
+            "readers": {"derived": "kernel",
+                       **{n: e.version for n, e in sorted(self.readers.items())}},
             "allow_udf": self.allow_udf,
             "extensions": {n: b.describe() for n, b in sorted(self.extensions.items())},
         }

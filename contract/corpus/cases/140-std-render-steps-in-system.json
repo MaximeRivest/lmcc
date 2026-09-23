@@ -1,0 +1,150 @@
+{
+ "name": "std-render-steps-in-system",
+ "kind": "render",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "tools_v1",
+  "versions": {
+   "kernel": "0.7.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% if steps %}Work so far:\n{% for m in steps %}[{m.kind}/{m.role}] {m.text}\n{% endfor %}{% endif %}{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "role": "user",
+    "text": "{question}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  },
+  "transports": {
+   "tools": {
+    "use": "fenced_tools"
+   }
+  },
+  "formats": {
+   "list[Tool]": {
+    "use": "function_tool"
+   },
+   "list[ToolCall]": {
+    "use": "tool_calls"
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Answer, using tools when needed.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "tools",
+    "direction": "input",
+    "type": "list[Tool]",
+    "shape": {
+     "type": "array",
+     "items": {
+      "type": "object"
+     }
+    },
+    "purpose": "tools"
+   },
+   {
+    "name": "calls",
+    "direction": "output",
+    "type": "list[ToolCall]",
+    "shape": {
+     "type": "array",
+     "items": {
+      "type": "object"
+     }
+    },
+    "purpose": "tools.calls"
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "capabilities": {
+  "instruct": true
+ },
+ "inputs": {
+  "question": "Weather in Paris?",
+  "tools": [
+   {
+    "name": "get_weather",
+    "description": "Weather for a city.",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "city": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "city"
+     ]
+    }
+   }
+  ]
+ },
+ "steps": [
+  {
+   "kind": "model",
+   "outputs": {
+    "calls": [
+     {
+      "id": "call_1",
+      "name": "get_weather",
+      "input": {
+       "city": "Paris"
+      }
+     }
+    ]
+   },
+   "calls_field": "calls"
+  },
+  {
+   "kind": "tool",
+   "id": "call_1",
+   "name": "get_weather",
+   "output": [
+    {
+     "type": "text",
+     "text": "Sunny, 22C"
+    }
+   ]
+  }
+ ],
+ "expect": {
+  "request": {
+   "system": "Answer, using tools when needed.\nWork so far:\n[model/assistant] ```tool\n{\"name\": \"get_weather\", \"input\": {\"city\": \"Paris\"}}\n```\n[tool/user] Result of get_weather (call_1):\nSunny, 22C\n<answer>\n...\n</answer>\n\n\nYou may call a tool by replying with exactly one fenced block:\n```tool\n{\"name\": \"<tool>\", \"input\": {...}}\n```\nand nothing else; you will be given the result and asked again.\n\n- get_weather({\"type\": \"object\", \"properties\": {\"city\": {\"type\": \"string\"}}, \"required\": [\"city\"]}): Weather for a city.",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "Weather in Paris?"
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

@@ -1,0 +1,120 @@
+{
+ "name": "render-turn-writer-line-prefixed",
+ "kind": "render",
+ "entry": {
+  "name": "lp_v1",
+  "versions": {
+   "kernel": "0.7.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "directive": "turns"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  },
+  "transports": {
+   "reasoning": {
+    "in_template": false,
+    "find": [
+     {
+      "from": "text",
+      "line_prefixed": "Thought: ",
+      "to": "@purpose",
+      "remove": true
+     }
+    ],
+    "spelling": {
+     "position": "before"
+    }
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Answer.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "reasoning",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    },
+    "purpose": "reasoning"
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "q": "And Italy?"
+ },
+ "turns": {
+  "turns": [
+   {
+    "inputs": {
+     "q": "Capital?"
+    },
+    "outputs": {
+     "reasoning": "France.\nIts capital.",
+     "answer": "Paris"
+    }
+   }
+  ]
+ },
+ "expect": {
+  "request": {
+   "system": "Answer.\n<answer>\n...\n</answer>\n",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "Capital?"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "Thought: France.\nThought: Its capital.\n<answer>\nParis\n</answer>"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "And Italy?"
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

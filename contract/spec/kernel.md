@@ -1,14 +1,30 @@
 # The LMCC kernel — normative specification
 
-**Version 0.6.0** (kernel). Status: the v3 design (`plans/08`), built with
+**Version 0.7.0** (kernel). Status: the v3 design (`plans/08`), built with
 two implementations (`python/lmcc`, `go/lmcc`) against the corpus. Where
 this document and the corpus disagree, fix the corpus first, then both.
+
+**What 0.7 changes (D-39).** One record, the **turn**, replaces demos
+and history. A turn is one call of one signature: the inputs, the steps
+(model replies and tool results, in order) and the outputs, kept as
+values. Examples, past exchanges and the exchange in progress are all
+turns, written into the prompt by the plan's own writers (§3a), so past
+replies always match the current adapter's spelling. The template places
+turns in named **slots**, as messages or as text (§2); the `demos` and
+`history` directives, `render(demos=, history=)` and lm15-message
+history items are gone. Every hidden field a transport finds gets a writer, and a
+tool's non-text result parts are no longer dropped on text transports.
+Every 0.6 artifact refuses `version-incompatible`; migrating one is
+replacing its `demos`/`history` directives with one `turns` directive.
+0.7 also renames the vocabulary so each word means one thing (D-40,
+`docs/glossary.md`): strategy → transport, a field's role → purpose,
+lens → reader, span → capture, routings → `find`, placement → `put`.
 
 **What 0.4 changes (D-35).** The wire layer *is* the lm15 contract
 (`../LM15_CONTRACT_PIN` names the ratified commit): parts carry `type`,
 messages carry `parts`, `system` is a request field, and what `render`
 produces is an lm15 request minus its model — feedable to any lm15
-implementation without translation. The controls patch is a partial
+implementation without translation. The request settings are a partial
 lm15 request (`config.<field>`, `tools`), deep-merged and validated
 against the pinned field names. No case expectation changed meaning; the
 bytes were re-spelled in lm15's words.
@@ -16,7 +32,7 @@ bytes were re-spelled in lm15's words.
 **What 0.3 changes (D-33).** The kernel is a small mandatory core; any
 behavior outside it is a named, versioned **extension** the artifact
 declares and the host binds or refuses (§10, `portability.md`). The one
-extension so far is the routing `pattern` dialect: a 0.3 artifact that
+extension so far is the find rule `pattern` dialect: a 0.3 artifact that
 uses `pattern` must declare `extensions: {"pattern/<name>": version}`.
 A 0.2 artifact refuses `version-incompatible` as before; migrating it is
 two edits, spelled out in §10. No case expectation changed meaning.
@@ -30,16 +46,16 @@ calling convention.
 signature (your typed function)
         │  write: each value → its place on the wire
         ▼
-   the wire: messages, parts, request controls        ← the adapter lays this out
+   the wire: messages, parts, request settings        ← the adapter lays this out
         │  read: the reply → each typed value
         ▼
 your typed return value
 ```
 
 LMCC never touches the network. It lays out the call and reads the
-return. The nouns: **signature, adapter, template, lens, format, part,
-span, role, strategy, capability**; the verb: **bind**. The kernel ships
-no formats and no strategies beyond the defaults §5 names.
+return. The nouns: **signature, adapter, template, reader, format, part,
+capture, purpose, transport, capability, turn**; the verb: **bind**. The kernel ships
+no formats and no transports beyond the defaults §5 names.
 
 **The wire is lm15.** Every message, part, request field and response
 lmcc reads or writes is the lm15 canonical JSON of the contract commit
@@ -56,7 +72,7 @@ lmcc's words.
 ```
 Signature = { instructions: str, fields: [Field] }
 Field = { name, direction: "input"|"output", shape: JSONSchema,
-          type?: str, role?: str = "plain", desc?: str }
+          type?: str, purpose?: str = "plain", desc?: str }
 ```
 
 Plain-data form: `schema/signature.schema.json`. Field names are ASCII
@@ -75,40 +91,45 @@ other one untouched for formats to use:
 `type` is the type's name **as the frontend spells it** (`Person`,
 `pd.DataFrame`, `list[Person]`). Formats resolve by it first (§5); it is
 the one place the artifact touches a host language, and it does so by
-name only. `role` is what the field means to the exchange
-(`spec/vocab/roles.md`); roles are namespaced strings (`tools`,
+name only. `purpose` is what the field is for in the exchange
+(`spec/vocab/purposes.md`); purposes are namespaced strings (`tools`,
 `tools.calls`), each bound to at most one field.
 
 **Frontends.** `@lmcc.fn` (Python: parameters → inputs, return type →
 outputs, dataclass return for several, docstring → instructions,
-`Role["reasoning", T]` for roles), Go struct tags, `lmcc_dspy`, JSON —
+`Purpose["reasoning", T]` for purposes), Go struct tags, `lmcc_dspy`, JSON —
 every syntax lowers to this form; none is the contract. A type a
 frontend cannot lower refuses `unmapped-type`, naming the field.
 
 ## 2. Adapter and template
 
-An adapter is a template, a parse rule, strategies by **role**, and
+An adapter is a template, a reader, transports by **purpose**, and
 formats by **type** — never a field name. That is what lets one adapter
 serve every signature. The template is a message list of `{role, text}`
 (roles `system`, `developer`, `user`, `assistant`; `system` messages
-lead) and directives `{"directive": "demos" | "history"}`, with exactly
-three constructs:
+lead) and turn directives `{"directive": "turns", "slot"?: name}`
+(§3a), with four constructs:
 
 | construct | example | meaning |
 |---|---|---|
 | slot | `{instruction}`, `{format}`, `{question}`, `{answer}`, `{f.name}`, `{f.value}` | a value goes here |
-| loop | `{% for f in inputs %} … {% endfor %}` (also `outputs`) | once per visible field, signature order |
+| loop | `{% for f in inputs %} … {% endfor %}` (also `outputs`); `{% for m in examples %} … {% endfor %}` over a turn slot | once per visible field, signature order; or once per message of the slot's turns (§3a) |
+| guard | `{% if examples %} … {% endif %}` | the body renders only when the turn slot is not empty (§3a) |
 | escape | `{{`, `}}` | a literal brace; a bare brace is `template-syntax` |
 
 Loop attributes: `name`, `desc` ("" when absent), `type` ("" when
 absent), `schema` (the format's `describe`, else the mechanical hint),
-`role`, `value`. `instruction` and `format` are reserved. An input slot
+`purpose`, `value`. `instruction` and `format` are reserved. An input slot
 renders the value through its format; an **output slot** (`{answer}` or
 `{f.value}` in an outputs loop) renders the field's **placeholder**:
 `desc`, else the format's `describe`, else the mechanical hint, else
-`...` — the shape is shown, never merely described. In demo and history
-turns an inputs loop iterates only the fields the turn supplies; a bare
-slot with no value refuses `missing-input`.
+`...` — the shape is shown, never merely described. In a past turn's
+user side (§3a) an inputs loop iterates only the fields the turn
+supplies; a bare slot with no value refuses `missing-input`.
+
+A loop over any source other than `inputs` and `outputs` is a turn loop;
+guards and turn loops are §3a's. The adapter may carry `replay`:
+`"recorded"` (the default, never written by `dump`) or `"values"` (§3a).
 
 Every input must be reachable from a slot or an inputs loop
 (`field-uncovered`).
@@ -117,7 +138,9 @@ Every input must be reachable from a slot or an inputs loop
 
 ```
 bind(adapter, signature, capabilities, registry) → plan   every refusal fires here
-plan.render(inputs, demos?, history?) → {messages, patch}   pure
+plan.render(inputs | turn, turns?) → rendered            pure (§3a)
+rendered.request(model?) → lm15 request                    {system?, messages, config?, tools?}
+rendered.step(reply) → turn                                pure: parse + record (§3a)
 plan.parse(response) → {field: value}                      pure
 plan.stream() → stream                                     pure, sans-I/O
 stream.feed(delta) → [event, …]
@@ -140,41 +163,218 @@ template, contiguous — `entry-malformed` otherwise) fold into `system`:
 one text part becomes the string, anything else the part list. Template
 message roles are `system`, `developer`, `user`, `assistant`; messages
 render as `{"role", "parts": [part, …]}`, adjacent text parts merge,
-empty messages drop. Everything after `messages` is the **patch**: the
-deep merge of every strategy's `controls` and the lens's `patch`, a
+empty messages drop. Everything after `messages` is the **request settings**: the
+deep merge of every transport's `request_settings` and the reader's own, a
 partial lm15 request whose first path segment is `config` or `tools` and
 whose `config` keys are the pinned lm15 `Config` fields (`max_tokens`,
 `temperature`, `top_p`, `top_k`, `stop`, `response_format`,
 `tool_choice`, `reasoning`, `cache`, `service_tier`, `user_id`, `store`,
 `extensions`); anything else refuses `entry-malformed` at the control's
 path. Below those two levels the value is opaque, as in lm15. Two
-sources disagreeing on one leaf is `control-conflict`; agreeing is fine.
+sources disagreeing on one leaf is `setting-conflict`; agreeing is fine.
 The plan adds one control of its own: when the model declares
-`stop_sequences` and the lens's skeleton has `stops`, `config.stop` is
+`stop_sequences` and the reader's skeleton has `stops`, `config.stop` is
 those stops — where the reply ends is the layout's knowledge, not the
 caller's chore. A provider omits the stop sequence from the reply; the
-lens reads a capture to its close *or end of text*, so nothing changes
+reader reads a capture to its close *or end of text*, so nothing changes
 in parsing.
 
 **Parse input** is a string (the reply text), an lm15 message
 (`{"role", "parts"}`; the role is not read), or an lm15 response
-(`{"message": {…}, …}`; only `message` is read). **Demos** are field
-dicts: the user templates over the demo's inputs, then one assistant
-turn written by the lens over the outputs the demo supplies (absent
-outputs are omitted). **History** items are lm15 messages (verbatim) or
-`{"fields": {…}}` turns rendered like demos; anything else refuses
-`value-invalid`.
+(`{"message": {…}, …}`; only `message` is read). Past exchanges and
+examples enter a request only as turns (§3a).
 
-`skeleton()` is what the derived lens knows the reply must contain:
+`skeleton()` is what the derived reader knows the reply must contain:
 `{"prefill": text before the first output hole, "stops": [the last
 close or tail]}` (a `grammar` face is a stated gap). `prefix()` is the
 rendered request prefix that does not depend on inputs
-(`{"system"?, "messages"}`: system, demos, history turns before the
-first message with an input slot) — the cache-stable bytes.
+(`{"system"?, "messages"}`: everything before the first message that
+renders an input, turn slots included; `prefix(turns?)` takes the same
+slot values as `render`) — the cache-stable bytes.
 
-## 4. The template is the lens
+## 3a. Turns: examples, past exchanges, and the one in progress
 
-`parse: {"kind": "derived"}` (the kernel lens). The **output pattern** is
+**The record.** A turn is one call of one signature:
+
+```
+Turn = { signature: "sha256:<hex>", inputs: {field: value}, steps: [Step],
+         outputs?: {field: value} | null, score?: number | null, meta?: {} }
+Step = { kind: "model", outputs: {field: value}, message?: lm15 message,
+         request?: "sha256:<hex>", calls_field?: name }
+     | { kind: "tool", id: text, name: text, output: [lm15 part], children?: [Turn] }
+```
+
+Form: `schema/turn.schema.json`. Values are JSON in their field's shape;
+a host lifts them to its own types against a signature. `score`, `meta`,
+`request` and `children` are carried and never read by render. A turn
+with no steps and outputs is an **example**; a finished turn's outputs
+are its last model step's.
+
+- `signature` is `"sha256:"` and the lowercase hex SHA-256 of the
+  canonical JSON of the signature's fields in signature order, each
+  `{"direction", "name", "purpose", "shape", "type"}` (`purpose` `"plain"` and
+  `type` `""` when absent). Instructions and descriptions are left out:
+  editing or optimizing prose does not orphan recorded turns.
+- `request` is `"sha256:"` and the hex SHA-256 of the canonical JSON of
+  the rendered request without `model`: it names the exact bytes the
+  reply answered without storing them, so a stored conversation grows
+  with its replies, not with the square of its length.
+- **Canonical JSON**: object keys sorted by code point, separators `,`
+  and `:` with no whitespace, non-ASCII written as UTF-8, integers
+  without a fraction.
+
+**A turn in progress.**
+
+```
+plan.turn(inputs) → turn                        no steps
+plan.example(inputs, outputs) → turn            no steps; outputs set
+plan.render(turn, turns?) → rendered            render(inputs) = render(plan.turn(inputs))
+rendered.step(reply) → turn + model step        outputs = parse(reply); message, request, calls_field
+turn.tool(id, output, children?) → turn + tool step
+turn.finish() → turn                            outputs = the last model step's outputs
+```
+
+A model step's **pending calls** are its `calls_field` value (the field
+with purpose `<p>.calls`), minus the tool steps after it, in call order.
+`tool(id, …)` answers the first pending call of the last model step, or
+refuses `turn-invalid`; `output` is a text or an lm15 part list.
+`finish` with pending calls or no model step, a render of a current
+turn with pending calls, and a field name the signature does not have
+all refuse `turn-invalid`. Refusals on turns carry no `fix`: their cause
+is a program value.
+
+**Slots.** The template places turns in named slots, once each:
+
+- **messages form**: `{"directive": "turns", "slot"?: name}` (default
+  `turns`) — the slot's turns become ordinary messages at that place;
+- **text form**: a loop `{% for m in name %} … {% endfor %}` in any
+  message — once per message the messages form would write, with
+  `{m.role}` (`user`, `assistant` or `tool`, after spelling), `{m.kind}`
+  (`input`, `model` or `tool`: where the message came from) and
+  `{m.text}` (its text parts, concatenated). A message holding a part
+  that is not text refuses `turn-not-renderable`, naming the slot and
+  the part type; nothing is dropped silently. A turn loop's body holds
+  text and `m.` attributes only;
+- **guard**: `{% if name %} … {% endif %}` renders its body when the slot
+  has at least one turn (for `steps`, one step). It does not place the
+  slot; it names a slot the template places.
+
+Slot names are ASCII identifiers other than `inputs`, `outputs`,
+`instruction` and `format`; placing a slot twice, a guard naming no
+placed slot, or any other attribute in a turn loop is `template-syntax`.
+A slot named like a signature field refuses `turns-layout` at bind.
+
+`steps` is reserved: the current turn's own steps. A template that
+places any slot is a **turns template**; in it, an unplaced `steps`
+writes its messages after the last template message. Messages-form slots
+other than `steps` precede the first non-`system` message that renders
+an input (a slot of an input, or an inputs loop), and a messages-form
+`steps` follows it, else `turns-layout` at bind (fix `edit-template`);
+`system` messages always lead and fold into the request's `system`. A template that places no slot writes no turns: a
+current turn with steps, or a slot value, refuses `turns-unplaced` at
+render.
+
+`render(turn, turns)`: `turns` maps slot names to lists of turns (a
+list alone fills the slot `turns`); an absent slot is empty. A
+non-empty list for a slot the template does not place, or for `steps`,
+refuses `turns-unplaced`. Every turn's `signature` must be the plan's
+(`turn-invalid`).
+
+**Writing a turn.** A past turn writes, in order: its **user side** —
+each template `user` message rendered over the turn's inputs (turn loops
+and guards render empty there; an empty message is dropped) — then, with
+no steps, one assistant message written from its outputs, or, with
+steps, one message per step in order; its outputs are not written again.
+The current turn writes only its steps: its inputs are the live
+template. Children of tool steps are never written.
+
+Within a turn, each model step's calls are answered by the tool steps
+that follow it, in call order, before the next model step; a past turn
+with an unanswered call, or a tool step answering no pending call,
+refuses `turn-invalid` naming the turn and the step.
+
+**A model step's message.** With `replay: "recorded"` (the default), a
+step with a recorded `message` that this plan parses into exactly the
+step's outputs (JSON equality) is written verbatim: the plan reads it as
+it was, so it is a valid spelling of those values, and nothing the
+model wrote is lost. Otherwise — and always with `replay: "values"` —
+the message is written from the outputs:
+
+1. for each `part:<type>` find rule that does not read the calls
+   field's own channel, the recorded message's parts of that type,
+   first, in recorded order; a step without a recorded message has none,
+   and `describe()` lists the field under `replayed` (such values cannot
+   be forged from text);
+2. then one text part: the `before` writers (signature order), the reader
+   body (the reader writing the visible outputs present), the `after`
+   writers (signature order), joined by `\n`, empty pieces skipped;
+3. then the calls: the calls field's value written through its format,
+   which must yield `tool_call` parts (else `turn-not-renderable`); with
+   a `spelling.call` on the owning transport each becomes text through it,
+   appended to the text after `\n` when the text is not empty; without
+   one they stay `tool_call` parts.
+
+The reader writes every visible output the step holds, `null` included
+(a nullable field's `null` is information). A hidden output that is
+absent, `null`, an empty string or an empty list is not written: no
+`<think></think>` for a turn without reasoning.
+
+**Writers for hidden fields.** Each hidden output that a `from: text`
+find rule targets needs a writer. Find rules with the same `from` and the
+same delimiters (`between` pair, `line_prefixed` prefix, `pattern`) read
+the same capture, as do two find rules from one `part:<type>`. In a capture
+shared with the calls field, only the calls field writes; the others are
+**projections**, recovered by reading it (reasoning spelled as comments
+inside a call, native or text). A text find rule with
+`remove: false` that shares its capture with nothing reads text it leaves
+for the reader: its field is a projection of the body (inline citation
+markers). For the rest:
+
+| find rule | writer |
+|---|---|
+| `between: [open, close]` | derived: `open + T + close` |
+| `line_prefixed: p` | derived: each line of `T` prefixed by `p`, joined by `\n` |
+| `pattern` | declared: `spelling.value` on the owning transport |
+| the calls field, from text | `spelling.call` (§6) |
+
+`T` is the value written through the field's format: text parts only,
+from a format that writes (`direction` `both` or `in`) with
+`round_trip: true` — else bind refuses `spelling-drift` naming the field
+(fix: give the format a write, or declare `spelling.value: null`); a `T`
+containing `close` refuses `value-collides`. `spelling.value` (text with
+one `{value}` slot, `{{`/`}}` escapes) overrides a derived writer;
+`spelling.value: null` drops the field from written turns on purpose.
+`spelling.position` (`"before"` or `"after"`, default `"after"`) says which
+side of the reader body the writer's piece goes. In a turns template, bind
+refuses `spelling-drift` naming the field when a hidden output found in text
+has no writer, a derived writer's format cannot write text, the calls
+format cannot write, or two fields share a capture the calls field does
+not own.
+
+**A tool step's message** is `{"role": "tool", "parts": [{"type":
+"tool_result", "id", "name", "content": output}]}`. With `spelling.result`
+on the transport owning the calls field, it becomes a `user` message: the
+`spelling.result` text (`{output}` is the output's text parts joined by
+`\n`), then the output's other parts (an image a tool returned), in
+order.
+
+**Call ids.** A call's id is the provider's when the step's recorded
+message holds `tool_call` parts, and assigned by the calls format
+otherwise (`call_1`, … per reply). A step written from values as native
+`tool_call` parts writes an assigned id as `s<k>_<id>`, where `k` is the
+0-based index of that step among the model steps written as messages in
+this request, in request order, and its tool steps answer with the same
+id; ids stay unique in the request. Provider ids and text spellings are
+never changed.
+
+`describe()["turns"]` is the whole plan of it: `slots` (`name`, `form`),
+`steps` (`"placed"`, `"after the template"`, or `null`), `replay`,
+`writers` (per hidden output a transport finds: how it is written and where),
+`projections`, `replayed`, and `input_formats` (§6).
+
+## 4. The template is the reader
+
+`reader: {"kind": "derived"}` (the kernel reader). The **output pattern** is
 the set of output holes in the template — `{f.value}` in one outputs
 loop, or bare output slots — and it must live in one message. Read
 backwards:
@@ -184,10 +384,10 @@ backwards:
   message** is the *whole-reply* pattern: the capture is the whole reply
   (a chat-style adapter: `{instruction}\n{answer}`). Any other anchorless
   hole — two or more outputs, a loop, or prose after the slot such as
-  `<answer>\n{answer}\n</answer>` — refuses `not-lensable` as always;
+  `<answer>\n{answer}\n</answer>` — refuses `not-readable` as always;
   a refusal is never quietly reinterpreted;
 - per visible output field, the literal before its hole (loop body
-  instantiated with the field's `name`/`desc`/`type`/`schema`/`role`)
+  instantiated with the field's `name`/`desc`/`type`/`schema`/`purpose`)
   is its **anchor**; the literal after it, up to the next hole, its
   **close**; the literal after an outputs loop, up to the next slot and
   to the end of its line, is the pattern's **tail** — the marker that
@@ -202,16 +402,16 @@ backwards:
   (`**Reasoning:**Answer:**` reads the answer marker from the reasoning
   marker's last two bytes) the capture is empty, never negative and
   never a guess;
-- demos and the `{format}` skeleton are written through the same
-  pattern: `join` (values) and `format` (placeholders) are the lens
+- past turns and the `{format}` skeleton are written through the same
+  pattern: `join` (values) and `format` (placeholders) are the reader
   writing forward.
 
-Refusals: no pattern or two (`not-lensable`); a hole with no literal
+Refusals: no pattern or two (`not-readable`); a hole with no literal
 before it, two holes sharing an anchor, nested loops in the pattern
-(`not-lensable`, naming the field); an anchor, close, or tail occurring
+(`not-readable`, naming the field); an anchor, close, or tail occurring
 twice in its region (`parse-ambiguous`); missing fields
 (`parse-missing-fields`, `.partial` carries what was read); a spelled
-demo value containing a marker the lens reads (`value-collides`).
+turn value containing a marker the reader reads (`value-collides`).
 Invertibility, stated exactly: `split(join(x)) == x` for marker-free,
 outer-whitespace-free values; a reply that omits its close *and*
 contains it inside the value is the one undetectable double fault.
@@ -219,14 +419,14 @@ contains it inside the value is the one undetectable double fault.
 **The JSON rule.** "Reply with a JSON object" names a format, not a
 pattern; it cannot be read backwards. Spell the pattern
 (`{{"answer": {answer}}}` with a `json` format on `answer`), or use a
-document-form lens from vocabulary: `parse.kind` may name a registered
-lens (`lens/json_object`), which declares the capability facts it needs
-and the request patch it adds. Unknown kinds refuse `unknown-parse-kind`.
+document-form reader from vocabulary: `reader.kind` may name a registered
+reader (`reader/json_object`), which declares the capability facts it needs
+and the request settings it adds. Unknown kinds refuse `unknown-reader`.
 
 ## 5. Formats: how a type is written and read
 
 A **format** is how one type crosses: `write(value, field) → parts`
-(text is a part; a string is one text part), `read(span, field) →
+(text is a part; a string is one text part), `read(capture, field) →
 value`, and optionally `describe(field) → text` (what the model is told
 when it must reply with one; default: the type's name, else the
 mechanical hint). A format declares:
@@ -235,8 +435,8 @@ mechanical hint). A format declares:
 |---|---|
 | `accepts` | what it carries: type names, structural keys (`object`, `list[*]`, `list[object]`, `string`, `media:image`), or `*` |
 | `direction` | `in`, `out`, `both` |
-| `emits` | `text` or `parts` |
-| `round_trip` | whether `read(write(v)) == v`; a lossy format cannot write demos (`demo-not-renderable`) |
+| `writes` | `text` or `parts` |
+| `round_trip` | whether `read(write(v)) == v`; a lossy format cannot write turns (`turn-not-renderable`) |
 
 **Resolution**, per field at bind, recorded in the plan:
 
@@ -269,7 +469,7 @@ surprise or a host exception:
 
 ```json
 {"language": "python", "deps": [], "write": "def write(v, f): …",
- "read": "def read(span, f): …", "describe"?: "…", "sha256": "…",
+ "read": "def read(capture, f): …", "describe"?: "…", "sha256": "…",
  "authored_by": "…"}
 ```
 
@@ -281,24 +481,25 @@ no artifact entry uses the runtime binding or the kernel default, and
 `plan.describe()` says which — this is the stated place where two
 runtimes may legitimately spell the same type differently.
 
-## 6. Strategies: how a meaning travels
+## 6. Transports: how a meaning travels
 
 ```
-Strategy = { when?: Predicate, requires?: [fact], visible?: bool = true,
-             fragments?: {message role: text}, controls?: {…},
-             placement?: {"@role": "controls.<key>" | "message:<role>"},
-             via?: {"@role": format name}, routings?: [Routing], turns?: Turns }
-         | { choose: [{when: Predicate, use: Strategy}…, {else: Strategy}] }
-Routing  = { from: "text" | "channel:<part type>",
+Transport = { when?: Predicate, requires?: [fact], in_template?: bool = true,
+             tell?: {message role: text}, request_settings?: {…},
+             put?: {"@purpose": "request.<key>" | "message:<role>"},
+             written_as?: {"@purpose": format name}, find?: [FindRule], spelling?: Spelling }
+         | { choose: [{when: Predicate, use: Transport}…, {else: Transport}] }
+FindRule  = { from: "text" | "part:<part type>",
              between?: [open, close] | pattern?: regex | line_prefixed?: prefix,
-             to: "@role" | "@role.<sub>", consume?: bool, suffices?: bool }
-Turns    = { call?: text, result?: text, input_format?: {use, options?},
-             probe?: {name, input, id?} }        (slots {id} {name} {input} {output})
+             to: "@purpose" | "@purpose.<sub>", remove?: bool, complete_reply?: bool }
+Spelling = { call?: text, result?: text, input_format?: {use, options?},
+             probe?: {name, input, id?}, value?: text | null,
+             position?: "before" | "after" }   (slots {id} {name} {input} {output}; value: {value})
 Predicate = {capability} | {not} | {all} | {any}
 ```
 
-Strategies are keyed by role in the artifact, as data, or referenced
-`{"use": name, "options"?}` (vocabulary, `strategy/<name>`). A reference
+Transports are keyed by purpose in the artifact, as data, or referenced
+`{"use": name, "options"?}` (vocabulary, `transport/<name>`). A reference
 is resolved at load, and what the factory returns is checked by the
 kernel's own rules exactly as inline data (an empty `between`
 delimiter, a bad predicate, an unrecoverable hidden field): a failing
@@ -307,19 +508,21 @@ reference's path. At bind, in
 signature order: `choose` picks the first alternative whose `when`
 holds (`capability-missing` if none and no `else`); `when`/`requires`
 are checked against the declared capabilities (`capability-missing`
-names role, strategy, fact); `@role` binds to the field bearing the
-role, `@role.<sub>` to the field bearing role `<role>.<sub>`
-(`role-ambiguous` if two fields share one); `{field}` in fragments binds
-the name; `visible: false` hides the field from loops and the pattern;
-`placement` writes the field's parts through its format into the request
-patch (`controls.<key>`) or appends them to a message (`message:<role>`,
-after a blank line when the message already has text, like a fragment)
-instead of a slot; fragments append to the named message (created if
-absent, system first); controls deep-merge into the patch (§3;
-`control-conflict` on a disagreeing leaf).
-A field both visible and routed is `field-double-covered`.
+names purpose, transport, fact); `@purpose` binds to the field bearing the
+purpose, `@purpose.<sub>` to the field bearing purpose `<purpose>.<sub>`
+(`purpose-ambiguous` if two fields share one); `{field}` in tell binds
+the name; `in_template: false` hides the field from loops and the pattern;
+`put` writes the field's parts through its format into the request
+request settings (`request.<key>`) or appends them to a message (`message:<role>`,
+after a blank line when the message already has text, like `tell` text)
+instead of a slot; `tell` text appends to the named message (created if
+absent, system first). Both target the template's own messages, never a
+message a turn slot wrote: the current input's sources never land in a
+past turn's question; request_settings deep-merge into the request settings (§3;
+`setting-conflict` on a disagreeing leaf).
+A field both in the template and found by a transport is `field-double-covered`.
 
-Batch parse normalizes response parts before routing by the same logical-part
+Batch parse normalizes response parts, before the find rules run, by the same logical-part
 rule as streaming (§8): adjacent same-type text-bearing parts coalesce,
 including empty text; a type change or a part without text ends the run.
 Every response part is an object with a string `type`; `text`, when present,
@@ -329,80 +532,82 @@ response or text delta, but not as an element of a part list.
 Metadata keys accumulate within a run; the last supplied value of each key
 wins. Normalization does not change the caller's parts.
 
-Routings run **before** the lens. `from: text` scans the reply text —
+Find rules run **before** the reader. `from: text` scans the reply text —
 `between` (plain scan), `line_prefixed` (lines split on `\n`), `pattern`
 (the artifact's declared `pattern/*` extension, §10: it defines the
 syntax, what a match is, and what is captured) — each match becomes a
-text part; `consume` removes the matches from the text the lens sees.
+text part; `remove` removes the matches from the text the reader sees.
 `between` and `line_prefixed` are core: plain scans, no regex engine.
-`from: channel:<type>` collects the response parts of that lm15 part
-type. The collected parts are the field's **span**; the field's format
+`from: part:<type>` collects the response parts of that lm15 part
+type. The collected parts are the field's **capture**; the field's format
 reads it.
-`span.text` is the stripped text parts joined by `\n`.
+`capture.text` is the stripped text parts joined by `\n`.
 
-Two contracts, checked at bind: a routing's span kind must be one the
-format's `read` accepts (`format-span-mismatch`); a placement's kind
-must match what the format `emits` (`format-placement-mismatch`).
+Two contracts, checked at bind: a find rule's capture kind must be one the
+format's `read` accepts (`format-capture-mismatch`); a put's kind
+must match what the format `writes` (`format-put-mismatch`).
 
-**`via`: a placement's own spelling.** Formats resolve by type (§5),
+**`written_as`: a put's own spelling.** Formats resolve by type (§5),
 and one type may need two spellings for two transports — a tool spec is
 an lm15 `function` tool in `Request.tools` and a line of text in a
-system prompt. `via` names, per placed field, the registered format that
-placement writes through, instead of the type's; the format must exist
-(`unknown-format`) and must emit what the placement needs. This is the
-one stated exception to format-by-type, scoped to placement, because
+system prompt. `written_as` names, per placed field, the registered format that
+put writes through, instead of the type's; the format must exist
+(`unknown-format`) and must write what the put needs. This is the
+one stated exception to format-by-type, scoped to put, because
 how a placed value is spelled is inseparable from where it is placed.
 
-**A sufficing routing.** `suffices: true` says a non-empty capture on
-this routing is a complete reply on its own (a tool call instead of an
-answer). When any sufficing routing captured something, visible outputs
-the lens cannot find are *omitted* from the values instead of refusing
+**A complete-reply find rule.** `complete_reply: true` says a non-empty capture on
+this find rule is a complete reply on its own (a tool call instead of an
+answer). When any complete-reply find rule captured something, visible outputs
+the reader cannot find are *omitted* from the values instead of refusing
 `parse-missing-fields`; everything found is still read and typed.
 Without a capture, nothing changes. Streaming emits no events for an
 omitted field.
 
-**Turns.** A strategy may spell past protocol parts as text for a model
-that has no native channel: `turns.call` renders each `tool_call` part
-of an assistant history message, `turns.result` each `tool_result` part
-of a `tool` history message (whose role becomes `user`); slots `{id}`,
-`{name}`, `{input}` (canonical JSON), `{output}` (the result's text
-parts joined by `\n`), `{{`/`}}` escape a brace; the rest of the message
-is untouched. A strategy without `turns` passes such messages verbatim.
-**The probe:** at bind, a strategy with `turns.call` and a routing to
-`@role.calls` renders `{"id": "probe", "name": "probe", "input":
-{"probe": true}}` through `call`, runs its own text routings on the
-result and reads the span with the field's format; if that does not
+**Spelling.** A transport may spell past protocol parts as text for a model
+that has no native part: `spelling.call` renders each call of a written
+model step, `spelling.result` each tool step (whose role becomes `user`,
+§3a); slots `{id}`, `{name}`, `{input}` (canonical JSON), `{output}`
+(the result's text parts joined by `\n`), `{{`/`}}` escape a brace. A
+transport without them writes native `tool_call` and `tool_result` parts.
+`spelling.value` and `spelling.position` govern how the transport's own `@purpose`
+field is written into past turns (§3a).
+**The probe:** at bind, a transport with `spelling.call` and a find rule to
+`@purpose.calls` renders `{"id": "probe", "name": "probe", "input":
+{"probe": true}}` through `call`, runs its own text find rules on the
+result and reads the capture with the field's format; if that does not
 yield one call named `probe` with that input, bind refuses
-`turns-drift` naming the strategy — the template-is-the-lens law, at
-strategy level.
+`spelling-drift` naming the transport — the template-is-the-reader law, at
+transport level.
 
-**Formatted arguments (0.6).** `turns.input_format` is a normal named
+**Formatted arguments (0.6).** `spelling.input_format` is a normal named
 format reference (`{use, options?}`), governing only the `{input}` slot.
 Without it the existing JSON spelling remains. With it, the bound format
 writes the call's input object using a synthetic input field named `input`,
 shape `{"type":"object"}`. It must accept that field, write inputs and
-emit text; otherwise bind refuses `entry-malformed` at the strategy's
-`.turns.input_format`. References resolve at load (including all `choose`
-branches and named strategies), and at bind for code-built adapters; unknown
+write text; otherwise bind refuses `entry-malformed` at the transport's
+`.spelling.input_format`. References resolve at load (including all `choose`
+branches and named transports), and at bind for code-built adapters; unknown
 names, bad options and version mismatch use the existing format refusals.
 Dump pins their `format/<name>` versions in `versions.vocab`.
 
-`turns.probe` supplies a representative call: nonempty string `name`,
+`spelling.probe` supplies a representative call: nonempty string `name`,
 object `input`, optional nonempty string `id` (default `probe`), no other
-keys. It requires `turns.call`; so does `input_format`. Invalid structure
-refuses `entry-malformed` at `.turns`. The default sample remains unchanged.
-A formatted call writer requires exactly one bound `@role.calls` target
-and a text routing to it; lack of either refuses `turns-drift` at `.turns`.
-A plan using a formatted writer or explicit sample may have only one active
-`turns` strategy: two competing history spellings refuse `entry-malformed`
-at the second strategy's `.turns` in signature order, rather than choosing
-one silently. The probe and history rendering use **the same bound writer**. The probe
+keys. It requires `spelling.call`; so does `input_format`. Invalid structure
+refuses `entry-malformed` at `.spelling`. The default sample remains unchanged.
+A formatted call writer requires exactly one bound `@purpose.calls` target
+and a text find rule to it; lack of either refuses `spelling-drift` at `.spelling`.
+`spelling.call` and `spelling.result` belong to the transport whose purpose has a
+`<purpose>.calls` field: on any other transport they would be a second
+spelling of one call, or a spelling nothing uses, and refuse
+`entry-malformed` at that transport's `.spelling`. The probe and turn
+writing use **the same bound writer**. The probe
 compares the recovered name and full input object with its sample, ignoring
 IDs (text transports may assign them). A refusal while spelling or reading
-the sample becomes `turns-drift`, never a render-time refusal at bind.
+the sample becomes `spelling-drift`, never a render-time refusal at bind.
 This is a sample check, not proof of arbitrary round trips or safe execution.
 
-History write failures are `format-write-error`; delimiter collisions may
+Call write failures are `format-write-error`; delimiter collisions may
 refuse `value-collides`. A format's output is inserted verbatim, never
 reparsed as template syntax. Plans expose the input-format reference and
 version in their `turns` inspection. No sample or formatter is inferred
@@ -426,7 +631,7 @@ from a tool's name or from the model.
 - **Enum** — the stripped text equals a member's spelling.
 - **Null** — nullable shapes only: written `null`, read `null` exactly.
 - **Rounding** — half-to-even in binary64: `roundeven(x·10ⁿ)/10ⁿ`.
-- **Regex** — none in the core. A `pattern` routing's syntax and matching
+- **Regex** — none in the core. A `pattern` find rule's syntax and matching
   are the declared `pattern/*` extension's (§10); the kernel never
   interprets the string itself.
 
@@ -435,7 +640,7 @@ from a tool's name or from the model.
 Scalars, enums and nullables write and read by §7a; strings are one
 text part, verbatim. A field whose shape is `{"media": type}` writes a
 value that is already a part dict as that lm15 part (`{"type": type, …}`)
-and reads the first part of that type from its span. Nothing structured
+and reads the first part of that type from its capture. Nothing structured
 has a default.
 
 ## 8. Streaming parse (sans-I/O)
@@ -480,7 +685,7 @@ One `field_started` and one `field_done` occur per recovered field;
 empty `field_delta` events never occur. `field_delta` is raw text after
 the same §7a outer strip as batch parse. The reducer holds leading and
 trailing ASCII whitespace and any suffix that can begin an anchor,
-close, tail, routing delimiter, or line; it emits only a prefix no
+close, tail, find rule delimiter, or line; it emits only a prefix no
 future delta can change. A marker occurrence acts — opens a field's
 section, ends the previous one, or fixes a close — only once no boundary
 marker can still be growing across it: a later marker may begin inside
@@ -494,30 +699,30 @@ anchor or close that arrives later can still make the reply ambiguous.
 Every `feed` does work proportional to its delta, never to the reply:
 an implementation must not rescan the accumulated text per delta.
 
-The derived marker lens streams incrementally. A vocabulary lens may
+The derived marker reader streams incrementally. A vocabulary reader may
 provide the optional streaming face
-`lens.stream(field_names) → reducer`, where
+`reader.stream(field_names) → reducer`, where
 `reducer.feed(text_delta) → {field: stable_raw_prefix}` and
 `reducer.finish() → {field: final_raw}`. Calls receive the stable text
-left by routings. Prefixes must only grow; `finish` checks them against
-the batch lens and a disagreement is an implementation bug. A lens
+left by find rules. Prefixes must only grow; `finish` checks them against
+the batch reader and a disagreement is an implementation bug. A reader
 without this face (the base method returns `None`) buffers and produces all events
 at `finish`. In Go the same optional face is `StreamingLens.NewStream`
-returning a `LensStream` with `Feed` and `Finish`. Routing behavior is:
+returning a `LensStream` with `Feed` and `Finish`. Find rule behavior is:
 
 - `between` emits a capture after its close arrives;
 - `line_prefixed` emits a capture after its newline arrives (or at EOF);
-- `from: channel:<type>` streams text from matching part deltas;
-- `pattern` buffers its routed field until `finish` because a later byte
+- `from: part:<type>` streams text from matching part deltas;
+- `pattern` buffers its field until `finish` because a later byte
   can change a regex match;
-- a consuming routing passes only stable, non-matching text to the next
-  routing and the lens; routing stages compose in declaration order;
-- when more than one routing writes one field, that field buffers until
-  `finish`, because batch `span.text` concatenates by routing order,
+- a removing find rule passes only stable, non-matching text to the next
+  find rule and the reader; find rule stages compose in declaration order;
+- when more than one find rule writes one field, that field buffers until
+  `finish`, because batch `capture.text` concatenates by find rule order,
   not response arrival order.
 
 `plan.describe()["streaming"]` declares `mode` (`incremental`,
-`hybrid`, or `buffered`), the lens mode, each routing's mode and reason,
+`hybrid`, or `buffered`), the reader mode, each find rule's mode and reason,
 and `field_done: "finish"`; buffering is visible, never hidden.
 
 **Refusal law.** `finish()` runs the same structural parse and typed
@@ -544,12 +749,17 @@ not a distinct lmcc chunking.
 Kernel and every vocabulary entry version independently (semver; while
 major = 0, minor is breaking). Artifacts pin what they need; loaders
 refuse `version-incompatible` naming both sides; unknown names refuse
-(`unknown-format`, `unknown-strategy`, `unknown-parse-kind`).
+(`unknown-format`, `unknown-transport`, `unknown-reader`).
 
 The corpus (`corpus/cases/*.json`, `schema/case.schema.json`) is the
 authority: an implementation is conformant when the harness passes every
 case byte-exactly — rendered text and parts, parsed values, refusal
-codes and their fixes. Case kinds: `render`, `parse`, `roundtrip`, `refuse`. A case
+codes and their fixes. Case kinds: `render`, `parse`, `roundtrip`, `refuse`,
+`plan`. A render, plan or refuse case renders the current turn from `inputs`
+and optional `steps`, with optional `turns` (slot → turns); a turn in a case
+may omit `signature`, and the harness then writes the case signature's
+fingerprint, computed by its own §3a implementation (case 128 pins the value
+itself; 139 pins the mismatch). A case
 declares in `requires` everything beyond the core it needs: a UDF
 placement (`udf:python`) or an extension (`pattern/legacy-re2`). A
 driver builds its registry with exactly those and nothing more, so a
@@ -593,12 +803,12 @@ built in code — a refusal fires before any plan exists):
 4. the bound version is compatible with the declared one by the §9
    rule, else `version-incompatible` (fix `match-version`, entry
    `<family>/<name>`);
-5. every construct that needs a family — today, a routing carrying
+5. every construct that needs a family — today, a find rule carrying
    `pattern` — has that family declared, else `extension-undeclared`
-   naming the construct's path (fix `declare-extension`); a routing the
-   artifact reaches through a named strategy counts, at the same path;
+   naming the construct's path (fix `declare-extension`); a find rule the
+   artifact reaches through a named transport counts, at the same path;
 6. after that, the binding admits each construct it governs: a `pattern`
-   the dialect rejects refuses `entry-malformed` at the routing's path,
+   the dialect rejects refuses `entry-malformed` at the find rule's path,
    exactly as a malformed `between` does.
 
 Declaring an extension the artifact does not use is allowed; it only
@@ -607,10 +817,10 @@ verbatim.
 
 **The default tier.** The adapter *constructor* (`lmcc.adapter`,
 `NewAdapter`) — never the loader — fills in the default when an inline
-strategy carries `pattern` and no `pattern/*` is declared:
+transport carries `pattern` and no `pattern/*` is declared:
 `pattern/legacy-re2` at the version the kernel binds natively. The line
 is written into the adapter, so the dumped artifact says it; an explicit
-`pattern/*` declaration is never overridden; a strategy reached by name
+`pattern/*` declaration is never overridden; a transport reached by name
 (`{"use": …}`) is not seen by the constructor and its author declares by
 hand. This is a tooling convenience with the same effect as typing the
 line: the artifact on disk always speaks for itself, and `load` refuses
@@ -632,15 +842,16 @@ declared version, the bound version, and the binding label — what
 resolved, inspectable before spending.
 
 **Migration from 0.2.** Set `versions.kernel` to `0.3.0`. If the
-artifact has any `pattern` routing, add
+artifact has any `pattern` find rule, add
 `"extensions": {"pattern/legacy-re2": "0.1.0"}` — that contract is,
 by definition, what 0.2 did (`spec/extensions/pattern-legacy-re2.md`),
 so the meaning is preserved exactly; nothing is relabeled silently
 because nothing is assumed: an undeclared `pattern` refuses.
 
-## Deliberate gaps (0.3)
+## Deliberate gaps (0.7)
 
-The `grammar` face of `skeleton()`, parse combinators (plan 02), turns
-(plan 03), tools/citations strategy vocabularies (plan 04), and a
+The `grammar` face of `skeleton()`, parse combinators (plan 02), a
 rigorously specified pattern dialect with library evidence (plan 10,
-remaining items). Each lands as a versioned addition.
+remaining items), and field-level layouts of a turn in the text form
+(`{% for f in t.inputs %}`; plan 12). The Go kernel is at 0.6 (plan 12
+lists what it must gain). Each lands as a versioned addition.

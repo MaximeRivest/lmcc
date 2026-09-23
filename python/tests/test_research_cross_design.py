@@ -1,8 +1,8 @@
 """Keep the research notebook's claims executable, not merely its imports.
 
 The notebook is the single implementation of the experimental formats and
-strategies. These tests load its cells and check the complete factor matrix,
-raw code, reasoning projections, history, artifacts and streaming.
+transports. These tests load its cells and check the complete factor matrix,
+raw code, reasoning projections, turns, artifacts and streaming.
 """
 
 import ast
@@ -46,10 +46,12 @@ def test_notebook_imports_only_kernel_and_stdlib():
 
 def test_full_matrix_is_simulated_and_declares_controls(research):
     r = research
-    keys = set(itertools.product(r["TRANSPORTS"], r["REASONING_STYLES"]))
+    keys = set(itertools.product(r["CALL_STYLES"], r["REASONING_STYLES"]))
     assert set(r["plans"]) == keys and len(keys) == len(r["rows"]) == 9
-    for (transport, style), (records, requests) in r["episodes"].items():
-        assert len(records) == len(requests) == 2
+    for (call_style, style), (turn, requests) in r["episodes"].items():
+        records = [s.outputs for s in turn.steps if s.kind == "model"]
+        assert [s.kind for s in turn.steps] == ["model", "tool", "model"]
+        assert len(records) == len(requests) == 2 and turn.outputs == records[-1]
         first, final = records
         assert first["reply"] == ""
         assert len(first["calls"]) == 1
@@ -62,34 +64,36 @@ def test_full_matrix_is_simulated_and_declares_controls(research):
         assert final == {"reply": "The result is 42.", "calls": [], "reasoning": ""}
         for request in requests:
             assert request["config"]["reasoning"]["effort"] == ("low" if style == "native" else "off")
-            if transport == "native":
+            if call_style == "native":
                 assert request["tools"][0]["type"] == "function"
             else:
                 assert "tools" not in request
-        history = requests[1]["messages"]
-        assert history[0]["parts"][0]["text"] == r["TASK"]
-        assert history[-1]["role"] == ("tool" if transport == "native" else "user")
+        second = requests[1]["messages"]
+        assert second[0]["parts"][0]["text"] == r["TASK"]
+        assert second[-1]["role"] == ("tool" if call_style == "native" else "user")
+        # the recorded reply goes back exactly as it came
+        assert second[1]["parts"] == r["simulated_call_reply"](call_style, style)["parts"]
 
 
-def response_with_code(research, transport, code):
-    if transport == "native":
+def response_with_code(research, call_style, code):
+    if call_style == "native":
         return {"role": "assistant", "parts": [{"type": "tool_call", "id": "fixture_call",
                 "name": "run_python", "input": {"code": code}}]}
-    if transport == "json_fence":
+    if call_style == "json_fence":
         payload = research["json"].dumps({"name": "run_python", "input": {"code": code}})
     else:
         payload = code
-    opening, closing = research["ENVELOPES"][transport]
+    opening, closing = research["ENVELOPES"][call_style]
     return {"role": "assistant", "parts": [{"type": "text", "text": opening + payload + closing}]}
 
 
-@pytest.mark.parametrize("transport", ["native", "json_fence", "heredoc"])
-def test_comments_are_tokens_not_string_contents_and_code_is_unchanged(research, transport):
+@pytest.mark.parametrize("call_style", ["native", "json_fence", "heredoc"])
+def test_comments_are_tokens_not_string_contents_and_code_is_unchanged(research, call_style):
     code = ('# reason: Explain the actual statement.\r\n'
             'text = "# reason: not analysis <think>not a tag</think>"\r\n'
             'print(text)  # reason: trailing comment excluded\r\n')
-    plan = research["plans"][(transport, "code_comments")]
-    value = plan.parse(response_with_code(research, transport, code))
+    plan = research["plans"][(call_style, "code_comments")]
+    value = plan.parse(response_with_code(research, call_style, code))
     assert value["reasoning"] == "Explain the actual statement."
     assert value["calls"][0].input["code"] == code
     assert value["reply"] == ""
@@ -109,28 +113,28 @@ def stream_chunkings(message):
                        {**part, "text": part["text"][offset:]}] + parts[index + 1:])
 
 
-@pytest.mark.parametrize("transport,style", list(itertools.product(
+@pytest.mark.parametrize("call_style,style", list(itertools.product(
     ["native", "json_fence", "heredoc"], ["native", "think_tags", "code_comments"])))
-def test_every_cell_streams_and_reloads(research, transport, style):
+def test_every_cell_streams_and_reloads(research, call_style, style):
     r = research
-    plan = r["plans"][(transport, style)]
-    response = r["simulated_call_reply"](transport, style)
+    plan = r["plans"][(call_style, style)]
+    response = r["simulated_call_reply"](call_style, style)
     want = plan.parse(response)
     for chunks in stream_chunkings(response):
         stream = plan.stream()
         for chunk in chunks:
             stream.feed(copy.deepcopy(chunk))
         assert stream.finish().values == want
-    entry = r["artifacts"][f"{transport}/{style}"]
+    entry = r["artifacts"][f"{call_style}/{style}"]
     loaded = lmcc.load(entry, registry=r["registry"])
     assert loaded.dump(registry=r["registry"]) == entry
     assert loaded.bind(r["signature"], r["CAPABILITIES"], registry=r["registry"]).parse(response) == want
 
 
-@pytest.mark.parametrize("transport", ["native", "json_fence", "heredoc"])
-def test_native_thinking_requires_declared_support(research, transport):
+@pytest.mark.parametrize("call_style", ["native", "json_fence", "heredoc"])
+def test_native_thinking_requires_declared_support(research, call_style):
     with pytest.raises(lmcc.Refusal) as caught:
-        research["adapters"][(transport, "native")].bind(
+        research["adapters"][(call_style, "native")].bind(
             research["signature"], {"instruct": True, "native_function_calling": True},
             registry=research["registry"])
     assert caught.value.code == "capability-missing"
@@ -141,7 +145,7 @@ def test_writer_drift_and_delimiter_collision_fail_visibly(research):
     r = research
     with pytest.raises(lmcc.Refusal) as caught:
         r["broken_adapter"].bind(r["signature"], r["CAPABILITIES"], registry=r["registry"])
-    assert caught.value.code == "turns-drift"
+    assert caught.value.code == "spelling-drift"
     with pytest.raises(ValueError):
         r["raw_code"].write({"code": 'print("CODE_END")'}, None)
     malformed = {"role": "assistant", "parts": [{"type": "text", "text": r["FENCE"] + 'tool\n{"wrong": 1}\n' + r["FENCE"]}]}
@@ -158,6 +162,7 @@ def test_runner_bounds_reasoning_only_continuations(research):
         return {"role": "assistant", "parts": [{"type": "text", "text": "<think>Still thinking.</think>"}]}
     def never_execute(call):
         pytest.fail("reasoning-only response must not execute a tool")
-    with pytest.raises(RuntimeError, match="turn budget exhausted"):
-        r["run_episode"](r["plans"][("heredoc", "think_tags")], reasoning_only, never_execute, max_turns=2)
+    with pytest.raises(RuntimeError, match="model-call budget exhausted"):
+        r["run_episode"](r["plans"][("heredoc", "think_tags")], reasoning_only, never_execute,
+                         max_model_calls=2)
     assert len(requests) == 2

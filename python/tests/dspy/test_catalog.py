@@ -3,7 +3,7 @@
 One DSPy signature per feature. Each row must (1) lower to a
 SignatureCore losing nothing but DSPy's declared no-ops, and (2) bake,
 render and round-trip through the DSPy-shaped LMCC entry: the assistant
-turn the lens writes for a full example parses back to the example's
+turn the reader writes for a full example parses back to the example's
 outputs. A feature not in this file is not claimed.
 
 Runs against a real DSPy (``python/lmcc_dspy/check``); the kernel suite
@@ -33,14 +33,15 @@ def _fixture():
 
 
 def roundtrip(signature, example: dict, *, capabilities=None, expect_values=None):
-    """Lower, bake, render a full example as a demo, parse the demo's
-    assistant turn back, and compare to the example's outputs."""
+    """Lower, bake, render a full example as an example turn, parse its
+    written assistant message back, and compare to the example's outputs."""
     registry, adapter = _fixture()
     lowered = lmcc_dspy.lower(signature, registry=registry)
     baked = adapter.bind(lowered.signature, capabilities or {}, registry=registry)
-    inputs, history = lowered.split_inputs(example)
-    outputs = {f.name: example[f.name] for f in lowered.signature.outputs if f.name in example}
-    request = baked.render(inputs=inputs, demos=[{**inputs, **outputs}], history=history)
+    values, history = lowered.split_inputs(example)
+    inputs = {f.name: values[f.name] for f in lowered.signature.inputs if f.name in values}
+    outputs = {f.name: values[f.name] for f in lowered.signature.outputs if f.name in values}
+    request = baked.render(inputs, turns={"examples": [baked.example(inputs, outputs)], "turns": history})
     assistant = [m for m in request.messages if m["role"] == "assistant"]
     values = baked.parse(assistant[0]["parts"][0]["text"])
     assert values == (expect_values if expect_values is not None else outputs)
@@ -202,7 +203,7 @@ class Chat(dspy.Signature):
     answer: str = dspy.OutputField()
 
 
-def test_history_input_becomes_field_turns():
+def test_history_input_becomes_earlier_turns():
     lowered, baked, req = roundtrip(Chat, {
         "history": dspy.History(messages=[{"question": "first", "answer": "one"},
                                           {"question": "second", "answer": "two"}]),
@@ -211,7 +212,7 @@ def test_history_input_becomes_field_turns():
     assert [f.name for f in lowered.signature.fields] == ["question", "answer"]
     texts = [m["parts"][0]["text"] for m in req.messages]
     assert any("first" in t for t in texts) and any("[[ ## answer ## ]]\ntwo" in t for t in texts)
-    # history turns come after the demo turns and before the live question
+    # history turns come after the example turns and before the live question
     assert texts.index(next(t for t in texts if "second" in t)) < len(texts) - 1
 
 
@@ -221,9 +222,9 @@ class CoT(dspy.Signature):
     answer: str = dspy.OutputField()
 
 
-def test_reasoning_type_lowers_to_the_reasoning_role():
+def test_reasoning_type_lowers_to_the_reasoning_purpose():
     lowered, _, _ = roundtrip(CoT, {"question": "q", "reasoning": "hm", "answer": "a"})
-    assert {f.name: f.role for f in lowered.signature.outputs} == {
+    assert {f.name: f.purpose for f in lowered.signature.outputs} == {
         "reasoning": "reasoning", "answer": "plain"}
 
 
@@ -233,26 +234,26 @@ class WithTools(dspy.Signature):
     calls: dspy.ToolCalls = dspy.OutputField()
 
 
-def test_tools_lower_to_the_tools_role_and_still_render():
+def test_tools_lower_to_the_tools_purpose_and_still_render():
     def add(a: int, b: int) -> int:
         """Add two numbers."""
         return a + b
 
     registry, adapter = _fixture()
     lowered = lmcc_dspy.lower(WithTools, registry=registry)
-    roles = {f.name: f.role for f in lowered.signature.fields}
-    assert roles == {"question": "plain", "tools": "tools", "calls": "tools"}
+    purposes = {f.name: f.purpose for f in lowered.signature.fields}
+    assert purposes == {"question": "plain", "tools": "tools", "calls": "tools"}
     assert shapes(lowered)["tools"]["items"]["required"] == ["name", "description", "parameters"]
     with pytest.raises(lmcc.Refusal) as err:
         adapter.bind(lowered.signature, {}, registry=registry)
-    assert err.value.code == "role-ambiguous"   # two fields on one role: the kernel rule
+    assert err.value.code == "purpose-ambiguous"   # two fields with one purpose: the kernel rule
 
     # with the output side renamed to plain, the tool declarations render as json
     only_in = dspy.Signature({"question": (str, dspy.InputField()),
                               "tools": (list[dspy.Tool], dspy.InputField()),
                               "calls": (dspy.ToolCalls, dspy.OutputField())})
     lowered = lmcc_dspy.lower(only_in, registry=registry)
-    lowered.signature.field_named("calls").role = "plain"
+    lowered.signature.field_named("calls").purpose = "plain"
     baked = adapter.bind(lowered.signature, {}, registry=registry)
     req = baked.render(inputs={"question": "2+2?", "tools": [dspy.Tool(add)]})
     user = req.messages[-1]["parts"][0]["text"]

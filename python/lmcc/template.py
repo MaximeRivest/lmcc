@@ -1,14 +1,18 @@
 """The template DSL: compile and render.
 
 The template language is deliberately *not* a programming language. It has
-exactly three constructs, so every template stays diffable, printable, and
+exactly four constructs, so every template stays diffable, printable, and
 serializable:
 
-- slots: ``{instruction}``, ``{format}`` (the lens's reply skeleton),
+- slots: ``{instruction}``, ``{format}`` (the reader's reply skeleton),
   ``{field_name}`` (an input's value, or an output's placeholder), and
   ``{f.attr}`` inside loops
 - loops: ``{% for f in inputs %} ... {% endfor %}`` (also ``outputs``),
-  iterating the *visible* fields of the baked plan, in signature order
+  iterating the *in_template* fields of the baked plan, in signature order;
+  any other source is a turn slot (kernel §3a), iterating the messages its
+  turns write, with ``m.role``, ``m.kind`` and ``m.text``
+- guards: ``{% if slot %} ... {% endif %}``, the body only when the turn
+  slot is not empty
 - escapes: ``{{`` renders ``{``, ``}}`` renders ``}``
 
 A bare ``{`` or ``}`` outside these constructs is a syntax error (code
@@ -16,7 +20,7 @@ A bare ``{`` or ``}`` outside these constructs is a syntax error (code
 
 Loop variables expose: ``f.name``, ``f.desc`` (empty when absent), ``f.type``
 (empty when absent), ``f.schema`` (the format's describe, or a mechanical
-hint), ``f.role``, ``f.value`` (the written value — parts land at the
+hint), ``f.purpose``, ``f.value`` (the written value — parts land at the
 slot; an output's value is its placeholder).
 """
 
@@ -33,12 +37,16 @@ _TOKEN = re.compile(
     r"(?P<escape>\{\{|\}\})"
     r"|(?P<loop>\{%\s*for\s+(?P<var>[A-Za-z_]\w*)\s+in\s+(?P<source>[A-Za-z_]\w*)\s*%\})"
     r"|(?P<end>\{%\s*endfor\s*%\})"
+    r"|(?P<guard>\{%\s*if\s+(?P<gname>[A-Za-z_]\w*)\s*%\})"
+    r"|(?P<endif>\{%\s*endif\s*%\})"
     r"|(?P<slot>\{(?P<path>[A-Za-z_][\w.]*)\})",
     re.ASCII,
 )
 
-LOOP_SOURCES = ("inputs", "outputs")
-LOOP_ATTRS = ("name", "desc", "type", "schema", "role", "value")
+LOOP_SOURCES = ("inputs", "outputs")          # field loops; any other source is a turn slot
+LOOP_ATTRS = ("name", "desc", "type", "schema", "purpose", "value")
+TURN_ATTRS = ("role", "kind", "text")
+RESERVED_SLOTS = ("inputs", "outputs", "instruction", "format")
 
 
 @dataclass
@@ -54,17 +62,27 @@ class Slot:
 @dataclass
 class Loop:
     var: str
-    source: str  # "inputs" | "outputs"
+    source: str  # "inputs" | "outputs" | a turn slot name
+    body: list
+
+    @property
+    def over_turns(self) -> bool:
+        return self.source not in LOOP_SOURCES
+
+
+@dataclass
+class Guard:
+    slot: str    # a turn slot name
     body: list
 
 
-Node = Text | Slot | Loop
+Node = Text | Slot | Loop | Guard
 
 
 def compile_template(text: str, *, where: str = "template") -> list[Node]:
     """Compile template text to an AST, refusing loudly on any bad syntax."""
     root: list[Node] = []
-    stack: list[tuple[Loop, list[Node]]] = []
+    stack: list[tuple[Loop | Guard, list[Node]]] = []
     current = root
     pos = 0
     for m in _TOKEN.finditer(text):
@@ -76,17 +94,35 @@ def compile_template(text: str, *, where: str = "template") -> list[Node]:
             current.append(Text(m.group("escape")[0]))
         elif m.group("loop"):
             source = m.group("source")
-            if source not in LOOP_SOURCES:
+            if source in ("instruction", "format"):
                 refuse("template-syntax",
-                       f"{where}: loop source {source!r} is not one of {LOOP_SOURCES}",
+                       f"{where}: {source!r} is reserved; a loop runs over inputs, outputs, "
+                       f"or a turn slot", fix={"action": "edit-template", "path": where})
+            if any(isinstance(n, Loop) and n.over_turns for n, _ in stack):
+                refuse("template-syntax", f"{where}: a turn loop's body holds text and "
+                       f"m.role/m.kind/m.text only; no nested loop",
                        fix={"action": "edit-template", "path": where})
             loop = Loop(m.group("var"), source, [])
             current.append(loop)
             stack.append((loop, current))
             current = loop.body
-        elif m.group("end"):
-            if not stack:
-                refuse("template-syntax", f"{where}: {{% endfor %}} without an open loop",
+        elif m.group("guard"):
+            name = m.group("gname")
+            if name in RESERVED_SLOTS:
+                refuse("template-syntax", f"{where}: a guard names a turn slot, not {name!r}",
+                       fix={"action": "edit-template", "path": where})
+            if any(isinstance(n, Loop) and n.over_turns for n, _ in stack):
+                refuse("template-syntax", f"{where}: no guard inside a turn loop",
+                       fix={"action": "edit-template", "path": where})
+            guard = Guard(name, [])
+            current.append(guard)
+            stack.append((guard, current))
+            current = guard.body
+        elif m.group("end") or m.group("endif"):
+            want, word = (Loop, "endfor") if m.group("end") else (Guard, "endif")
+            if not stack or not isinstance(stack[-1][0], want):
+                refuse("template-syntax", f"{where}: {{% {word} %}} without an open "
+                       f"{'loop' if want is Loop else 'guard'}",
                        fix={"action": "edit-template", "path": where})
             _, current = stack.pop()
         else:
@@ -97,9 +133,46 @@ def compile_template(text: str, *, where: str = "template") -> list[Node]:
     if tail:
         current.append(Text(tail))
     if stack:
-        refuse("template-syntax", f"{where}: unclosed {{% for %}} loop",
+        what = "{% for %} loop" if isinstance(stack[-1][0], Loop) else "{% if %} guard"
+        refuse("template-syntax", f"{where}: unclosed {what}",
                fix={"action": "edit-template", "path": where})
+    _check_turn_loops(root, where)
     return root
+
+
+def _check_turn_loops(nodes: list[Node], where: str) -> None:
+    for node in nodes:
+        if isinstance(node, Loop) and node.over_turns:
+            for n in node.body:
+                if isinstance(n, Slot):
+                    var, _, attr = n.path.partition(".")
+                    if var != node.var or attr not in TURN_ATTRS:
+                        refuse("template-syntax",
+                               f"{where}: in a loop over turn slot {node.source!r} only "
+                               f"{{{node.var}.role}}, {{{node.var}.kind}} and "
+                               f"{{{node.var}.text}} exist; got {{{n.path}}}",
+                               fix={"action": "edit-template", "path": where})
+        elif isinstance(node, (Loop, Guard)):
+            _check_turn_loops(node.body, where)
+
+
+def turn_slots(nodes: list[Node]) -> tuple[list[str], list[str]]:
+    """(slots placed as text by turn loops, slots named by guards), in order."""
+    placed: list[str] = []
+    guarded: list[str] = []
+    for node in nodes:
+        if isinstance(node, Loop) and node.over_turns:
+            placed.append(node.source)
+        elif isinstance(node, Guard):
+            guarded.append(node.slot)
+            p, g = turn_slots(node.body)
+            placed += p
+            guarded += g
+        elif isinstance(node, Loop):
+            p, g = turn_slots(node.body)
+            placed += p
+            guarded += g
+    return placed, guarded
 
 
 def _check_literal(literal: str, where: str) -> None:
@@ -140,6 +213,12 @@ def validate_nodes(nodes: list[Node], *, known_fields: set[str],
             refuse("unknown-slot",
                    f"{where}: {{{path}}} names no field in the signature",
                    fix={"action": "edit-template", "path": where, "slot": path})
+        elif isinstance(node, Loop) and node.over_turns:
+            continue     # checked at compile: text and m.role/m.kind/m.text only
+        elif isinstance(node, Guard):
+            covered |= validate_nodes(node.body, known_fields=known_fields,
+                                      input_fields=input_fields, where=where,
+                                      in_loop_var=in_loop_var)
         elif isinstance(node, Loop):
             covered |= validate_nodes(
                 node.body, known_fields=known_fields, input_fields=input_fields,
@@ -154,15 +233,24 @@ def render_nodes(nodes: list[Node], env, out: list[dict], buf: list[str],
     """Render an AST into message parts.
 
     ``env`` must provide: ``instruction`` (str), ``loop_fields(source)``
-    (visible fields for a loop), ``value_of(field)`` returning
-    ``("text", str)`` or ``("part", dict)``, ``schema_of(field)`` and
-    ``field_named(name)``.
+    (in_template fields for a loop), ``value_of(field)`` returning
+    ``("text", str)`` or ``("part", dict)``, ``schema_of(field)``,
+    ``field_named(name)``, ``turn_messages(slot)`` (the slot's written
+    messages as ``(role, kind, text)``) and ``slot_filled(slot)``.
     """
     for node in nodes:
         if isinstance(node, Text):
             buf.append(node.text)
         elif isinstance(node, Slot):
             _render_slot(node, env, out, buf, loop_ctx)
+        elif isinstance(node, Guard):
+            if env.slot_filled(node.slot):
+                render_nodes(node.body, env, out, buf, loop_ctx)
+        elif isinstance(node, Loop) and node.over_turns:
+            for role, kind, text in env.turn_messages(node.source):
+                attrs = {"role": role, "kind": kind, "text": text}
+                for n in node.body:
+                    buf.append(n.text if isinstance(n, Text) else attrs[n.path.partition(".")[2]])
         elif isinstance(node, Loop):
             for f in env.loop_fields(node.source):
                 render_nodes(node.body, env, out, buf,
@@ -180,8 +268,8 @@ def _render_slot(node: Slot, env, out: list[dict], buf: list[str],
                 buf.append(f.name)
             elif attr == "desc":
                 buf.append(f.desc or "")
-            elif attr == "role":
-                buf.append(f.role)
+            elif attr == "purpose":
+                buf.append(f.purpose)
             elif attr == "type":
                 buf.append(f.type or "")
             elif attr == "schema":

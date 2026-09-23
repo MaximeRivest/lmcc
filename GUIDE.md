@@ -23,6 +23,7 @@ any model is called. It never guesses.
 
 ```python
 import dataclasses
+import json
 import lmcc
 
 @dataclasses.dataclass
@@ -43,26 +44,27 @@ Parameters are inputs, the return type is the output, a dataclass return
 is several outputs, the docstring is the instruction. The same signature
 as plain data — what every frontend lowers to — is
 `lmcc.signature_to_dict(book.signature)`; it has a JSON Schema
-(`contract/schema/signature.schema.json`). Descriptions and roles:
+(`contract/schema/signature.schema.json`). Descriptions and purposes:
 `lmcc.signature("...", inputs={"text": str}, outputs={"title": lmcc.field(str, desc="the book title")})`.
 
 ## 3. The adapter: how the conversation looks
 
-An adapter never knows a signature. It is a template, a parse rule,
-strategies by role, formats by type — never a field name. The template
-has exactly three constructs — slots, loops, escapes:
+An adapter never knows a signature. It is a template, a reader,
+transports by purpose, formats by type — never a field name. The template
+has four constructs — slots, loops, guards, escapes — and one directive,
+`lmcc.turns()`, the place where earlier exchanges go (§8):
 
 ```python
 adapter = lmcc.adapter(messages=[
     lmcc.system("{instruction}\n\nAnswer in exactly this form:\n"
                 "{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"),
-    lmcc.demos(),
+    lmcc.turns(),
     lmcc.user("{text}"),
 ])
 ```
 
 The outputs loop containing `{f.value}` is the **output pattern**. It
-renders the prompt's skeleton, it writes example answers, and **the
+renders the prompt's skeleton, it writes earlier answers, and **the
 parser is derived from it** — the literal text around each hole becomes
 the anchors the parser looks for. You never write a parser.
 
@@ -75,9 +77,9 @@ Every refusal fires here — before any money is spent. `render` and
 ```python
 plan = book.bind(adapter)
 
-request = plan.render(text="Dune came out in 1965.",
-                      demos=[{"text": "1984 was published in 1949.",
-                              "title": "1984", "year": 1949, "confident": True}])
+example = plan.example({"text": "1984 was published in 1949."},
+                       {"title": "1984", "year": 1949, "confident": True})
+request = plan.render(text="Dune came out in 1965.", turns=[example])
 assert request.system and [m["role"] for m in request.messages] == ["user", "assistant", "user"]
 
 values = plan.parse("Sure!\n<title>\nDune\n</title>\n<year>\n1965\n</year>\n"
@@ -91,21 +93,22 @@ integer, `Yes` is a boolean, only ASCII whitespace is trimmed, `3.0` is
 spelled `3`. Surrounding chatter falls away because anchors are found
 *inside* the reply.
 
-The lens law, checkable in one line — what the lens wrote as a demo, the
-lens reads back identically:
+The reader law, checkable in one line — what the reader wrote for the
+example, the reader reads back identically:
 
 ```python
-demo_turn = request.messages[1]["parts"][0]["text"]
-assert plan.parse(demo_turn) == {"title": "1984", "year": 1949, "confident": True}
+written = request.messages[1]["parts"][0]["text"]
+assert plan.parse(written) == {"title": "1984", "year": 1949, "confident": True}
 ```
 
-The law holds for every demo the lens agrees to write. A demo value that
-contains one of the lens's own markers could not be read back as
-written — so the lens refuses to write it (`value-collides`):
+The law holds for every turn the reader agrees to write. A value that
+contains one of the reader's own markers could not be read back as
+written — so the reader refuses to write it (`value-collides`):
 
 ```python
 try:
-    plan.render(text="x", demos=[{"text": "y", "title": "Dune </title> II", "year": 1, "confident": True}])
+    bad = plan.example({"text": "y"}, {"title": "Dune </title> II", "year": 1, "confident": True})
+    plan.render(text="x", turns=[bad])
     raise AssertionError("should have refused")
 except lmcc.Refusal as err:
     assert err.code == "value-collides"
@@ -135,7 +138,7 @@ whole reply passes the same checks as `parse()`.
 
 The rule is strict: every way to split one reply gives the same final
 values or refusal, and each field's deltas join to the raw text that
-batch parsing captured. Regex routings and lenses without a streaming
+batch parsing captured. Regex find rules and readers without a streaming
 face buffer until EOF; `plan.describe()["streaming"]` states every such
 choice and its reason.
 
@@ -163,7 +166,7 @@ try:
     book.bind(bad)
     raise AssertionError("should have refused")
 except lmcc.Refusal as err:
-    assert err.code == "not-lensable"           # no anchor before the hole
+    assert err.code == "not-readable"           # no anchor before the hole
     assert err.fix == {"action": "edit-template", "path": "template[0]", "field": "title"}
 ```
 
@@ -171,7 +174,7 @@ The last one shows the fourth face of a refusal. Every refusal that
 fires *before render* — at signature, load, or bind — carries a `fix`:
 the one next action as plain data, from a closed vocabulary
 (`contract/spec/errors.md`, "Fix actions"). Its parameters are names a
-program can act on (a field, a role, a capability fact, a vocabulary
+program can act on (a field, a purpose, a capability fact, a vocabulary
 name, a path into the artifact), never prose. `err.describe()` is the
 whole refusal as a dict. Render and parse refusals carry `fix: None`:
 what to do about a bad value or a bad reply is orchestration.
@@ -190,61 +193,72 @@ assert p.parse('{"title": "Dune", "year": 1965, "confident": true}') == {"title"
 assert p.skeleton() == {"prefill": '{"title": "', "stops": ["}"]}
 ```
 
-## 7. Strategies: how a meaning travels, as data
+## 7. Transports: how a meaning travels, as data
 
-Mark a field with a role; bind a strategy to the role. A strategy is
+Mark a field with a purpose; bind a transport to the purpose. A transport is
 plain data: a predicate over declared capability facts, prompt
-fragments, request controls, routings that recover the value from where
+tell, request request_settings, find rules that recover the value from where
 it actually arrives, and a `choose` list to pick among alternatives:
 
 ```python
 @dataclasses.dataclass
 class Solution:
-    reasoning: lmcc.Role["reasoning", str]
+    reasoning: lmcc.Purpose["reasoning", str]
     answer: str
 
 @lmcc.fn
 def cot(question: str) -> Solution:
     """Answer the question."""
 
-think_aloud = lmcc.Strategy(
+think_aloud = lmcc.Transport(
     when={"not": {"capability": "native_reasoning"}},
-    fragments={"system": "Wrap every thought in <think>...</think>."},
-    routings=[{"from": "text", "between": ["<think>", "</think>"], "to": "@role", "consume": True}],
-    visible=False)          # the field leaves the token stream entirely
+    tell={"system": "Wrap every thought in <think>...</think>."},
+    find=[{"from": "text", "between": ["<think>", "</think>"], "to": "@purpose", "remove": True}],
+    in_template=False)          # the field leaves the token stream entirely
 
 cot_adapter = lmcc.adapter(messages=[
     lmcc.system("{instruction}\n\nAnswer in exactly this form:\n"
                 "{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"),
-    lmcc.user("{question}")], strategies={"reasoning": think_aloud})
+    lmcc.user("{question}")], transports={"reasoning": think_aloud})
 
 cp = cot.bind(cot_adapter)
 system_text = cp.render(question="Capital of France?").system
 assert "<reasoning>" not in system_text          # hidden from the pattern
-assert "Wrap every thought" in system_text       # fragment landed
+assert "Wrap every thought" in system_text       # the tell text landed
 assert cp.parse("<think>easy one</think><answer>\nParis\n</answer>") == {"reasoning": "easy one", "answer": "Paris"}
 ```
 
-Same signature on a native-reasoning model? A strategy with
-`requires=["native_reasoning"]` and a routing `{"from": "channel:thinking",
-"to": "@role"}` — the program does not change. The capability dict you
+Same signature on a native-reasoning model? A transport with
+`requires=["native_reasoning"]` and a find rule `{"from": "part:thinking",
+"to": "@purpose"}` — the program does not change. The capability dict you
 pass to `bind` is **declared, never sniffed**; its legal words live in
 `contract/spec/vocab/capabilities.md`.
 
-## 8. History: typed turns through the same description
+## 8. Turns: examples and conversations through the same description
 
-History items are messages, or **field turns** rendered exactly like
-demos — through the template and the lens, so history can never drift
-from the format the model is asked to produce:
+A **turn** is one call of one signature, kept as values: what went in,
+the steps (model replies, tool results), what came out. An example is a
+turn that did not happen here; a conversation is the turns that did.
+Both are written by the plan's own template and reader, so a past answer
+can never drift from the format the model is asked to produce — even
+after you switch adapters.
 
 ```python
-chat = lmcc.adapter(messages=[adapter.template[0], lmcc.history(), lmcc.user("{text}")])
-hp = book.bind(chat)
-req = hp.render(text="third", history=[
-    {"fields": {"text": "first", "title": "A", "year": 1, "confident": False}},
-    {"role": "assistant", "parts": [{"type": "text", "text": "a raw turn"}]}])
-assert [m["role"] for m in req.messages] == ["user", "assistant", "assistant", "user"]
+current = plan.turn(text="first")
+rendered = plan.render(current)
+first = rendered.step("<title>\nA\n</title>\n<year>\n1\n</year>\n<confident>\nfalse\n</confident>").finish()
+assert first.outputs == {"title": "A", "year": 1, "confident": False}
+
+req = plan.render(text="second", turns=[example, first])
+assert [m["role"] for m in req.messages] == ["user", "assistant", "user", "assistant", "user"]
+assert json.loads(json.dumps(first.to_dict()))["signature"] == first.signature   # a turn is JSON
 ```
+
+Templates may name their turn slots and place them as messages or as
+text (`{% for m in examples %}[{m.role}] {m.text}{% endfor %}`, behind
+`{% if examples %}`); the kernel renders exactly the turns it is given.
+Choosing which turns to give — windows, summaries, memory — belongs above
+lmcc (`kernel.md` §3a).
 
 ## 9. Formats: your types, your spelling
 
@@ -265,13 +279,13 @@ except lmcc.Refusal as err:
 ```
 
 A format is a few lines. It owns one type's spelling, both directions;
-the template owns position; the lens owns layout:
+the template owns position; the reader owns layout:
 
 ```python
 registry = lmcc.Registry()
 registry.format(list[int],
     write=lambda v: ", ".join(map(str, v)),
-    read=lambda span: [int(p.strip()) for p in span.text.split(",")],
+    read=lambda capture: [int(p.strip()) for p in capture.text.split(",")],
     describe=lambda: "comma-separated integers")
 
 rp = rows.bind(adapter, registry=registry)
@@ -287,8 +301,8 @@ carry one **whole** (source, language, deps, hash, author):
 def write(v, f):
     return ", ".join(str(x) for x in v)
 
-def read(span, f):
-    return [int(p.strip()) for p in span.text.split(",")]
+def read(capture, f):
+    return [int(p.strip()) for p in capture.text.split(",")]
 
 shipped = lmcc.adapter(messages=adapter.template,
                        formats={"list[int]": lmcc.make_format(write=write, read=read)})
@@ -320,15 +334,15 @@ assert again.bind(cot.signature).parse("<think>hm</think><answer>\nParis\n</answ
 ```
 
 Diff two dumps to see exactly what changed. The file format is
-`contract/schema/entry.schema.json`: template, parse, strategies by
-role, formats by type. No signature, no field names.
+`contract/schema/entry.schema.json`: template, parse, transports by
+purpose, formats by type. No signature, no field names.
 
 ## 11. Seeing what you built
 
 ```python
 d = cp.describe()                        # JSON-serializable, all of it
-assert d["lens"]["kind"] == "derived" and d["hidden"] == ["reasoning"]
-assert d["strategies"] == {"reasoning": "(inline)"}
+assert d["reader"]["kind"] == "derived" and d["hidden"] == ["reasoning"]
+assert d["transports"] == {"reasoning": "(inline)"}
 assert d["skeleton"] == {"prefill": "<answer>\n", "stops": ["</answer>"]}
 json.dumps(d)
 print(cp.explain())
@@ -341,16 +355,16 @@ print(registry.describe())
 
 Portability means identical behavior within a declared feature set, not
 support for every extension on every host. The kernel is a small core;
-regex is not in it. A `pattern` routing runs under a declared extension —
+regex is not in it. A `pattern` find rule runs under a declared extension —
 like SQL dialects: divergence between engines is normal, *undeclared*
 divergence is the sin. The constructor declares the default tier for you
 (the host's own engine, `pattern/legacy-re2`); the artifact carries the
 line; a loaded artifact without it refuses:
 
 ```python
-regex = lmcc.Strategy(visible=False, routings=[
-    {"from": "text", "pattern": "Thought: ([^\\n]+)", "to": "@role", "consume": True}])
-xml = lmcc.adapter(messages=cot_adapter.template, strategies={"reasoning": regex})
+regex = lmcc.Transport(in_template=False, find=[
+    {"from": "text", "pattern": "Thought: ([^\\n]+)", "to": "@purpose", "remove": True}])
+xml = lmcc.adapter(messages=cot_adapter.template, transports={"reasoning": regex})
 assert xml.dump()["extensions"] == {"pattern/legacy-re2": "0.1.0"}      # written for you
 assert cot.bind(xml).describe()["extensions"] == {
     "pattern/legacy-re2": {"needs": "0.1.0", "provides": "0.1.0", "binding": "python:re"}}
@@ -364,7 +378,7 @@ try:
 except lmcc.Refusal as r:
     assert r.code == "extension-undeclared"
     assert r.fix == {"action": "declare-extension", "family": "pattern",
-                     "path": "strategies['reasoning'].routings[0]"}
+                     "path": "transports['reasoning'].find[0]"}
 ```
 
 Three tiers exist or can: the default (native engine, small stated

@@ -2,11 +2,11 @@
 
 Run the cells in order. This notebook uses **hand-written model replies**:
 it makes no network requests and executes no generated code. It demonstrates
-how a conversation turn becomes values, and how those values become history
-for the next model call. `./dev-venv` prepares the project notebook environment.
+how a model reply becomes values, and how those values are written back into
+the next model call. `./dev-venv` prepares the project notebook environment.
 
-We will use three independent components of a turn: a conversational reply,
-optional reasoning, and a request to run Python. A turn may contain more than
+We will use three independent components of a reply: a conversational reply,
+optional reasoning, and a request to run Python. A reply may contain more than
 one component. The application, not LMCC, decides what to do with them.
 
 ## 1. Setup and the program
@@ -26,13 +26,13 @@ def show(value):
                      default=lambda x: dataclasses.asdict(x) if dataclasses.is_dataclass(x) else str(x)))
 
 @dataclasses.dataclass
-class Turn:
+class Reply:
     reply: str
-    reasoning: lmcc.Role["reasoning", str]
-    calls: lmcc.Role["tools.calls", list[ToolCall]]
+    reasoning: lmcc.Purpose["reasoning", str]
+    calls: lmcc.Purpose["tools.calls", list[ToolCall]]
 
 @lmcc.fn
-def agent(message: str, tools: lmcc.Role["tools", list[Tool]]) -> Turn:
+def agent(message: str, tools: lmcc.Purpose["tools", list[Tool]]) -> Reply:
     """Talk with the user and help with programming.
     You may request Python execution when useful.
     A request is not execution: wait for the result before claiming success.
@@ -48,29 +48,30 @@ print("Kernel:", lmcc.__version__)
 
 ## 2. The adapter: prose plus two hidden channels
 
-The ordinary reply is whatever remains after routing. Reasoning is removed
+The ordinary reply is whatever remains after find rule. Reasoning is removed
 from the prose, and a heredoc becomes a structured call. There is no shell
 execution here: `run_python <<'PY_END'` is a literal message spelling.
 
 ```python
-reasoning = lmcc.Strategy(
-    visible=False,
-    fragments={"system": "If you include analysis, put it inside <think>...</think>."},
-    routings=[{"from": "text", "between": ["<think>", "</think>"],
-               "to": "@role", "consume": True}],
+reasoning = lmcc.Transport(
+    in_template=False,
+    tell={"system": "If you include analysis, put it inside <think>...</think>."},
+    find=[{"from": "text", "between": ["<think>", "</think>"],
+               "to": "@purpose", "remove": True}],
+    spelling={"position": "before"},   # when a past reply is written from values: reasoning first
 )
 
 adapter = lmcc.adapter(
     messages=[
         lmcc.system("{instruction}\n{reply}"),
+        lmcc.turns(),
         lmcc.user("{message}"),
-        lmcc.history(),
     ],
     formats={
         "list[Tool]": lmcc.use("function_tool"),
         "list[ToolCall]": lmcc.use("code_calls"),
     },
-    strategies={"reasoning": reasoning, "tools": lmcc.use("heredoc_tools")},
+    transports={"reasoning": reasoning, "tools": lmcc.use("heredoc_tools")},
 )
 plan = agent.bind(adapter, capabilities={"instruct": True}, registry=registry)
 question = "Could you calculate 6 times 7?"
@@ -79,8 +80,11 @@ print(rendered.system)
 print("\nUser:", rendered.messages[0]["parts"][0]["text"])
 ```
 
-The tools strategy writes the catalog as text (`via: tool_catalog`). Its
-`turns.input_format` is **code_arguments**: it writes `{"code": ...}` as raw
+The reasoning transport reads `<think>` blocks; the same markers write past
+reasoning back when a reply must be rebuilt from its values, and `position`
+puts it before the reply. The tools transport writes the catalog as text
+(`written_as: tool_catalog`). Its
+`spelling.input_format` is **code_arguments**: it writes `{"code": ...}` as raw
 code, without JSON quotes, escape sequences or trimming.
 
 ## 3. Three possible replies
@@ -102,52 +106,67 @@ values = plan.parse(model_reply)
 show(values)
 ```
 
-## 4. The writer: structured call → the next prompt
+## 4. One turn: the question, the call, the result, the answer
 
-Suppose the application approved that call and its sandbox returned `42`.
-We **supply that result as a fixture** below; this notebook does not run the
-code. We store the call and result in lm15's normal message shapes, not as
-hand-built heredoc strings.
+A **turn** records one call of the agent as values: its inputs, its steps
+(each model reply, each tool result) and, once finished, its outputs.
+`rendered.step(reply)` parses a reply and records it with the message exactly
+as it came; `turn.tool(id, output)` records a result for a pending call.
+
+Suppose the application approved the call and its sandbox returned `42`.
+We **supply that result as a fixture**; this notebook does not run the code.
 
 ```python
-call = values["calls"][0]
-history = [
-    {"role": "assistant", "parts": [
-        {"type": "tool_call", **dataclasses.asdict(call)},
-    ]},
-    {"role": "tool", "parts": [
-        {"type": "tool_result", "id": call.id, "name": call.name,
-         "content": [{"type": "text", "text": "42"}]},
-    ]},
-]
-next_request = plan.render(message=question, tools=[python_tool], history=history)
+turn = plan.turn(message=question, tools=[python_tool])
+turn = plan.render(turn).step(model_reply)
+call = turn.pending_calls()[0]
+print("Pending:", call)
+turn = turn.tool(call.id, "42")
+
+next_request = plan.render(turn)
 for message in next_request.messages:
     print(f"\n{message['role']}:")
     for part in message["parts"]:
         print(part.get("text", part))
-
-print("\nA possible final answer:")
-show(plan.parse("The result is 42."))
 ```
 
-The adapter has written the heredoc for you and converted the result into a
-user message. The sequence is question → call → result. Keep the initial
-question fixed while continuing this tool exchange. A larger chat loop
-manages subsequent user turns and history explicitly.
+You built no message by hand. The question is written once; the model's reply
+is sent back exactly as it came (this plan reads it into the same values);
+the result becomes a user message through the transport's `spelling.result`.
+
+The model answers, and the turn closes. The finished turn is the conversation
+so far: the next question passes it as an earlier turn.
+
+```python
+turn = plan.render(turn).step("The result is 42.").finish()
+show(turn.outputs)
+
+follow_up = plan.render(message="And 8 times 9?", tools=[python_tool], turns=[turn])
+print([m["role"] for m in follow_up.messages])
+```
+
+The first turn is written before the new question, with its call and result.
+Which earlier turns to pass (all, the last few, a summary) is the
+application's choice; LMCC writes exactly what it is given.
 
 ## 5. Code whitespace is data
 
-The reader uses the raw captured parts, **not** the trimmed `span.text` view.
+The reader uses the raw captured parts, **not** the trimmed `capture.text` view.
 Here the code contains indentation, Unicode, CRLF and a trailing newline.
 The envelope adds its own newline before `PY_END`; that newline is not code.
 
+A step can also be built from values alone, for example one loaded from
+storage with no recorded message. Then the plan's own writer spells it:
+
 ```python
+def called(code):
+    step = lmcc.ModelStep({"calls": [ToolCall("example", "run_python", {"code": code})]},
+                          calls_field="calls")
+    return plan.turn(message=question, tools=[python_tool]).with_step(step).tool("example", "ok")
+
 exact_code = '    # café\r\n    print(6 * 7)\r\n'
-exact_history = [{"role": "assistant", "parts": [
-    {"type": "tool_call", "id": "example", "name": "run_python", "input": {"code": exact_code}},
-]}]
-request_with_code = plan.render(message=question, tools=[python_tool], history=exact_history)
-heredoc = request_with_code.messages[-1]["parts"][0]["text"]
+request_with_code = plan.render(called(exact_code))
+heredoc = request_with_code.messages[1]["parts"][0]["text"]
 recovered_code = plan.parse(heredoc)["calls"][0].input["code"]
 print("Written:", repr(heredoc))
 print("Recovered:", repr(recovered_code))
@@ -159,12 +178,12 @@ identity. The probe checks the tool name and arguments, not ID preservation.
 
 ## 6. What does the bind-time probe actually do?
 
-Inspect the shipped strategy. Its sample is a valid call to `run_python`,
+Inspect the shipped transport. Its sample is a valid call to `run_python`,
 not the old generic `probe({probe: true})` that a code-only reader cannot read.
 
 ```python
-strategy = lmcc_std.code.heredoc_tools({})
-show(strategy.turns)
+transport = lmcc_std.code.heredoc_tools({})
+show(transport.spelling)
 show(plan.describe()["turns"])
 
 entry = adapter.dump(registry=registry)
@@ -173,21 +192,21 @@ loaded = lmcc.load(entry, registry=registry)
 print("Artifact round-trips:", loaded.dump(registry=registry) == entry)
 ```
 
-At bind, the same writer used for history spells the sample call, the
-strategy's own routing captures it, and the calls format reads it back.
-A different name or input object means `turns-drift`.
+At bind, the same writer used for past calls spells the sample call, the
+transport's own find rule captures it, and the calls format reads it back.
+A different name or input object means `spelling-drift`.
 
 You can provide a different representative sample, without adding Python
 code to the artifact:
 
 ```python
 custom = lmcc_std.code.heredoc_tools({})
-custom.turns["probe"] = {
+custom.spelling["probe"] = {
     "name": "run_python",
     "input": {"code": 'print({"total": 6 * 7})\n'},
 }
 custom_adapter = lmcc.adapter(messages=adapter.template, formats=adapter.formats,
-                              strategies={"reasoning": reasoning, "tools": custom})
+                              transports={"reasoning": reasoning, "tools": custom})
 custom_plan = agent.bind(custom_adapter, capabilities={"instruct": True}, registry=registry)
 print("Custom sample accepted.")
 ```
@@ -206,9 +225,9 @@ def show_refusal(operation):
         print("Next step:", error.fix)
 
 broken = lmcc_std.code.heredoc_tools({})
-broken.turns["call"] = "CALL {name}: {input}"
+broken.spelling["call"] = "CALL {name}: {input}"
 broken_adapter = lmcc.adapter(messages=adapter.template, formats=adapter.formats,
-                              strategies={"tools": broken, "reasoning": reasoning})
+                              transports={"tools": broken, "reasoning": reasoning})
 show_refusal(lambda: agent.bind(broken_adapter, capabilities={"instruct": True}, registry=registry))
 ```
 
@@ -216,23 +235,20 @@ show_refusal(lambda: agent.bind(broken_adapter, capabilities={"instruct": True},
 
 For this literal-delimiter transport, `PY_END` is forbidden anywhere inside
 code. This is conservative: even a harmless string mentioning it is rejected.
-Choose another marker in **both** the strategy and the calls format if needed.
+Choose another marker in **both** the transport and the calls format if needed.
 
 ```python
-unsafe_history = [{"role": "assistant", "parts": [
-    {"type": "tool_call", "id": "c2", "name": "run_python", "input": {"code": "print('PY_END')"}},
-]}]
-show_refusal(lambda: plan.render(message=question, tools=[python_tool], history=unsafe_history))
+show_refusal(lambda: plan.render(called("print('PY_END')")))
 ```
 
 ## What this does not promise
 
 - The probe proves its **sample**, not every possible program. Regression
   tests separately cover whitespace, Unicode, empty bodies and stream splits.
-- Core `between` routing is not a strict shell-heredoc parser. Unterminated
+- Core `between` find rule is not a strict shell-heredoc parser. Unterminated
   blocks can remain ordinary reply text. Only structured `calls` may be
   considered for execution—never raw model text.
-- This shipped strategy supports one configured tool. A multi-tool agent needs
+- This shipped transport supports one configured tool. A multi-tool agent needs
   a deliberate dispatch protocol, not shell evaluation of the header.
 - The application must validate, authorize and sandbox execution, associate
   results with calls, and bound the number of continuation turns.

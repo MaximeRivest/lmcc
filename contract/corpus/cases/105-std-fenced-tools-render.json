@@ -7,7 +7,7 @@
  "entry": {
   "name": "tools_v1",
   "versions": {
-   "kernel": "0.6.0",
+   "kernel": "0.7.0",
    "vocab": {}
   },
   "template": [
@@ -16,17 +16,17 @@
     "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
    },
    {
-    "directive": "history"
+    "directive": "turns"
    },
    {
     "role": "user",
     "text": "{question}"
    }
   ],
-  "parse": {
+  "reader": {
    "kind": "derived"
   },
-  "strategies": {
+  "transports": {
    "tools": {
     "use": "fenced_tools"
    }
@@ -60,7 +60,7 @@
       "type": "object"
      }
     },
-    "role": "tools"
+    "purpose": "tools"
    },
    {
     "name": "calls",
@@ -72,7 +72,7 @@
       "type": "object"
      }
     },
-    "role": "tools.calls"
+    "purpose": "tools.calls"
    },
    {
     "name": "answer",

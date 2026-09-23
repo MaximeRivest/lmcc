@@ -20,7 +20,7 @@ FIX_SCHEMA = json.loads((ROOT / "contract" / "schema" / "fix.schema.json").read_
 
 PATTERN = lmcc.adapter(messages=[
     lmcc.system("{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"),
-    lmcc.demos(), lmcc.user("{text}")])
+    lmcc.turns(), lmcc.user("{text}")])
 
 
 def check_fix(fix: dict) -> None:
@@ -135,11 +135,11 @@ def test_unknown_slot_names_the_slot():
 
 
 def test_template_syntax_names_the_message():
-    err = refusal(lmcc.adapter, messages=[lmcc.system("ok"), lmcc.user("{% for f in nothing %}{% endfor %}")])
+    err = refusal(lmcc.adapter, messages=[lmcc.system("ok"), lmcc.user("{% for m in examples %}{m.name}{% endfor %}")])
     assert err.code == "template-syntax" and err.fix == {"action": "edit-template", "path": "template[1]"}
 
 
-def test_not_lensable_variants_name_the_message_and_the_offender():
+def test_not_readerable_variants_name_the_message_and_the_offender():
     sig = lmcc.signature("x", inputs={"text": str}, outputs={"a": str, "b": str})
     none = lmcc.adapter(messages=[lmcc.user("{text}")])
     assert refusal(none.bind, sig).fix == {"action": "edit-template", "path": "template"}
@@ -152,14 +152,14 @@ def test_not_lensable_variants_name_the_message_and_the_offender():
 
 
 def test_capability_missing_for_when_carries_the_predicate():
-    s = lmcc.Strategy(when={"not": {"capability": "instruct"}}, visible=False,
-                      routings=[{"from": "channel:thinking", "to": "@role"}])
+    s = lmcc.Transport(when={"not": {"capability": "instruct"}}, in_template=False,
+                      find=[{"from": "part:thinking", "to": "@purpose"}])
     sig = lmcc.signature("x", inputs={"text": str},
-                         outputs={"r": lmcc.field(str, role="reasoning"), "a": str})
-    adapter = lmcc.adapter(messages=PATTERN.template, strategies={"reasoning": s})
+                         outputs={"r": lmcc.field(str, purpose="reasoning"), "a": str})
+    adapter = lmcc.adapter(messages=PATTERN.template, transports={"reasoning": s})
     err = refusal(adapter.bind, sig, {"instruct": True})
     assert err.code == "capability-missing"
-    assert err.fix == {"action": "satisfy-predicate", "role": "reasoning",
+    assert err.fix == {"action": "satisfy-predicate", "purpose": "reasoning",
                        "predicate": {"not": {"capability": "instruct"}}}
     check_fix(err.fix)
 
@@ -169,7 +169,7 @@ def test_capability_missing_for_when_carries_the_predicate():
 
 def test_udf_unplaceable_names_the_language():
     entry = {"name": "x", "versions": {"kernel": lmcc.KERNEL_VERSION, "vocab": {}},
-             "template": PATTERN.template, "parse": {"kind": "derived"},
+             "template": PATTERN.template, "reader": {"kind": "derived"},
              "formats": {"Person": {"language": "javascript", "write": "x => x", "sha256": "0"}}}
     err = refusal(lmcc.load, entry, registry=lmcc.Registry(allow_udf=True))
     assert err.code == "udf-unplaceable"
@@ -189,14 +189,14 @@ def test_ship_refusals_point_at_the_face():
 
 def test_entry_malformed_paths_are_locators():
     base = {"name": "x", "versions": {"kernel": lmcc.KERNEL_VERSION, "vocab": {}},
-            "template": PATTERN.template, "parse": {"kind": "derived"}}
-    err = refusal(lmcc.load, {**base, "strategies": {"reasoning": {"routings": [{"from": "text", "to": "@role"}]}}})
+            "template": PATTERN.template, "reader": {"kind": "derived"}}
+    err = refusal(lmcc.load, {**base, "transports": {"reasoning": {"find": [{"from": "text", "to": "@purpose"}]}}})
     assert err.code == "entry-malformed"
-    assert err.fix == {"action": "edit-entry", "path": "strategies['reasoning'].routings[0]"}
+    assert err.fix == {"action": "edit-entry", "path": "transports['reasoning'].find[0]"}
     err = refusal(lmcc.load, {**base, "versions": {"kernel": 2}})
     assert err.fix == {"action": "edit-entry", "path": "versions"}
-    err = refusal(lmcc.load, {k: v for k, v in base.items() if k != "parse"})
-    assert err.fix == {"action": "edit-entry", "path": "parse"}
+    err = refusal(lmcc.load, {k: v for k, v in base.items() if k != "reader"})
+    assert err.fix == {"action": "edit-entry", "path": "reader"}
 
 
 # --------------------------------------------------- after render: none

@@ -1,0 +1,74 @@
+{
+ "name": "refuse-render-turn-signature-mismatch",
+ "kind": "refuse",
+ "entry": {
+  "name": "sections_v1",
+  "versions": {
+   "kernel": "0.7.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n\nReply with EXACTLY these sections:\n{% for f in outputs %}<{f.name}>\n{f.value}\n{% endfor %}</done>"
+   },
+   {
+    "directive": "turns"
+   },
+   {
+    "role": "user",
+    "text": "{% for f in inputs %}== {f.name} ==\n{f.value}\n{% endfor %}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Answer the question.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    },
+    "desc": "short answer"
+   },
+   {
+    "name": "score",
+    "direction": "output",
+    "shape": {
+     "type": "integer"
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "question": "3+3?"
+ },
+ "turns": {
+  "turns": [
+   {
+    "signature": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "inputs": {
+     "question": "2+2?"
+    },
+    "outputs": {
+     "answer": "4"
+    }
+   }
+  ]
+ },
+ "expect": {
+  "code": "turn-invalid",
+  "at": "render"
+ }
+}

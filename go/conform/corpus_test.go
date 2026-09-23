@@ -10,7 +10,7 @@ import (
 // TestCorpus runs every corpus case in-process. The corpus is the
 // authority: a failure here is a contract failure, never a test bug.
 func TestCorpus(t *testing.T) {
-	files, err := filepath.Glob(filepath.Join("..", "..", "contract", "corpus", "cases", "*.json"))
+	files, err := filepath.Glob(filepath.Join(casesDir(), "*.json"))
 	if err != nil || len(files) == 0 {
 		t.Fatalf("no corpus cases found: %v", err)
 	}
@@ -31,4 +31,14 @@ func TestCorpus(t *testing.T) {
 			}
 		})
 	}
+}
+
+// casesDir is the corpus this kernel is held to: LMCC_CASES when set (the
+// root ./check points it at the kernel-0.6 corpus while Go is at 0.6; see
+// plans/12-turns.md), else the live corpus.
+func casesDir() string {
+	if dir := os.Getenv("LMCC_CASES"); dir != "" {
+		return dir
+	}
+	return filepath.Join("..", "..", "contract", "corpus", "cases")
 }

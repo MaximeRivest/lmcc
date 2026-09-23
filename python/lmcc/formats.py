@@ -1,9 +1,9 @@
 """Formats: how a type is written and read (kernel §5).
 
 A format is ``write(value, field) → parts`` (text is a part),
-``read(span, field) → value``, and optionally ``describe(field) → text``.
+``read(capture, field) → value``, and optionally ``describe(field) → text``.
 It declares what it ``accepts`` (type names, structural keys, ``*``), its
-``direction``, what it ``emits`` (``text`` or ``parts``), and whether it
+``direction``, what it ``writes`` (``text`` or ``parts``), and whether it
 round-trips.
 
 This module holds the protocol, the **kernel defaults** (scalars, enums,
@@ -35,9 +35,9 @@ class Format:
     name: str | None = None          # the registered name, for named formats
     accepts: tuple[str, ...] = ("*",)
     direction: str = "both"          # "in" | "out" | "both"
-    emits: str = "text"              # "text" | "parts"
+    writes: str = "text"              # "text" | "parts"
     round_trip: bool = True
-    reads: tuple[str, ...] = ("text",)   # span kinds `read` accepts
+    reads: tuple[str, ...] = ("text",)   # capture kinds `read` accepts
 
     def describe(self, field: core.Field) -> str | None:
         return None
@@ -45,18 +45,18 @@ class Format:
     def write(self, value: object, field: core.Field) -> object:
         raise NotImplementedError
 
-    def read(self, span: core.Span, field: core.Field) -> object:
+    def read(self, capture: core.Capture, field: core.Field) -> object:
         raise NotImplementedError
 
     # -- introspection ----------------------------------------------------
     def describe_self(self) -> dict:
         return {"name": self.name, "accepts": list(self.accepts),
-                "direction": self.direction, "emits": self.emits,
+                "direction": self.direction, "writes": self.writes,
                 "round_trip": self.round_trip}
 
 
 def make(*, write, read=None, describe=None, accepts=("*",), direction=None,
-         emits="text", round_trip=True, reads=("text",), name=None) -> Format:
+         writes="text", round_trip=True, reads=("text",), name=None) -> Format:
     """Build a format from functions — the ``lmcc.format(...)`` surface."""
     if direction is None:
         direction = "both" if read is not None else "in"
@@ -67,11 +67,11 @@ def make(*, write, read=None, describe=None, accepts=("*",), direction=None,
     f = _Fn()
     f.name = name
     f.accepts = tuple(accepts) if not isinstance(accepts, str) else (accepts,)
-    f.direction, f.emits, f.round_trip, f.reads = direction, emits, round_trip, tuple(reads)
+    f.direction, f.writes, f.round_trip, f.reads = direction, writes, round_trip, tuple(reads)
     f._write, f._read, f._describe = write, read, describe
     f.write = lambda value, field: write(value) if _arity(write) == 1 else write(value, field)
     if read is not None:
-        f.read = lambda span, field: read(span) if _arity(read) == 1 else read(span, field)
+        f.read = lambda capture, field: read(capture) if _arity(read) == 1 else read(capture, field)
     if describe is not None:
         f.describe = lambda field: describe(field) if _arity(describe) == 1 else describe()
     return f
@@ -90,7 +90,7 @@ def _arity(fn) -> int:
 
 class ScalarFormat(Format):
     """Kernel §7b: scalars, enums and nullables by the §7a text rules. It
-    reads any span that carries text (text parts, thinking parts)."""
+    reads any capture that carries text (text parts, thinking parts)."""
 
     name = "kernel-scalar"
     accepts = STRUCTURAL_SCALARS + ("enum",)
@@ -104,8 +104,8 @@ class ScalarFormat(Format):
             value = value.value
         return core.spell_value(field.shape, value, where=f"field {field.name!r}", field=field.name)
 
-    def read(self, span, field):
-        value = core.read_value(field.shape, span.text, where=f"field {field.name!r}")
+    def read(self, capture, field):
+        value = core.read_value(field.shape, capture.text, where=f"field {field.name!r}")
         ann = field.annotation
         if isinstance(ann, type) and issubclass(ann, enum.Enum) and value is not None:
             return ann(value)
@@ -118,7 +118,7 @@ class MediaFormat(Format):
 
     name = "kernel-media"
     accepts = ("media:*",)
-    emits = "parts"
+    writes = "parts"
     reads = ("*",)
 
     def describe(self, field):
@@ -131,10 +131,10 @@ class MediaFormat(Format):
                    f"field {field.name!r}: a media value must be a plain dict of part data")
         return [{"type": kind, **{k: v for k, v in value.items() if k != "type"}}]
 
-    def read(self, span, field):
-        parts = span.of(field.shape.get("media"))
+    def read(self, capture, field):
+        parts = capture.of(field.shape.get("media"))
         if not parts:
-            refuse("parse-value", f"field {field.name!r}: no {field.shape.get('media')} part in the span")
+            refuse("parse-value", f"field {field.name!r}: no {field.shape.get('media')} part in the capture")
         return {k: v for k, v in parts[0].items() if k != "type"}
 
 
@@ -185,7 +185,7 @@ def ship(fmt: Format, *, language: str = "python", deps: list[str] | None = None
                fix={"action": "edit-entry", "path": "write"})
     entry = {"language": language, "deps": list(deps or []), **sources,
              "sha256": digest(sources), "authored_by": authored_by,
-             "accepts": list(fmt.accepts), "emits": fmt.emits, "round_trip": fmt.round_trip,
+             "accepts": list(fmt.accepts), "writes": fmt.writes, "round_trip": fmt.round_trip,
              "reads": list(fmt.reads)}
     return entry
 
@@ -243,7 +243,7 @@ def check_self_contained(src: str, face: str) -> None:
 
 def load_udf(entry: dict, *, where: str) -> Format:
     """Admit and materialize a shipped UDF in this Python runtime. The
-    caller has already decided placement is allowed here."""
+    caller has already decided put is allowed here."""
     if entry.get("language") != "python":
         refuse("udf-unplaceable", f"{where}: this host places python only, not {entry.get('language')!r}",
                fix={"action": "place-udf", "language": str(entry.get("language")), "path": where})
@@ -262,7 +262,7 @@ def load_udf(entry: dict, *, where: str) -> Format:
                    fix={"action": "edit-entry", "path": f"{where}.{face}"})
         fns[face] = fn
     fmt = make(write=fns["write"], read=fns.get("read"), describe=fns.get("describe"),
-               accepts=tuple(entry.get("accepts", ["*"])), emits=entry.get("emits", "text"),
+               accepts=tuple(entry.get("accepts", ["*"])), writes=entry.get("writes", "text"),
                round_trip=entry.get("round_trip", True), reads=tuple(entry.get("reads", ["text"])))
     fmt.name = f"udf:{where}"
     return fmt

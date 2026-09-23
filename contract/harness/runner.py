@@ -2,7 +2,7 @@
 
 Cases live in ``contract/corpus/cases/*.json``. Each case names a kind:
 
-- ``render``:    load entry, bake, render → compare messages + patch, exact.
+- ``render``:    load entry, bake, render → compare messages + request_settings, exact.
 - ``parse``:     load entry, bake, parse the given response → compare values;
                  replay streaming whole, one scalar at a time, and at every
                  text/part split → compare values and concatenated deltas.
@@ -26,6 +26,7 @@ per line in, one ``{"ok": bool, "detail": str}`` per line out, in order.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import shlex
 import subprocess
@@ -34,6 +35,26 @@ from dataclasses import dataclass
 from pathlib import Path
 
 CASES_DIR = Path(__file__).resolve().parent.parent / "corpus" / "cases"
+
+
+def signature_fingerprint(signature: dict) -> str:
+    """Kernel §3a, written here from the spec, independently of any kernel:
+    the harness fills it into case turns that omit ``signature``."""
+    fields = [{"direction": f["direction"], "name": f["name"], "purpose": f.get("purpose", "plain"),
+               "shape": f["shape"], "type": f.get("type", "")} for f in signature["fields"]]
+    blob = json.dumps(fields, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return "sha256:" + hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def case_turns(case: dict) -> tuple[dict, dict]:
+    """The case's current turn and slot values (kernel §9), as turn JSON."""
+    fp = signature_fingerprint(case["signature"])
+
+    def fill(turn: dict) -> dict:
+        return {"signature": fp, **turn}
+    current = {"signature": fp, "inputs": case.get("inputs", {}), "steps": case.get("steps", [])}
+    slots = {name: [fill(t) for t in ts] for name, ts in case.get("turns", {}).items()}
+    return current, slots
 
 
 class PythonDriver:
@@ -47,7 +68,7 @@ class PythonDriver:
 
     def _registry(self, case: dict):
         """Exactly what the case requires (kernel §9): a core-only registry
-        plus the listed UDF placement and extensions — never more, so a
+        plus the listed UDF put and extensions — never more, so a
         case that forgets a requirement refuses instead of passing."""
         requires = case.get("requires", [])
         extensions = [r for r in requires if not r.startswith("udf:")]
@@ -85,13 +106,12 @@ class PythonDriver:
             baked = adapter.bind(sig, case.get("capabilities", {}),
                                  registry=registry)
             if kind == "plan":
-                got = {"skeleton": baked.skeleton(),
-                       "prefix": baked.prefix(demos=case.get("demos"), history=case.get("history"))}
+                _, slots = case_turns(case)
+                got = {"skeleton": baked.skeleton(), "prefix": baked.prefix(turns=slots)}
                 return _compare({"skeleton": expect["skeleton"], "prefix": expect["prefix"]}, got, "plan")
             if kind == "render":
-                result = baked.render(inputs=case.get("inputs", {}),
-                                      demos=case.get("demos"),
-                                      history=case.get("history"))
+                current, slots = case_turns(case)
+                result = baked.render(lmcc.Turn.from_dict(current), turns=slots)
                 return _compare(expect["request"], result.request(), "request")
             if kind == "parse":
                 values = baked.parse(case["response"])
@@ -104,8 +124,8 @@ class PythonDriver:
                 return result
             if kind == "refuse":
                 if "inputs" in case:
-                    baked.render(inputs=case["inputs"], demos=case.get("demos"),
-                                 history=case.get("history"))
+                    current, slots = case_turns(case)
+                    baked.render(lmcc.Turn.from_dict(current), turns=slots)
                 if "response" in case:
                     baked.parse(case["response"])
                 return {"ok": False,
@@ -245,7 +265,7 @@ def _event_digest(event: dict) -> list:
 def _stream_trace(plan, response: object) -> list:
     """The events of every feed at one-scalar chunking, then the EOF events
     or the refusal code. Typed values are left out: the values comparison
-    already pins them; the trace pins *when* raw text becomes visible."""
+    already pins them; the trace pins *when* raw text becomes in_template."""
     import lmcc
     stream = plan.stream()
     trace: list = []
@@ -318,7 +338,7 @@ class Report:
         return self.failed == 0
 
 
-def run_corpus(driver=None, cases_dir: Path = CASES_DIR) -> Report:
+def run_corpus(driver=None, cases_dir: Path = CASES_DIR, *, compare_traces: bool = True) -> Report:
     driver = driver or PythonDriver()
     # The reference kernel is needed only to judge a driver's stream trace
     # (D-27). A driver that sends none runs against the corpus alone, so a
@@ -329,7 +349,8 @@ def run_corpus(driver=None, cases_dir: Path = CASES_DIR) -> Report:
         for path in sorted(cases_dir.glob("*.json")):
             case = json.loads(path.read_text(encoding="utf-8"))
             result = driver.run(case)
-            if result.get("ok") and not isinstance(driver, PythonDriver) and "stream_trace" in result:
+            if (compare_traces and result.get("ok") and not isinstance(driver, PythonDriver)
+                    and "stream_trace" in result):
                 if reference is None:
                     reference = PythonDriver()
                 expected = reference.run(case).get("stream_trace")
@@ -360,16 +381,24 @@ def main(argv: list[str] | None = None) -> int:
                     help="run CMD as a JSON Lines driver instead of the "
                          "in-process Python reference")
     ap.add_argument("--cwd", metavar="DIR", help="working directory for CMD")
+    ap.add_argument("--cases", metavar="DIR",
+                    help="run the corpus in DIR instead of contract/corpus/cases (an "
+                         "implementation held to an earlier kernel runs that kernel's corpus)")
     args = ap.parse_args(argv)
     if args.driver:
         driver = SubprocessDriver(args.driver, cwd=Path(args.cwd) if args.cwd else None)
     else:
         driver = PythonDriver()
-    report = run_corpus(driver)
+    # Stream traces are judged against the reference kernel, which runs the
+    # live corpus; another kernel's corpus is judged on its own expectations.
+    report = run_corpus(driver, Path(args.cases) if args.cases else CASES_DIR,
+                        compare_traces=not args.cases)
     for name, detail in report.failures:
         print(f"FAIL {name}\n{detail}\n")
     note = f", {len(report.unclaimed)} unclaimed ({', '.join(sorted({u for _, u in report.unclaimed}))})" if report.unclaimed else ""
-    if args.driver:
+    if args.driver and args.cases:
+        note += f" (corpus {args.cases}; stream traces not compared: the reference runs the live kernel)"
+    elif args.driver:
         note += f", {report.traced} stream traces match the reference kernel"
     print(f"[{driver.name}] {report.passed} passed, {report.failed} failed{note}")
     return 0 if report.ok else 1

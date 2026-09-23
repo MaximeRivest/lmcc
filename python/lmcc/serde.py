@@ -15,9 +15,9 @@ from . import extensions as _extensions
 from . import formats as _formats
 from .adapter import Adapter, adapter as make_adapter
 from .errors import refuse
-from .strategy import Strategy, turn_format_refs
+from .transport import Transport, spelling_format_refs
 
-KERNEL_VERSION = "0.6.0"
+KERNEL_VERSION = "0.7.0"
 
 
 def _parse_version(version: object, *, what: str) -> tuple[int, int, int]:
@@ -54,7 +54,7 @@ def load(entry: dict, *, registry=None) -> Adapter:
 
     if not isinstance(entry, dict):
         refuse("entry-malformed", "entry must be a JSON object", fix={"action": "edit-entry", "path": ""})
-    for key in ("template", "parse", "versions"):
+    for key in ("template", "reader", "versions"):
         if key not in entry:
             refuse("entry-malformed", f"entry is missing required key {key!r}",
                    fix={"action": "edit-entry", "path": key})
@@ -72,37 +72,37 @@ def load(entry: dict, *, registry=None) -> Adapter:
     if not isinstance(template, list):
         refuse("entry-malformed", "template must be a list", fix={"action": "edit-entry", "path": "template"})
 
-    parse_spec = entry["parse"]
-    if not isinstance(parse_spec, dict):
-        refuse("entry-malformed", "entry.parse must be an object", fix={"action": "edit-entry", "path": "parse"})
-    lens_kind = parse_spec.get("kind")
-    if lens_kind != "derived":
-        if lens_kind not in registry.lenses:
-            refuse("unknown-parse-kind",
-                   f"parse.kind {lens_kind!r} is neither the kernel lens 'derived' nor a "
-                   f"registered lens",
-                   fix={"action": "install-vocabulary", "kind": "lens", "name": str(lens_kind)})
-        _check_vocab_version(f"lens/{lens_kind}", vocab_versions,
-                             registry.lenses[lens_kind].version)
+    reader_spec = entry["reader"]
+    if not isinstance(reader_spec, dict):
+        refuse("entry-malformed", "entry.reader must be an object", fix={"action": "edit-entry", "path": "reader"})
+    reader_kind = reader_spec.get("kind")
+    if reader_kind != "derived":
+        if reader_kind not in registry.readers:
+            refuse("unknown-reader",
+                   f"reader.kind {reader_kind!r} is neither the kernel reader 'derived' nor a "
+                   f"registered reader",
+                   fix={"action": "install-vocabulary", "kind": "reader", "name": str(reader_kind)})
+        _check_vocab_version(f"reader/{reader_kind}", vocab_versions,
+                             registry.readers[reader_kind].version)
 
-    strategies: dict[str, object] = {}
-    for role, s in (entry.get("strategies") or {}).items():
-        where = f"strategies[{role!r}]"
+    transports: dict[str, object] = {}
+    for purpose, s in (entry.get("transports") or {}).items():
+        where = f"transports[{purpose!r}]"
         if not isinstance(s, dict):
             refuse("entry-malformed", f"{where}: must be an object",
                    fix={"action": "edit-entry", "path": where})
         if "use" in s:
             name = s["use"]
-            if name not in registry.strategies:
-                refuse("unknown-strategy", f"{where}: strategy {name!r} is not registered",
-                       fix={"action": "install-vocabulary", "kind": "strategy", "name": str(name)})
-            _check_vocab_version(f"strategy/{name}", vocab_versions,
-                                 registry.strategies[name].version)
+            if name not in registry.transports:
+                refuse("unknown-transport", f"{where}: transport {name!r} is not registered",
+                       fix={"action": "install-vocabulary", "kind": "transport", "name": str(name)})
+            _check_vocab_version(f"transport/{name}", vocab_versions,
+                                 registry.transports[name].version)
             options = dict(s.get("options", {}))
-            registry.strategy(name, options, where=where)  # resolve at load (§6)
-            strategies[role] = {"use": name, "options": options}
+            registry.transport(name, options, where=where)  # resolve at load (§6)
+            transports[purpose] = {"use": name, "options": options}
         else:
-            strategies[role] = Strategy.from_dict(s, where=where)
+            transports[purpose] = Transport.from_dict(s, where=where)
 
     formats: dict[str, object] = {}
     for key, f in (entry.get("formats") or {}).items():
@@ -136,11 +136,12 @@ def load(entry: dict, *, registry=None) -> Adapter:
             refuse("entry-malformed", f"{where}: a format entry is {{use}} or a shipped UDF",
                    fix={"action": "edit-entry", "path": where})
 
-    adp = make_adapter(messages=template, parse=parse_spec, strategies=strategies,
+    adp = make_adapter(messages=template, reader=reader_spec, transports=transports,
                         formats=formats, name=entry.get("name", "adapter"),
-                        extensions=entry.get("extensions"), declare_defaults=False)
+                        extensions=entry.get("extensions"),
+                        replay=entry.get("replay", "recorded"), declare_defaults=False)
     _extensions.resolve(adp, registry)   # kernel §10: refuse here, before any plan
-    for where, ref in turn_format_refs(adp, registry):
+    for where, ref in spelling_format_refs(adp, registry):
         registry.named_format(ref["use"], ref.get("options"), where=where)
         _check_vocab_version(f"format/{ref['use']}", vocab_versions, registry.formats[ref["use"]].version)
     return adp
@@ -151,20 +152,20 @@ def load(entry: dict, *, registry=None) -> Adapter:
 
 def dump(adp: Adapter, registry) -> dict:
     vocab: dict[str, str] = {}
-    strategies: dict[str, dict] = {}
-    for role, binding in adp.strategies.items():
-        if isinstance(binding, Strategy):
-            strategies[role] = binding.to_dict()
+    transports: dict[str, dict] = {}
+    for purpose, binding in adp.transports.items():
+        if isinstance(binding, Transport):
+            transports[purpose] = binding.to_dict()
         else:
-            named = registry.strategies.get(binding["use"])
+            named = registry.transports.get(binding["use"])
             if named is None:
-                refuse("unknown-strategy",
-                       f"cannot dump: strategy {binding['use']!r} is not registered "
+                refuse("unknown-transport",
+                       f"cannot dump: transport {binding['use']!r} is not registered "
                        f"(its version is part of the artifact)",
-                       fix={"action": "install-vocabulary", "kind": "strategy", "name": binding["use"]})
-            vocab[f"strategy/{binding['use']}"] = named.version
-            strategies[role] = _ref(binding)
-    for where, ref in turn_format_refs(adp, registry):
+                       fix={"action": "install-vocabulary", "kind": "transport", "name": binding["use"]})
+            vocab[f"transport/{binding['use']}"] = named.version
+            transports[purpose] = _ref(binding)
+    for where, ref in spelling_format_refs(adp, registry):
         registry.named_format(ref["use"], ref.get("options"), where=where)
         vocab[f"format/{ref['use']}"] = registry.formats[ref["use"]].version
     formats: dict[str, dict] = {}
@@ -182,27 +183,29 @@ def dump(adp: Adapter, registry) -> dict:
             formats[key] = dict(binding.shipped)
         else:
             formats[key] = _formats.ship(binding)
-    lens_kind = adp.parse.get("kind")
-    if lens_kind != "derived":
-        named = registry.lenses.get(lens_kind)
+    reader_kind = adp.reader.get("kind")
+    if reader_kind != "derived":
+        named = registry.readers.get(reader_kind)
         if named is None:
-            refuse("unknown-parse-kind",
-                   f"cannot dump: lens {lens_kind!r} is not registered (its version is "
+            refuse("unknown-reader",
+                   f"cannot dump: reader {reader_kind!r} is not registered (its version is "
                    f"part of the artifact)",
-                   fix={"action": "install-vocabulary", "kind": "lens", "name": str(lens_kind)})
-        vocab[f"lens/{lens_kind}"] = named.version
+                   fix={"action": "install-vocabulary", "kind": "reader", "name": str(reader_kind)})
+        vocab[f"reader/{reader_kind}"] = named.version
     entry: dict = {
         "name": adp.name,
         "versions": {"kernel": KERNEL_VERSION, "vocab": vocab},
         "template": [dict(m) for m in adp.template],
-        "parse": dict(adp.parse),
+        "reader": dict(adp.reader),
     }
     if adp.extensions:
         entry = {**{k: v for k, v in entry.items() if k in ("name", "versions")},
                  "extensions": dict(adp.extensions),
                  **{k: v for k, v in entry.items() if k not in ("name", "versions")}}
-    if strategies:
-        entry["strategies"] = strategies
+    if adp.replay != "recorded":
+        entry["replay"] = adp.replay
+    if transports:
+        entry["transports"] = transports
     if formats:
         entry["formats"] = formats
     return entry

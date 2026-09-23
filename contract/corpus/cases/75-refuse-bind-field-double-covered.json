@@ -4,7 +4,7 @@
  "entry": {
   "name": "visible_and_routed_v1",
   "versions": {
-   "kernel": "0.6.0",
+   "kernel": "0.7.0",
    "vocab": {}
   },
   "template": [
@@ -17,20 +17,20 @@
     "text": "{q}"
    }
   ],
-  "parse": {
+  "reader": {
    "kind": "derived"
   },
-  "strategies": {
+  "transports": {
    "reasoning": {
-    "routings": [
+    "find": [
      {
       "from": "text",
       "between": [
        "<think>",
        "</think>"
       ],
-      "to": "@role",
-      "consume": true
+      "to": "@purpose",
+      "remove": true
      }
     ]
    }
@@ -52,7 +52,7 @@
     "shape": {
      "type": "string"
     },
-    "role": "reasoning"
+    "purpose": "reasoning"
    },
    {
     "name": "answer",
@@ -67,7 +67,7 @@
   "code": "field-double-covered",
   "fix": {
    "action": "edit-entry",
-   "path": "strategies['reasoning'].visible"
+   "path": "transports['reasoning'].in_template"
   },
   "at": "bind"
  }

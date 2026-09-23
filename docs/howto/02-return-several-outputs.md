@@ -49,7 +49,7 @@ Here each field is one line: `name: value`.
 adapter = lmcc.adapter(messages=[
     lmcc.system("{instruction}\n\nReply with exactly this pattern:\n"
                 "{% for f in outputs %}{f.name}: {f.value}\n{% endfor %}"),
-    lmcc.demos(),
+    lmcc.turns(),
     lmcc.user("{text}"),
 ])
 plan = review.bind(adapter)
@@ -57,7 +57,7 @@ plan = review.bind(adapter)
 assert plan.render(text="t").system == (
     "Summarize the review.\n\nReply with exactly this pattern:\n"
     "summary: ...\nstars: (integer)\nmood: one of: happy, sad\nprice: (number)\n")
-assert plan.describe()["lens"]["anchors"] == [
+assert plan.describe()["reader"]["anchors"] == [
     ["summary", "summary: ", "\n"], ["stars", "stars: ", "\n"],
     ["mood", "mood: ", "\n"], ["price", "price: ", "\n"]]
 ```
@@ -80,17 +80,19 @@ assert plan.parse("summary: Great\nstars: 5\nmood: happy\nprice: 12.50")["price"
 `5` is an `int`. `happy` becomes `Mood.HAPPY`. `null` reads as `None`
 only because the shape is nullable.
 
-## 4. Demos go through the same pattern
+## 4. Examples go through the same pattern
 
-A demo may supply a subset of the outputs. The lens writes only the
-fields the demo supplies.
+An example is a turn: inputs and outputs, no steps (`plan.example`). It
+may supply a subset of the outputs. The reader writes only the fields the
+example supplies.
 
 ```python
-full = plan.render(text="x", demos=[{"text": "d", "summary": "s", "stars": 3, "mood": Mood.SAD, "price": None}])
+full = plan.render(text="x", turns=[plan.example(
+    {"text": "d"}, {"summary": "s", "stars": 3, "mood": Mood.SAD, "price": None})])
 assert full.messages[1]["parts"][0]["text"] == "summary: s\nstars: 3\nmood: sad\nprice: null"
 assert plan.parse(full.messages[1]["parts"][0]["text"]) == {"summary": "s", "stars": 3, "mood": Mood.SAD, "price": None}
 
-part = plan.render(text="x", demos=[{"text": "d", "summary": "s", "stars": 3}])
+part = plan.render(text="x", turns=[plan.example({"text": "d"}, {"summary": "s", "stars": 3})])
 assert part.messages[1]["parts"][0]["text"] == "summary: s\nstars: 3"
 ```
 
@@ -130,11 +132,11 @@ is whitespace, so there is no stop sequence. Use a marker such as
 |---|---|
 | `unmapped-type` | at signature: a dataclass field has a type the frontend cannot lower |
 | `no-format` | at bind: a dataclass field has a structured type and no format |
-| `not-lensable` | at bind: the pattern has a hole with no literal before it, or two fields share one anchor |
+| `not-readable` | at bind: the pattern has a hole with no literal before it, or two fields share one anchor |
 | `parse-value` | at parse: text the kernel scalar rules cannot read (`five`, `+5`, `maybe`) |
 | `parse-missing-fields` | at parse: a section is absent; `partial` carries the raw sections found |
 | `parse-ambiguous` | at parse: an anchor appears twice |
-| `value-invalid` | at render: a demo value the kernel cannot spell (a non-finite number, null where not nullable) |
+| `value-invalid` | at render: a turn value the kernel cannot spell (a non-finite number, null where not nullable) |
 
 Codes and fixes: [contract/spec/errors.md](../../contract/spec/errors.md).
 Scalar text rules: kernel.md §7a.

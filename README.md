@@ -9,7 +9,7 @@ lmcc is its calling convention.
 signature (your typed function)
         │  write: each value → its place on the wire
         ▼
-   the wire: messages, parts, request controls        ← the adapter lays this out
+   the wire: messages, parts, request request_settings        ← the adapter lays this out
         │  read: the reply → each typed value
         ▼
 your typed return value
@@ -42,23 +42,25 @@ xml = lmcc.adapter(messages=[
         "{instruction}\n\n"
         "Reply with exactly this pattern:\n"
         "{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"),
-    lmcc.demos(),
+    lmcc.turns(),
     lmcc.user("{% for f in inputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"),
 ])
 ```
 
 An adapter never knows your field names — that is what lets one adapter
-serve every signature. The template has three constructs and nothing
+serve every signature. The template has four constructs and nothing
 else:
 
 | construct | example | meaning |
 |---|---|---|
 | slot | `{instruction}`, `{question}`, `{f.name}`, `{f.value}` | a value goes here |
-| loop | `{% for f in inputs %} … {% endfor %}` (also `outputs`) | once per field |
+| loop | `{% for f in inputs %} … {% endfor %}` (also `outputs`, or a turn slot) | once per field (or per earlier message) |
+| guard | `{% if examples %} … {% endif %}` | only when that turn slot has turns |
 | escape | `{{`, `}}` | a literal brace |
 
-`lmcc.demos()` marks where worked examples go. Read the template top to
-bottom and you know the prompt. If a byte is not in the template or in a
+`lmcc.turns()` marks where earlier turns go — worked examples and the
+conversation so far (§4). Read the template top to bottom and you know
+the prompt. If a byte is not in the template or in a
 format you registered, it is not in the prompt.
 
 ## 3. Bind, render, parse
@@ -68,7 +70,7 @@ plan = answer.bind(xml, capabilities={"instruct": True})
 
 request = plan.render(question="Why is the sky blue?")
 assert request.messages[0]["parts"][0]["text"] == "<question>\nWhy is the sky blue?\n</question>\n"
-assert request.patch == {}
+assert request.request_settings == {}
 
 assert plan.parse("<answer>\nRayleigh scattering.\n</answer>") == {"answer": "Rayleigh scattering."}
 
@@ -94,7 +96,7 @@ assert end.events == [
   values or refusal as `parse`; field deltas join to the batch raw text.
 - `feed` accepts text or one part delta. `finish` returns EOF events and
   final values. Typed `field_done` events wait for full validation.
-- The rendered form is plain messages with parts plus a request patch.
+- The rendered form is plain messages with parts plus request settings.
   Hand it to any client.
 
 ## 4. The template is the parser
@@ -102,17 +104,18 @@ assert end.events == [
 You wrote no parser for `xml`. lmcc read the output pattern backwards:
 the literal before each output hole is its anchor, the literal after it
 its close. Rename `<answer>` to `<reply>` and the prompt *and* the parser
-change in the same edit. Demos are written through the same pattern the
-model is asked to follow.
+change in the same edit. Earlier turns are written through the same
+pattern the model is asked to follow.
 
 ```python
-assert plan.describe()["lens"]["anchors"] == [["answer", "<answer>\n", "\n</answer>\n"]]
-demo = plan.render(question="q", demos=[{"question": "d", "answer": "a"}]).messages[1]
-assert plan.parse(demo["parts"][0]["text"]) == {"answer": "a"}
+assert plan.describe()["reader"]["anchors"] == [["answer", "<answer>\n", "\n</answer>\n"]]
+example = plan.example({"question": "q"}, {"answer": "a"})
+written = plan.render(question="d", turns=[example]).messages[1]
+assert plan.parse(written["parts"][0]["text"]) == {"answer": "a"}
 ```
 
 Two rules keep it honest: a pattern that cannot be read backwards
-refuses at bind (`not-lensable`, naming the field); a reply that reads
+refuses at bind (`not-readable`, naming the field); a reply that reads
 two ways refuses at parse (`parse-ambiguous`). lmcc never guesses.
 
 **The JSON rule.** "Reply with a JSON object" names a format, not a
@@ -127,15 +130,41 @@ qa = lmcc.signature("Answer.", inputs={"question": str}, outputs={"answer": str,
 assert spelled.bind(qa).parse('{"answer": "Paris", "score": 9}') == {"answer": "Paris", "score": 9}
 ```
 
-Or ask the server to enforce a schema: `lens/json_object` in the std
+Or ask the server to enforce a schema: `reader/json_object` in the std
 pack is that mode, gated on the `native_structured_output` capability.
 Meanings go *inside* fields, through formats (§5). Surroundings stay
 invertible.
 
+### Turns: one record for examples and conversations
+
+A **turn** is one call of one signature, kept as values: the inputs, the
+steps (each model reply, each tool result), the outputs. An example is a
+turn that did not happen here; the conversation is the turns that did;
+the call in progress is a turn too. The plan writes all of them with its
+own writers, so a past answer always matches the current adapter — even
+after you switch it.
+
+```python
+now = plan.turn(question="Why is the sky blue?")
+rendered = plan.render(now)                                       # a request, as before
+done = rendered.step("<answer>\nRayleigh scattering.\n</answer>").finish()
+assert done.outputs == {"answer": "Rayleigh scattering."}
+
+nxt = plan.render(question="And sunsets?", turns=[done])          # the conversation so far
+assert [m["role"] for m in nxt.messages] == ["user", "assistant", "user"]
+```
+
+A turn is JSON (`done.to_dict()`, `plan.load_turn(...)`), tied to its
+signature by a fingerprint. A tool call and its result are steps of the
+same turn: `rendered.step(reply)` records the call, `turn.tool(id,
+output)` its result. Choosing *which* turns to pass — a window, a
+summary, a memory — is the caller's job; lmcc writes exactly what it is
+given. Kernel §3a has the whole contract.
+
 ## 5. Formats: how a type is written and read
 
 A **format** is how one type crosses: `write` (value → what the model
-sees) and `read` (the captured span → value). It is the only mechanism
+sees) and `read` (the captured capture → value). It is the only mechanism
 for values. Scalars, enums and `Optional[...]` have kernel defaults;
 anything with structure needs a format or refuses `no-format` — never a
 silent `str()`.
@@ -151,7 +180,7 @@ class Person:
 registry = lmcc.Registry()
 registry.format(Person,
     write=lambda p: json.dumps(p.__dict__),
-    read=lambda span: Person(**json.loads(span.text)),
+    read=lambda capture: Person(**json.loads(capture.text)),
     describe=lambda: "name and age, as JSON")
 
 @lmcc.fn
@@ -178,61 +207,61 @@ Three rules:
   when it must reply with one. Default: the type's name.
 
 `write` returns **parts** — text, or an image, or several. `read`
-receives the **span** lmcc captured. An image format writes an image
-part at the field's slot; a text-only format just reads `span.text`.
+receives the **capture** lmcc captured. An image format writes an image
+part at the field's slot; a text-only format just reads `capture.text`.
 
-## 6. Strategies: how a meaning travels
+## 6. Transports: how a meaning travels
 
-Some fields are not just values. Reasoning, tools, citations, history:
+Some fields are not just values. Reasoning, tools, citations:
 for those the question is **how they travel** — in the text, or through
-the model's own channel. That choice is a **strategy**: data, attached
-to a role.
+the model's own channel. That choice is a **transport**: data, attached
+to a purpose.
 
 ```python
 @dataclasses.dataclass
 class Solution:
-    reasoning: lmcc.Role["reasoning", str]
+    reasoning: lmcc.Purpose["reasoning", str]
     answer: int
 
 @lmcc.fn
 def solve(problem: str) -> Solution:
     """Solve it."""
 
-tags = lmcc.Strategy(
-    fragments={"system": "Think inside <think>…</think> before you answer."},
-    routings=[{"from": "text", "between": ["<think>", "</think>"], "to": "@role", "consume": True}],
-    visible=False)
+tags = lmcc.Transport(
+    tell={"system": "Think inside <think>…</think> before you answer."},
+    find=[{"from": "text", "between": ["<think>", "</think>"], "to": "@purpose", "remove": True}],
+    in_template=False)
 
-native = lmcc.Strategy(
+native = lmcc.Transport(
     requires=["native_reasoning"],
-    visible=False,
-    controls={"config": {"reasoning": {"effort": "medium"}}},   # a partial lm15 request
-    routings=[{"from": "channel:thinking", "to": "@role"}])
+    in_template=False,
+    request_settings={"config": {"reasoning": {"effort": "medium"}}},   # a partial lm15 request
+    find=[{"from": "part:thinking", "to": "@purpose"}])
 
-auto = lmcc.Strategy(choose=[
+auto = lmcc.Transport(choose=[
     {"when": {"capability": "native_reasoning"}, "use": native},
     {"else": tags},
 ])
 
-adapter = lmcc.adapter(messages=xml.template, strategies={"reasoning": auto})
+adapter = lmcc.adapter(messages=xml.template, transports={"reasoning": auto})
 p1 = solve.bind(adapter, capabilities={"instruct": True})
 p2 = solve.bind(adapter, capabilities={"instruct": True, "native_reasoning": True})
 assert p1.parse("<think>4</think><answer>\n4\n</answer>") == {"answer": 4, "reasoning": "4"}
-assert p2.render(problem="2+2").patch == {"config": {"reasoning": {"effort": "medium"}}}
+assert p2.render(problem="2+2").request_settings == {"config": {"reasoning": {"effort": "medium"}}}
 assert p2.parse({"role": "assistant", "parts": [{"type": "thinking", "text": "4"}, {"type": "text", "text": "<answer>\n4\n</answer>"}]}) == {"answer": 4, "reasoning": "4"}
 ```
 
 Same signature, same template, two inference behaviors — chosen by the
-model's declared facts, never by editing the program. A strategy may add
-text (`fragments`), hide its field (`visible`), read it back from a place
-in the reply (`routings`), put its parts in the request or a message
-(`placement`), and patch the request (`controls`).
+model's declared facts, never by editing the program. A transport may add
+text (`tell`), take its field out of the template (`in_template: False`),
+find it in the reply (`find`), put an input in the request or a message
+(`put`), and add request settings (`request_settings`).
 
 ## 7. Capabilities: refuse before you pay
 
 ```python
 try:
-    solve.bind(lmcc.adapter(messages=xml.template, strategies={"reasoning": native}),
+    solve.bind(lmcc.adapter(messages=xml.template, transports={"reasoning": native}),
                capabilities={"instruct": True})
     raise AssertionError("should have refused")
 except lmcc.Refusal as r:
@@ -243,7 +272,7 @@ except lmcc.Refusal as r:
 Capabilities are a closed, versioned vocabulary of facts, declared by
 whoever knows the model. Nothing is sniffed. Every refusal that fires
 before render carries a `fix`: the one next action, as data from a
-closed vocabulary (`spec/errors.md`), naming the exact field, role,
+closed vocabulary (`spec/errors.md`), naming the exact field, purpose,
 fact, name, or artifact path to act on. A program can repair without
 reading English.
 
@@ -276,13 +305,13 @@ refusals about model text or program values carry no `fix`.
 
 ```python
 entry = adapter.dump()
-assert entry["template"] == xml.template and entry["parse"] == {"kind": "derived"}
-assert list(entry["strategies"]) == ["reasoning"] and "formats" not in entry
+assert entry["template"] == xml.template and entry["reader"] == {"kind": "derived"}
+assert list(entry["transports"]) == ["reasoning"] and "formats" not in entry
 again = lmcc.load(entry, registry=lmcc.Registry())
 assert again.dump() == entry
 ```
 
-One JSON file: template, parse rule, **strategies by role**, **formats
+One JSON file: template, reader, **transports by purpose**, **formats
 by type**. No signature, no field names, no hidden code — a shipped
 format says so on its entry (language, deps, hash, author).
 `lmcc.load(entry)` needs nothing ambient. Another implementation that
@@ -299,8 +328,8 @@ contract/          the authority (no code)
   harness/         runs any implementation against the corpus
 python/
   lmcc/            the reference kernel, stdlib only
-  lmcc_std/        formats json/table/scaled_number, lens json_object,
-                   reasoning strategies — a pack like anyone's
+  lmcc_std/        formats json/table/scaled_number, reader json_object,
+                   reasoning transports — a pack like anyone's
   lmcc_dspy/       any dspy.Signature → a signature (16-row catalog)
   lmcc_lm15/       typed face over the shared wire: lm15 Request in, Response out
 go/
@@ -325,8 +354,8 @@ minus its model** — `{"system", "messages": [{"role", "parts"}], "config",
 `contract/LM15_CONTRACT_PIN` — and what it parses is an lm15 message or
 response. No translation layer: `plan.render(...).request(model)` is the
 dict lm15's `request_from_dict` takes, in every language lm15 exists in.
-A strategy's `controls` are a partial lm15 request too (`config.reasoning`,
-`config.response_format`, `tools`), so a strategy does everything its
+A transport's `request_settings` are a partial lm15 request too (`config.reasoning`,
+`config.response_format`, `tools`), so a transport does everything its
 meaning needs — asks for thinking *and* reads it back. The typed face
 (`python/lmcc_lm15`) is a few lines over lm15's own serde:
 
@@ -357,12 +386,11 @@ capabilities and host execution support stay separate vocabularies. See
 
 Raw-code tool calls are covered in the runnable
 [conversational heredoc notebook](docs/howto/12-conversational-heredoc-tools.md).
-`heredoc_tools` supplies the envelope and history spelling; `code_arguments`
-writes the body without escaping or trimming; `code_calls` reads it back.
-`turns.input_format` and `turns.probe` let custom transports use the same
-writer for history and a representative bind-time round-trip check. This is
-kernel 0.6: update older artifact kernel pins deliberately; the old turns
-syntax keeps its meaning. No code is executed by binding or by the notebook.
+`heredoc_tools` supplies the envelope and the spelling of past calls;
+`code_arguments` writes the body without escaping or trimming; `code_calls`
+reads it back. `spelling.input_format` and `spelling.probe` let custom transports
+use the same writer for past calls and a representative bind-time
+round-trip check. No code is executed by binding or by the notebook.
 
 ## 12. What lmcc refuses to be
 

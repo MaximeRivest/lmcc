@@ -7,7 +7,7 @@
  "entry": {
   "name": "std_spelling_v1",
   "versions": {
-   "kernel": "0.6.0",
+   "kernel": "0.7.0",
    "vocab": {
     "format/json": "0.1.0",
     "format/table": "0.1.0",
@@ -20,14 +20,14 @@
     "text": "{instruction}\n{% for f in outputs %}{f.name}: {f.schema}\n{% endfor %}\n{% for f in outputs %}<{f.name}>\n{f.value}\n{% endfor %}</done>"
    },
    {
-    "directive": "demos"
+    "directive": "turns"
    },
    {
     "role": "user",
     "text": "{q}"
    }
   ],
-  "parse": {
+  "reader": {
    "kind": "derived"
   },
   "formats": {
@@ -103,33 +103,39 @@
  "inputs": {
   "q": "go"
  },
- "demos": [
-  {
-   "q": "went",
-   "data": {
-    "x": 1.0,
-    "y": 1e+21,
-    "z": true,
-    "s": "é\n\"q\"",
-    "n": null,
-    "e": {},
-    "l": []
-   },
-   "rows": [
-    {
-     "name": "a",
-     "score": 2.5,
-     "ok": true
+ "turns": {
+  "turns": [
+   {
+    "inputs": {
+     "q": "went"
     },
-    {
-     "name": "b",
-     "score": 3,
-     "ok": false
+    "outputs": {
+     "data": {
+      "x": 1.0,
+      "y": 1e+21,
+      "z": true,
+      "s": "é\n\"q\"",
+      "n": null,
+      "e": {},
+      "l": []
+     },
+     "rows": [
+      {
+       "name": "a",
+       "score": 2.5,
+       "ok": true
+      },
+      {
+       "name": "b",
+       "score": 3,
+       "ok": false
+      }
+     ],
+     "conf": 0.78
     }
-   ],
-   "conf": 0.78
-  }
- ],
+   }
+  ]
+ },
  "expect": {
   "request": {
    "system": "Spell.\ndata: JSON matching this schema: {\"type\": \"object\"}\nrows: | name | score | ok |  (one row per item)\nconf: a number like 83%\n\n<data>\nJSON matching this schema: {\"type\": \"object\"}\n<rows>\n| name | score | ok |  (one row per item)\n<conf>\na number like 83%\n</done>",

@@ -1,0 +1,319 @@
+{
+ "name": "std-native-tools-render-assigned-ids",
+ "kind": "render",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "tools_v1",
+  "versions": {
+   "kernel": "0.7.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "directive": "turns"
+   },
+   {
+    "role": "user",
+    "text": "{question}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  },
+  "transports": {
+   "tools": {
+    "use": "native_tools"
+   }
+  },
+  "formats": {
+   "list[Tool]": {
+    "use": "function_tool"
+   },
+   "list[ToolCall]": {
+    "use": "tool_calls"
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Answer, using tools when needed.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "tools",
+    "direction": "input",
+    "type": "list[Tool]",
+    "shape": {
+     "type": "array",
+     "items": {
+      "type": "object"
+     }
+    },
+    "purpose": "tools"
+   },
+   {
+    "name": "calls",
+    "direction": "output",
+    "type": "list[ToolCall]",
+    "shape": {
+     "type": "array",
+     "items": {
+      "type": "object"
+     }
+    },
+    "purpose": "tools.calls"
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "capabilities": {
+  "native_function_calling": true
+ },
+ "inputs": {
+  "question": "And tomorrow?",
+  "tools": [
+   {
+    "name": "get_weather",
+    "description": "Weather for a city.",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "city": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "city"
+     ]
+    }
+   }
+  ]
+ },
+ "turns": {
+  "turns": [
+   {
+    "inputs": {
+     "question": "Weather in Paris?"
+    },
+    "steps": [
+     {
+      "kind": "model",
+      "outputs": {
+       "calls": [
+        {
+         "id": "call_1",
+         "name": "get_weather",
+         "input": {
+          "city": "Paris"
+         }
+        }
+       ]
+      },
+      "calls_field": "calls"
+     },
+     {
+      "kind": "tool",
+      "id": "call_1",
+      "name": "get_weather",
+      "output": [
+       {
+        "type": "text",
+        "text": "Sunny, 22C"
+       }
+      ]
+     },
+     {
+      "kind": "model",
+      "outputs": {
+       "answer": "Sunny."
+      }
+     }
+    ]
+   },
+   {
+    "inputs": {
+     "question": "Weather in Paris?"
+    },
+    "steps": [
+     {
+      "kind": "model",
+      "outputs": {
+       "calls": [
+        {
+         "id": "call_1",
+         "name": "get_weather",
+         "input": {
+          "city": "Paris"
+         }
+        }
+       ]
+      },
+      "calls_field": "calls"
+     },
+     {
+      "kind": "tool",
+      "id": "call_1",
+      "name": "get_weather",
+      "output": [
+       {
+        "type": "text",
+        "text": "Sunny, 22C"
+       }
+      ]
+     },
+     {
+      "kind": "model",
+      "outputs": {
+       "answer": "Sunny."
+      }
+     }
+    ]
+   }
+  ]
+ },
+ "expect": {
+  "request": {
+   "system": "Answer, using tools when needed.\n<answer>\n...\n</answer>\n",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "Weather in Paris?"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "tool_call",
+       "id": "s0_call_1",
+       "name": "get_weather",
+       "input": {
+        "city": "Paris"
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "parts": [
+      {
+       "type": "tool_result",
+       "id": "s0_call_1",
+       "name": "get_weather",
+       "content": [
+        {
+         "type": "text",
+         "text": "Sunny, 22C"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "<answer>\nSunny.\n</answer>"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "Weather in Paris?"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "tool_call",
+       "id": "s2_call_1",
+       "name": "get_weather",
+       "input": {
+        "city": "Paris"
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "parts": [
+      {
+       "type": "tool_result",
+       "id": "s2_call_1",
+       "name": "get_weather",
+       "content": [
+        {
+         "type": "text",
+         "text": "Sunny, 22C"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "<answer>\nSunny.\n</answer>"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "And tomorrow?"
+      }
+     ]
+    }
+   ],
+   "tools": [
+    {
+     "type": "function",
+     "name": "get_weather",
+     "description": "Weather for a city.",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "city": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "city"
+      ]
+     }
+    }
+   ]
+  }
+ }
+}

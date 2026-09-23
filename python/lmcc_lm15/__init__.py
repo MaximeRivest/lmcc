@@ -7,17 +7,20 @@ lm15's own serde in both directions, so there is no translation and
 nothing here can drift from what lm15 says a request or a response is.
 
 - ``request(rendered, model=..., config=...)`` → ``lm15.Request``: the
-  plan's patch (what the adapter *needs*: ``config.reasoning`` for a
-  native thinking strategy, ``config.response_format`` for a JSON lens,
-  ``tools`` for a placement) is the base; the caller's ``Config`` fills
-  the rest. A caller value that *contradicts* the patch raises — the
-  patch is part of the calling convention, not a suggestion — unless
+  plan's request_settings (what the adapter *needs*: ``config.reasoning`` for a
+  native thinking transport, ``config.response_format`` for a JSON reader,
+  ``tools`` for a put) is the base; the caller's ``Config`` fills
+  the rest. A caller value that *contradicts* the request_settings raises — the
+  request_settings is part of the calling convention, not a suggestion — unless
   ``override=True`` says the caller knows better.
 - ``parse(plan, response)`` → typed values from an ``lm15.Response`` (or
   ``Message``).
 - ``stream(plan, events)`` → drive a plan's sans-I/O stream from
   ``lm.stream(...)`` events; returns the events lmcc emitted and the
   typed values.
+- ``step(rendered, response)`` → the turn that was rendered, with the
+  ``lm15.Response`` (or ``Message``) recorded as its next model step
+  (kernel §3a): the typed values and the message exactly as it came.
 """
 
 from __future__ import annotations
@@ -29,12 +32,13 @@ from lm15.serde import config_to_dict, delta_to_dict, message_to_dict, request_f
 
 from lmcc.plan import Plan, RenderResult
 from lmcc.stream import StreamResult
+from lmcc.turn import Turn
 
-__all__ = ["request", "parse", "stream", "message_to_history", "ConfigConflict"]
+__all__ = ["request", "parse", "stream", "step", "ConfigConflict"]
 
 
 class ConfigConflict(ValueError):
-    """The caller's Config contradicts what the plan's patch requires."""
+    """The caller's Config contradicts what the plan's request_settings requires."""
 
 
 def _merge(base: dict, extra: dict, *, path: str, override: bool) -> dict:
@@ -45,7 +49,7 @@ def _merge(base: dict, extra: dict, *, path: str, override: bool) -> dict:
             out[key] = _merge(out[key], value, path=here, override=override)
         elif key in out and out[key] != value and not override:
             raise ConfigConflict(
-                f"{here}: the plan's patch requires {out[key]!r} (a strategy or lens asked for it) "
+                f"{here}: the plan's request_settings requires {out[key]!r} (a transport or reader asked for it) "
                 f"but the caller's Config says {value!r}; pass override=True to insist")
         else:
             out[key] = value
@@ -86,8 +90,8 @@ def stream(plan: Plan, events: Iterable[object]) -> tuple[list[dict], StreamResu
     return out, result
 
 
-def message_to_history(message: Message) -> dict:
-    """An lm15 ``Message`` as a history item (kernel §3): its canonical
-    JSON, verbatim — a tool-call turn or a ``Message.tool(...)`` result
-    goes straight back into the next ``render(history=...)``."""
-    return message_to_dict(message)
+def step(rendered: RenderResult, response: Response | Message) -> Turn:
+    """The rendered turn with this reply recorded as its next model step:
+    ``rendered.step`` over lm15's own canonical JSON of the message."""
+    message = response if isinstance(response, Message) else response.message
+    return rendered.step(message_to_dict(message))

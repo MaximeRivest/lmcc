@@ -1,5 +1,29 @@
 # The corpus
 
+**Vocabulary (kernel 0.7, D-40).** Every case was rewritten as JSON, never as
+text, so a message's `role` could not be confused with a field's: entry keys
+(`transports`, `reader`, `find`, `put`, `tell`, `request_settings`,
+`written_as`, `in_template`, `remove`, `complete_reply`, `spelling`),
+`@purpose`, `part:`, `request.<key>`, field `purpose`, error codes, fix
+payloads and file names. No rendered or parsed byte changed, with one
+intended exception: case 128's fingerprint, which hashes the key `purpose`.
+
+**Turns (kernel 0.7, D-39).** One record replaces demos and history. The
+migration of 01–127 was mechanical and changed no expected byte: every
+kernel pin moved to 0.7.0 (`transport/reasoning_tags` to 0.2.0), each
+template's `demos`/`history` directives became one `turns` directive, and
+each case's `demos` became example turns in the slot `turns`. Eight cases
+that pinned history were rewritten by hand to the rule they now test and
+renamed: 03 (a recorded reply replayed verbatim), 47, 53 (example turns with
+subsets), 54 (`turn-invalid`), 103 and 107 (one recorded turn, native then
+re-spelled for fenced), 116 and 122 (heredoc steps written from values);
+13 now names the provided kernel. Cases 128–148 were authored by hand from
+kernel §3a; honestly stated, the Python kernel existed when they were
+written, and none of their expectations was produced by running it. Every
+new rule was checked by breaking the kernel on purpose: each break must
+fail at least one case (the projection rule needed case 148 to be caught).
+The Go kernel is held to the `kernel-0.6` tag's corpus until it is ported.
+
 **Formatted turns (kernel 0.6, D-38).** Cases 116–127 were authored from
 kernel §6 and `spec/vocab/format-code.md` before implementing the feature.
 They pin exact history bytes and raw-code parsing (including indentation,
@@ -17,23 +41,23 @@ the entry schema; their case and refusal schemas still validate.
 messages; parts carry `type`. The bytes of 01–95 were re-spelled by
 script and reviewed through both harness drivers — no expectation
 changed meaning; two were hand-edited to be *valid lm15* (66's tool item
-became a `function` tool; 67's placement path a real control path).
+became a `function` tool; 67's put path a real control path).
 Cases 96–98 pin what 0.4 adds: a control outside the pinned lm15 fields
 refuses (96), a `developer` message renders and `system` folds (97), a
 `system` message that does not lead refuses (98). Case 99 (D-36) pins
 `config.stop` from the skeleton when `stop_sequences` is declared.
 
 **Tools and citations (kernel 0.5, D-37).** Cases 100–112 were
-hand-authored from `spec/vocab/strategy-tools.md` and
-`strategy-citations.md`: native tools render (100), a call turn (101, the
+hand-authored from `spec/vocab/transport-tools.md` and
+`transport-citations.md`: native tools render (100), a call turn (101, the
 answer is omitted, never refused), an answer turn (102, empty calls), lm15
 history verbatim (103), the capability refusal (104); fenced tools render
-with the catalog spelled `via` (105), a fenced call with an assigned id
+with the catalog spelled `written_as` (105), a fenced call with an assigned id
 (106), history spelled through `turns` (107), the probe refusing a
 drifted spelling (108); inline citations render and parse (109–110),
 native citations parse and render (111–112). Cases 113–114 pin the
 whole-reply pattern (a single bare slot with no anchor, kernel §4),
-which search-mode replies made necessary. Case 66's placement now
+which search-mode replies made necessary. Case 66's put now
 appends after a blank line, like a fragment — one deliberate byte change.
 
 **Kernel 0.3 (D-33).** Every case pinned `kernel: 0.3.0`; the migration
@@ -48,7 +72,7 @@ the implementation is wrong; changing a case is a contract change and gets
 reviewed like one.
 
 **Provenance honesty.** The `expect` blocks of render/parse/roundtrip cases
-were seeded once from the Python reference (`tools/bootstrap.py`) at
+were seeded once from the Python reference (`tools/bootstrap.py`, removed in kernel 0.7; see git history) at
 contract creation, then human-reviewed. From that moment the direction of
 authority flipped: the files rule, the reference obeys. Do not re-run the
 seeder over behavior changes — that would silently re-bless drift.
@@ -60,7 +84,7 @@ whitespace, regex dialect, marker collisions, signature validity).
 
 **Second seeding (kernel 0.2, plan 08).** When the contract moved to the
 v3 design, cases 01–54 were converted by a script (template list,
-`codecs` → `formats` by structural key, the routing form, refusal codes)
+`codecs` → `formats` by structural key, the find rule form, refusal codes)
 and every `sections` template became a derived pattern. For the eleven
 render cases whose bytes changed, the new expectation was regenerated
 from the reference and each diff was reviewed by hand: every change is
@@ -69,13 +93,13 @@ to render `name  desc`. Cases 55–73 were hand-authored for what v3 adds.
 Authority is frozen again from this point.
 
 **Fix hints (plan 06).** Every refuse case that fires before render
-gained an `expect.fix` (the exact payload both kernels must emit,
+gained an `expect.fix` (the exact payload both kernels must write,
 `schema/fix.schema.json`), authored by hand and reviewed against the
 reference — one guess (case 56's field) was corrected by the harness
 diff, in the reference's favor: the first offender in signature order.
 Cases 74–79 were hand-authored to pin the actions no earlier case
-reached (`edit-signature` with a role, `edit-entry` on `.visible` and
-`.controls`, `install-vocabulary` for a strategy, `satisfy-predicate`,
+reached (`edit-signature` with a role, `edit-entry` on `.in_template` and
+`.request_settings`, `install-vocabulary` for a transport, `satisfy-predicate`,
 `edit-template` for syntax).
 
 **Anchor inside anchor (D-27).** Case 80 was hand-authored while making
@@ -84,9 +108,9 @@ occurrence yields an empty capture (§4). It exposed a Go batch panic on
 the negative slice, fixed to match; the reference already read it so.
 
 **Vocabulary references (D-28).** Cases 81–82 were hand-authored after a
-pack-built strategy with empty `between` delimiters hung batch parse in
+pack-built transport with empty `between` delimiters hung batch parse in
 both kernels: a reference's factory now runs at load, its failure is
-`entry-malformed` at the reference's path, and a strategy it returns is
+`entry-malformed` at the reference's path, and a transport it returns is
 validated like inline data. Case 82 pins the same rule for a format
 whose options the pack rejects.
 
@@ -105,7 +129,7 @@ records its withdrawal without discarding the safety fixes.
 by hand to declare `pattern/legacy-re2` 0.1.0 and to `requires` it; their
 expectations are byte-identical. Cases 91–95 were hand-authored for the
 mechanism of kernel §10: an undeclared `pattern` (91, fix names the
-routing's path and the family to declare), a declared extension on a
+find rule's path and the family to declare), a declared extension on a
 core-only host (92, `bind-extension`), a version the host does not
 provide (93, reusing `match-version` with the extension as `entry`), two
 contracts of one family (94, `entry-malformed` at `extensions`, refused
@@ -124,15 +148,17 @@ feed decoded text or part deltas.
 **Case format.** One JSON object per file:
 
 - `kind`: `render` | `parse` | `roundtrip` | `refuse` | `plan` (skeleton + prefix); every `parse` and refuse-at-parse case also drives streaming automatically
-- `requires`: everything beyond the core the case needs — UDF placements
+- `requires`: everything beyond the core the case needs — UDF puts
   (`udf:python`) and extensions (`pattern/legacy-re2`); a driver binds
   exactly these and answers `unclaimed` for any it lacks; the harness
   counts those apart
 - `vocab`: packs the harness must install (e.g. `["std"]`); absent means
   the case must pass against an **empty registry**
-- `entry`, `signature`, `capabilities`, `inputs`, `demos`, `history`,
-  `response`: the scenario
-- `expect`: exact `messages`+`patch`, exact `values`, exact `entry`, or
+- `entry`, `signature`, `capabilities`, `inputs`, `steps`, `turns`,
+  `response`: the scenario — `inputs` and `steps` are the current turn,
+  `turns` maps slot names to earlier turns (a turn may omit `signature`;
+  the harness writes the case signature's fingerprint, kernel §9)
+- `expect`: exact `messages`+request settings, exact `values`, exact `entry`, or
   `{code, fix?, at}` for refusals (`fix` is asserted exactly when present;
   every pre-render refuse case carries one)
 

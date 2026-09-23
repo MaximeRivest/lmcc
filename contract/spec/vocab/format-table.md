@@ -30,6 +30,6 @@ the item schema's property shape with the kernel scalar rules
 (`integer`, `number`, `boolean`, `enum`; default string) — a cell that
 fails its rule is a format error, never a silent default.
 
-**Corpus.** `17-std-table-format-demo-lens.json` (render incl. escaping via
-the demo lens), `18-std-table-format-parse.json` (header skip + coercion),
+**Corpus.** `17-std-table-format-demo-reader.json` (render incl. escaping via
+an example turn), `18-std-table-format-parse.json` (header skip + coercion),
 `45-std-json-number-spelling.json` (number and boolean cells).

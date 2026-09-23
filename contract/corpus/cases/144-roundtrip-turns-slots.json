@@ -1,0 +1,94 @@
+{
+ "name": "roundtrip-turns-slots",
+ "kind": "roundtrip",
+ "entry": {
+  "name": "turns_v1",
+  "versions": {
+   "kernel": "0.7.0",
+   "vocab": {}
+  },
+  "replay": "values",
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% if examples %}{% for m in examples %}{m.role}: {m.text}\n{% endfor %}{% endif %}{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "directive": "turns",
+    "slot": "conversation"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  },
+  "transports": {
+   "reasoning": {
+    "in_template": false,
+    "find": [
+     {
+      "from": "text",
+      "between": [
+       "<r>",
+       "</r>"
+      ],
+      "to": "@purpose",
+      "remove": true
+     }
+    ],
+    "spelling": {
+     "position": "before"
+    }
+   }
+  }
+ },
+ "expect": {
+  "entry": {
+   "name": "turns_v1",
+   "versions": {
+    "kernel": "0.7.0",
+    "vocab": {}
+   },
+   "replay": "values",
+   "template": [
+    {
+     "role": "system",
+     "text": "{instruction}\n{% if examples %}{% for m in examples %}{m.role}: {m.text}\n{% endfor %}{% endif %}{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+    },
+    {
+     "directive": "turns",
+     "slot": "conversation"
+    },
+    {
+     "role": "user",
+     "text": "{q}"
+    }
+   ],
+   "reader": {
+    "kind": "derived"
+   },
+   "transports": {
+    "reasoning": {
+     "in_template": false,
+     "find": [
+      {
+       "from": "text",
+       "between": [
+        "<r>",
+        "</r>"
+       ],
+       "to": "@purpose",
+       "remove": true
+      }
+     ],
+     "spelling": {
+      "position": "before"
+     }
+    }
+   }
+  }
+ }
+}

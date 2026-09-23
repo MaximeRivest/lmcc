@@ -1,0 +1,131 @@
+{
+ "name": "std-table-format-example-reader",
+ "kind": "render",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "sections_v1",
+  "versions": {
+   "kernel": "0.7.0",
+   "vocab": {
+    "format/table": "0.1.0"
+   }
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n\nReply with EXACTLY these sections:\n{% for f in outputs %}<{f.name}>\n{f.value}\n{% endfor %}</done>"
+   },
+   {
+    "directive": "turns"
+   },
+   {
+    "role": "user",
+    "text": "{% for f in inputs %}== {f.name} ==\n{f.value}\n{% endfor %}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  },
+  "formats": {
+   "list[object]": {
+    "use": "table",
+    "options": {
+     "columns": [
+      "name",
+      "score"
+     ]
+    }
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Rank.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "rows",
+    "direction": "output",
+    "shape": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "name": {
+        "type": "string"
+       },
+       "score": {
+        "type": "integer"
+       }
+      }
+     }
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "q": "rank these"
+ },
+ "turns": {
+  "turns": [
+   {
+    "inputs": {
+     "q": "rank those"
+    },
+    "outputs": {
+     "rows": [
+      {
+       "name": "a|b",
+       "score": 3
+      },
+      {
+       "name": "c",
+       "score": 1
+      }
+     ]
+    }
+   }
+  ]
+ },
+ "expect": {
+  "request": {
+   "system": "Rank.\n\nReply with EXACTLY these sections:\n<rows>\n| name | score |  (one row per item)\n</done>",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "== q ==\nrank those\n"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "<rows>\n| a\\|b | 3 |\n| c | 1 |\n</done>"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "== q ==\nrank these\n"
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

@@ -4,7 +4,7 @@
  "entry": {
   "name": "choose_without_else_v1",
   "versions": {
-   "kernel": "0.6.0",
+   "kernel": "0.7.0",
    "vocab": {}
   },
   "template": [
@@ -17,10 +17,10 @@
     "text": "{q}"
    }
   ],
-  "parse": {
+  "reader": {
    "kind": "derived"
   },
-  "strategies": {
+  "transports": {
    "reasoning": {
     "choose": [
      {
@@ -28,11 +28,11 @@
        "capability": "native_reasoning"
       },
       "use": {
-       "visible": false,
-       "routings": [
+       "in_template": false,
+       "find": [
         {
-         "from": "channel:thinking",
-         "to": "@role"
+         "from": "part:thinking",
+         "to": "@purpose"
         }
        ]
       }
@@ -49,16 +49,16 @@
        ]
       },
       "use": {
-       "visible": false,
-       "routings": [
+       "in_template": false,
+       "find": [
         {
          "from": "text",
          "between": [
           "<think>",
           "</think>"
          ],
-         "to": "@role",
-         "consume": true
+         "to": "@purpose",
+         "remove": true
         }
        ]
       }
@@ -83,7 +83,7 @@
     "shape": {
      "type": "string"
     },
-    "role": "reasoning"
+    "purpose": "reasoning"
    },
    {
     "name": "answer",
@@ -101,7 +101,7 @@
   "code": "capability-missing",
   "fix": {
    "action": "satisfy-predicate",
-   "role": "reasoning",
+   "purpose": "reasoning",
    "predicate": {
     "any": [
      {

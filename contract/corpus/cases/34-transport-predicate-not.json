@@ -1,0 +1,83 @@
+{
+ "name": "transport-predicate-not",
+ "kind": "render",
+ "entry": {
+  "name": "prefix_cot_style_v1",
+  "versions": {
+   "kernel": "0.7.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n{% endfor %}"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  },
+  "transports": {
+   "reasoning": {
+    "when": {
+     "not": {
+      "capability": "native_reasoning"
+     }
+    },
+    "tell": {
+     "system": "Think step by step in the reasoning section before answering."
+    }
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Answer.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "reasoning",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    },
+    "purpose": "reasoning"
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "capabilities": {},
+ "inputs": {
+  "q": "3+3?"
+ },
+ "expect": {
+  "request": {
+   "system": "Answer.\n<reasoning>\n...\n<answer>\n...\n\n\nThink step by step in the reasoning section before answering.",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "3+3?"
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

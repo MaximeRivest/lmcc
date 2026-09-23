@@ -1,0 +1,29 @@
+{
+ "name": "refuse-load-unknown-reader",
+ "kind": "refuse",
+ "entry": {
+  "name": "json_lens_v1",
+  "versions": {
+   "kernel": "0.7.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "user",
+    "text": "{question}"
+   }
+  ],
+  "reader": {
+   "kind": "json_object"
+  }
+ },
+ "expect": {
+  "code": "unknown-reader",
+  "fix": {
+   "action": "install-vocabulary",
+   "kind": "reader",
+   "name": "json_object"
+  },
+  "at": "load"
+ }
+}

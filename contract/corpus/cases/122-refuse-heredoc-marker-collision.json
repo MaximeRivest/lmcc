@@ -7,7 +7,7 @@
  "entry": {
   "name": "tools_v1",
   "versions": {
-   "kernel": "0.6.0",
+   "kernel": "0.7.0",
    "vocab": {}
   },
   "template": [
@@ -16,17 +16,17 @@
     "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
    },
    {
-    "directive": "history"
+    "directive": "turns"
    },
    {
     "role": "user",
     "text": "{question}"
    }
   ],
-  "parse": {
+  "reader": {
    "kind": "derived"
   },
-  "strategies": {
+  "transports": {
    "tools": {
     "use": "heredoc_tools"
    }
@@ -60,7 +60,7 @@
       "type": "object"
      }
     },
-    "role": "tools"
+    "purpose": "tools"
    },
    {
     "name": "calls",
@@ -72,7 +72,7 @@
       "type": "object"
      }
     },
-    "role": "tools.calls"
+    "purpose": "tools.calls"
    },
    {
     "name": "answer",
@@ -97,33 +97,30 @@
    }
   ]
  },
- "history": [
+ "steps": [
   {
-   "role": "assistant",
-   "parts": [
-    {
-     "type": "tool_call",
-     "id": "c1",
-     "name": "run_python",
-     "input": {
-      "code": "print('PY_END')"
+   "kind": "model",
+   "outputs": {
+    "calls": [
+     {
+      "id": "c1",
+      "name": "run_python",
+      "input": {
+       "code": "print('PY_END')"
+      }
      }
-    }
-   ]
+    ]
+   },
+   "calls_field": "calls"
   },
   {
-   "role": "tool",
-   "parts": [
+   "kind": "tool",
+   "id": "c1",
+   "name": "run_python",
+   "output": [
     {
-     "type": "tool_result",
-     "id": "c1",
-     "name": "run_python",
-     "content": [
-      {
-       "type": "text",
-       "text": "42"
-      }
-     ]
+     "type": "text",
+     "text": "42"
     }
    ]
   }

@@ -34,10 +34,14 @@ entry = json.load(open("contract/schema/entry.schema.json"))
 signature = json.load(open("contract/schema/signature.schema.json"))
 case_schema = json.load(open("contract/schema/case.schema.json"))
 fix_schema = json.load(open("contract/schema/fix.schema.json"))
+turn_schema = json.load(open("contract/schema/turn.schema.json"))
+from referencing import Registry, Resource
+schemas = Registry().with_resource(turn_schema["$id"], Resource.from_contents(turn_schema))
+case_validator = jsonschema.Draft202012Validator(case_schema, registry=schemas)
 n = 0
 for f in sorted(glob.glob("contract/corpus/cases/*.json")):
     case = json.load(open(f))
-    jsonschema.validate(case, case_schema)
+    case_validator.validate(case)
     if "fix" in case.get("expect", {}):
         jsonschema.validate(case["expect"]["fix"], fix_schema)
     try:
@@ -53,7 +57,7 @@ for f in sorted(glob.glob("contract/corpus/cases/*.json")):
     if "signature" in case and case["expect"].get("code") != "signature-malformed":
         jsonschema.validate(case["signature"], signature)
     n += 1
-print(n, "cases validate against the case, entry, signature and fix schemas")
+print(n, "cases validate against the case, turn, entry, signature and fix schemas")
 '
 if python -c 'import jsonschema' 2>/dev/null; then
   python -c "$VALIDATE"
@@ -72,14 +76,20 @@ exec(compile(code, 'README-quickstart', 'exec'))
 print('README quickstart runs verbatim')
 EOF
 
-step "5/7 go implementation: own checks, then the corpus via the harness"
+step "5/7 go implementation (kernel 0.6): own checks, then the kernel-0.6 corpus via the harness"
+# Go is held to the corpus of the kernel it implements, never to one it does
+# not claim. Porting Go to 0.7 (turns) is listed in plans/12-turns.md.
+GO_CASES=$(mktemp -d)
+trap 'rm -rf "$GO_CASES"' EXIT
+git archive kernel-0.6 contract/corpus/cases | tar -x -C "$GO_CASES"
+export LMCC_CASES="$GO_CASES/contract/corpus/cases"
 if command -v go >/dev/null 2>&1; then
   (cd go && ./check)
 else
   echo "go not on PATH; using nix shell nixpkgs#go"
   (cd go && nix shell nixpkgs#go -c ./check)
 fi
-run_py ../contract/harness/runner.py --driver ../go/bin/lmcc-conform
+run_py ../contract/harness/runner.py --driver ../go/bin/lmcc-conform --cases "$LMCC_CASES"
 
 step "6/7 dspy frontend: feature catalog against a real DSPy"
 python/lmcc_dspy/check

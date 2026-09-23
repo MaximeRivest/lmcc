@@ -4,7 +4,7 @@
  "entry": {
   "name": "sections_v1",
   "versions": {
-   "kernel": "0.6.0",
+   "kernel": "0.7.0",
    "vocab": {}
   },
   "template": [
@@ -17,7 +17,7 @@
     "text": "{question}"
    }
   ],
-  "parse": {
+  "reader": {
    "kind": "derived"
   }
  },

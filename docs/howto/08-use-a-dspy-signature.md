@@ -77,11 +77,11 @@ assert short.signature.instructions == "Given the fields `question`, produce the
 assert [f.name for f in short.signature.fields] == ["question", "answer"]
 ```
 
-## 5. `dspy.History` becomes history turns
+## 5. `dspy.History` becomes earlier turns
 
-The history input leaves the signature. `split_inputs` turns its
-messages into field turns that the adapter's `history` directive
-renders through the same pattern.
+The history input leaves the signature. `split_inputs` turns each of its
+messages into a turn — inputs and outputs, no steps — that the adapter's
+turn slot renders through the same pattern.
 
 ```python
 class Chat(dspy.Signature):
@@ -96,15 +96,15 @@ inputs, turns = chat.split_inputs({
     "history": dspy.History(messages=[{"question": "hi", "answer": "hello"}]),
     "question": "how are you?"})
 assert inputs == {"question": "how are you?"}
-assert turns == [{"fields": {"question": "hi", "answer": "hello"}}]
+assert [(t.inputs, t.outputs) for t in turns] == [({"question": "hi"}, {"answer": "hello"})]
 
 cp = adapter.bind(chat.signature, {}, registry=registry)
-req = cp.render(inputs=inputs, history=turns)
+req = cp.render(inputs, turns=turns)
 assert [m["role"] for m in req.messages] == ["system", "user", "assistant", "user"]
 assert req.messages[1]["parts"][0]["text"] == "[[ ## answer ## ]]\nhello\n\n[[ ## completed ## ]]"
 ```
 
-## 6. `dspy.Reasoning` carries the role
+## 6. `dspy.Reasoning` carries the purpose
 
 ```python
 class Solve(dspy.Signature):
@@ -112,11 +112,11 @@ class Solve(dspy.Signature):
     reasoning: dspy.Reasoning = dspy.OutputField()
     a: str = dspy.OutputField()
 
-assert [(f.name, f.role) for f in lmcc_dspy.lower(Solve, registry=registry).signature.fields] == [
+assert [(f.name, f.purpose) for f in lmcc_dspy.lower(Solve, registry=registry).signature.fields] == [
     ("q", "plain"), ("reasoning", "reasoning"), ("a", "plain")]
 ```
 
-Bind a strategy to the `reasoning` role to change how it travels
+Bind a transport to the `reasoning` purpose to change how it travels
 ([03-adaptive-reasoning.md](03-adaptive-reasoning.md)).
 
 ## What can refuse here

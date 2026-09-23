@@ -7,9 +7,9 @@
  "entry": {
   "name": "tools_v1",
   "versions": {
-   "kernel": "0.6.0",
+   "kernel": "0.7.0",
    "vocab": {
-    "strategy/heredoc_tools": "0.1.0",
+    "transport/heredoc_tools": "0.1.0",
     "format/code_arguments": "0.1.0",
     "format/function_tool": "0.1.0",
     "format/code_calls": "0.1.0"
@@ -21,17 +21,17 @@
     "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
    },
    {
-    "directive": "history"
+    "directive": "turns"
    },
    {
     "role": "user",
     "text": "{question}"
    }
   ],
-  "parse": {
+  "reader": {
    "kind": "derived"
   },
-  "strategies": {
+  "transports": {
    "tools": {
     "use": "heredoc_tools"
    }
@@ -49,9 +49,9 @@
   "entry": {
    "name": "tools_v1",
    "versions": {
-    "kernel": "0.6.0",
+    "kernel": "0.7.0",
     "vocab": {
-     "strategy/heredoc_tools": "0.1.0",
+     "transport/heredoc_tools": "0.1.0",
      "format/code_arguments": "0.1.0",
      "format/function_tool": "0.1.0",
      "format/code_calls": "0.1.0"
@@ -63,17 +63,17 @@
      "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
     },
     {
-     "directive": "history"
+     "directive": "turns"
     },
     {
      "role": "user",
      "text": "{question}"
     }
    ],
-   "parse": {
+   "reader": {
     "kind": "derived"
    },
-   "strategies": {
+   "transports": {
     "tools": {
      "use": "heredoc_tools"
     }

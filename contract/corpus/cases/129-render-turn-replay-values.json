@@ -1,0 +1,123 @@
+{
+ "name": "render-turn-replay-values",
+ "kind": "render",
+ "entry": {
+  "name": "sections_v1",
+  "versions": {
+   "kernel": "0.7.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n\nReply with EXACTLY these sections:\n{% for f in outputs %}<{f.name}>\n{f.value}\n{% endfor %}</done>"
+   },
+   {
+    "directive": "turns"
+   },
+   {
+    "role": "user",
+    "text": "{% for f in inputs %}== {f.name} ==\n{f.value}\n{% endfor %}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  },
+  "replay": "values"
+ },
+ "signature": {
+  "instructions": "Answer the question.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    },
+    "desc": "short answer"
+   },
+   {
+    "name": "score",
+    "direction": "output",
+    "shape": {
+     "type": "integer"
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "question": "and now?"
+ },
+ "turns": {
+  "turns": [
+   {
+    "inputs": {
+     "question": "hi"
+    },
+    "steps": [
+     {
+      "kind": "model",
+      "outputs": {
+       "answer": "hello",
+       "score": 3
+      },
+      "message": {
+       "role": "assistant",
+       "parts": [
+        {
+         "type": "text",
+         "text": "Sure.\n<answer>\nhello\n<score>\n3\n</done>"
+        }
+       ]
+      }
+     }
+    ],
+    "outputs": {
+     "answer": "hello",
+     "score": 3
+    }
+   }
+  ]
+ },
+ "expect": {
+  "request": {
+   "system": "Answer the question.\n\nReply with EXACTLY these sections:\n<answer>\nshort answer\n<score>\n(integer)\n</done>",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "== question ==\nhi\n"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "<answer>\nhello\n<score>\n3\n</done>"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "== question ==\nand now?\n"
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

@@ -4,7 +4,7 @@
  "entry": {
   "name": "choose_v1",
   "versions": {
-   "kernel": "0.6.0",
+   "kernel": "0.7.0",
    "vocab": {}
   },
   "template": [
@@ -17,10 +17,10 @@
     "text": "{q}"
    }
   ],
-  "parse": {
+  "reader": {
    "kind": "derived"
   },
-  "strategies": {
+  "transports": {
    "reasoning": {
     "choose": [
      {
@@ -31,37 +31,37 @@
        "requires": [
         "native_reasoning"
        ],
-       "visible": false,
-       "controls": {
+       "in_template": false,
+       "request_settings": {
         "config": {
          "reasoning": {
           "effort": "medium"
          }
         }
        },
-       "routings": [
+       "find": [
         {
-         "from": "channel:thinking",
-         "to": "@role"
+         "from": "part:thinking",
+         "to": "@purpose"
         }
        ]
       }
      },
      {
       "else": {
-       "visible": false,
-       "fragments": {
+       "in_template": false,
+       "tell": {
         "system": "Think inside <think>...</think> before you answer."
        },
-       "routings": [
+       "find": [
         {
          "from": "text",
          "between": [
           "<think>",
           "</think>"
          ],
-         "to": "@role",
-         "consume": true
+         "to": "@purpose",
+         "remove": true
         }
        ]
       }
@@ -86,7 +86,7 @@
     "shape": {
      "type": "string"
     },
-    "role": "reasoning"
+    "purpose": "reasoning"
    },
    {
     "name": "answer",

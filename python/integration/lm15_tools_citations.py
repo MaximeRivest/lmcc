@@ -4,7 +4,8 @@
     PYTHONPATH=~/Projects/lmcc/python:~/Projects/lm15-dev/lm15-python python integration/lm15_tools_citations.py
 
 The tool loop is the caller's (kernel §6): lmcc lays out one call and reads
-one reply; we run the function and append two lm15 messages to history.
+one reply; we run the function and record the reply and the result as
+steps of one turn (kernel §3a).
 Not in ./check: it costs money. Under pytest it skips without keys.
 """
 
@@ -14,7 +15,7 @@ import os
 import lmcc
 import lmcc_lm15
 import lmcc_std
-from lm15 import AnthropicLM, Config, Message, OpenAILM
+from lm15 import AnthropicLM, Config, OpenAILM
 from lmcc_std.tools import Citation, Source, Tool, ToolCall
 
 registry = lmcc.Registry()
@@ -27,12 +28,12 @@ TAGS = ("Reply with exactly this pattern and nothing else, also after a tool res
 
 @dataclasses.dataclass
 class Out:
-    calls: lmcc.Role["tools.calls", list[ToolCall]]
+    calls: lmcc.Purpose["tools.calls", list[ToolCall]]
     answer: str
 
 
 @lmcc.fn
-def ask(question: str, tools: lmcc.Role["tools", list[Tool]]) -> Out:
+def ask(question: str, tools: lmcc.Purpose["tools", list[Tool]]) -> Out:
     """Answer the question. Use a tool when you need facts you do not have."""
 
 
@@ -44,24 +45,21 @@ def get_weather(city: str) -> str:
     return f"Sunny and 22°C in {city}."
 
 
-def tool_loop(name, strategy, caps, lm, model):
-    plan = ask.bind(lmcc.adapter(messages=[lmcc.system("{instruction}\n\n" + TAGS), lmcc.user("{question}"), lmcc.history()],
-                                 strategies={"tools": strategy}), capabilities=caps, registry=registry)
-    history, turns = [], 0
+def tool_loop(name, transport, caps, lm, model):
+    plan = ask.bind(lmcc.adapter(messages=[lmcc.system("{instruction}\n\n" + TAGS), lmcc.turns(), lmcc.user("{question}")],
+                                 transports={"tools": transport}), capabilities=caps, registry=registry)
+    turn, turns = plan.turn(question="What is the weather in Montreal right now?", tools=[WEATHER]), 0
     while True:
-        request = lmcc_lm15.request(plan.render(question="What is the weather in Montreal right now?",
-                                                tools=[WEATHER], history=history),
-                                    model=model, config=Config(max_tokens=400))
-        response = lm.complete(request)
-        values = lmcc_lm15.parse(plan, response)
+        rendered = plan.render(turn)
+        response = lm.complete(lmcc_lm15.request(rendered, model=model, config=Config(max_tokens=400)))
+        turn = lmcc_lm15.step(rendered, response)   # the reply, recorded as it came
+        values = turn.steps[-1].outputs
         turns += 1
         if not values.get("calls"):
             break
         call = values["calls"][0]
-        result = get_weather(**call.input)
-        # native: the provider's own messages; fenced: the same lm15 shapes, spelled by `turns`
-        history += [lmcc_lm15.message_to_history(response.message),
-                    lmcc_lm15.message_to_history(Message.tool(call.id, result))]
+        # native: the provider's message is replayed as it came; fenced: re-read, spelled by `turns`
+        turn = turn.tool(call.id, get_weather(**call.input))
         assert turns < 4, "loop did not converge"
     assert "22" in values["answer"] and "Montreal" in values["answer"], values
     print(f"{name:<14} {model:<18} turns={turns}  call={call.name}({call.input})  answer={values['answer'][:60]!r}")
@@ -72,11 +70,11 @@ def tool_loop(name, strategy, caps, lm, model):
 @dataclasses.dataclass
 class Grounded:
     answer: str
-    citations: lmcc.Role["citations", list[Citation]]
+    citations: lmcc.Purpose["citations", list[Citation]]
 
 
 @lmcc.fn
-def grounded(question: str, sources: lmcc.Role["citations.sources", list[Source]]) -> Grounded:
+def grounded(question: str, sources: lmcc.Purpose["citations.sources", list[Source]]) -> Grounded:
     """Answer the question from the sources only."""
 
 
@@ -87,7 +85,7 @@ def searched(question: str) -> Grounded:
 
 def inline(lm, model):
     plan = grounded.bind(lmcc.adapter(messages=[lmcc.system("{instruction}\n\n" + TAGS), lmcc.user("{question}")],
-                                      strategies={"citations": "inline_citations"}),
+                                      transports={"citations": "inline_citations"}),
                          capabilities={"instruct": True}, registry=registry)
     sources = [Source("The Eiffel Tower was completed in 1889.", title="Encyclopedia"),
                Source("The Eiffel Tower is 330 metres tall.", title="Almanac")]
@@ -103,7 +101,7 @@ def native(lm, model):
     # search mode answers in prose and ignores reply patterns; the adapter says
     # so: the whole reply is the answer (kernel §4), citations ride as parts
     plan = searched.bind(lmcc.adapter(messages=[lmcc.system("{instruction}\n{answer}"), lmcc.user("{question}")],
-                                      strategies={"citations": "native_citations"}),
+                                      transports={"citations": "native_citations"}),
                          capabilities={"native_citations": True}, registry=registry)
     request = lmcc_lm15.request(plan.render(question="Where will the 2028 Summer Olympics be held?"),
                                 model=model, config=Config(max_tokens=400))

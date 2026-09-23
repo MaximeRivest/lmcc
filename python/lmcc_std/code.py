@@ -1,7 +1,7 @@
 """Raw-code argument spelling and heredoc calls (spec/vocab/format-code.md).
 
 No execution. Arguments and capture bodies stay exact, including indentation
-and trailing newlines. The envelope is owned by the strategy.
+and trailing newlines. The envelope is owned by the transport.
 """
 
 import dataclasses
@@ -9,7 +9,7 @@ import dataclasses
 from lmcc import core
 from lmcc.errors import refuse
 from lmcc.formats import Format
-from lmcc.strategy import Strategy
+from lmcc.transport import Transport
 
 from .formats import lift
 
@@ -49,10 +49,10 @@ class CodeArguments(Format):
             refuse("value-collides", f"code contains heredoc marker {self.marker!r}; choose another marker")
         return code
 
-    def read(self, span, field):
-        if any(p.get("type") != "text" or not isinstance(p.get("text"), str) for p in span.parts):
+    def read(self, capture, field):
+        if any(p.get("type") != "text" or not isinstance(p.get("text"), str) for p in capture.parts):
             raise ValueError("code arguments need text parts")
-        code = "".join(p["text"] for p in span.parts)  # NOT span.text: code whitespace is data
+        code = "".join(p["text"] for p in capture.parts)  # NOT capture.text: code whitespace is data
         if self.marker in code:
             raise ValueError(f"code contains heredoc marker {self.marker!r}")
         return {"code": code}
@@ -60,7 +60,7 @@ class CodeArguments(Format):
 
 class CodeCalls(Format):
     accepts = ("list[*]", "*")
-    emits = "parts"
+    writes = "parts"
     reads = ("text", "tool_call")
 
     def __init__(self, options):
@@ -70,28 +70,33 @@ class CodeCalls(Format):
     def describe(self, field):
         return "heredoc tool calls"
 
-    def _native(self, call, field):
+    def _native(self, call, field, *, writing=False):
         call = dataclasses.asdict(call) if dataclasses.is_dataclass(call) else call
         if (not isinstance(call, dict) or call.get("name") != self.tool
                 or not isinstance(call.get("id"), str) or not call["id"]):
             raise ValueError(f"expected a {self.tool!r} call with a nonempty id")
-        body = self.arguments._code(call.get("input"))
-        # Read-side validation raises a format error, not a render refusal.
-        self.arguments.read(core.Span.of_text(body), field)
+        if writing:
+            # The same argument writer as spelling.input_format: a marker in the
+            # code refuses value-collides, exactly as the heredoc would.
+            body = self.arguments.write(call.get("input"), field)
+        else:
+            body = self.arguments._code(call.get("input"))
+            # Read-side validation raises a format error, not a render refusal.
+            self.arguments.read(core.Capture.of_text(body), field)
         return {"id": call["id"], "name": self.tool, "input": {"code": body}}
 
     def write(self, value, field):
         if not isinstance(value, list):
             raise ValueError("calls must be a list")
-        return [{"type": "tool_call", **self._native(c, field)} for c in value]
+        return [{"type": "tool_call", **self._native(c, field, writing=True)} for c in value]
 
-    def read(self, span, field):
+    def read(self, capture, field):
         calls = []
-        for part in span.parts:
+        for part in capture.parts:
             if part.get("type") == "tool_call":
                 calls.append(self._native(part, field))
             else:
-                args = self.arguments.read(core.Span([part]), field)
+                args = self.arguments.read(core.Capture([part]), field)
                 calls.append({"id": f"call_{len(calls) + 1}", "name": self.tool, "input": args})
         return lift(field.annotation, calls)
 
@@ -99,15 +104,15 @@ class CodeCalls(Format):
 def heredoc_tools(options):
     marker, tool = _options(options, calls=True)
     opening, closing = f"{tool} <<'{marker}'\n", f"\n{marker}"
-    return Strategy(
-        requires=["instruct"], visible=False,
-        placement={"@role": "message:system"}, via={"@role": "tool_catalog"},
-        fragments={"system": f"To request {tool}, emit this heredoc and wait for its result:\n"
+    return Transport(
+        requires=["instruct"], in_template=False,
+        put={"@purpose": "message:system"}, written_as={"@purpose": "tool_catalog"},
+        tell={"system": f"To request {tool}, emit this heredoc and wait for its result:\n"
                    f"{opening}<code>{closing}\n"
                    f"Do not put {marker} anywhere in the code. Otherwise reply normally."},
-        routings=[{"from": "text", "between": [opening, closing], "to": "@role.calls",
-                   "consume": True, "suffices": True}],
-        turns={"call": "{name} <<'" + marker + "'\n{input}" + closing,
+        find=[{"from": "text", "between": [opening, closing], "to": "@purpose.calls",
+                   "remove": True, "complete_reply": True}],
+        spelling={"call": "{name} <<'" + marker + "'\n{input}" + closing,
                "result": "Result of {name} ({id}):\n{output}",
                "input_format": {"use": "code_arguments", "options": {"marker": marker}},
                "probe": {"name": tool, "input": {"code": "print(6 * 7)\n"}}})
@@ -116,4 +121,4 @@ def heredoc_tools(options):
 def install(registry, *, exist_ok=True):
     registry.register_format("code_arguments", CodeArguments, version=VERSION, exist_ok=exist_ok)
     registry.register_format("code_calls", CodeCalls, version=VERSION, exist_ok=exist_ok)
-    registry.register_strategy("heredoc_tools", heredoc_tools, version=VERSION, exist_ok=exist_ok)
+    registry.register_transport("heredoc_tools", heredoc_tools, version=VERSION, exist_ok=exist_ok)

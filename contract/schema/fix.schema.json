@@ -9,7 +9,7 @@
     {
       "properties": {
         "action": {"const": "install-vocabulary"},
-        "kind": {"enum": ["format", "strategy", "lens"]},
+        "kind": {"enum": ["format", "transport", "reader"]},
         "name": {"type": "string"}
       },
       "required": ["action", "kind", "name"],
@@ -64,17 +64,17 @@
       "properties": {
         "action": {"const": "edit-signature"},
         "field": {"type": "string"},
-        "role": {"type": "string"}
+        "purpose": {"type": "string"}
       },
       "required": ["action"],
       "additionalProperties": false
     },
     {
       "properties": {
-        "action": {"const": "assign-role"},
-        "role": {"type": "string"}
+        "action": {"const": "assign-purpose"},
+        "purpose": {"type": "string"}
       },
-      "required": ["action", "role"],
+      "required": ["action", "purpose"],
       "additionalProperties": false
     },
     {
@@ -88,10 +88,10 @@
     {
       "properties": {
         "action": {"const": "satisfy-predicate"},
-        "role": {"type": "string"},
+        "purpose": {"type": "string"},
         "predicate": {"type": "object"}
       },
-      "required": ["action", "role", "predicate"],
+      "required": ["action", "purpose", "predicate"],
       "additionalProperties": false
     },
     {

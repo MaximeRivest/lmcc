@@ -1,0 +1,118 @@
+{
+ "name": "refuse-bind-spelling-drift",
+ "kind": "refuse",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "tools_v1",
+  "versions": {
+   "kernel": "0.7.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "directive": "turns"
+   },
+   {
+    "role": "user",
+    "text": "{question}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  },
+  "transports": {
+   "tools": {
+    "in_template": false,
+    "put": {
+     "@purpose": "message:system"
+    },
+    "written_as": {
+     "@purpose": "tool_catalog"
+    },
+    "find": [
+     {
+      "from": "text",
+      "between": [
+       "```tool\n",
+       "\n```"
+      ],
+      "to": "@purpose.calls",
+      "remove": true,
+      "complete_reply": true
+     }
+    ],
+    "spelling": {
+     "call": "CALL {name} {input}"
+    }
+   }
+  },
+  "formats": {
+   "list[Tool]": {
+    "use": "function_tool"
+   },
+   "list[ToolCall]": {
+    "use": "tool_calls"
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Answer, using tools when needed.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "tools",
+    "direction": "input",
+    "type": "list[Tool]",
+    "shape": {
+     "type": "array",
+     "items": {
+      "type": "object"
+     }
+    },
+    "purpose": "tools"
+   },
+   {
+    "name": "calls",
+    "direction": "output",
+    "type": "list[ToolCall]",
+    "shape": {
+     "type": "array",
+     "items": {
+      "type": "object"
+     }
+    },
+    "purpose": "tools.calls"
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "capabilities": {
+  "instruct": true
+ },
+ "expect": {
+  "code": "spelling-drift",
+  "fix": {
+   "action": "edit-entry",
+   "path": "transports['tools'].spelling"
+  },
+  "at": "bind"
+ }
+}

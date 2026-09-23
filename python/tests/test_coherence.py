@@ -87,7 +87,7 @@ def _fix_action(fix_node) -> str | None:
 
 
 def test_fix_actions_are_documented_and_closed():
-    """Every action a Python call site emits is in the closed table; every
+    """Every action a Python call site writes is in the closed table; every
     documented action is emitted somewhere (the table cannot rot)."""
     documented = _documented_actions()
     assert documented, "errors.md has a fix-actions table"
@@ -97,7 +97,7 @@ def test_fix_actions_are_documented_and_closed():
     emitted = {a for _, _, fix in _refuse_calls() if (a := _fix_action(fix))}
     assert emitted <= set(documented), f"undocumented fix actions: {sorted(emitted - set(documented))}"
     assert emitted == set(documented), (
-        f"documented actions no call site emits: {sorted(set(documented) - emitted)}")
+        f"documented actions no call site writes: {sorted(set(documented) - emitted)}")
 
 
 def test_every_pre_render_refusal_carries_a_fix():
@@ -168,10 +168,10 @@ def test_vocab_index_is_complete_and_spec_files_exist():
     index = (SPEC / "vocab" / "README.md").read_text()
     for name in registry.formats:
         assert f"`format/{name}`" in index, f"format/{name} missing from index"
-    for name in registry.strategies:
-        assert f"`strategy/{name}`" in index, f"strategy/{name} missing"
-    for name in registry.lenses:
-        assert f"`lens/{name}`" in index, f"lens/{name} missing from index"
+    for name in registry.transports:
+        assert f"`transport/{name}`" in index, f"transport/{name} missing"
+    for name in registry.readers:
+        assert f"`reader/{name}`" in index, f"reader/{name} missing from index"
     for entry, spec_file in re.findall(r"^\| `([\w/]+)` \| `([\w.-]+)` \|$",
                                        index, re.MULTILINE):
         assert (SPEC / "vocab" / spec_file).exists(), (
@@ -205,20 +205,20 @@ def test_extension_index_is_complete_and_both_kernels_bind_the_same_natives():
 
 
 def test_capability_facts_used_by_std_are_in_the_vocabulary():
-    """Std strategies/lenses may only name declared capability facts."""
+    """Std transports/readers may only name declared capability facts."""
     vocab = set(re.findall(r"^\| `([a-z_]+)` \|",
                            (SPEC / "vocab" / "capabilities.md").read_text(),
                            re.MULTILINE))
     registry = lmcc.Registry()
     lmcc_std.install(registry)
-    for name, entry in registry.strategies.items():
-        strategy = entry.factory({})
-        for fact in strategy.requires:
-            assert fact in vocab, f"strategy {name}: unknown fact {fact!r}"
-    for name, entry in registry.lenses.items():
-        lens = entry.factory({"kind": name})
-        for fact in lens.requires():
-            assert fact in vocab, f"lens {name}: unknown fact {fact!r}"
+    for name, entry in registry.transports.items():
+        transport = entry.factory({})
+        for fact in transport.requires:
+            assert fact in vocab, f"transport {name}: unknown fact {fact!r}"
+    for name, entry in registry.readers.items():
+        reader = entry.factory({"kind": name})
+        for fact in reader.requires():
+            assert fact in vocab, f"reader {name}: unknown fact {fact!r}"
 
 
 def test_plans_have_acceptance_criteria():
@@ -252,6 +252,7 @@ def test_go_pre_render_refusals_carry_a_fix():
     """The same rule as the Python kernel, on the Go call sites."""
     fixes = _documented_fixes()
     for where, code, has_fix in _go_refuse_calls():
+        code = RENAMED_IN_07.get(code, code)
         if fixes.get(code):
             assert has_fix, f"{where}: {code!r} must use refuseFix/refuseFixf (errors.md gives it a fix)"
         else:
@@ -259,8 +260,9 @@ def test_go_pre_render_refusals_carry_a_fix():
     actions = set()
     for go in sorted((ROOT / "go" / "lmcc").glob("*.go")):
         actions |= set(re.findall(r'"action", "([a-z-]+)"', go.read_text()))
+    actions = {GO_AT_06_ACTIONS.get(a, a) for a in actions}
     assert actions == set(_documented_actions()), (
-        f"Go emits {sorted(actions)}; errors.md documents {sorted(_documented_actions())}")
+        f"Go writes {sorted(actions)}; errors.md documents {sorted(_documented_actions())}")
 
 
 def test_go_implementation_raises_only_documented_codes():
@@ -268,7 +270,7 @@ def test_go_implementation_raises_only_documented_codes():
     a code it can raise must be in spec/errors.md."""
     raised = _go_raised_codes()
     assert raised, "the Go implementation exists and raises codes"
-    undocumented = raised - _documented_codes()
+    undocumented = raised - _documented_codes() - GO_AT_06_EXTRA
     assert not undocumented, (
         f"codes raised in go/ but missing from spec/errors.md: {sorted(undocumented)}")
 
@@ -277,9 +279,23 @@ def test_go_implementation_raises_only_documented_codes():
 # none (kernel §5, plan 08 V3-6). Everything else must match exactly.
 PYTHON_ONLY = {"format-not-self-contained"}
 
+# The Go kernel is at 0.6 (plans/12-turns.md): it lacks the 0.7 turn codes and
+# still raises the 0.6 names of the codes 0.7 renamed (D-40). Declared exactly,
+# so the gap can only shrink. RENAMED_IN_07 maps each 0.6 name to its 0.7 name.
+RENAMED_IN_07 = {
+    "demo-not-renderable": "turn-not-renderable", "unknown-parse-kind": "unknown-reader",
+    "unknown-strategy": "unknown-transport", "lens-parse-error": "reader-error",
+    "not-lensable": "not-readable", "role-ambiguous": "purpose-ambiguous",
+    "control-conflict": "setting-conflict", "format-span-mismatch": "format-capture-mismatch",
+    "format-placement-mismatch": "format-put-mismatch", "turns-drift": "spelling-drift",
+}
+GO_AT_06_LACKS = {"turn-invalid", "turns-layout", "turns-unplaced"} | set(RENAMED_IN_07.values())
+GO_AT_06_EXTRA = set(RENAMED_IN_07)
+GO_AT_06_ACTIONS = {"assign-role": "assign-purpose"}
+
 
 def test_both_implementations_raise_the_same_codes():
     """Neither kernel may have a refusal the other cannot produce — a
     one-sided code is a behavior the corpus cannot pin across languages
-    (except the declared placement-only codes)."""
-    assert _go_raised_codes() == _raised_codes() - PYTHON_ONLY
+    (except the declared put-only codes)."""
+    assert _go_raised_codes() - GO_AT_06_EXTRA == _raised_codes() - PYTHON_ONLY - GO_AT_06_LACKS

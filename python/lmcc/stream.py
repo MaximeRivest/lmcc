@@ -22,7 +22,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from . import core
-from .parse import DerivedLens, Lens, _text_spans
+from .reader import DerivedReader, Reader, _text_captures
 
 _WS = core.WHITESPACE
 
@@ -125,30 +125,30 @@ class _Field:
         return "".join(self.emitted)
 
 
-# -------------------------------------------------------------- routings
+# -------------------------------------------------------------- find rules
 #
-# Each routing is a transducer: it receives the text delta left by the
-# previous stage and returns the stable text it passes on. Consuming
+# Each rule is a transducer: it receives the text delta left by the
+# previous stage and returns the stable text it passes on. Removing
 # stages hold text that may still become a match; the rest streams.
 
 
 class _Between:
-    def __init__(self, routing: dict):
-        self.open, self.close = routing["between"]
-        self.consume = bool(routing.get("consume"))
+    def __init__(self, rule: dict):
+        self.open, self.close = rule["between"]
+        self.remove = bool(rule.get("remove"))
         self.hold = _Prefixes([self.open])
         self.buf = ""
         self.inside = False
         self.captures: list[str] = []
 
     def feed(self, delta: str, final: bool) -> str:
-        out: list[str] = [] if self.consume else [delta]
+        out: list[str] = [] if self.remove else [delta]
         buf = self.buf + delta
         while True:
             if not self.inside:
                 i = buf.find(self.open)
                 if i < 0:
-                    if self.consume:
+                    if self.remove:
                         keep = 0 if final else self.hold.hold(buf)
                         out.append(buf[:len(buf) - keep])
                         buf = buf[len(buf) - keep:]
@@ -156,13 +156,13 @@ class _Between:
                         keep = min(len(buf), max(len(self.open) - 1, 0))
                         buf = buf[len(buf) - keep:]
                     break
-                if self.consume:
+                if self.remove:
                     out.append(buf[:i])
                 buf = buf[i:]
                 self.inside = True
             j = buf.find(self.close, len(self.open))
             if j < 0:
-                if final and self.consume:
+                if final and self.remove:
                     out.append(buf)  # batch ignores an unclosed extractor
                     buf = ""
                 break
@@ -176,27 +176,27 @@ class _Between:
 
 
 class _LinePrefixed:
-    def __init__(self, routing: dict):
-        self.prefix = routing["line_prefixed"]
-        self.consume = bool(routing.get("consume"))
+    def __init__(self, rule: dict):
+        self.prefix = rule["line_prefixed"]
+        self.remove = bool(rule.get("remove"))
         self.line = ""
         self.captures: list[str] = []
 
     def feed(self, delta: str, final: bool) -> str:
-        out: list[str] = [] if self.consume else [delta]
+        out: list[str] = [] if self.remove else [delta]
         lines = (self.line + delta).split("\n")
         last = lines.pop()
         for line in lines:
             if line.startswith(self.prefix):
                 self.captures.append(core.strip(line[len(self.prefix):]))
-                if self.consume:
+                if self.remove:
                     out.append("\n")
-            elif self.consume:
+            elif self.remove:
                 out.append(line + "\n")
         if final:
             if last.startswith(self.prefix):
                 self.captures.append(core.strip(last[len(self.prefix):]))
-            elif self.consume:
+            elif self.remove:
                 out.append(last)
             last = ""
         self.line = last
@@ -206,33 +206,33 @@ class _LinePrefixed:
 class _Pattern:
     """A regex needs the whole text: later bytes can change any match."""
 
-    def __init__(self, routing: dict, pattern):
-        self.routing = routing
+    def __init__(self, rule: dict, pattern):
+        self.rule = rule
         self.pattern = pattern
-        self.consume = bool(routing.get("consume"))
+        self.remove = bool(rule.get("remove"))
         self.pieces: list[str] = []
         self.captures: list[str] = []
 
     def feed(self, delta: str, final: bool) -> str:
         self.pieces.append(delta)
         if not final:
-            return "" if self.consume else delta
+            return "" if self.remove else delta
         text = "".join(self.pieces)
-        spans = _text_spans(text, self.routing, self.pattern)
-        self.captures = [core.strip(cap) for _, _, cap in spans]
-        if not self.consume:
+        captures = _text_captures(text, self.rule, self.pattern)
+        self.captures = [core.strip(cap) for _, _, cap in captures]
+        if not self.remove:
             return ""
-        if not spans:
+        if not captures:
             return text
         out, pos = [], 0
-        for start, end, _ in spans:
+        for start, end, _ in captures:
             out.append(text[pos:start])
             pos = end
         out.append(text[pos:])
         return "".join(out)
 
 
-class _Channel:
+class _PartSource:
     """Text of every part of one kind, each stripped, joined by newlines."""
 
     def __init__(self, kind: str):
@@ -247,7 +247,7 @@ class _Channel:
         return [core.strip("".join(pieces)) for pieces in self.texts]
 
     def part(self, kind: str, text: str | None, new_part: bool) -> str:
-        """A part delta arrived; return this routing's stable raw delta."""
+        """A part delta arrived; return this rule's stable raw delta."""
         if kind != self.kind:
             return ""
         self.any_part = True
@@ -271,11 +271,11 @@ class _Channel:
         return out + stable
 
 
-# ---------------------------------------------------------- derived lens
+# ---------------------------------------------------------- derived reader
 
 
 class _Section:
-    """One field's section of the lens text (kernel §4 read backwards)."""
+    """One field's section of the reader text (kernel §4 read backwards)."""
 
     __slots__ = ("field", "start", "after", "close", "scanner", "close_starts",
                  "end", "received", "held", "fixed", "hold")
@@ -327,11 +327,11 @@ class _Section:
 
 
 class _DerivedReducer:
-    def __init__(self, lens: DerivedLens, fields: dict[str, _Field], names: list[str]):
+    def __init__(self, reader: DerivedReader, fields: dict[str, _Field], names: list[str]):
         self.fields = fields
         self.wanted = [(name, core.rstrip(prefix), core.strip(suffix))
-                       for name, prefix, suffix in lens.anchors if name in names]
-        self.tail = core.strip(lens.tail)
+                       for name, prefix, suffix in reader.anchors if name in names]
+        self.tail = core.strip(reader.tail)
         markers = [m for _, m, _ in self.wanted] + ([self.tail] if self.tail else [])
         self.bounds = _Prefixes(markers)
         self.holds: dict[str, _Prefixes] = {}
@@ -434,42 +434,42 @@ class _DerivedReducer:
 
 
 def describe_streaming(plan) -> dict:
-    """The buffering choices visible through ``plan.describe()``."""
+    """The buffering choices in_template through ``plan.describe()``."""
     counts: dict[str, int] = {}
-    for field, _ in plan.routings:
+    for field, _ in plan.find_rules:
         counts[field] = counts.get(field, 0) + 1
     routes = []
     modes = []
-    consuming_pattern = False
-    for field, routing in plan.routings:
+    removing_pattern = False
+    for field, rule in plan.find_rules:
         reason = None
-        if "pattern" in routing:
-            mode, reason = "buffered", "pattern routing waits for EOF"
-            consuming_pattern |= bool(routing.get("consume"))
+        if "pattern" in rule:
+            mode, reason = "buffered", "a pattern find rule waits for EOF"
+            removing_pattern |= bool(rule.get("remove"))
         elif counts[field] > 1:
-            mode, reason = "buffered", "multiple routings concatenate by declaration order"
+            mode, reason = "buffered", "multiple find rules concatenate by declaration order"
         else:
             mode = "incremental"
-        item = {"field": field, "from": routing["from"], "mode": mode}
+        item = {"field": field, "from": rule["from"], "mode": mode}
         if reason:
             item["reason"] = reason
         routes.append(item)
         modes.append(mode)
-    custom_face = getattr(type(plan.lens), "stream", None)
-    custom_stream = custom_face is not None and custom_face is not Lens.stream
-    if (isinstance(plan.lens, DerivedLens) or custom_stream) and not consuming_pattern:
-        lens_mode, lens_reason = "incremental", None
-    elif isinstance(plan.lens, DerivedLens) or custom_stream:
-        lens_mode, lens_reason = "buffered", "a consuming pattern routing can revise lens text"
+    custom_face = getattr(type(plan.reader), "stream", None)
+    custom_stream = custom_face is not None and custom_face is not Reader.stream
+    if (isinstance(plan.reader, DerivedReader) or custom_stream) and not removing_pattern:
+        reader_mode, reader_reason = "incremental", None
+    elif isinstance(plan.reader, DerivedReader) or custom_stream:
+        reader_mode, reader_reason = "buffered", "a removing pattern find rule can revise the reader's text"
     else:
-        lens_mode, lens_reason = "buffered", "lens provides no streaming face"
-    lens = {"mode": lens_mode}
-    if lens_reason:
-        lens["reason"] = lens_reason
-    modes.append(lens_mode)
+        reader_mode, reader_reason = "buffered", "reader provides no streaming face"
+    reader = {"mode": reader_mode}
+    if reader_reason:
+        reader["reason"] = reader_reason
+    modes.append(reader_mode)
     mode = "incremental" if set(modes) == {"incremental"} else (
         "buffered" if set(modes) == {"buffered"} else "hybrid")
-    return {"mode": mode, "lens": lens, "routings": routes, "field_done": "finish"}
+    return {"mode": mode, "reader": reader, "find": routes, "field_done": "finish"}
 
 
 # ----------------------------------------------------------------- stream
@@ -487,29 +487,29 @@ class Stream:
         self._finished = False
         self._fields: dict[str, _Field] = {f.name: _Field(f.name) for f in plan.signature.fields}
         names = [f.name for f in plan.visible_outputs]
-        # routing stages in declaration order; each field's stages by order
+        # rule stages in declaration order; each field's stages by order
         self._stages: list[tuple[str, object]] = []
         self._by_field: dict[str, list[object]] = {}
-        for field, routing in plan.routings:
-            source = routing["from"]
-            if source.startswith("channel:"):
-                stage: object = _Channel(source.split(":", 1)[1])
-            elif "between" in routing:
-                stage = _Between(routing)
-            elif "line_prefixed" in routing:
-                stage = _LinePrefixed(routing)
+        for field, rule in plan.find_rules:
+            source = rule["from"]
+            if source.startswith("part:"):
+                stage: object = _PartSource(source.split(":", 1)[1])
+            elif "between" in rule:
+                stage = _Between(rule)
+            elif "line_prefixed" in rule:
+                stage = _LinePrefixed(rule)
             else:
-                stage = _Pattern(routing, plan.pattern_binding())
+                stage = _Pattern(rule, plan.pattern_binding())
             self._stages.append((field, stage))
             self._by_field.setdefault(field, []).append(stage)
         self._counted: dict[str, int] = {}   # captures already turned into deltas
-        self._derived = (_DerivedReducer(plan.lens, self._fields, names)
-                         if isinstance(plan.lens, DerivedLens) else None)
-        make_lens_stream = getattr(plan.lens, "stream", None)
-        self._lens_stream = (None if self._derived is not None or make_lens_stream is None
-                             else make_lens_stream(names))
-        self._lens_prefixes: dict[str, str] = {}
-        self._lens_final_names: set[str] | None = None
+        self._derived = (_DerivedReducer(plan.reader, self._fields, names)
+                         if isinstance(plan.reader, DerivedReader) else None)
+        make_reader_stream = getattr(plan.reader, "stream", None)
+        self._reader_stream = (None if self._derived is not None or make_reader_stream is None
+                             else make_reader_stream(names))
+        self._reader_prefixes: dict[str, str] = {}
+        self._reader_final_names: set[str] | None = None
 
     # ------------------------------------------------------------ input
 
@@ -528,9 +528,9 @@ class Stream:
             else "".join(self._pieces)
         # Batch is the final authority. It preserves refusal code, fix,
         # partial, structural order, and typed-read order exactly.
-        values, spans = self.plan._parse_with_spans(response)
+        values, captures = self.plan._parse_with_captures(response)
         self._run("", None, final=True)
-        events = self._events(final=True, final_spans=spans, values=values)
+        events = self._events(final=True, final_captures=captures, values=values)
         return StreamResult(events, values)
 
     def _append(self, delta: object) -> tuple[str, tuple[str, str | None, bool] | None]:
@@ -581,7 +581,7 @@ class Stream:
     def _run(self, text: str, part: tuple[str, str | None, bool] | None, *, final: bool) -> None:
         stage_text = text
         for field, stage in self._stages:
-            if isinstance(stage, _Channel):
+            if isinstance(stage, _PartSource):
                 if part is not None:
                     kind, ptext, new_part = part
                     delta = stage.part(kind, ptext, new_part)
@@ -602,30 +602,30 @@ class Stream:
                 self._counted[field] = done
         if self._derived is not None:
             self._derived.feed(stage_text, final)
-        elif self._lens_stream is not None:
-            prefixes = self._lens_stream.feed(stage_text) if stage_text or not final else {}
+        elif self._reader_stream is not None:
+            prefixes = self._reader_stream.feed(stage_text) if stage_text or not final else {}
             if final:
-                prefixes = self._lens_stream.finish()
-                self._lens_final_names = set(prefixes)
+                prefixes = self._reader_stream.finish()
+                self._reader_final_names = set(prefixes)
             for name, raw in prefixes.items():
                 f = self._fields.get(name)
                 if f is None:
                     continue
                 f.present = True
-                before = self._lens_prefixes.get(name, "")
+                before = self._reader_prefixes.get(name, "")
                 if not raw.startswith(before):
-                    raise RuntimeError(f"lens stream prefix for {name!r} revised emitted text")
-                self._lens_prefixes[name] = raw
+                    raise RuntimeError(f"reader stream prefix for {name!r} revised emitted text")
+                self._reader_prefixes[name] = raw
                 f.emit(raw[len(before):])
 
     def _final_projection(self) -> dict[str, str]:
         """What the incremental projection says each present field's raw
-        text is, at EOF — checked against the batch spans."""
+        text is, at EOF — checked against the batch captures."""
         out: dict[str, str] = {}
         if self._derived is not None:
             out.update(self._derived.final_raw())
-        elif self._lens_stream is not None:
-            out.update(self._lens_prefixes)
+        elif self._reader_stream is not None:
+            out.update(self._reader_prefixes)
         for field, stages in self._by_field.items():
             f = self._fields[field]
             if not f.present:
@@ -638,7 +638,7 @@ class Stream:
 
     # ----------------------------------------------------------- events
 
-    def _events(self, final: bool, *, final_spans: dict | None = None,
+    def _events(self, final: bool, *, final_captures: dict | None = None,
                 values: dict | None = None) -> list[dict]:
         if self._derived is not None and self._derived.poisoned and not final:
             # A later delta can still supersede this provisional structural
@@ -647,25 +647,25 @@ class Stream:
             return []
         events: list[dict] = []
         if final:
-            assert final_spans is not None and values is not None
+            assert final_captures is not None and values is not None
             projected = self._final_projection()
-            if self._lens_stream is not None:
+            if self._reader_stream is not None:
                 expected = {f.name for f in self.plan.visible_outputs}
-                actual = self._lens_final_names or set()
+                actual = self._reader_final_names or set()
                 if actual != expected:
                     raise RuntimeError(
-                        f"lens stream fields {sorted(actual)!r} disagree with batch fields {sorted(expected)!r}")
+                        f"reader stream fields {sorted(actual)!r} disagree with batch fields {sorted(expected)!r}")
             for name, raw in projected.items():
-                if name in final_spans and raw != final_spans[name].text:
+                if name in final_captures and raw != final_captures[name].text:
                     raise RuntimeError(f"stream projection for {name!r} disagrees with batch parse")
             for field in self.plan.signature.fields:
-                if field.name not in final_spans:
+                if field.name not in final_captures:
                     continue
                 f = self._fields[field.name]
                 if not f.started:
                     f.started = True
                     events.append({"kind": "field_started", "field": field.name})
-                raw = final_spans[field.name].text
+                raw = final_captures[field.name].text
                 before = f.emitted_text()
                 held_back = "".join(f.pending)
                 if not raw.startswith(before[:len(before) - len(held_back)]):

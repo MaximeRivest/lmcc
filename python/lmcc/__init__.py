@@ -1,25 +1,26 @@
 """lmcc — the language model calling convention.
 
-A typed signature and an adapter (a template, a parse rule, strategies by
-role, formats by type) bind into a plan that renders messages and parses
+A typed signature and an adapter (a template, a parse rule, transports by
+purpose, formats by type) bind into a plan that renders messages and parses
 replies. The kernel ships no vocabulary beyond its scalar and media
 defaults; everything else registers through the sockets.
 """
 
-from .adapter import (Adapter, adapter, assistant, demos, developer, directive, history,
-                      message, system, use, user)
-from .core import (Field, SignatureCore, Span, field, signature, signature_from_dict,
+from .adapter import (Adapter, adapter, assistant, developer, message, system, turns, use,
+                      user)
+from .core import (Field, SignatureCore, Capture, field, signature, signature_from_dict,
                    signature_to_dict, typename)
 from .errors import Refusal, refuse
 from .extensions import ExtensionBinding, PatternBinding, native_extensions
-from .fn import Fn, One, Role, fn
+from .fn import Fn, One, Purpose, fn
 from .formats import Format, make as make_format, ship
-from .parse import Lens
+from .reader import Reader
 from .plan import Plan, RenderResult, bind
 from .registry import Registry, default_registry
 from .serde import KERNEL_VERSION, dump, load
-from .strategy import Strategy
+from .transport import Transport
 from .stream import Stream, StreamResult
+from .turn import ModelStep, ToolStep, Turn, signature_fingerprint
 
 __version__ = KERNEL_VERSION
 
@@ -33,12 +34,12 @@ def format(host_type, **kw):
 
 
 __all__ = [
-    "Adapter", "ExtensionBinding", "Field", "Fn", "Format", "KERNEL_VERSION", "Lens", "One",
-    "PatternBinding", "Plan",
-    "Refusal", "Registry", "RenderResult", "Role", "SignatureCore", "Span", "Strategy",
-    "Stream", "StreamResult",
-    "adapter", "assistant", "bind", "default_registry", "demos", "developer", "directive", "dump",
-    "field", "fn", "format", "history", "load", "make_format", "message", "native_extensions",
-    "refuse", "ship",
-    "signature", "signature_from_dict", "signature_to_dict", "system", "typename", "use", "user",
+    "Adapter", "ExtensionBinding", "Field", "Fn", "Format", "KERNEL_VERSION", "Reader",
+    "ModelStep", "One", "PatternBinding", "Plan",
+    "Refusal", "Registry", "RenderResult", "Purpose", "SignatureCore", "Capture", "Transport",
+    "Stream", "StreamResult", "ToolStep", "Turn",
+    "adapter", "assistant", "bind", "default_registry", "developer", "dump",
+    "field", "fn", "format", "load", "make_format", "message", "native_extensions",
+    "refuse", "ship", "signature", "signature_fingerprint",
+    "signature_from_dict", "signature_to_dict", "system", "turns", "typename", "use", "user",
 ]

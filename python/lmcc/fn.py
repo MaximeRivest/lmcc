@@ -1,8 +1,8 @@
-"""The typed-function frontend: ``@lmcc.fn`` and ``Role`` (kernel §1).
+"""The typed-function frontend: ``@lmcc.fn`` and ``Purpose`` (kernel §1).
 
 Inputs come from the parameters, outputs from the return type (a
 dataclass for several), instructions from the docstring. Nothing else is
-inferred. ``Role["reasoning", str]`` marks what a field means to the
+inferred. ``Purpose["reasoning", str]`` marks what a field means to the
 exchange. The result lowers to a SignatureCore like every other frontend.
 """
 
@@ -24,12 +24,12 @@ class One:
         return typing.Annotated[item, cls()]
 
 
-class Role:
-    """``Role["reasoning", str]`` — a role name and the field's type."""
+class Purpose:
+    """``Purpose["reasoning", str]`` — a purpose name and the field's type."""
 
     def __class_getitem__(cls, item):
         if not (isinstance(item, tuple) and len(item) == 2 and isinstance(item[0], str)):
-            refuse("unmapped-type", "Role takes [name, type], e.g. Role['reasoning', str]",
+            refuse("unmapped-type", "Purpose takes [name, type], e.g. Purpose['reasoning', str]",
                    fix={"action": "edit-signature"})
         return typing.Annotated[item[1], cls(item[0])]
 
@@ -37,24 +37,24 @@ class Role:
         self.name = name
 
     def __repr__(self) -> str:
-        return f"Role({self.name!r})"
+        return f"Purpose({self.name!r})"
 
 
-def _split_role(ann) -> tuple[object, str]:
-    base, role, _one = _unwrap(ann)
-    return base, role
+def _split_purpose(ann) -> tuple[object, str]:
+    base, purpose, _one = _unwrap(ann)
+    return base, purpose
 
 
 def _unwrap(ann) -> tuple[object, str, bool]:
-    role, one = "plain", False
+    purpose, one = "plain", False
     while typing.get_origin(ann) is typing.Annotated:
         ann, *extras = typing.get_args(ann)
         for extra in extras:
-            if isinstance(extra, Role):
-                role = extra.name
+            if isinstance(extra, Purpose):
+                purpose = extra.name
             elif isinstance(extra, One):
                 one = True
-    return ann, role, one
+    return ann, purpose, one
 
 
 class Fn:
@@ -94,22 +94,22 @@ def _lower(func, registry) -> core.SignatureCore:
         if name not in hints:
             refuse("unmapped-type", f"parameter {name!r} has no type annotation",
                    fix={"action": "edit-signature", "field": name})
-        ann, role = _split_role(hints[name])
+        ann, purpose = _split_purpose(hints[name])
         fields.append(core.Field(name, "input", core.annotation_to_shape(ann, registry, field_name=name),
-                                 type=core.typename(ann), role=role, annotation=ann))
+                                 type=core.typename(ann), purpose=purpose, annotation=ann))
     if "return" not in hints:
         refuse("unmapped-type", f"{func.__name__}: no return annotation — the return type is the output",
                fix={"action": "edit-signature", "field": func.__name__})
-    ret, role, one = _unwrap(hints["return"])
+    ret, purpose, one = _unwrap(hints["return"])
     if dataclasses.is_dataclass(ret) and isinstance(ret, type) and not one:
         for df in dataclasses.fields(ret):
-            ann, r = _split_role(typing.get_type_hints(ret, include_extras=True)[df.name])
+            ann, r = _split_purpose(typing.get_type_hints(ret, include_extras=True)[df.name])
             fields.append(core.Field(df.name, "output",
                                      core.annotation_to_shape(ann, registry, field_name=df.name),
-                                     type=core.typename(ann), role=r, annotation=ann))
+                                     type=core.typename(ann), purpose=r, annotation=ann))
     else:
         fields.append(core.Field(func.__name__, "output",
                                  core.annotation_to_shape(ret, registry, field_name=func.__name__),
-                                 type=core.typename(ret), role=role, annotation=ret))
+                                 type=core.typename(ret), purpose=purpose, annotation=ret))
     instructions = inspect.cleandoc(func.__doc__ or "")
     return core._validated(core.SignatureCore(instructions, fields))

@@ -4,7 +4,7 @@
  "entry": {
   "name": "scalars_v1",
   "versions": {
-   "kernel": "0.6.0",
+   "kernel": "0.7.0",
    "vocab": {}
   },
   "template": [
@@ -13,14 +13,14 @@
     "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n{% endfor %}</done>"
    },
    {
-    "directive": "demos"
+    "directive": "turns"
    },
    {
     "role": "user",
     "text": "x={x} flag={flag} count={count} level={level}"
    }
   ],
-  "parse": {
+  "reader": {
    "kind": "derived"
   }
  },
@@ -130,23 +130,29 @@
   "count": -12,
   "level": "high"
  },
- "demos": [
-  {
-   "x": 0.25,
-   "flag": false,
-   "count": 0,
-   "level": "low",
-   "a": 3.0,
-   "b": 1e+21,
-   "c": 1e-06,
-   "d": 1e-07,
-   "e": 123456789012345680000,
-   "f": -0.5,
-   "g": -0.0,
-   "h": 1.5e+300,
-   "i": 9007199254740993
-  }
- ],
+ "turns": {
+  "turns": [
+   {
+    "inputs": {
+     "x": 0.25,
+     "flag": false,
+     "count": 0,
+     "level": "low"
+    },
+    "outputs": {
+     "a": 3.0,
+     "b": 1e+21,
+     "c": 1e-06,
+     "d": 1e-07,
+     "e": 123456789012345680000,
+     "f": -0.5,
+     "g": -0.0,
+     "h": 1.5e+300,
+     "i": 9007199254740993
+    }
+   }
+  ]
+ },
  "expect": {
   "request": {
    "system": "Spell.\n<a>\n(number)\n<b>\n(number)\n<c>\n(number)\n<d>\n(number)\n<e>\n(number)\n<f>\n(number)\n<g>\n(number)\n<h>\n(number)\n<i>\n(integer)\n</done>",

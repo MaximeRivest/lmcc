@@ -4,7 +4,7 @@
  "entry": {
   "name": "sections_v1",
   "versions": {
-   "kernel": "0.6.0",
+   "kernel": "0.7.0",
    "vocab": {}
   },
   "template": [
@@ -13,34 +13,31 @@
     "text": "{instruction}\n\nReply with EXACTLY these sections:\n{% for f in outputs %}<{f.name}>\n{f.value}\n{% endfor %}</done>"
    },
    {
-    "directive": "demos"
-   },
-   {
-    "directive": "history"
+    "directive": "turns"
    },
    {
     "role": "user",
     "text": "{% for f in inputs %}== {f.name} ==\n{f.value}\n{% endfor %}"
    }
   ],
-  "parse": {
+  "reader": {
    "kind": "derived"
   },
-  "strategies": {
+  "transports": {
    "reasoning": {
-    "visible": false,
-    "fragments": {
+    "in_template": false,
+    "tell": {
      "system": "Think inside <think>...</think> tags."
     },
-    "routings": [
+    "find": [
      {
       "from": "text",
       "between": [
        "<think>",
        "</think>"
       ],
-      "to": "@role",
-      "consume": true
+      "to": "@purpose",
+      "remove": true
      }
     ]
    }
@@ -50,7 +47,7 @@
   "entry": {
    "name": "sections_v1",
    "versions": {
-    "kernel": "0.6.0",
+    "kernel": "0.7.0",
     "vocab": {}
    },
    "template": [
@@ -59,34 +56,31 @@
      "text": "{instruction}\n\nReply with EXACTLY these sections:\n{% for f in outputs %}<{f.name}>\n{f.value}\n{% endfor %}</done>"
     },
     {
-     "directive": "demos"
-    },
-    {
-     "directive": "history"
+     "directive": "turns"
     },
     {
      "role": "user",
      "text": "{% for f in inputs %}== {f.name} ==\n{f.value}\n{% endfor %}"
     }
    ],
-   "parse": {
+   "reader": {
     "kind": "derived"
    },
-   "strategies": {
+   "transports": {
     "reasoning": {
-     "visible": false,
-     "fragments": {
+     "in_template": false,
+     "tell": {
       "system": "Think inside <think>...</think> tags."
      },
-     "routings": [
+     "find": [
       {
        "from": "text",
        "between": [
         "<think>",
         "</think>"
        ],
-       "to": "@role",
-       "consume": true
+       "to": "@purpose",
+       "remove": true
       }
      ]
     }

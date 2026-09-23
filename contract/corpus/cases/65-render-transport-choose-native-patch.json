@@ -1,0 +1,127 @@
+{
+ "name": "render-transport-choose-native-patch",
+ "kind": "render",
+ "entry": {
+  "name": "choose_v1",
+  "versions": {
+   "kernel": "0.7.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n\nAnswer in exactly this form:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  },
+  "transports": {
+   "reasoning": {
+    "choose": [
+     {
+      "when": {
+       "capability": "native_reasoning"
+      },
+      "use": {
+       "requires": [
+        "native_reasoning"
+       ],
+       "in_template": false,
+       "request_settings": {
+        "config": {
+         "reasoning": {
+          "effort": "medium"
+         }
+        }
+       },
+       "find": [
+        {
+         "from": "part:thinking",
+         "to": "@purpose"
+        }
+       ]
+      }
+     },
+     {
+      "else": {
+       "in_template": false,
+       "tell": {
+        "system": "Think inside <think>...</think> before you answer."
+       },
+       "find": [
+        {
+         "from": "text",
+         "between": [
+          "<think>",
+          "</think>"
+         ],
+         "to": "@purpose",
+         "remove": true
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Solve.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "reasoning",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    },
+    "purpose": "reasoning"
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "integer"
+    }
+   }
+  ]
+ },
+ "capabilities": {
+  "native_reasoning": true
+ },
+ "inputs": {
+  "q": "2+2?"
+ },
+ "expect": {
+  "request": {
+   "system": "Solve.\n\nAnswer in exactly this form:\n<answer>\n(integer)\n</answer>\n",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "2+2?"
+      }
+     ]
+    }
+   ],
+   "config": {
+    "reasoning": {
+     "effort": "medium"
+    }
+   }
+  }
+ }
+}

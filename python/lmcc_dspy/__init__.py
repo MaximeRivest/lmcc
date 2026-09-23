@@ -14,14 +14,14 @@ against a real DSPy, is:
 2. **Always renderable.** Every lowered signature binds, renders and
    parses with :func:`adapter`: structured and uninterpreted shapes go
    through the ``*`` → ``json`` format (kernel §5), ``Optional[X]`` is
-   nullable, ``dspy.History`` becomes history field turns, and the DSPy
+   nullable, ``dspy.History`` becomes earlier turns (kernel §3a), and the DSPy
    types that are not plain data (``Image``, ``Audio``, ``Tool``,
    ``Code``) get runtime type bindings — per language, never serialized.
 
 What is *not* claimed: DSPy's prompt bytes (LMCC renders its own way),
 lenient parsing (``json_repair``; LMCC refuses instead), and native
-tool/citation channels (plan 04) — those roles lower and render as
-plain visible fields until a strategy is bound.
+tool/citation channels (plan 04) — those purposes lower and render as
+plain in_template fields until a transport is bound.
 
 Kernel stays stdlib-only; this package imports ``dspy`` and ``pydantic``.
 """
@@ -42,19 +42,31 @@ VERSION = "0.1.0"
 
 class Lowered:
     """The result of :func:`lower`: the signature, plus the name of a
-    ``dspy.History`` input, if any (rendered as history turns)."""
+    ``dspy.History`` input, if any. DSPy's history is not a field in LMCC:
+    it is earlier turns (kernel §3a)."""
 
     def __init__(self, signature: core.SignatureCore, history_field: str | None):
         self.signature = signature
         self.history_field = history_field
 
-    def split_inputs(self, values: dict) -> tuple[dict, list[dict]]:
+    def split_inputs(self, values: dict) -> tuple[dict, list[lmcc.Turn]]:
+        """Separate the live inputs from the ``dspy.History``: each history
+        message becomes a turn (its inputs and outputs, no steps). A message
+        key the signature does not have refuses ``turn-invalid``."""
         values = dict(values)
-        turns: list[dict] = []
+        turns: list[lmcc.Turn] = []
         if self.history_field and self.history_field in values:
             history = values.pop(self.history_field)
-            messages = getattr(history, "messages", history) or []
-            turns = [{"fields": dict(m)} for m in messages]
+            fp = lmcc.signature_fingerprint(self.signature)
+            direction = {f.name: f.direction for f in self.signature.fields}
+            for i, message in enumerate(getattr(history, "messages", history) or []):
+                unknown = sorted(set(message) - set(direction))
+                if unknown:
+                    refuse("turn-invalid", f"{self.history_field}.messages[{i}]: {unknown} are "
+                                           f"not fields of this signature")
+                turns.append(lmcc.Turn(
+                    fp, {k: v for k, v in message.items() if direction[k] == "input"}, (),
+                    {k: v for k, v in message.items() if direction[k] == "output"}))
         return values, turns
 
 
@@ -88,8 +100,8 @@ def lower(signature, *, registry: lmcc.Registry | None = None) -> Lowered:
         desc = extra.get("desc")
         if desc == f"${{{name}}}" or desc == "":
             desc = None
-        shape, role = _shape_and_role(ann, info, name)
-        fields.append(core.Field(name, direction, shape, type=_typename(ann), role=role,
+        shape, purpose = _shape_and_purpose(ann, info, name)
+        fields.append(core.Field(name, direction, shape, type=_typename(ann), purpose=purpose,
                                  desc=desc, annotation=ann))
     lowered = core._validated(core.SignatureCore(sig.instructions, fields))
     return Lowered(lowered, history_field)
@@ -105,12 +117,12 @@ def _typename(ann) -> str:
 # ------------------------------------------------------------------ shapes
 
 
-def _shape_and_role(ann, info, name: str) -> tuple[dict, str]:
+def _shape_and_purpose(ann, info, name: str) -> tuple[dict, str]:
     import dspy
     from dspy.adapters.types import Audio, Image
     from dspy.adapters.types.tool import Tool, ToolCalls
 
-    role = "plain"
+    purpose = "plain"
     origin, args = typing.get_origin(ann), typing.get_args(ann)
     base = args[0] if origin is list and args else ann
 
@@ -120,27 +132,27 @@ def _shape_and_role(ann, info, name: str) -> tuple[dict, str]:
         shape = _TOOL_SHAPE if ann is Tool else {"type": "array", "items": _TOOL_SHAPE}
         return dict(shape), "tools"
     if ann is ToolCalls:
-        role = "tools"
+        purpose = "tools"
     citations = getattr(dspy, "Citations", None)
     if citations is not None and ann is citations:
-        role = "citations"
+        purpose = "citations"
     if ann is Image:
-        return {"media": "image"}, role
+        return {"media": "image"}, purpose
     if ann is Audio:
-        return {"media": "audio"}, role
+        return {"media": "audio"}, purpose
     for media_name in ("File", "Document"):
         t = getattr(dspy, media_name, None)
         if t is not None and ann is t:
-            return {"media": media_name.lower()}, role
+            return {"media": media_name.lower()}, purpose
     code_t = getattr(dspy, "Code", None)
     if code_t is not None and isinstance(ann, type) and issubclass(ann, code_t):
         shape = {"type": "string", "format": "code"}
         lang = getattr(ann, "language", None)
         if isinstance(lang, str) and lang:
             shape["language"] = lang
-        return shape, role
+        return shape, purpose
     if isinstance(ann, type) and issubclass(ann, enum.Enum):
-        return core.annotation_to_shape(ann, None, field_name=name), role
+        return core.annotation_to_shape(ann, None, field_name=name), purpose
     try:
         annotated = typing.Annotated[(ann, *info.metadata)] if info.metadata else ann
         shape = pydantic.TypeAdapter(annotated).json_schema()
@@ -149,7 +161,7 @@ def _shape_and_role(ann, info, name: str) -> tuple[dict, str]:
                f"field {name!r}: cannot lower annotation {ann!r} to a shape ({exc})",
                fix={"action": "edit-signature", "field": name})
     shape.pop("title", None)
-    return shape, role
+    return shape, purpose
 
 
 _TOOL_SHAPE = {
@@ -181,9 +193,9 @@ def bind_dspy_types(registry: lmcc.Registry) -> None:
     from lmcc_std import jsontext
 
     registry.format(Image, write=lambda im: [{"type": "image", "url": im.url}],
-                    accepts=("media:image",), emits="parts", direction="in")
+                    accepts=("media:image",), writes="parts", direction="in")
     registry.format(Audio, write=lambda au: [{"type": "audio", "url": getattr(au, "url", None)}],
-                    accepts=("media:audio",), emits="parts", direction="in")
+                    accepts=("media:audio",), writes="parts", direction="in")
     registry.format(Tool, write=lambda t: jsontext.dumps(_tool_declaration(t), indent=None),
                     accepts=("Tool", "object"), direction="in")
     registry.format(list[Tool],
@@ -193,7 +205,7 @@ def bind_dspy_types(registry: lmcc.Registry) -> None:
     if code_t is not None:
         registry.format(code_t,
                         write=lambda c: c.model_dump(mode="json") if isinstance(c, code_t) else c,
-                        read=lambda span, f: f.annotation.model_validate(span.text),
+                        read=lambda capture, f: f.annotation.model_validate(capture.text),
                         accepts=("Code", "string"))
 
 
@@ -221,14 +233,14 @@ def entry() -> dict:
                 "{% for f in outputs %}[[ ## {f.name} ## ]]\n{f.value}\n\n{% endfor %}"
                 "[[ ## completed ## ]]\n\n"
                 "In adhering to this structure, your objective is: {instruction}"},
-            {"directive": "demos"},
-            {"directive": "history"},
+            {"directive": "turns", "slot": "examples"},
+            {"directive": "turns"},
             {"role": "user", "text":
                 "{% for f in inputs %}[[ ## {f.name} ## ]]\n{f.value}\n\n{% endfor %}"
                 "Respond with the corresponding output fields, then end with the "
                 "marker for `[[ ## completed ## ]]`."},
         ],
-        "parse": {"kind": "derived"},
+        "reader": {"kind": "derived"},
         "formats": {"*": {"use": "json", "options": {"indent": None}}},
     }
 

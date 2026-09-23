@@ -2,7 +2,7 @@
 
 No network, no keys: lm15 objects are built by hand. What is proven:
 the plan's request *is* an lm15 Request through lm15's own serde; a
-plan's patch reaches Config; a caller cannot silently contradict it; an
+plan's request_settings reaches Config; a caller cannot silently contradict it; an
 lm15 Response parses; lm15 stream events drive lmcc's stream to the
 same values as batch (kernel §8).
 """
@@ -23,7 +23,7 @@ from lm15.serde import request_to_dict
 
 @dataclasses.dataclass
 class Solution:
-    reasoning: lmcc.Role["reasoning", str]
+    reasoning: lmcc.Purpose["reasoning", str]
     answer: int
 
 
@@ -39,8 +39,8 @@ REG = lmcc.Registry()
 lmcc_std.install(REG)
 
 
-def plan_for(strategy, caps):
-    adapter = lmcc.adapter(messages=XML.template, strategies={"reasoning": strategy})
+def plan_for(transport, caps):
+    adapter = lmcc.adapter(messages=XML.template, transports={"reasoning": transport})
     return solve.bind(adapter, capabilities=caps, registry=REG)
 
 
@@ -56,10 +56,10 @@ def test_request_is_an_lm15_request_through_lm15_serde():
     assert request_to_dict(req) == {**rendered.request("m"), "config": {"max_tokens": 64}}
 
 
-def test_a_strategy_patch_reaches_config_and_the_caller_cannot_contradict_it():
+def test_a_transport_patch_reaches_config_and_the_caller_cannot_contradict_it():
     plan = plan_for("native_reasoning", {"instruct": True, "native_reasoning": True})
     rendered = plan.render(problem="2+2")
-    assert rendered.patch == {"config": {"reasoning": {"effort": "medium"}}}
+    assert rendered.request_settings == {"config": {"reasoning": {"effort": "medium"}}}
     req = lmcc_lm15.request(rendered, model="m", config=Config(max_tokens=64))
     assert req.config.reasoning == Reasoning(effort="medium") and req.config.max_tokens == 64
     with pytest.raises(lmcc_lm15.ConfigConflict) as err:
@@ -73,7 +73,7 @@ def test_a_strategy_patch_reaches_config_and_the_caller_cannot_contradict_it():
 
 
 def test_native_reasoning_options_spell_lm15_reasoning():
-    adapter = lmcc.adapter(messages=XML.template, strategies={"reasoning": lmcc.use(
+    adapter = lmcc.adapter(messages=XML.template, transports={"reasoning": lmcc.use(
         "native_reasoning", effort="low", thinking_budget=1024)})
     plan = solve.bind(adapter, capabilities={"native_reasoning": True}, registry=REG)
     req = lmcc_lm15.request(plan.render(problem="x"), model="m")
@@ -108,9 +108,9 @@ def test_stream_events_drive_the_plan_to_the_batch_values():
     assert batch == result.values
 
 
-def test_json_lens_patch_is_a_valid_lm15_response_format():
+def test_json_reader_patch_is_a_valid_lm15_response_format():
     sig = lmcc.signature("x", inputs={"q": str}, outputs={"answer": str, "n": int})
-    plan = lmcc.adapter(messages=[lmcc.user("{q}")], parse={"kind": "json_object"}).bind(
+    plan = lmcc.adapter(messages=[lmcc.user("{q}")], reader={"kind": "json_object"}).bind(
         sig, {"native_structured_output": True}, registry=REG)
     req = lmcc_lm15.request(plan.render(q="?"), model="m")
     assert req.config.response_format["type"] == "json_schema"

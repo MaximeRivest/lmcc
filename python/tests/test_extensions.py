@@ -9,9 +9,9 @@ LEGACY = {"pattern/legacy-re2": "0.1.0"}
 XML = [lmcc.system("{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"),
        lmcc.user("{q}")]
 SIG = lmcc.signature("Answer.", inputs={"q": str},
-                     outputs={"reasoning": lmcc.field(str, role="reasoning"), "answer": str})
-PATTERN = lmcc.Strategy(visible=False, routings=[
-    {"from": "text", "pattern": r"Thought: ([^\n]+)", "to": "@role", "consume": True}])
+                     outputs={"reasoning": lmcc.field(str, purpose="reasoning"), "answer": str})
+PATTERN = lmcc.Transport(in_template=False, find=[
+    {"from": "text", "pattern": r"Thought: ([^\n]+)", "to": "@purpose", "remove": True}])
 
 
 def test_default_registry_binds_natives_and_core_only_binds_none():
@@ -29,7 +29,7 @@ def test_discovery_is_separate_from_capabilities():
 
 
 def test_core_only_host_refuses_before_any_plan():
-    adapter = lmcc.adapter(messages=XML, strategies={"reasoning": PATTERN}, extensions=LEGACY)
+    adapter = lmcc.adapter(messages=XML, transports={"reasoning": PATTERN}, extensions=LEGACY)
     with pytest.raises(lmcc.Refusal) as err:
         adapter.bind(SIG, registry=lmcc.Registry(extensions=()))
     assert err.value.code == "extension-unsupported"
@@ -37,53 +37,53 @@ def test_core_only_host_refuses_before_any_plan():
 
 
 def test_constructor_declares_the_default_tier_and_dump_says_so():
-    adapter = lmcc.adapter(messages=XML, strategies={"reasoning": PATTERN})
+    adapter = lmcc.adapter(messages=XML, transports={"reasoning": PATTERN})
     assert adapter.extensions == LEGACY
     assert adapter.dump()["extensions"] == LEGACY
     assert adapter.bind(SIG).describe()["extensions"]["pattern/legacy-re2"]["binding"] == "python:re"
     # an explicit pattern/* declaration is never overridden; nothing declared without a pattern
-    explicit = lmcc.adapter(messages=XML, strategies={"reasoning": PATTERN}, extensions={"pattern/other": "0.1.0"})
+    explicit = lmcc.adapter(messages=XML, transports={"reasoning": PATTERN}, extensions={"pattern/other": "0.1.0"})
     assert explicit.extensions == {"pattern/other": "0.1.0"}
     assert lmcc.adapter(messages=XML).extensions == {}
 
 
 def test_default_reaches_choose_branches_and_load_never_defaults():
-    choose = lmcc.Strategy(choose=[
+    choose = lmcc.Transport(choose=[
         {"when": {"capability": "native_reasoning"},
-         "use": lmcc.Strategy(visible=False, routings=[{"from": "channel:thinking", "to": "@role"}])},
+         "use": lmcc.Transport(in_template=False, find=[{"from": "part:thinking", "to": "@purpose"}])},
         {"else": PATTERN}])
-    adapter = lmcc.adapter(messages=XML, strategies={"reasoning": choose})
+    adapter = lmcc.adapter(messages=XML, transports={"reasoning": choose})
     assert adapter.extensions == LEGACY
     entry = adapter.dump()
     del entry["extensions"]
     with pytest.raises(lmcc.Refusal) as err:
         lmcc.load(entry)
     assert err.value.code == "extension-undeclared"
-    assert err.value.fix["path"] == "strategies['reasoning'].choose[1].routings[0]"
+    assert err.value.fix["path"] == "transports['reasoning'].choose[1].find[0]"
 
 
 def test_declare_defaults_can_be_switched_off():
     with pytest.raises(lmcc.Refusal) as err:
-        lmcc.adapter(messages=XML, strategies={"reasoning": PATTERN}, declare_defaults=False).bind(SIG)
+        lmcc.adapter(messages=XML, transports={"reasoning": PATTERN}, declare_defaults=False).bind(SIG)
     assert err.value.code == "extension-undeclared"
 
 
-def test_pattern_from_a_named_strategy_counts_at_the_same_path():
+def test_pattern_from_a_named_transport_counts_at_the_same_path():
     registry = lmcc.Registry()
-    registry.register_strategy("thought", lambda options: PATTERN)
-    adapter = lmcc.adapter(messages=XML, strategies={"reasoning": "thought"})
+    registry.register_transport("thought", lambda options: PATTERN)
+    adapter = lmcc.adapter(messages=XML, transports={"reasoning": "thought"})
     with pytest.raises(lmcc.Refusal) as err:
         adapter.bind(SIG, registry=registry)
     assert err.value.code == "extension-undeclared"
-    assert err.value.fix["path"] == "strategies['reasoning'].routings[0]"
+    assert err.value.fix["path"] == "transports['reasoning'].find[0]"
 
 
-def test_admission_refuses_at_the_routing_path_after_declaration():
-    bad = lmcc.Strategy(visible=False, routings=[{"from": "text", "pattern": "(?=x)", "to": "@role"}])
+def test_admission_refuses_at_the_find_rule_path_after_declaration():
+    bad = lmcc.Transport(in_template=False, find=[{"from": "text", "pattern": "(?=x)", "to": "@purpose"}])
     with pytest.raises(lmcc.Refusal) as err:
-        lmcc.adapter(messages=XML, strategies={"reasoning": bad}, extensions=LEGACY).bind(SIG)
+        lmcc.adapter(messages=XML, transports={"reasoning": bad}, extensions=LEGACY).bind(SIG)
     assert err.value.code == "entry-malformed"
-    assert err.value.fix == {"action": "edit-entry", "path": "strategies['reasoning'].routings[0]"}
+    assert err.value.fix == {"action": "edit-entry", "path": "transports['reasoning'].find[0]"}
 
 
 @pytest.mark.parametrize("extensions, hint", [
@@ -109,7 +109,7 @@ def test_unused_declaration_is_allowed_and_dumped_verbatim():
 
 
 def test_plan_describes_what_resolved():
-    plan = lmcc.adapter(messages=XML, strategies={"reasoning": PATTERN}, extensions=LEGACY).bind(SIG)
+    plan = lmcc.adapter(messages=XML, transports={"reasoning": PATTERN}, extensions=LEGACY).bind(SIG)
     assert plan.describe()["extensions"] == {
         "pattern/legacy-re2": {"needs": "0.1.0", "provides": "0.1.0", "binding": "python:re"}}
     assert plan.parse("Thought: t\n<answer>\nA\n</answer>\n") == {"reasoning": "t", "answer": "A"}
@@ -124,7 +124,7 @@ def test_a_host_can_bind_its_own_implementation():
         def admit(self, regex, *, where):
             pass
 
-        def spans(self, regex, text):
+        def captures(self, regex, text):
             return [(m.start(), m.end(), m.group(1).upper())
                     for m in __import__("re").finditer(regex, text)]
 
@@ -133,7 +133,7 @@ def test_a_host_can_bind_its_own_implementation():
     with pytest.raises(lmcc.Refusal) as err:
         registry.register_extension(Upper())
     assert err.value.code == "already-registered"
-    plan = lmcc.adapter(messages=XML, strategies={"reasoning": PATTERN}, extensions=LEGACY).bind(
+    plan = lmcc.adapter(messages=XML, transports={"reasoning": PATTERN}, extensions=LEGACY).bind(
         SIG, registry=registry)
     assert plan.describe()["extensions"]["pattern/legacy-re2"]["binding"] == "test:upper"
     assert plan.parse("Thought: t\n<answer>\nA\n</answer>\n")["reasoning"] == "T"
@@ -150,6 +150,6 @@ def test_version_mismatch_reuses_match_version():
 
 def test_legacy_re2_is_dotall_group_one_and_drops_empty_matches():
     b = LegacyRE2()
-    assert b.spans("a(.)c", "a\nc") == [(0, 3, "\n")]
-    assert b.spans("x*", "xx yx") == [(0, 2, "xx"), (4, 5, "x")]
-    assert b.spans("(a)|b", "b") == [(0, 1, "")]
+    assert b.captures("a(.)c", "a\nc") == [(0, 3, "\n")]
+    assert b.captures("x*", "xx yx") == [(0, 2, "xx"), (4, 5, "x")]
+    assert b.captures("(a)|b", "b") == [(0, 1, "")]

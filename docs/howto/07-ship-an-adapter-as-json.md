@@ -29,11 +29,11 @@ adapter = lmcc.adapter(messages=template, formats={"list[integer]": "json"}, nam
 entry = adapter.dump(registry=std)
 assert entry == {
     "name": "rows_v1",
-    "versions": {"kernel": "0.6.0", "vocab": {"format/json": "0.1.0"}},
+    "versions": {"kernel": "0.7.0", "vocab": {"format/json": "0.1.0"}},
     "template": [
         {"role": "system", "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"},
         {"role": "user", "text": "{text}"}],
-    "parse": {"kind": "derived"},
+    "reader": {"kind": "derived"},
     "formats": {"list[integer]": {"use": "json"}},
 }
 wire = json.dumps(entry)
@@ -71,8 +71,8 @@ named `def` (not a lambda) that reaches no global.
 def write(v, f):
     return ", ".join(str(x) for x in v)
 
-def read(span, f):
-    return [int(p.strip()) for p in span.text.split(",")]
+def read(capture, f):
+    return [int(p.strip()) for p in capture.text.split(",")]
 
 def describe(f):
     return "comma-separated integers"
@@ -88,7 +88,7 @@ entry2 = shipped.dump(registry=lmcc.Registry())
 assert entry2["formats"]["list[integer]"] == shipped_entry
 ```
 
-## 4. Load with and without placement
+## 4. Load with and without put
 
 ```python
 try:
@@ -113,7 +113,7 @@ self-containment. `allow_udf` is the host's decision.
 
 ```python
 tampered = json.loads(json.dumps(entry2))
-tampered["formats"]["list[integer]"]["read"] = "def read(span, f):\n    return []"
+tampered["formats"]["list[integer]"]["read"] = "def read(capture, f):\n    return []"
 try:
     lmcc.load(tampered, registry=placing)
     raise AssertionError("should have refused")
@@ -137,13 +137,13 @@ except lmcc.Refusal as r:
 
 | code | when |
 |---|---|
-| `unknown-format`, `unknown-strategy`, `unknown-parse-kind` | at load or dump: a `{"use": name}` names nothing in the registry |
+| `unknown-format`, `unknown-transport`, `unknown-reader` | at load or dump: a `{"use": name}` names nothing in the registry |
 | `version-incompatible` | at load: the artifact pins a version this runtime cannot honor |
 | `entry-malformed` | at load: a structural defect; the hint names the path |
 | `format-untrusted` | at load: the artifact ships a UDF and `allow_udf` is false |
 | `udf-tampered` | at load: the `sha256` does not match the source |
 | `format-not-self-contained` | at ship or load: a function reaches a free variable or a global |
-| `udf-unplaceable` | at load: the UDF's language has no placement in this host |
+| `udf-unplaceable` | at load: the UDF's language has no put in this host |
 
 Codes and fixes: [errors.md](../../contract/spec/errors.md). The file
 format: [entry.schema.json](../../contract/schema/entry.schema.json).

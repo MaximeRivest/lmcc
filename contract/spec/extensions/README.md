@@ -50,6 +50,6 @@ authoring a grammar or a matcher (D-32, D-34).
 
 | family | governs | contract | version | spec | evidence |
 |---|---|---|---|---|---|
-| `pattern` | the `pattern` key of a text routing (kernel §6) | `pattern/legacy-re2` | 0.1.0 | `pattern-legacy-re2.md` | cases 40, 42 |
+| `pattern` | the `pattern` key of a text find rule (kernel §6) | `pattern/legacy-re2` | 0.1.0 | `pattern-legacy-re2.md` | cases 40, 42 |
 
 Mechanism cases (declare, bind, refuse; kernel §10): 91–95.

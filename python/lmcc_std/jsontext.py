@@ -2,9 +2,9 @@
 
 The standard library's ``json`` module spells floats as Python does
 (``1.0``, ``1e+20``) and accepts non-JSON (``NaN``, duplicate members).
-The specs (``codec-json.md``, ``lens-json_object.md``) pin one portable
+The specs (``codec-json.md``, ``reader-json_object.md``) pin one portable
 spelling — numbers per kernel §7a, two layouts — and strict reading. This
-module is that spelling; both the codec and the lens go through it so
+module is that spelling; both the codec and the reader go through it so
 they cannot disagree.
 """
 
@@ -119,7 +119,7 @@ def loads(text: str) -> object:
 def members(text: str) -> list[tuple[str, object, str]]:
     """Read one JSON object and return ``[(key, value, source_text)]`` for
     its top-level members, in document order, with duplicates kept — the
-    lens decides what a duplicate means. ``source_text`` is the member's
+    reader decides what a duplicate means. ``source_text`` is the member's
     value exactly as written. Raises ValueError when the text is not a
     JSON object."""
     s = text

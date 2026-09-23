@@ -8,7 +8,7 @@ bind for adapters built in code, always before a plan exists.
 Two things live here:
 
 - the **binding** protocol per family (today one family, ``pattern``:
-  how a text routing's ``pattern`` string is admitted and matched), and
+  how a text rule's ``pattern`` string is admitted and matched), and
   the kernel's native bindings for what this runtime can honestly do;
 - ``resolve``: the declaration rules, in order — syntax, one per
   family, host support, version, undeclared use, admission.
@@ -49,8 +49,8 @@ class ExtensionBinding:
 
 
 class PatternBinding(ExtensionBinding):
-    """The ``pattern`` family: admit a regex at load/bind, find its spans
-    at parse. ``spans`` returns ``(start, end, capture)`` triples in match
+    """The ``pattern`` family: admit a regex at load/bind, find its captures
+    at parse. ``captures`` returns ``(start, end, capture)`` triples in match
     order — the same shape the core scans produce."""
 
     family = "pattern"
@@ -58,7 +58,7 @@ class PatternBinding(ExtensionBinding):
     def admit(self, regex: str, *, where: str) -> None:
         raise NotImplementedError
 
-    def spans(self, regex: str, text: str) -> list[tuple[int, int, str]]:
+    def captures(self, regex: str, text: str) -> list[tuple[int, int, str]]:
         raise NotImplementedError
 
 
@@ -91,7 +91,7 @@ class LegacyRE2(PatternBinding):
             refuse("entry-malformed", f"{where}: regex {regex!r} does not compile: {exc}",
                    fix={"action": "edit-entry", "path": where})
 
-    def spans(self, regex: str, text: str) -> list[tuple[int, int, str]]:
+    def captures(self, regex: str, text: str) -> list[tuple[int, int, str]]:
         pattern = self._compiled.get(regex)
         if pattern is None:
             pattern = self._compiled[regex] = re.compile(regex, re.DOTALL)
@@ -125,28 +125,28 @@ class Resolved:
                 "binding": self.binding.binding}
 
 
-def uses_family(strategies: dict, family: str) -> bool:
-    """Whether any *inline* strategy (through ``choose`` branches) carries a
-    routing of ``family``. Named strategies are resolved at bind with a
+def uses_family(transports: dict, family: str) -> bool:
+    """Whether any *inline* transport (through ``choose`` branches) carries a
+    rule of ``family``. Named transports are resolved at bind with a
     registry and are not seen here."""
-    from .strategy import Strategy
+    from .transport import Transport
 
-    def walk(s: Strategy) -> bool:
+    def walk(s: Transport) -> bool:
         if s.choose is not None:
             return any(walk(alt.get("else") or alt["use"]) for alt in s.choose)
-        return any(family == "pattern" and "pattern" in r for r in s.routings)
+        return any(family == "pattern" and "pattern" in r for r in s.find)
 
-    return any(isinstance(s, Strategy) and walk(s) for s in strategies.values())
+    return any(isinstance(s, Transport) and walk(s) for s in transports.values())
 
 
-def default_declaration(strategies: dict, declared: dict[str, str]) -> dict[str, str]:
+def default_declaration(transports: dict, declared: dict[str, str]) -> dict[str, str]:
     """The constructor's convenience (kernel §10): an inline ``pattern``
-    routing with no ``pattern/*`` declared gets the default tier — the
+    rule with no ``pattern/*`` declared gets the default tier — the
     host's native engine, ``pattern/legacy-re2`` at the version this
     kernel binds. The declaration is written into the adapter, so the
     dumped artifact says it. Loading never defaults: an artifact on disk
     must speak for itself."""
-    if uses_family(strategies, "pattern") and not any(family_of(n) == "pattern" for n in declared):
+    if uses_family(transports, "pattern") and not any(family_of(n) == "pattern" for n in declared):
         return {**declared, LegacyRE2.extension: LegacyRE2.version}
     return declared
 
@@ -182,7 +182,7 @@ def resolve(adapter, registry) -> dict[str, Resolved]:
     """Kernel §10 rules 1–6. Returns {name: Resolved} for the declared
     extensions. Refuses, naming the offender, before any plan exists."""
     from .serde import check_compatible
-    from .strategy import Strategy
+    from .transport import Transport
 
     declared = validate_declaration(adapter.extensions)
     resolved: dict[str, Resolved] = {}
@@ -197,15 +197,15 @@ def resolve(adapter, registry) -> dict[str, Resolved]:
         resolved[name] = Resolved(name, needs, binding)
     by_family = {family_of(n): r for n, r in resolved.items()}
 
-    def walk(strategy: Strategy, where: str) -> None:
-        if strategy.choose is not None:
-            for i, alt in enumerate(strategy.choose):
+    def walk(transport: Transport, where: str) -> None:
+        if transport.choose is not None:
+            for i, alt in enumerate(transport.choose):
                 walk(alt.get("else") or alt["use"], f"{where}.choose[{i}]")
             return
-        for i, r in enumerate(strategy.routings):
+        for i, r in enumerate(transport.find):
             if "pattern" not in r:
                 continue
-            path = f"{where}.routings[{i}]"
+            path = f"{where}.find[{i}]"
             pattern = by_family.get("pattern")
             if pattern is None:
                 refuse("extension-undeclared",
@@ -214,12 +214,12 @@ def resolve(adapter, registry) -> dict[str, Resolved]:
                        fix={"action": "declare-extension", "family": "pattern", "path": path})
             pattern.binding.admit(r["pattern"], where=path)
 
-    for role, binding in adapter.strategies.items():
-        where = f"strategies[{role!r}]"
-        if isinstance(binding, Strategy):
+    for purpose, binding in adapter.transports.items():
+        where = f"transports[{purpose!r}]"
+        if isinstance(binding, Transport):
             walk(binding, where)
         else:
-            walk(registry.strategy(binding["use"], binding.get("options"), where=where), where)
+            walk(registry.transport(binding["use"], binding.get("options"), where=where), where)
     return resolved
 
 

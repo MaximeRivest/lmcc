@@ -827,3 +827,94 @@ notebook uses simulated replies/results and does not execute generated code.
 Evidence: corpus 116–127, Python and Go regression tests and every-split
 stream replay. The previous Go serializer dropped inline `turns`; preserving
 those declarations is now pinned by the nested-choice roundtrip case.
+
+**D-39 · Kernel 0.7: one record, the turn, replaces demos and history.**
+Examples, past exchanges and the exchange in progress are all turns: one
+call of one signature, kept as values (inputs, steps, outputs), with each
+model step's message as it came and a hash of the request it answered.
+The plan writes turns with its own writers; the template places them in
+named slots, as messages (`{"directive": "turns", "slot"?}`) or as text
+(`{% for m in slot %}` with `m.role`/`m.kind`/`m.text`, and a
+`{% if slot %}` guard). `demos`, `history`, lm15-message history items and
+`render(demos=, history=)` are removed without aliases: there are no users
+to migrate, and two ways to say one thing is the drift rule 1 forbids.
+
+Why values, not messages: a conversation kept as messages freezes the
+spelling it was recorded in, so switching adapters left old conventions in
+the prompt, and hidden fields (reasoning, calls) had readers but no
+writers. Why keep the message too: a reply holds more than its fields —
+prose outside them, opaque provider parts (signed thinking, continuation
+data). So the adapter chooses, as data (`replay`): `"recorded"` (default)
+sends a recorded reply verbatim when this plan reads it back into the same
+values, else writes it from values; `"values"` always writes from values,
+replaying only parts no text can forge. Every hidden text-routed output
+needs a writer — derived from `between`/`line_prefixed`, declared
+(`turns.write`, `turns.position`) or dropped on purpose (`turns.write:
+null`) — checked at bind (`turns-drift`); fields that read the calls' own
+span are projections and are never written twice (a prototype shipped
+that duplicate; case 148 now pins it). The current turn is a turn, so the
+live input is written once. Tool results pair with calls in order
+(`turn-invalid` otherwise); assigned ids written as native parts are
+qualified per request (`s<k>_<id>`), provider ids never change; a tool's
+non-text result parts follow its text on text transports (a 0.6 bug
+dropped them). A turn carries its signature's fingerprint (instructions
+excluded, so optimizing prose does not orphan recordings); a stored
+request is its hash, so a stored conversation grows with its replies, not
+quadratically. Placements and fragments now target only the template's
+own messages (a 0.6 bug put the live sources into a past question).
+
+Rejected: a `kind` on turns ("example" | "actual") and slot filters in the
+kernel (presets; selection, windows and memory belong to the caller);
+`env:` placement for RLM-style variables (control flow's concern, served
+by a role + strategy + format in a pack); storing whole requests (quadratic
+growth); byte-exact replay of whole requests as a kernel promise.
+
+Costs: every 0.6 artifact refuses `version-incompatible`; the Go kernel
+stays at 0.6 until ported — held to the `kernel-0.6` corpus with an exact,
+declared code gap — and TypeScript is further behind. `replay: "values"`
+loses a tool call's own continuation data (the calls format reads id,
+name, input); the default keeps it. A text-form slot cannot hold native
+parts and refuses rather than drops them. Id qualification and native
+replay are unverified against live providers. Evidence: corpus 03, 47,
+53, 54, 103, 107, 116, 122, 128–148 (each new rule caught by a deliberate
+break of the kernel), `tests/test_turns.py`, howtos 11–13.
+
+**D-40 · Kernel 0.7 vocabulary: one word, one meaning; named by what it does.**
+The words are judged by how people learn: a few new ideas at a time,
+recognition over recall, one meaning per word, familiar words over coined
+ones, matching names for matching jobs. `docs/glossary.md` defines every
+term in one sentence, in the order it is needed, and is the reference for
+names. The renames, with their reason:
+
+| 0.6 | 0.7 | why |
+|---|---|---|
+| strategy | transport | says what it is: how fields of one purpose travel |
+| role (field), `Role[…]`, `@role` | purpose, `Purpose[…]`, `@purpose` | "role" is lm15's word for a message's speaker; one word, one meaning |
+| lens, `parse: {kind}` | reader, `reader: {kind}` | "lens" is borrowed jargon; "parse" also names the verb |
+| span | capture | the piece of reply found for a field; a word regex users know |
+| `routings` / `placement` | `find` / `put` | a mirrored pair: where an output is found, where an input is put |
+| `consume`, `suffices` | `remove`, `complete_reply` | say the effect |
+| `fragments`, `controls` | `tell`, `request_settings` | text that tells the model; settings added to the request |
+| `via`, `visible` | `written_as`, `in_template` | say what and where |
+| `emits` | `writes` | pairs with `reads` |
+| `channel:<type>`, `controls.<key>` | `part:<type>`, `request.<key>` | lm15's word "part"; the request is where the value goes |
+| strategy `turns: {…, write}` | transport `spelling: {…, value}` | "turns" meant three things; now it means turns |
+| patch (of a request) | request settings | one name for one thing |
+
+Error codes follow: `unknown-reader`, `unknown-transport`, `reader-error`,
+`not-readable`, `purpose-ambiguous`, `setting-conflict`,
+`format-capture-mismatch`, `format-put-mismatch`, `spelling-drift`; fix
+action `assign-purpose` (parameter `purpose`). The signature's JSON key
+`role` became `purpose`, so the turn fingerprint changed (case 128).
+
+Kept: signature, adapter, template, format, plan, bind, render, parse,
+capabilities, turn, and lm15's words (message, role, part, request,
+config). Kept "placement" only for placing shipped code in a runtime
+(`place-udf`, `udf-unplaceable`), a different idea from `put`.
+
+Costs: a second breaking change in 0.7, before any release (no pin
+change: 0.7 was never published). Longer names in a few places
+(`request_settings`, `complete_reply`). The Go kernel, pinned at 0.6,
+keeps every old word until it is ported; its codes are mapped exactly in
+`tests/test_coherence.py`. Not yet done: the check that someone new can
+predict each setting from its name alone (plan 12, open item).

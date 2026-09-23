@@ -1,4 +1,4 @@
-"""The kernel surface: @lmcc.fn, the template, the derived lens, bind,
+"""The kernel surface: @lmcc.fn, the template, the derived reader, bind,
 render, parse, plan faces. Kernel only — empty registry."""
 
 import dataclasses
@@ -10,7 +10,7 @@ import lmcc
 XML = lmcc.adapter(messages=[
     lmcc.system("{instruction}\n\nReply with exactly this pattern:\n"
                 "{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"),
-    lmcc.demos(),
+    lmcc.turns(),
     lmcc.user("{% for f in inputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"),
 ])
 
@@ -22,7 +22,7 @@ def answer(question: str) -> str:
 
 @dataclasses.dataclass
 class Solution:
-    reasoning: lmcc.Role["reasoning", str]
+    reasoning: lmcc.Purpose["reasoning", str]
     answer: int
 
 
@@ -56,7 +56,7 @@ def test_fn_lowers_parameters_return_and_docstring():
     assert [(f.name, f.direction, f.type) for f in sig.fields] == [
         ("question", "input", "str"), ("answer", "output", "str")]
     s2 = solve.signature
-    assert [(f.name, f.role, f.type) for f in s2.outputs] == [
+    assert [(f.name, f.purpose, f.type) for f in s2.outputs] == [
         ("reasoning", "reasoning", "str"), ("answer", "plain", "int")]
     with pytest.raises(TypeError, match="not a callable"):   # host API misuse, not a refusal
         answer("x")
@@ -66,7 +66,7 @@ def test_bind_render_parse_round_trip():
     plan = answer.bind(XML, capabilities={"instruct": True})
     req = plan.render(question="Why is the sky blue?")
     assert req.messages[-1]["parts"][0]["text"] == "<question>\nWhy is the sky blue?\n</question>\n"
-    assert req.patch == {}
+    assert req.request_settings == {}
     assert plan.parse("<answer>\nRayleigh scattering.\n</answer>") == {"answer": "Rayleigh scattering."}
 
 
@@ -76,12 +76,12 @@ def test_the_template_is_the_parser():
         lmcc.user("{question}")])
     plan = answer.bind(renamed)
     assert plan.parse("<reply-answer>\nyes\n</reply-answer>") == {"answer": "yes"}
-    assert plan.describe()["lens"]["anchors"] == [["answer", "<reply-answer>\n", "\n</reply-answer>\n"]]
+    assert plan.describe()["reader"]["anchors"] == [["answer", "<reply-answer>\n", "\n</reply-answer>\n"]]
 
 
-def test_demos_are_written_by_the_lens():
+def test_examples_are_written_by_the_reader():
     plan = answer.bind(XML)
-    req = plan.render(question="q", demos=[{"question": "d", "answer": "a"}])
+    req = plan.render(question="q", turns=[plan.example({"question": "d"}, {"answer": "a"})])
     demo_turn = req.messages[1]["parts"][0]["text"]
     assert demo_turn == "<answer>\na\n</answer>"
     assert plan.parse(demo_turn) == {"answer": "a"}
@@ -100,11 +100,11 @@ def test_bare_output_slots_form_a_pattern():
 
 
 @pytest.mark.parametrize("template, code", [
-    ("{% for f in outputs %}{f.value}\n{% endfor %}", "not-lensable"),        # no anchor
-    ("{% for f in outputs %}x {f.value} {f.value}{% endfor %}", "not-lensable"),  # two holes
-    ("{% for f in outputs %}<a>{f.value}{% endfor %}", "not-lensable"),      # anchors coincide
-    ("no pattern at all", "not-lensable"),
-    ("{% for f in outputs %}<{f.name}>{f.value}{% for g in inputs %}{g.name}{% endfor %}{% endfor %}", "not-lensable"),
+    ("{% for f in outputs %}{f.value}\n{% endfor %}", "not-readable"),        # no anchor
+    ("{% for f in outputs %}x {f.value} {f.value}{% endfor %}", "not-readable"),  # two holes
+    ("{% for f in outputs %}<a>{f.value}{% endfor %}", "not-readable"),      # anchors coincide
+    ("no pattern at all", "not-readable"),
+    ("{% for f in outputs %}<{f.name}>{f.value}{% for g in inputs %}{g.name}{% endfor %}{% endfor %}", "not-readable"),
     ("{bad brace", "template-syntax"),
     ("{% for f in outputs %}<{f.name}>{f.value}{% endfor %}{nope}", "unknown-slot"),
 ])
@@ -139,7 +139,7 @@ def test_plan_faces_are_data():
     json.dumps(d)
     assert d["outputs"][0]["format"] == "kernel-scalar" and d["outputs"][0]["resolved_by"] == "kernel"
     assert d["skeleton"] == {"prefill": "<reasoning>\n", "stops": ["</answer>"]}
-    assert "system" in plan.prefix(demos=[{"problem": "p", "reasoning": "r", "answer": 1}])
+    assert "system" in plan.prefix(turns=[plan.example({"problem": "p"}, {"reasoning": "r", "answer": 1})])
     assert "kernel-scalar" in plan.explain()
 
 
@@ -156,14 +156,15 @@ def test_field_uncovered_and_missing_input():
     assert err.value.code == "missing-input"
 
 
-def test_history_field_turns_and_partial_examples():
-    with_history = lmcc.adapter(messages=[XML.template[0], lmcc.history(), XML.template[2]])
-    plan = answer.bind(with_history)
-    req = plan.render(question="third", history=[
-        {"fields": {"question": "first", "answer": "one"}},
-        {"role": "assistant", "parts": [{"type": "text", "text": "raw"}]}])
+def test_turns_partial_examples_and_refusals():
+    plan = answer.bind(XML)
+    req = plan.render(question="third", turns=[
+        plan.example({"question": "first"}, {"answer": "one"}), plan.example({}, {"answer": "raw"})])
     roles = [m["role"] for m in req.messages]
     assert roles == ["user", "assistant", "assistant", "user"] and req.system
     with pytest.raises(lmcc.Refusal) as err:
-        plan.render(question="x", history=[{"question": "flat"}])
-    assert err.value.code == "value-invalid"
+        plan.example({"q": "flat"}, {})
+    assert err.value.code == "turn-invalid"
+    with pytest.raises(lmcc.Refusal) as err:
+        plan.render(question="x", turns={"examples": [plan.example({}, {"answer": "a"})]})
+    assert err.value.code == "turns-unplaced"

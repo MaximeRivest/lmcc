@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:lmcc:schema:entry:0.6.0",
+  "$id": "urn:lmcc:schema:entry:0.7.0",
   "title": "LMCC adapter entry",
-  "description": "The artifact (kernel.md \u00a72, \u00a75, \u00a76): a template, a parse rule, strategies by role, formats by type \u2014 never a field name.",
+  "description": "The artifact (kernel.md §2, §5, §6): a template, a reader, transports by purpose, formats by type — never a field name.",
   "type": "object",
   "required": [
     "versions",
     "template",
-    "parse"
+    "reader"
   ],
   "properties": {
     "name": {
@@ -34,7 +34,7 @@
     },
     "extensions": {
       "type": "object",
-      "description": "declared execution extensions (kernel \u00a710): '<family>/<name>' -> the version this artifact needs; at most one per family",
+      "description": "declared execution extensions (kernel §10): '<family>/<name>' -> the version this artifact needs; at most one per family",
       "propertyNames": {
         "pattern": "^[a-z][a-z0-9_]*/[a-z][a-z0-9_-]*$"
       },
@@ -74,10 +74,19 @@
             ],
             "properties": {
               "directive": {
-                "enum": [
-                  "demos",
-                  "history"
-                ]
+                "const": "turns"
+              },
+              "slot": {
+                "type": "string",
+                "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                "not": {
+                  "enum": [
+                    "inputs",
+                    "outputs",
+                    "instruction",
+                    "format"
+                  ]
+                }
               }
             },
             "additionalProperties": false
@@ -85,7 +94,7 @@
         ]
       }
     },
-    "parse": {
+    "reader": {
       "type": "object",
       "required": [
         "kind"
@@ -97,13 +106,13 @@
         }
       }
     },
-    "strategies": {
+    "transports": {
       "type": "object",
       "propertyNames": {
         "pattern": "^[A-Za-z_][A-Za-z0-9_.]*$"
       },
       "additionalProperties": {
-        "$ref": "#/$defs/strategy"
+        "$ref": "#/$defs/transport"
       }
     },
     "formats": {
@@ -119,6 +128,13 @@
           }
         ]
       }
+    },
+    "replay": {
+      "enum": [
+        "recorded",
+        "values"
+      ],
+      "description": "how a written model step is spelled (kernel §3a): the recorded reply when this plan reads it back into the same values (default), or always from values"
     }
   },
   "additionalProperties": false,
@@ -153,7 +169,7 @@
       },
       "additionalProperties": false
     },
-    "routing": {
+    "find_rule": {
       "type": "object",
       "required": [
         "from",
@@ -162,7 +178,7 @@
       "properties": {
         "from": {
           "type": "string",
-          "pattern": "^(text|channel:[a-z_]+)$"
+          "pattern": "^(text|part:[a-z_]+)$"
         },
         "between": {
           "type": "array",
@@ -180,18 +196,18 @@
         },
         "to": {
           "type": "string",
-          "pattern": "^@role(\\.[A-Za-z_][A-Za-z0-9_]*)?$"
+          "pattern": "^@purpose(\\.[A-Za-z_][A-Za-z0-9_]*)?$"
         },
-        "consume": {
+        "remove": {
           "type": "boolean"
         },
-        "suffices": {
+        "complete_reply": {
           "type": "boolean"
         }
       },
       "additionalProperties": false
     },
-    "plain_strategy": {
+    "plain_transport": {
       "type": "object",
       "properties": {
         "when": {
@@ -203,29 +219,29 @@
             "type": "string"
           }
         },
-        "visible": {
+        "in_template": {
           "type": "boolean"
         },
-        "fragments": {
+        "tell": {
           "type": "object",
           "additionalProperties": {
             "type": "string"
           }
         },
-        "controls": {
+        "request_settings": {
           "type": "object"
         },
-        "placement": {
+        "put": {
           "type": "object",
           "propertyNames": {
-            "pattern": "^@role(\\.[A-Za-z_][A-Za-z0-9_]*)?$"
+            "pattern": "^@purpose(\\.[A-Za-z_][A-Za-z0-9_]*)?$"
           },
           "additionalProperties": {
             "type": "string",
-            "pattern": "^(controls\\.(config\\.[a-z_]+|tools)|message:(system|developer|user|assistant))$"
+            "pattern": "^(request\\.(config\\.[a-z_]+|tools)|message:(system|developer|user|assistant))$"
           }
         },
-        "routings": {
+        "find": {
           "type": "array",
           "items": {
             "type": "object",
@@ -236,7 +252,7 @@
             "properties": {
               "from": {
                 "type": "string",
-                "pattern": "^(text|channel:[a-z_]+)$"
+                "pattern": "^(text|part:[a-z_]+)$"
               },
               "between": {
                 "type": "array",
@@ -254,19 +270,19 @@
               },
               "to": {
                 "type": "string",
-                "pattern": "^@role(\\.[A-Za-z_][A-Za-z0-9_]*)?$"
+                "pattern": "^@purpose(\\.[A-Za-z_][A-Za-z0-9_]*)?$"
               },
-              "consume": {
+              "remove": {
                 "type": "boolean"
               },
-              "suffices": {
+              "complete_reply": {
                 "type": "boolean"
               }
             },
             "additionalProperties": false
           }
         },
-        "turns": {
+        "spelling": {
           "type": "object",
           "properties": {
             "call": {
@@ -275,25 +291,57 @@
             "result": {
               "type": "string"
             },
-            "input_format": {"$ref": "#/$defs/reference"},
+            "input_format": {
+              "$ref": "#/$defs/reference"
+            },
             "probe": {
               "type": "object",
-              "required": ["name", "input"],
+              "required": [
+                "name",
+                "input"
+              ],
               "properties": {
-                "name": {"type": "string", "minLength": 1},
-                "id": {"type": "string", "minLength": 1},
-                "input": {"type": "object"}
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "input": {
+                  "type": "object"
+                }
               },
               "additionalProperties": false
+            },
+            "value": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "position": {
+              "enum": [
+                "before",
+                "after"
+              ]
             }
           },
-          "dependentRequired": {"input_format": ["call"], "probe": ["call"]},
+          "dependentRequired": {
+            "input_format": [
+              "call"
+            ],
+            "probe": [
+              "call"
+            ]
+          },
           "additionalProperties": false
         },
-        "via": {
+        "written_as": {
           "type": "object",
           "propertyNames": {
-            "pattern": "^@role(\\.[A-Za-z_][A-Za-z0-9_]*)?$"
+            "pattern": "^@purpose(\\.[A-Za-z_][A-Za-z0-9_]*)?$"
           },
           "additionalProperties": {
             "type": "string",
@@ -303,10 +351,10 @@
       },
       "additionalProperties": false
     },
-    "strategy": {
+    "transport": {
       "oneOf": [
         {
-          "$ref": "#/$defs/plain_strategy"
+          "$ref": "#/$defs/plain_transport"
         },
         {
           "type": "object",
@@ -330,7 +378,7 @@
                         "$ref": "#/$defs/predicate"
                       },
                       "use": {
-                        "$ref": "#/$defs/strategy"
+                        "$ref": "#/$defs/transport"
                       }
                     },
                     "additionalProperties": false
@@ -342,7 +390,7 @@
                     ],
                     "properties": {
                       "else": {
-                        "$ref": "#/$defs/strategy"
+                        "$ref": "#/$defs/transport"
                       }
                     },
                     "additionalProperties": false
@@ -413,7 +461,7 @@
             "type": "string"
           }
         },
-        "emits": {
+        "writes": {
           "enum": [
             "text",
             "parts"

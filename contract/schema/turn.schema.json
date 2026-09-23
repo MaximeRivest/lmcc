@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:lmcc:schema:turn:0.7.0",
+  "title": "LMCC turn",
+  "description": "One call of one signature (kernel §3a): inputs, steps, outputs. Examples, past exchanges and the exchange in progress are turns.",
+  "type": "object",
+  "required": [
+    "inputs"
+  ],
+  "properties": {
+    "signature": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "inputs": {
+      "type": "object"
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/step"
+      }
+    },
+    "outputs": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "score": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "meta": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "step": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "outputs"
+          ],
+          "properties": {
+            "kind": {
+              "const": "model"
+            },
+            "outputs": {
+              "type": "object"
+            },
+            "message": {
+              "type": "object",
+              "required": [
+                "parts"
+              ],
+              "properties": {
+                "role": {
+                  "type": "string"
+                },
+                "parts": {
+                  "type": "array"
+                }
+              }
+            },
+            "request": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            "calls_field": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "id",
+            "name",
+            "output"
+          ],
+          "properties": {
+            "kind": {
+              "const": "tool"
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "output": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "type"
+                ]
+              }
+            },
+            "children": {
+              "type": "array",
+              "items": {
+                "$ref": "#"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

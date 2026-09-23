@@ -8,9 +8,9 @@ import pytest
 
 import lmcc
 from lmcc import core
-from lmcc.parse import DerivedLens, _text_spans
+from lmcc.reader import DerivedReader, _text_captures
 from lmcc.extensions import LegacyRE2
-from lmcc.strategy import validate_routing
+from lmcc.transport import validate_find_rule
 from lmcc_std import jsontext
 
 
@@ -102,33 +102,33 @@ def test_python_frontend_validates_too():
 
 # ------------------------------------------------------------- extractors
 
-def _run(text, routing):
-    from lmcc.parse import apply_routings
-    rest, found = apply_routings(text, [], [("f", routing)], LegacyRE2())
+def _run(text, rule):
+    from lmcc.reader import apply_find_rules
+    rest, found = apply_find_rules(text, [], [("f", rule)], LegacyRE2())
     return rest, [p["text"] for p in found["f"].parts]
 
 
 def test_between_is_a_plain_scan():
-    text, found = _run("a<t>1</t>b<t>2</t><t>open", {"from": "text", "between": ["<t>", "</t>"], "consume": True})
+    text, found = _run("a<t>1</t>b<t>2</t><t>open", {"from": "text", "between": ["<t>", "</t>"], "remove": True})
     assert found == ["1", "2"]
     assert text == "ab<t>open"
 
 
 def test_line_prefixed_keeps_newlines_and_cr():
-    text, found = _run("> a\r\nx\n> b", {"from": "text", "line_prefixed": "> ", "consume": True})
+    text, found = _run("> a\r\nx\n> b", {"from": "text", "line_prefixed": "> ", "remove": True})
     assert found == ["a\r", "b"]
     assert text == "\nx\n"
 
 
-def test_pattern_discards_empty_matches_and_consumes_whole_match():
-    text, found = _run("k: 1, k: 22.", {"from": "text", "pattern": "k: ([0-9]*)", "consume": True})
+def test_pattern_discards_empty_matches_and_removes_whole_match():
+    text, found = _run("k: 1, k: 22.", {"from": "text", "pattern": "k: ([0-9]*)", "remove": True})
     assert found == ["1", "22"]
     assert text == ", ."
 
 
 def test_span_text_strips_and_joins_every_text_bearing_part():
-    span = lmcc.Span([{"type": "text", "text": " a "}, {"type": "thinking", "text": "b\n"}, {"type": "image", "data": "x"}])
-    assert span.text == "a\nb" and span.of("image") == [{"type": "image", "data": "x"}]
+    capture = lmcc.Capture([{"type": "text", "text": " a "}, {"type": "thinking", "text": "b\n"}, {"type": "image", "data": "x"}])
+    assert capture.text == "a\nb" and capture.of("image") == [{"type": "image", "data": "x"}]
 
 
 @pytest.mark.parametrize("regex", [
@@ -136,8 +136,8 @@ def test_span_text_strips_and_joins_every_text_bearing_part():
     "(?P<x>a)", "(?<x>a)"])
 def test_regex_outside_legacy_re2_refuses(regex):
     """Admission belongs to the bound pattern/* extension (kernel §10 rule 6),
-    not to routing construction: the same regex is structurally fine."""
-    validate_routing({"from": "text", "pattern": regex, "to": "@role"}, where="t")
+    not to rule construction: the same regex is structurally fine."""
+    validate_find_rule({"from": "text", "pattern": regex, "to": "@purpose"}, where="t")
     with pytest.raises(lmcc.Refusal) as err:
         LegacyRE2().admit(regex, where="t")
     assert err.value.code == "entry-malformed" and err.value.fix == {"action": "edit-entry", "path": "t"}
@@ -151,31 +151,31 @@ def test_legacy_re2_lint_has_no_false_positives(regex):
 # ---------------------------------------------------------- invertibility
 
 def test_derived_join_refuses_marker_collisions():
-    lens = DerivedLens([("a", "<a>\n", "\n"), ("b", "<b>\n", "\n")], tail="</done>")
+    reader = DerivedReader([("a", "<a>\n", "\n"), ("b", "<b>\n", "\n")], tail="</done>")
     for bad in ("x <b> y", "x </done> y", "<a>"):
         with pytest.raises(lmcc.Refusal) as err:
-            lens.join([("a", bad), ("b", "ok")])
+            reader.join([("a", bad), ("b", "ok")])
         assert err.value.code == "value-collides"
-    assert lens.join([("a", "fine"), ("b", "ok")]) == "<a>\nfine\n<b>\nok\n</done>"
-    xml = DerivedLens([("a", "<a>\n", "\n</a>\n"), ("b", "<b>\n", "\n</b>\n")])
+    assert reader.join([("a", "fine"), ("b", "ok")]) == "<a>\nfine\n<b>\nok\n</done>"
+    xml = DerivedReader([("a", "<a>\n", "\n</a>\n"), ("b", "<b>\n", "\n</b>\n")])
     for bad in ("has </a> inside", "has <b> inside"):
         with pytest.raises(lmcc.Refusal) as err:
             xml.join([("a", bad), ("b", "ok")])
         assert err.value.code == "value-collides"
 
 
-def test_lens_law_holds_on_marker_free_trimmed_values():
-    lens = DerivedLens([("a", "<a>\n", "\n</a>\n"), ("b", "<b>\n", "\n</b>\n")])
+def test_reader_law_holds_on_marker_free_trimmed_values():
+    reader = DerivedReader([("a", "<a>\n", "\n</a>\n"), ("b", "<b>\n", "\n</b>\n")])
     x = [("a", "line one\nline two"), ("b", "<not-a-marker>")]
-    assert lens.split(lens.join(x), ["a", "b"]) == dict(x)
+    assert reader.split(reader.join(x), ["a", "b"]) == dict(x)
 
 
 def test_repeated_close_and_tail_refuse():
-    lens = DerivedLens([("a", "<a>\n", "\n</a>\n")])
+    reader = DerivedReader([("a", "<a>\n", "\n</a>\n")])
     with pytest.raises(lmcc.Refusal) as err:
-        lens.split("<a>\nx </a> y\n</a>", ["a"])
+        reader.split("<a>\nx </a> y\n</a>", ["a"])
     assert err.value.code == "parse-ambiguous"
-    tailed = DerivedLens([("a", "<a>\n", "\n")], tail="</done>")
+    tailed = DerivedReader([("a", "<a>\n", "\n")], tail="</done>")
     with pytest.raises(lmcc.Refusal) as err:
         tailed.split("<a>\nx </done> y\n</done>", ["a"])
     assert err.value.code == "parse-ambiguous"

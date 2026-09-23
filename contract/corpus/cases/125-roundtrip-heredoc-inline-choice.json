@@ -6,7 +6,7 @@
  "entry": {
   "name": "tools_v1",
   "versions": {
-   "kernel": "0.6.0",
+   "kernel": "0.7.0",
    "vocab": {
     "format/code_arguments": "0.1.0",
     "format/function_tool": "0.1.0",
@@ -19,17 +19,17 @@
     "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
    },
    {
-    "directive": "history"
+    "directive": "turns"
    },
    {
     "role": "user",
     "text": "{question}"
    }
   ],
-  "parse": {
+  "reader": {
    "kind": "derived"
   },
-  "strategies": {
+  "transports": {
    "tools": {
     "choose": [
      {
@@ -37,26 +37,26 @@
        "requires": [
         "instruct"
        ],
-       "visible": false,
-       "placement": {
-        "@role": "message:system"
+       "in_template": false,
+       "put": {
+        "@purpose": "message:system"
        },
-       "via": {
-        "@role": "tool_catalog"
+       "written_as": {
+        "@purpose": "tool_catalog"
        },
-       "routings": [
+       "find": [
         {
          "from": "text",
          "between": [
           "run_python <<'PY_END'\n",
           "\nPY_END"
          ],
-         "to": "@role.calls",
-         "consume": true,
-         "suffices": true
+         "to": "@purpose.calls",
+         "remove": true,
+         "complete_reply": true
         }
        ],
-       "turns": {
+       "spelling": {
         "call": "{name} <<'PY_END'\n{input}\nPY_END",
         "input_format": {
          "use": "code_arguments"
@@ -86,7 +86,7 @@
   "entry": {
    "name": "tools_v1",
    "versions": {
-    "kernel": "0.6.0",
+    "kernel": "0.7.0",
     "vocab": {
      "format/code_arguments": "0.1.0",
      "format/function_tool": "0.1.0",
@@ -99,17 +99,17 @@
      "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
     },
     {
-     "directive": "history"
+     "directive": "turns"
     },
     {
      "role": "user",
      "text": "{question}"
     }
    ],
-   "parse": {
+   "reader": {
     "kind": "derived"
    },
-   "strategies": {
+   "transports": {
     "tools": {
      "choose": [
       {
@@ -117,26 +117,26 @@
         "requires": [
          "instruct"
         ],
-        "visible": false,
-        "placement": {
-         "@role": "message:system"
+        "in_template": false,
+        "put": {
+         "@purpose": "message:system"
         },
-        "via": {
-         "@role": "tool_catalog"
+        "written_as": {
+         "@purpose": "tool_catalog"
         },
-        "routings": [
+        "find": [
          {
           "from": "text",
           "between": [
            "run_python <<'PY_END'\n",
            "\nPY_END"
           ],
-          "to": "@role.calls",
-          "consume": true,
-          "suffices": true
+          "to": "@purpose.calls",
+          "remove": true,
+          "complete_reply": true
          }
         ],
-        "turns": {
+        "spelling": {
          "call": "{name} <<'PY_END'\n{input}\nPY_END",
          "input_format": {
           "use": "code_arguments"

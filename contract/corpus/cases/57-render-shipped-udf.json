@@ -7,7 +7,7 @@
  "entry": {
   "name": "udf_v1",
   "versions": {
-   "kernel": "0.6.0",
+   "kernel": "0.7.0",
    "vocab": {}
   },
   "template": [
@@ -16,14 +16,14 @@
     "text": "{instruction}\n\nAnswer in exactly this form:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
    },
    {
-    "directive": "demos"
+    "directive": "turns"
    },
    {
     "role": "user",
     "text": "{q}"
    }
   ],
-  "parse": {
+  "reader": {
    "kind": "derived"
   },
   "formats": {
@@ -38,7 +38,7 @@
     "accepts": [
      "Person"
     ],
-    "emits": "text",
+    "writes": "text",
     "round_trip": true,
     "reads": [
      "text"
@@ -69,15 +69,21 @@
  "inputs": {
   "q": "go"
  },
- "demos": [
-  {
-   "q": "went",
-   "who": {
-    "name": "Ann",
-    "age": 41
+ "turns": {
+  "turns": [
+   {
+    "inputs": {
+     "q": "went"
+    },
+    "outputs": {
+     "who": {
+      "name": "Ann",
+      "age": 41
+     }
+    }
    }
-  }
- ],
+  ]
+ },
  "expect": {
   "request": {
    "system": "Extract.\n\nAnswer in exactly this form:\n<who>\nname (age)\n</who>\n",

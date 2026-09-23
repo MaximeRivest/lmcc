@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:lmcc:schema:case:0.6.0",
+  "$id": "urn:lmcc:schema:case:0.7.0",
   "title": "LMCC corpus case",
   "description": "One conformance case. The harness feeds these to any driver; the driver compares and answers {ok, detail}.",
   "type": "object",
@@ -44,18 +44,6 @@
     },
     "inputs": {
       "type": "object"
-    },
-    "demos": {
-      "type": "array",
-      "items": {
-        "type": "object"
-      }
-    },
-    "history": {
-      "type": "array",
-      "items": {
-        "type": "object"
-      }
     },
     "response": {
       "oneOf": [
@@ -104,6 +92,26 @@
         "pattern": "^(udf:[a-z]+|[a-z][a-z0-9_]*/[a-z][a-z0-9_-]*)$"
       },
       "description": "everything beyond the core the case needs: UDF placements (udf:<language>) and extensions (<family>/<name>); a driver binds exactly these, and one that lacks any answers unclaimed"
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "$ref": "urn:lmcc:schema:turn:0.7.0#/$defs/step"
+      },
+      "description": "the current turn's steps (kernel §3a)"
+    },
+    "turns": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "$ref": "urn:lmcc:schema:turn:0.7.0"
+        }
+      },
+      "description": "slot name → turns; a turn may omit signature, and the harness writes the case signature's fingerprint"
     }
   },
   "allOf": [

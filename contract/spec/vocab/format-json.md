@@ -4,9 +4,9 @@ Spells any plain value as JSON.
 
 **Options.** `indent`: integer or null (default 2).
 
-**Accepts** `*` — any shape; `read` receives the span's text.
+**Accepts** `*` — any shape; `read` receives the capture's text.
 
-**JSON writing (normative for this format and `lens/json_object`).**
+**JSON writing (normative for this format and `reader/json_object`).**
 Strict RFC 8259 text; strings escaped minimally (`"`, `\`, and
 U+0000–U+001F — the short forms `\n \r \t \b \f` where they exist, else
 `\u00XX`), all other characters emitted raw (no `\uXXXX` for non-ASCII);

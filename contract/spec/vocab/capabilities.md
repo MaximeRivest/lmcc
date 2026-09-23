@@ -1,8 +1,8 @@
 # The capability vocabulary — version 0.2.0
 
 Capability facts are **declared, never sniffed**: the caller hands `bake`
-a plain dict of booleans describing the model. Strategies predicate on
-them; lenses may require them. Refusals fire at bake, by name, before any
+a plain dict of booleans describing the model. Transports predicate on
+them; readers may require them. Refusals fire at bake, by name, before any
 money is spent.
 
 The vocabulary is deliberately closed and small — predicates stay
@@ -17,9 +17,9 @@ version of this file; changing one's meaning is breaking.
 | `native_reasoning` | an API-level thinking channel exists |
 | `native_function_calling` | provider-native tool calling |
 | `native_citations` | a provider citations channel |
-| `native_structured_output` | the server enforces a JSON schema on the reply (`response_format`) — the gate for `lens/json_object` |
+| `native_structured_output` | the server enforces a JSON schema on the reply (`response_format`) — the gate for `reader/json_object` |
 | `image_input` | accepts image parts |
-| `stop_sequences` | the request honors `config.stop` (lm15 `Config.stop`); the plan then asks to stop at the lens's tail (kernel §3) |
+| `stop_sequences` | the request honors `config.stop` (lm15 `Config.stop`); the plan then asks to stop at the reader's tail (kernel §3) |
 
 An absent key means **false**. Unknown keys are ignored by predicates
 (they can only be named by the vocabulary above), so declaring extra

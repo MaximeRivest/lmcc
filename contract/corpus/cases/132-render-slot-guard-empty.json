@@ -1,0 +1,74 @@
+{
+ "name": "render-slot-guard-empty",
+ "kind": "render",
+ "entry": {
+  "name": "sections_v1",
+  "versions": {
+   "kernel": "0.7.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n\n{% if examples %}Examples:\n{% for m in examples %}[{m.kind}] {m.text}\n{% endfor %}\n{% endif %}Reply with EXACTLY these sections:\n{% for f in outputs %}<{f.name}>\n{f.value}\n{% endfor %}</done>"
+   },
+   {
+    "directive": "turns",
+    "slot": "conversation"
+   },
+   {
+    "role": "user",
+    "text": "{% for f in inputs %}== {f.name} ==\n{f.value}\n{% endfor %}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Answer the question.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    },
+    "desc": "short answer"
+   },
+   {
+    "name": "score",
+    "direction": "output",
+    "shape": {
+     "type": "integer"
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "question": "3+3?"
+ },
+ "expect": {
+  "request": {
+   "system": "Answer the question.\n\nReply with EXACTLY these sections:\n<answer>\nshort answer\n<score>\n(integer)\n</done>",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "== question ==\n3+3?\n"
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

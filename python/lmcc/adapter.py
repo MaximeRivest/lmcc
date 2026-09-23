@@ -1,8 +1,8 @@
-"""The Adapter: a template, a parse rule, strategies by role, formats by
+"""The Adapter: a template, a reader, transports by purpose, formats by
 type — never a field name. It meets a signature only at ``bind``.
 
 Construction surfaces:
-- ``lmcc.adapter(messages=[...], parse=..., strategies=..., formats=...)``
+- ``lmcc.adapter(messages=[...], reader=..., transports=..., formats=...)``
 - ``lmcc.load(entry, registry=...)`` from serialized data (serde.py)
 """
 
@@ -11,8 +11,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field as dc_field
 
 from .errors import refuse
-from .strategy import Strategy
-from .template import compile_template
+from .transport import Transport
+from .template import RESERVED_SLOTS, compile_template, turn_slots
+
+_SLOT_NAME = __import__("re").compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+REPLAY = ("recorded", "values")
 
 
 def system(text: str) -> dict:
@@ -38,34 +41,26 @@ def message(role: str, text: str) -> dict:
     return {"role": role, "text": text}
 
 
-def demos() -> dict:
-    return {"directive": "demos"}
-
-
-def history() -> dict:
-    return {"directive": "history"}
-
-
-def directive(kind: str) -> dict:
-    if kind not in ("demos", "history"):
-        refuse("entry-malformed", f"directive {kind!r} must be 'demos' or 'history'",
-               fix={"action": "edit-entry", "path": "template"})
-    return {"directive": kind}
+def turns(slot: str = "turns") -> dict:
+    """A turn slot in messages form (kernel §3a): the slot's turns become
+    ordinary messages here. ``lmcc.turns()`` is the slot ``turns``."""
+    return {"directive": "turns"} if slot == "turns" else {"directive": "turns", "slot": slot}
 
 
 def use(name: str, **options) -> dict:
-    """A reference to a named format or strategy: ``lmcc.use("table", columns=[...])``."""
+    """A reference to a named format or transport: ``lmcc.use("table", columns=[...])``."""
     return {"use": name, "options": options}
 
 
 @dataclass
 class Adapter:
     template: list                          # [{role, text} | {directive}]
-    parse: dict                             # {"kind": "derived", ...}
-    strategies: dict[str, object] = dc_field(default_factory=dict)   # role -> Strategy | {"use", "options"}
+    reader: dict                            # {"kind": "derived", ...}
+    transports: dict[str, object] = dc_field(default_factory=dict)   # purpose -> Transport | {"use", "options"}
     formats: dict[str, object] = dc_field(default_factory=dict)      # type/structural key -> {"use", "options"} | shipped dict | Format
     name: str = "adapter"
     extensions: dict[str, str] = dc_field(default_factory=dict)      # "<family>/<name>" -> version needed (kernel §10)
+    replay: str = "recorded"                # how written model steps are spelled (kernel §3a)
 
     def bind(self, signature, capabilities: dict | None = None, *, registry=None):
         from .plan import bind as _bind
@@ -79,27 +74,63 @@ class Adapter:
         return _dump(self, registry or default_registry)
 
     def compiled_messages(self) -> list[tuple[dict, list | None]]:
+        cached = getattr(self, "_compiled", None)
+        if cached is not None and cached[0] == self.template:
+            return cached[1]
         out = []
         for i, msg in enumerate(self.template):
             if "directive" in msg:
                 out.append((msg, None))
             else:
                 out.append((msg, compile_template(msg["text"], where=f"template[{i}]")))
+        object.__setattr__(self, "_compiled", ([dict(m) for m in self.template], out))
         return out
+
+    def turn_slots(self) -> dict[str, tuple[str, int]]:
+        """Every placed turn slot: name -> ("messages" | "text", template index)
+        (kernel §3a). Placing one twice, or guarding an unplaced one, is
+        ``template-syntax``."""
+        slots: dict[str, tuple[str, int]] = {}
+        guards: list[tuple[str, int]] = []
+        for i, (msg, nodes) in enumerate(self.compiled_messages()):
+            if nodes is None:
+                placed, guarded = [msg.get("slot", "turns")], []
+                form = "messages"
+            else:
+                placed, guarded = turn_slots(nodes)
+                form = "text"
+            for name in placed:
+                if name in slots:
+                    refuse("template-syntax",
+                           f"template[{i}]: turn slot {name!r} is already placed at "
+                           f"template[{slots[name][1]}]; a slot is placed once",
+                           fix={"action": "edit-template", "path": f"template[{i}]"})
+                slots[name] = (form, i)
+            guards += [(g, i) for g in guarded]
+        for name, i in guards:
+            if name not in slots:
+                refuse("template-syntax",
+                       f"template[{i}]: {{% if {name} %}} names no turn slot this template places",
+                       fix={"action": "edit-template", "path": f"template[{i}]"})
+        return slots
 
 
 def adapter(*, messages: list[dict] | None = None, template: list[dict] | dict | None = None,
-            parse: dict | None = None, strategies: dict | None = None,
+            reader: dict | None = None, transports: dict | None = None,
             formats: dict | None = None, name: str = "adapter",
-            extensions: dict[str, str] | None = None, declare_defaults: bool = True) -> Adapter:
-    """Build an adapter. ``strategies`` values: a name, a :class:`Strategy`,
+            extensions: dict[str, str] | None = None, replay: str = "recorded",
+            declare_defaults: bool = True) -> Adapter:
+    """Build an adapter. ``transports`` values: a name, a :class:`Transport`,
     a data dict, or ``use(...)``. ``formats`` keys: type names or structural
     keys; values: a name, ``use(...)``, a shipped dict, or a Format.
     ``extensions``: ``{"<family>/<name>": version}`` the adapter needs
     (kernel §10); checked against the registry at bind. With
     ``declare_defaults`` (the constructor's convenience, not the loader's)
-    an inline ``pattern`` routing declares ``pattern/legacy-re2`` for you;
-    the dumped artifact carries the line either way."""
+    an inline ``pattern`` rule declares ``pattern/legacy-re2`` for you;
+    the dumped artifact carries the line either way. ``replay``:
+    ``"recorded"`` writes a past model step's recorded reply when this plan
+    reads it back into the same values, ``"values"`` always writes it from
+    its values (kernel §3a)."""
     if messages is None:
         messages = template.get("messages") if isinstance(template, dict) else template
     if not isinstance(messages, list):
@@ -109,9 +140,17 @@ def adapter(*, messages: list[dict] | None = None, template: list[dict] | dict |
         if not isinstance(m, dict) or not ({"role", "text"} <= set(m) or "directive" in m):
             refuse("entry-malformed", f"template[{i}]: a message is {{role, text}} or {{directive}}",
                    fix={"action": "edit-entry", "path": f"template[{i}]"})
-        if "directive" in m and m["directive"] not in ("demos", "history"):
-            refuse("entry-malformed", f"template[{i}]: directive must be demos or history",
-                   fix={"action": "edit-entry", "path": f"template[{i}]"})
+        if "directive" in m:
+            slot = m.get("slot", "turns")
+            if (m["directive"] != "turns" or set(m) - {"directive", "slot"}
+                    or not isinstance(slot, str) or not _SLOT_NAME.match(slot)):
+                refuse("entry-malformed",
+                       f"template[{i}]: a directive is {{\"directive\": \"turns\", \"slot\"?: "
+                       f"name}} (demos and history are turn slots since kernel 0.7)",
+                       fix={"action": "edit-entry", "path": f"template[{i}]"})
+            if slot in RESERVED_SLOTS:
+                refuse("template-syntax", f"template[{i}]: {slot!r} is reserved, not a turn slot",
+                       fix={"action": "edit-template", "path": f"template[{i}]"})
         if "role" in m and m["role"] not in ("system", "developer", "user", "assistant"):
             refuse("entry-malformed", f"template[{i}]: role must be system/developer/user/assistant",
                    fix={"action": "edit-entry", "path": f"template[{i}]"})
@@ -121,25 +160,28 @@ def adapter(*, messages: list[dict] | None = None, template: list[dict] | dict |
                    f"template[{i}]: system messages lead the template (they become the lm15 "
                    f"request's system field); put later instructions in a developer message",
                    fix={"action": "edit-entry", "path": f"template[{i}]"})
-    parse = parse or {"kind": "derived"}
-    kind = parse.get("kind")
+    if replay not in REPLAY:
+        refuse("entry-malformed", f"replay must be one of {REPLAY}, not {replay!r}",
+               fix={"action": "edit-entry", "path": "replay"})
+    reader = reader or {"kind": "derived"}
+    kind = reader.get("kind")
     if not isinstance(kind, str) or not kind:
-        refuse("unknown-parse-kind", "parse.kind must name a lens",
-               fix={"action": "edit-entry", "path": "parse"})
+        refuse("unknown-reader", "reader.kind must name a reader",
+               fix={"action": "edit-entry", "path": "reader"})
     s_bindings: dict[str, object] = {}
-    for role, value in (strategies or {}).items():
-        where = f"strategies[{role!r}]"
+    for purpose, value in (transports or {}).items():
+        where = f"transports[{purpose!r}]"
         if isinstance(value, str):
-            s_bindings[role] = {"use": value, "options": {}}
-        elif isinstance(value, Strategy):
+            s_bindings[purpose] = {"use": value, "options": {}}
+        elif isinstance(value, Transport):
             value.validate(where=where)
-            s_bindings[role] = value
+            s_bindings[purpose] = value
         elif isinstance(value, dict) and "use" in value:
-            s_bindings[role] = {"use": value["use"], "options": dict(value.get("options", {}))}
+            s_bindings[purpose] = {"use": value["use"], "options": dict(value.get("options", {}))}
         elif isinstance(value, dict):
-            s_bindings[role] = Strategy.from_dict(value, where=where)
+            s_bindings[purpose] = Transport.from_dict(value, where=where)
         else:
-            refuse("entry-malformed", f"{where}: expected a name, Strategy, use(...), or dict",
+            refuse("entry-malformed", f"{where}: expected a name, Transport, use(...), or dict",
                    fix={"action": "edit-entry", "path": where})
     f_bindings: dict[str, object] = {}
     for key, value in (formats or {}).items():
@@ -159,7 +201,8 @@ def adapter(*, messages: list[dict] | None = None, template: list[dict] | dict |
     declared = validate_declaration(extensions)
     if declare_defaults:
         declared = default_declaration(s_bindings, declared)
-    adp = Adapter(template=list(messages), parse=dict(parse), strategies=s_bindings,
-                  formats=f_bindings, name=name, extensions=declared)
+    adp = Adapter(template=list(messages), reader=dict(reader), transports=s_bindings,
+                  formats=f_bindings, name=name, extensions=declared, replay=replay)
     adp.compiled_messages()  # surface template syntax errors immediately
+    adp.turn_slots()         # and turn-slot put errors
     return adp

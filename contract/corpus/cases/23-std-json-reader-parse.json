@@ -1,0 +1,92 @@
+{
+ "name": "std-json-reader-parse",
+ "kind": "parse",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "json_lens_v1",
+  "versions": {
+   "kernel": "0.7.0",
+   "vocab": {
+    "reader/json_object": "0.1.0",
+    "format/json": "0.1.0"
+   }
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}"
+   },
+   {
+    "role": "user",
+    "text": "{question}"
+   }
+  ],
+  "reader": {
+   "kind": "json_object"
+  },
+  "formats": {
+   "object": {
+    "use": "json"
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Answer.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "score",
+    "direction": "output",
+    "shape": {
+     "type": "integer"
+    }
+   },
+   {
+    "name": "ok",
+    "direction": "output",
+    "shape": {
+     "type": "boolean"
+    }
+   },
+   {
+    "name": "payload",
+    "direction": "output",
+    "shape": {
+     "type": "object"
+    }
+   }
+  ]
+ },
+ "capabilities": {
+  "native_structured_output": true
+ },
+ "response": "```json\n{\n  \"answer\": \"Paris\",\n  \"score\": 9,\n  \"ok\": true,\n  \"payload\": {\"rows\": [1, 2]},\n  \"chatter\": \"ignored\"\n}\n```",
+ "expect": {
+  "values": {
+   "answer": "Paris",
+   "score": 9,
+   "ok": true,
+   "payload": {
+    "rows": [
+     1,
+     2
+    ]
+   }
+  }
+ }
+}

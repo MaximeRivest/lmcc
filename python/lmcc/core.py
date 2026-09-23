@@ -37,7 +37,7 @@ DIRECTIONS = ("input", "output")
 
 WHITESPACE = " \t\n\r\f\v"
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-_ROLE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$")
+_PURPOSE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$")
 _INTEGER = re.compile(r"^-?[0-9]+$")
 _NUMBER = re.compile(r"^-?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?$")
 
@@ -129,17 +129,17 @@ class FieldSpec:
     """User-facing marker built by :func:`field` before lowering."""
 
     annotation: object
-    role: str = "plain"
+    purpose: str = "plain"
     desc: str | None = None
 
 
-def field(annotation: object, *, role: str = "plain", desc: str | None = None) -> FieldSpec:
-    """Annotate a signature entry with a role and/or description.
+def field(annotation: object, *, purpose: str = "plain", desc: str | None = None) -> FieldSpec:
+    """Annotate a signature entry with a purpose and/or description.
 
     Example:
-        >>> lmcc.signature("...", outputs={"reasoning": lmcc.field(str, role="reasoning")})
+        >>> lmcc.signature("...", outputs={"reasoning": lmcc.field(str, purpose="reasoning")})
     """
-    return FieldSpec(annotation, role=role, desc=desc)
+    return FieldSpec(annotation, purpose=purpose, desc=desc)
 
 
 @dataclass
@@ -152,7 +152,7 @@ class Field:
     direction: str
     shape: dict
     type: str | None = None
-    role: str = "plain"
+    purpose: str = "plain"
     desc: str | None = None
     annotation: object | None = None
 
@@ -190,19 +190,19 @@ def signature(
 
     Each value in ``inputs``/``outputs`` may be a Python annotation
     (``str``, ``list[int]``, ``Literal["a", "b"]``), a raw JSON-Schema
-    dict, or an :func:`field` spec carrying a role/description.
+    dict, or an :func:`field` spec carrying a purpose/description.
     Unknown types resolve through the registry's host socket, or refuse
     naming the field and the type.
     """
     fields: list[Field] = []
     for direction, entries in (("input", inputs or {}), ("output", outputs or {})):
         for name, spec in entries.items():
-            role, desc, ann = "plain", None, spec
+            purpose, desc, ann = "plain", None, spec
             if isinstance(spec, FieldSpec):
-                role, desc, ann = spec.role, spec.desc, spec.annotation
+                purpose, desc, ann = spec.purpose, spec.desc, spec.annotation
             shape = annotation_to_shape(ann, registry, field_name=name)
             fields.append(Field(name, direction, shape, type=typename(ann),
-                                role=role, desc=desc,
+                                purpose=purpose, desc=desc,
                                 annotation=None if isinstance(ann, dict) else ann))
     return _validated(SignatureCore(instructions, fields))
 
@@ -237,7 +237,7 @@ def signature_from_dict(data: dict) -> SignatureCore:
         if not isinstance(f, dict):
             refuse("signature-malformed", "each field is an object", fix={"action": "edit-signature"})
         fields.append(Field(f.get("name"), f.get("direction"), f.get("shape"),
-                            type=f.get("type"), role=f.get("role", "plain"),
+                            type=f.get("type"), purpose=f.get("purpose", "plain"),
                             desc=f.get("desc")))
     return _validated(SignatureCore(data.get("instructions", ""), fields))
 
@@ -267,9 +267,9 @@ def _validated(sig: SignatureCore) -> SignatureCore:
         if not isinstance(f.shape, dict):
             refuse("signature-malformed", f"field {f.name!r}: shape must be an object",
                    fix=_fix_field(f))
-        if not isinstance(f.role, str) or not _ROLE.match(f.role):
+        if not isinstance(f.purpose, str) or not _PURPOSE.match(f.purpose):
             refuse("signature-malformed",
-                   f"field {f.name!r}: role {f.role!r} is not a (dotted) identifier",
+                   f"field {f.name!r}: purpose {f.purpose!r} is not a (dotted) identifier",
                    fix=_fix_field(f))
         if f.type is not None and not isinstance(f.type, str):
             refuse("signature-malformed", f"field {f.name!r}: type must be a string",
@@ -286,7 +286,7 @@ def signature_to_dict(sig: SignatureCore) -> dict:
         "fields": [
             {"name": f.name, "direction": f.direction, "shape": f.shape,
              **({"type": f.type} if f.type else {}),
-             **({"role": f.role} if f.role != "plain" else {}),
+             **({"purpose": f.purpose} if f.purpose != "plain" else {}),
              **({"desc": f.desc} if f.desc is not None else {})}
             for f in sig.fields
         ],
@@ -520,11 +520,11 @@ def parse_scalar(f: Field, text: str) -> object:
     return read_value(f.shape, text, where=f"field {f.name!r}")
 
 
-# ------------------------------------------------------------ parts, spans
+# ------------------------------------------------------------ parts, captures
 
 
-class Span:
-    """What a routing or the lens captured for one field: a list of parts.
+class Capture:
+    """What a rule or the reader captured for one field: a list of parts.
     ``text`` is the text parts, each stripped, joined by newlines (kernel
     §6); ``of(kind)`` selects parts by kind."""
 
@@ -532,7 +532,7 @@ class Span:
         self.parts = list(parts)
 
     @classmethod
-    def of_text(cls, text: str) -> "Span":
+    def of_text(cls, text: str) -> "Capture":
         return cls([text_part(text)])
 
     @property
@@ -547,11 +547,11 @@ class Span:
 
     @property
     def kinds(self) -> set[str]:
-        """The lm15 part types present (the name is the kernel's span-kind vocabulary)."""
+        """The lm15 part types present (the name is the kernel's capture-kind vocabulary)."""
         return {p.get("type") for p in self.parts}
 
     def __repr__(self) -> str:
-        return f"Span({self.parts!r})"
+        return f"Capture({self.parts!r})"
 
 
 def as_parts(written: object, *, where: str) -> list[dict]:

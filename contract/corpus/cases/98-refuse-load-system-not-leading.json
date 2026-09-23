@@ -4,7 +4,7 @@
  "entry": {
   "name": "late",
   "versions": {
-   "kernel": "0.6.0",
+   "kernel": "0.7.0",
    "vocab": {}
   },
   "template": [
@@ -17,7 +17,7 @@
     "text": "{instruction}\n<answer>\n{answer}\n</answer>"
    }
   ],
-  "parse": {
+  "reader": {
    "kind": "derived"
   }
  },

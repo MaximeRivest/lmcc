@@ -32,13 +32,13 @@ adapter = lmcc.adapter(messages=[
 ])
 plan = book.bind(adapter)
 assert plan.describe()["streaming"] == {
-    "mode": "incremental", "lens": {"mode": "incremental"}, "routings": [], "field_done": "finish"}
+    "mode": "incremental", "reader": {"mode": "incremental"}, "find": [], "field_done": "finish"}
 ```
 
 `incremental`: field text is released as it arrives. `buffered`: it
 waits for EOF, and the reason is stated.
 
-## 2. Feed text deltas, consume events
+## 2. Feed text deltas, remove events
 
 ```python
 stream = plan.stream()
@@ -74,16 +74,16 @@ Adjacent part deltas of the same kind join into one part.
 ```python
 @dataclasses.dataclass
 class Solution:
-    reasoning: lmcc.Role["reasoning", str]
+    reasoning: lmcc.Purpose["reasoning", str]
     answer: int
 
 @lmcc.fn
 def solve(problem: str) -> Solution:
     """Solve."""
 
-native = lmcc.Strategy(requires=["native_reasoning"], visible=False,
-                       routings=[{"from": "channel:thinking", "to": "@role"}])
-p2 = solve.bind(lmcc.adapter(messages=adapter.template, strategies={"reasoning": native}),
+native = lmcc.Transport(requires=["native_reasoning"], in_template=False,
+                       find=[{"from": "part:thinking", "to": "@purpose"}])
+p2 = solve.bind(lmcc.adapter(messages=adapter.template, transports={"reasoning": native}),
                 capabilities={"native_reasoning": True})
 s = p2.stream()
 assert s.feed({"type": "thinking", "text": "two and "}) == [
@@ -119,26 +119,26 @@ except lmcc.Refusal as r:
     assert r.code == "parse-missing-fields" and r.partial == {"title": "Dune"}
 ```
 
-## 5. When a routing buffers
+## 5. When a find rule buffers
 
 ```python
-regex = lmcc.Strategy(visible=False, routings=[
-    {"from": "text", "pattern": "THOUGHT: ([^\\n]*)\\n", "to": "@role", "consume": True}])
-p3 = solve.bind(lmcc.adapter(messages=adapter.template, strategies={"reasoning": regex}))
+regex = lmcc.Transport(in_template=False, find=[
+    {"from": "text", "pattern": "THOUGHT: ([^\\n]*)\\n", "to": "@purpose", "remove": True}])
+p3 = solve.bind(lmcc.adapter(messages=adapter.template, transports={"reasoning": regex}))
 assert p3.describe()["extensions"] == {
     "pattern/legacy-re2": {"needs": "0.1.0", "provides": "0.1.0", "binding": "python:re"}}
 assert p3.describe()["streaming"] == {
     "mode": "buffered",
-    "lens": {"mode": "buffered", "reason": "a consuming pattern routing can revise lens text"},
-    "routings": [{"field": "reasoning", "from": "text", "mode": "buffered",
-                  "reason": "pattern routing waits for EOF"}],
+    "reader": {"mode": "buffered", "reason": "a removing pattern find rule can revise the reader's text"},
+    "find": [{"field": "reasoning", "from": "text", "mode": "buffered",
+                  "reason": "a pattern find rule waits for EOF"}],
     "field_done": "finish"}
 s = p3.stream()
 assert s.feed("THOUGHT: hm\n<answer>\n4\n</answer>") == []
 assert s.finish().values == {"answer": 4, "reasoning": "hm"}
 ```
 
-A `pattern` routing is not core: the artifact declares which dialect
+A `pattern` find rule is not core: the artifact declares which dialect
 the string is in (`extensions`, kernel §10), and the constructor writes
 the default tier for you — `pattern/legacy-re2`, the host's own regex
 engine with `.` matching newlines and group 1 as the capture, exactly
@@ -154,7 +154,7 @@ what kernel 0.2 did. A loaded artifact without the line refuses
 | `parse-value` | at `finish`: a section's text is not a valid scalar |
 | `parse-missing-fields` | at `finish`: a section is absent; `partial` carries the raw sections found |
 | `parse-ambiguous` | at `finish`: an anchor, close, or tail occurs twice |
-| `format-read-error`, `lens-parse-error` | at `finish`: a format's `read` raised; a vocabulary lens cannot read the document |
+| `format-read-error`, `reader-error` | at `finish`: a format's `read` raised; a vocabulary reader cannot read the document |
 
 `feed` after `finish`, or `finish` twice, is host API misuse, not a
 `Refusal`. Codes: [errors.md](../../contract/spec/errors.md). The

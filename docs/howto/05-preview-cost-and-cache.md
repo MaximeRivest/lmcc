@@ -6,7 +6,7 @@ stable across calls, and what the reply must contain. Spend nothing.
 `render`, `prefix`, and `skeleton` are pure. They touch no network and
 no clock. Call them as often as you like.
 
-## 1. A plan with demos
+## 1. A plan with an example
 
 ```python
 import dataclasses
@@ -25,22 +25,22 @@ def qa(context: str, question: str) -> Out:
 adapter = lmcc.adapter(messages=[
     lmcc.system("{instruction}\n\nReply with exactly this pattern:\n"
                 "{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}</done>"),
-    lmcc.demos(),
+    lmcc.turns(),
     lmcc.user("<context>\n{context}\n</context>"),
     lmcc.user("{question}"),
 ])
 plan = qa.bind(adapter)
-demos = [{"context": "Paris is in France.", "question": "Where is Paris?",
-          "answer": "France", "score": 9}]
+examples = [plan.example({"context": "Paris is in France.", "question": "Where is Paris?"},
+                         {"answer": "France", "score": 9})]
 ```
 
 ## 2. `prefix()`: the cache-stable messages
 
 `prefix` renders every message before the first one that depends on an
-input. That is the system message and the demo turns here.
+input. That is the system message and the example turn here.
 
 ```python
-pre = plan.prefix(demos=demos)
+pre = plan.prefix(turns=examples)
 assert [m["role"] for m in pre["messages"]] == ["user", "user", "assistant"]
 assert pre["system"] == (
     "Answer from the context.\n\nReply with exactly this pattern:\n"
@@ -57,18 +57,18 @@ provider's prompt cache can hold.
 ## 3. `render()` is pure and starts with the prefix
 
 ```python
-req = plan.render(context="c", question="q", demos=demos)
+req = plan.render(context="c", question="q", turns=examples)
 assert req.system == pre["system"] and req.messages[:3] == pre["messages"]
 assert [m["role"] for m in req.messages] == ["user", "user", "assistant", "user", "user"]
-assert req.patch == {}
+assert req.request_settings == {}
 assert req.request(model="m") == {"model": "m", "system": req.system, "messages": req.messages}   # an lm15 request
 
-again = plan.render(context="c", question="q", demos=demos)
+again = plan.render(context="c", question="q", turns=examples)
 assert again == req
 ```
 
 Two renders with the same values are equal. `request()` merges the
-messages and the patch into one dict for a client.
+messages and the request settings into one dict for a client.
 
 The user messages carry the inputs. Change one input, and only its
 message changes:
@@ -109,10 +109,11 @@ Render refusals carry no `fix`: the cause is a program value.
 | code | when |
 |---|---|
 | `missing-input` | at render: no value for a rendered input field |
-| `value-invalid` | at render: a kernel default cannot spell the value (wrong kind, non-finite number, bad history item) |
+| `value-invalid` | at render: a kernel default cannot spell the value (wrong kind, non-finite number) |
 | `format-write-error` | at render: a format's `write` raised |
-| `value-collides` | at render: a demo value contains a marker the lens reads |
-| `demo-not-renderable` | at render: a demo goes through a format that does not round-trip |
+| `value-collides` | at render: a turn value contains a marker the reader reads |
+| `turn-not-renderable` | at render: a turn value goes through a format that does not round-trip |
+| `turn-invalid` | at render: a turn of another signature, or with a field the signature does not have |
 
 None of these carries a `fix`. Every bind-time refusal has already fired
 before you reach `render`. Codes: [errors.md](../../contract/spec/errors.md).

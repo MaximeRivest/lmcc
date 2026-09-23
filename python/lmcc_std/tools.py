@@ -1,5 +1,5 @@
-"""Tools and citations: formats and strategies (spec/vocab/strategy-tools.md,
-strategy-citations.md). Every value shape is lm15's; the program never
+"""Tools and citations: formats and transports (spec/vocab/transport-tools.md,
+transport-citations.md). Every value shape is lm15's; the program never
 changes between the native and the text tier."""
 
 from __future__ import annotations
@@ -8,7 +8,7 @@ import dataclasses
 
 from lmcc.errors import refuse
 from lmcc.formats import Format
-from lmcc.strategy import Strategy
+from lmcc.transport import Transport
 
 from . import jsontext
 from .formats import lift
@@ -17,7 +17,7 @@ VERSION = "0.1.0"
 
 
 # The host types a Python program spells; formats resolve by type, never
-# by role (kernel §5), so ``tools`` and ``calls`` are different types.
+# by purpose (kernel §5), so ``tools`` and ``calls`` are different types.
 # ``install`` binds them at runtime; an artifact names them under
 # ``formats`` ("list[Tool]": {"use": "function_tool"}) to travel.
 
@@ -74,7 +74,7 @@ class FunctionToolFormat(Format):
     """lm15 ``FunctionTool`` parts, for ``Request.tools``."""
     accepts = ("list[Tool]", "Tool", "list[*]", "object", "*")
     direction = "in"
-    emits = "parts"
+    writes = "parts"
     reads = ("function",)
 
     def __init__(self, options: dict):
@@ -93,15 +93,15 @@ class FunctionToolFormat(Format):
             parts.append(part)
         return parts
 
-    def read(self, span, field):
-        return [{k: v for k, v in p.items() if k != "type"} for p in span.of("function")]
+    def read(self, capture, field):
+        return [{k: v for k, v in p.items() if k != "type"} for p in capture.of("function")]
 
 
 class ToolCatalogFormat(Format):
     """The same tools as text, for a model without native calling."""
     accepts = ("list[Tool]", "Tool", "list[*]", "object", "*")
     direction = "in"
-    emits = "text"
+    writes = "text"
 
     def __init__(self, options: dict):
         pass
@@ -123,7 +123,7 @@ class ToolCallsFormat(Format):
     from text (fenced JSON; ids assigned ``call_1``… in reply order)."""
     accepts = ("list[ToolCall]", "list[*]", "*")
     direction = "both"
-    emits = "parts"
+    writes = "parts"
     reads = ("tool_call", "text")
 
     def __init__(self, options: dict):
@@ -139,10 +139,10 @@ class ToolCallsFormat(Format):
             out.append({"type": "tool_call", "id": c["id"], "name": c["name"], "input": c.get("input", {})})
         return out
 
-    def read(self, span, field):
+    def read(self, capture, field):
         calls = []
         n = 0
-        for p in span.parts:
+        for p in capture.parts:
             if p.get("type") == "tool_call":
                 calls.append({k: v for k, v in p.items() if k not in ("type", "continuation")})
             elif isinstance(p.get("text"), str):
@@ -162,15 +162,15 @@ class CitationsFormat(Format):
     ``{"source": n}`` per distinct bracketed integer, order kept."""
     accepts = ("list[Citation]", "list[*]", "*")
     direction = "out"
-    emits = "parts"
+    writes = "parts"
     reads = ("citation", "text")
 
     def __init__(self, options: dict):
         pass
 
-    def read(self, span, field):
+    def read(self, capture, field):
         out, seen = [], set()
-        for p in span.parts:
+        for p in capture.parts:
             if p.get("type") == "citation":
                 out.append({k: v for k, v in p.items() if k not in ("type", "continuation")})
             elif isinstance(p.get("text"), str):
@@ -185,7 +185,7 @@ class SourceListFormat(Format):
     """Numbered sources as text: ``[n] title: text``."""
     accepts = ("list[Source]", "list[*]", "*")
     direction = "in"
-    emits = "text"
+    writes = "text"
 
     def __init__(self, options: dict):
         pass
@@ -204,45 +204,45 @@ class SourceListFormat(Format):
         return "\n".join(lines)
 
 
-# ------------------------------------------------------------ strategies
+# ------------------------------------------------------------ transports
 
-def native_tools(options: dict) -> Strategy:
-    return Strategy(
-        requires=["native_function_calling"], visible=False,
-        placement={"@role": "controls.tools"},
-        routings=[{"from": "channel:tool_call", "to": "@role.calls", "suffices": True}])
+def native_tools(options: dict) -> Transport:
+    return Transport(
+        requires=["native_function_calling"], in_template=False,
+        put={"@purpose": "request.tools"},
+        find=[{"from": "part:tool_call", "to": "@purpose.calls", "complete_reply": True}])
 
 
 FENCE_OPEN, FENCE_CLOSE = "```tool\n", "\n```"
 
 
-def fenced_tools(options: dict) -> Strategy:
-    return Strategy(
-        requires=["instruct"], visible=False,
-        placement={"@role": "message:system"}, via={"@role": "tool_catalog"},
-        fragments={"system": "You may call a tool by replying with exactly one fenced block:\n"
+def fenced_tools(options: dict) -> Transport:
+    return Transport(
+        requires=["instruct"], in_template=False,
+        put={"@purpose": "message:system"}, written_as={"@purpose": "tool_catalog"},
+        tell={"system": "You may call a tool by replying with exactly one fenced block:\n"
                              "```tool\n{\"name\": \"<tool>\", \"input\": {...}}\n```\n"
                              "and nothing else; you will be given the result and asked again."},
-        routings=[{"from": "text", "between": [FENCE_OPEN, FENCE_CLOSE], "to": "@role.calls",
-                   "consume": True, "suffices": True}],
-        turns={"call": "```tool\n{\"name\": \"{name}\", \"input\": {input}}\n```",
+        find=[{"from": "text", "between": [FENCE_OPEN, FENCE_CLOSE], "to": "@purpose.calls",
+                   "remove": True, "complete_reply": True}],
+        spelling={"call": "```tool\n{\"name\": \"{name}\", \"input\": {input}}\n```",
                "result": "Result of {name} ({id}):\n{output}"})
 
 
-def native_citations(options: dict) -> Strategy:
-    s = Strategy(requires=["native_citations"], visible=False,
-                 routings=[{"from": "channel:citation", "to": "@role"}])
+def native_citations(options: dict) -> Transport:
+    s = Transport(requires=["native_citations"], in_template=False,
+                 find=[{"from": "part:citation", "to": "@purpose"}])
     if options.get("search", True):
-        s.controls = {"tools": [{"type": "builtin", "name": "web_search"}]}
+        s.request_settings = {"tools": [{"type": "builtin", "name": "web_search"}]}
     return s
 
 
-def inline_citations(options: dict) -> Strategy:
-    return Strategy(
-        requires=["instruct"], visible=False,
-        placement={"@role.sources": "message:user"},
-        fragments={"system": "Cite the numbered sources inline as [n] after each claim they support."},
-        routings=[{"from": "text", "between": ["[", "]"], "to": "@role", "consume": False}])
+def inline_citations(options: dict) -> Transport:
+    return Transport(
+        requires=["instruct"], in_template=False,
+        put={"@purpose.sources": "message:user"},
+        tell={"system": "Cite the numbered sources inline as [n] after each claim they support."},
+        find=[{"from": "text", "between": ["[", "]"], "to": "@purpose", "remove": False}])
 
 
 def install(registry, *, exist_ok: bool = True) -> None:
@@ -253,7 +253,7 @@ def install(registry, *, exist_ok: bool = True) -> None:
     for name, factory in (("native_tools", native_tools), ("fenced_tools", fenced_tools),
                           ("native_citations", native_citations),
                           ("inline_citations", inline_citations)):
-        registry.register_strategy(name, factory, version=VERSION, exist_ok=exist_ok)
+        registry.register_transport(name, factory, version=VERSION, exist_ok=exist_ok)
     # runtime type bindings for Python programs (kernel §5 step 3); an
     # artifact that must travel names the same formats under its `formats`
     registry.format(list[Tool], use="function_tool")

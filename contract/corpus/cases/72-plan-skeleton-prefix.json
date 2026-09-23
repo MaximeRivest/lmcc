@@ -4,7 +4,7 @@
  "entry": {
   "name": "sub_v1",
   "versions": {
-   "kernel": "0.6.0",
+   "kernel": "0.7.0",
    "vocab": {}
   },
   "template": [
@@ -13,28 +13,28 @@
     "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
    },
    {
-    "directive": "demos"
+    "directive": "turns"
    },
    {
     "role": "user",
     "text": "{q}"
    }
   ],
-  "parse": {
+  "reader": {
    "kind": "derived"
   },
-  "strategies": {
+  "transports": {
    "work": {
-    "visible": false,
-    "routings": [
+    "in_template": false,
+    "find": [
      {
       "from": "text",
       "between": [
        "<w>",
        "</w>"
       ],
-      "to": "@role",
-      "consume": true
+      "to": "@purpose",
+      "remove": true
      },
      {
       "from": "text",
@@ -42,8 +42,8 @@
        "<n>",
        "</n>"
       ],
-      "to": "@role.notes",
-      "consume": true
+      "to": "@purpose.notes",
+      "remove": true
      }
     ]
    }
@@ -65,7 +65,7 @@
     "shape": {
      "type": "string"
     },
-    "role": "work"
+    "purpose": "work"
    },
    {
     "name": "notes",
@@ -73,7 +73,7 @@
     "shape": {
      "type": "string"
     },
-    "role": "work.notes"
+    "purpose": "work.notes"
    },
    {
     "name": "answer",
@@ -84,12 +84,18 @@
    }
   ]
  },
- "demos": [
-  {
-   "q": "d",
-   "answer": "y"
-  }
- ],
+ "turns": {
+  "turns": [
+   {
+    "inputs": {
+     "q": "d"
+    },
+    "outputs": {
+     "answer": "y"
+    }
+   }
+  ]
+ },
  "expect": {
   "skeleton": {
    "prefill": "<answer>\n",

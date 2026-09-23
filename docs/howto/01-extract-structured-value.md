@@ -42,7 +42,7 @@ frontend spelled: `Person`. Formats resolve by that name first.
 adapter = lmcc.adapter(messages=[
     lmcc.system("{instruction}\n\nReply with exactly this pattern:\n"
                 "{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"),
-    lmcc.demos(),
+    lmcc.turns(),
     lmcc.user("{text}"),
 ])
 
@@ -65,7 +65,7 @@ It is never written into the artifact.
 registry = lmcc.Registry()
 registry.format(Person,
     write=lambda p: json.dumps(p.__dict__),
-    read=lambda span: Person(**json.loads(span.text)),
+    read=lambda capture: Person(**json.loads(capture.text)),
     describe=lambda: 'a JSON object {"name": ..., "age": ...}')
 
 plan = extract.bind(adapter, registry=registry)
@@ -81,7 +81,7 @@ assert plan.parse('<extract>\n{"name": "Ann", "age": 41}\n</extract>') == {"extr
 ```
 
 `describe` is what the model sees in the output slot. `read` gets the
-captured span; `span.text` is the stripped text between the markers.
+captured capture; `capture.text` is the stripped text between the markers.
 
 ## 4. Way two: a format in the artifact
 
@@ -103,8 +103,9 @@ fence = "`" * 3
 fenced = f'<extract>\n{fence}json\n{{"name": "Ann", "age": 41}}\n{fence}\n</extract>'
 assert plan2.parse(fenced) == {"extract": Person("Ann", 41)}
 
-demo = plan2.render(text="x", demos=[{"text": "Bo is 7.", "extract": Person("Bo", 7)}]).messages[1]
-assert demo["parts"][0]["text"] == '<extract>\n{\n  "name": "Bo",\n  "age": 7\n}\n</extract>'
+example = plan2.example({"text": "Bo is 7."}, {"extract": Person("Bo", 7)})
+written = plan2.render(text="x", turns=[example]).messages[1]
+assert written["parts"][0]["text"] == '<extract>\n{\n  "name": "Bo",\n  "age": 7\n}\n</extract>'
 assert shared.dump(registry=std)["formats"] == {"Person": {"use": "json"}}
 ```
 

@@ -9,7 +9,11 @@ import (
 
 func heredocCase(t *testing.T) *lmcc.Object {
 	t.Helper()
-	b, err := os.ReadFile("../../contract/corpus/cases/116-render-heredoc-history.json")
+	dir := os.Getenv("LMCC_CASES") // the kernel-0.6 corpus while Go is at 0.6 (plans/12-turns.md)
+	if dir == "" {
+		dir = "../../contract/corpus/cases"
+	}
+	b, err := os.ReadFile(dir + "/116-render-heredoc-history.json")
 	if err != nil {
 		t.Fatal(err)
 	}

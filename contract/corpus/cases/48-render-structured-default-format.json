@@ -7,7 +7,7 @@
  "entry": {
   "name": "dspy_like_v1",
   "versions": {
-   "kernel": "0.6.0",
+   "kernel": "0.7.0",
    "vocab": {
     "format/json": "0.1.0"
    }
@@ -18,14 +18,14 @@
     "text": "{instruction}\n\nAnswer in exactly this form:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
    },
    {
-    "directive": "demos"
+    "directive": "turns"
    },
    {
     "role": "user",
     "text": "{% for f in inputs %}[[ ## {f.name} ## ]]\n{f.value}\n{% endfor %}"
    }
   ],
-  "parse": {
+  "reader": {
    "kind": "derived"
   },
   "formats": {
@@ -127,21 +127,27 @@
   ],
   "who": null
  },
- "demos": [
-  {
-   "doc": "e",
-   "ctx": [],
-   "who": "me",
-   "items": [
-    "x"
-   ],
-   "meta": {
-    "n": 2
-   },
-   "pick": 7,
-   "count": null
-  }
- ],
+ "turns": {
+  "turns": [
+   {
+    "inputs": {
+     "doc": "e",
+     "ctx": [],
+     "who": "me"
+    },
+    "outputs": {
+     "items": [
+      "x"
+     ],
+     "meta": {
+      "n": 2
+     },
+     "pick": 7,
+     "count": null
+    }
+   }
+  ]
+ },
  "expect": {
   "request": {
    "system": "Extract.\n\nAnswer in exactly this form:\n<items>\nJSON matching this schema: {\"type\": \"array\", \"items\": {\"type\": \"string\"}}\n</items>\n<meta>\nJSON matching this schema: {\"type\": \"object\", \"properties\": {\"n\": {\"type\": \"integer\"}}}\n</meta>\n<pick>\nJSON matching this schema: {\"anyOf\": [{\"type\": \"string\"}, {\"type\": \"integer\"}]}\n</pick>\n<count>\n(integer)\n</count>\n",

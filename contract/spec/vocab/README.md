@@ -1,6 +1,6 @@
 # Vocabulary specifications
 
-Every named format, strategy, and lens is a **vocabulary entry**: a
+Every named format, transport, and reader is a **vocabulary entry**: a
 versioned spec file here plus corpus cases pinning its behavior. No entry
 is privileged — `format/json` and your lab's format graduate the same way:
 
@@ -11,40 +11,40 @@ is privileged — `format/json` and your lab's format graduate the same way:
 
 An implementation may claim any subset of the vocabulary. Claimed entries
 must pass their cases byte-exactly; unclaimed names refuse at load
-(`unknown-format` / `unknown-strategy` / `unknown-parse-kind`) — never
+(`unknown-format` / `unknown-transport` / `unknown-reader`) — never
 silently.
 
 **Extensions are the same principle for host behavior** (kernel §10,
-`../extensions/README.md`): a routing `pattern` dialect is a named,
+`../extensions/README.md`): a find rule `pattern` dialect is a named,
 versioned contract the artifact declares in `extensions` and the host
 binds or refuses. Vocabulary entries are *referenced* (`{"use": name}`)
 and pinned in `versions.vocab`; extensions govern a *construct* and are
 must-understand. Regex is not a kernel obligation.
 
-Role names are themselves vocabulary — the function each name means and
-its alignment with the wire layer's part kinds live in `roles.md`.
+Purpose names are themselves vocabulary — what each name means and
+its alignment with the wire layer's part kinds live in `purposes.md`.
 The capability facts predicates may name live in `capabilities.md`.
 
-Current entries (all 0.1.0, provided by `python/lmcc_std` and, byte-identically, by `go/lmccstd`):
+Current entries (all 0.1.0 except `transport/reasoning_tags` 0.2.0, provided by `python/lmcc_std`; `go/lmccstd` provides the kernel-0.6 spelling of the same entries):
 
 | entry | spec |
 |---|---|
 | `format/json` | `format-json.md` |
 | `format/table` | `format-table.md` |
 | `format/scaled_number` | `format-scaled_number.md` |
-| `strategy/prefix_cot` | `strategy-reasoning.md` |
-| `strategy/reasoning_tags` | `strategy-reasoning.md` |
-| `strategy/native_reasoning` | `strategy-reasoning.md` |
-| `lens/json_object` | `lens-json_object.md` |
-| `format/function_tool` | `strategy-tools.md` |
-| `format/tool_catalog` | `strategy-tools.md` |
-| `format/tool_calls` | `strategy-tools.md` |
+| `transport/prefix_cot` | `transport-reasoning.md` |
+| `transport/reasoning_tags` | `transport-reasoning.md` |
+| `transport/native_reasoning` | `transport-reasoning.md` |
+| `reader/json_object` | `reader-json_object.md` |
+| `format/function_tool` | `transport-tools.md` |
+| `format/tool_catalog` | `transport-tools.md` |
+| `format/tool_calls` | `transport-tools.md` |
 | `format/code_arguments` | `format-code.md` |
 | `format/code_calls` | `format-code.md` |
-| `strategy/heredoc_tools` | `format-code.md` |
-| `strategy/native_tools` | `strategy-tools.md` |
-| `strategy/fenced_tools` | `strategy-tools.md` |
-| `format/citations` | `strategy-citations.md` |
-| `format/source_list` | `strategy-citations.md` |
-| `strategy/native_citations` | `strategy-citations.md` |
-| `strategy/inline_citations` | `strategy-citations.md` |
+| `transport/heredoc_tools` | `format-code.md` |
+| `transport/native_tools` | `transport-tools.md` |
+| `transport/fenced_tools` | `transport-tools.md` |
+| `format/citations` | `transport-citations.md` |
+| `format/source_list` | `transport-citations.md` |
+| `transport/native_citations` | `transport-citations.md` |
+| `transport/inline_citations` | `transport-citations.md` |

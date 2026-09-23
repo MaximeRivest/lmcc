@@ -4,7 +4,7 @@
  "entry": {
   "name": "number_read",
   "versions": {
-   "kernel": "0.6.0",
+   "kernel": "0.7.0",
    "vocab": {}
   },
   "template": [
@@ -13,7 +13,7 @@
     "text": "<n>{n}</n>"
    }
   ],
-  "parse": {
+  "reader": {
    "kind": "derived"
   }
  },

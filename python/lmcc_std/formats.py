@@ -1,7 +1,7 @@
 """Standard formats: json, table, scaled_number.
 
 Each format is one *spelling* of a value: ``write(value, field) → text``,
-``read(span, field) → value``, ``describe(field) → text``. Normative
+``read(capture, field) → value``, ``describe(field) → text``. Normative
 behavior (escaping, nulls, fences) lives in contract/spec/vocab/ and is
 pinned by corpus cases — two implementations that disagree have a failing
 test, not an argument.
@@ -47,8 +47,8 @@ class JsonFormat(Format):
     def write(self, value, field):
         return jsontext.dumps(lower(value), indent=self.indent)
 
-    def read(self, span, field):
-        text = span.text
+    def read(self, capture, field):
+        text = capture.text
         m = _FENCE.match(text)
         if m:
             text = m.group(1)
@@ -153,10 +153,10 @@ class TableFormat(Format):
             return core.format_number(cell)
         raise ValueError(f"column {col!r}: {type(cell).__name__} is not a cell value")
 
-    def read(self, span, field):
+    def read(self, capture, field):
         item_props = (field.shape.get("items") or {}).get("properties", {})
         out = []
-        for line in span.text.split("\n"):
+        for line in capture.text.split("\n"):
             line = core.strip(line)
             if not line.startswith(self.delimiter):
                 continue
@@ -223,8 +223,8 @@ class ScaledNumberFormat(Format):
             scaled = round(scaled * p) / p
         return f"{core.format_number(scaled)}{self.suffix}"
 
-    def read(self, span, field):
-        text = core.strip(span.text)
+    def read(self, capture, field):
+        text = core.strip(capture.text)
         if self.suffix and text.endswith(self.suffix):
             text = text[: -len(self.suffix)]
         return _read({"type": "number"}, text, "scaled_number") / self.scale

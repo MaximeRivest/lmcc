@@ -1,7 +1,7 @@
 # `pattern/legacy-re2` — version 0.1.0
 
 **Status:** the migration bridge. This contract is, by definition, the
-behavior kernel 0.2 required of every `pattern` routing (D-14, D-29,
+behavior kernel 0.2 required of every `pattern` find rule (D-14, D-29,
 D-30/D-32), given a name and a version so that a 0.3 artifact can
 declare it and a host can honestly say whether it binds it. It is not
 the rigorously specified dialect plan 10 still owes; when that lands it
@@ -10,7 +10,7 @@ what it is.
 
 ## What the artifact writes
 
-`{"from": "text", "pattern": <regex>, "to": …, "consume"?: bool}`. The
+`{"from": "text", "pattern": <regex>, "to": …, "remove"?: bool}`. The
 regex is a string; the extension defines everything about it.
 
 ## Syntax admitted
@@ -19,7 +19,7 @@ RE2 syntax **minus**: lookaround (`(?=`, `(?!`, `(?<=`, `(?<!`),
 backreferences (`\1`…`\9`, `\k<…>`), named groups (`(?P<…>`, `(?<…>`),
 atomic groups (`(?>`), and possessive quantifiers (`*+`, `++`, `?+`,
 `}+`). A regex using any of these, or one the host's engine cannot
-compile, refuses `entry-malformed` at the routing's path, at load (or at
+compile, refuses `entry-malformed` at the find rule's path, at load (or at
 bind for an adapter built in code), with fix `edit-entry`.
 
 The exclusion check is lexical, on the regex with its escaped characters
@@ -34,14 +34,14 @@ what both kernels do (`_NON_RE2` / `nonRE2`).
 - **Search.** Non-overlapping matches, left to right, leftmost-first
   semantics as the host engine defines them.
 - **Empty matches** are discarded: a match whose start equals its end is
-  not a capture and does not consume.
+  not a capture and does not remove.
 - **Capture.** If the regex has at least one capturing group, the
   capture is group 1's text (empty when group 1 did not participate);
   otherwise the whole match. Each capture becomes one text part; the
-  field's span is those parts in match order, stripped per §7a.
-- **Consume.** With `consume: true` the whole match (not only group 1)
-  is removed from the text later routings and the lens see.
-- **Streaming.** A pattern routing buffers until EOF (kernel §8) because
+  field's capture is those parts in match order, stripped per §7a.
+- **Remove.** With `remove: true` the whole match (not only group 1)
+  is removed from the text later find rules and the reader see.
+- **Streaming.** A pattern find rule buffers until EOF (kernel §8) because
   a later byte can change any match; the plan says so in
   `describe()["streaming"]`.
 
@@ -61,7 +61,7 @@ the honest reason this contract is named *legacy*.
 
 ## Evidence
 
-Cases 40 (group-1 capture, consume, multiple matches) and 42 (refused
+Cases 40 (group-1 capture, remove, multiple matches) and 42 (refused
 syntax). A host claiming this contract passes both; a host that does
 not claim it answers `unclaimed` and refuses every artifact that
 declares it with `extension-unsupported`.

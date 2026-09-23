@@ -1,0 +1,52 @@
+{
+ "name": "refuse-json-reader-needs-capability",
+ "kind": "refuse",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "json_lens_v1",
+  "versions": {
+   "kernel": "0.7.0",
+   "vocab": {
+    "reader/json_object": "0.1.0"
+   }
+  },
+  "template": [
+   {
+    "role": "user",
+    "text": "{question}"
+   }
+  ],
+  "reader": {
+   "kind": "json_object"
+  }
+ },
+ "signature": {
+  "instructions": "Answer.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "expect": {
+  "code": "capability-missing",
+  "fix": {
+   "action": "declare-capability",
+   "fact": "native_structured_output"
+  },
+  "at": "bind"
+ }
+}

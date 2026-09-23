@@ -1,0 +1,84 @@
+{
+ "name": "refuse-bind-purpose-ambiguous",
+ "kind": "refuse",
+ "entry": {
+  "name": "role_twice_v1",
+  "versions": {
+   "kernel": "0.7.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n\nAnswer in exactly this form:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  },
+  "transports": {
+   "reasoning": {
+    "in_template": false,
+    "find": [
+     {
+      "from": "text",
+      "between": [
+       "<think>",
+       "</think>"
+      ],
+      "to": "@purpose",
+      "remove": true
+     }
+    ]
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Answer.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "draft",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    },
+    "purpose": "reasoning"
+   },
+   {
+    "name": "notes",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    },
+    "purpose": "reasoning"
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "expect": {
+  "code": "purpose-ambiguous",
+  "fix": {
+   "action": "edit-signature",
+   "field": "notes",
+   "purpose": "reasoning"
+  },
+  "at": "bind"
+ }
+}

@@ -26,14 +26,14 @@ needed to implement it: `between` and `line_prefixed` are plain scans.
 |---|---|---|
 | signature validity, shape table, nullable and enum forms | §1 | 43, 48–52 |
 | template constructs: slots, loops, escapes, syntax refusal | §2 | 01, 05, 47, 79 |
-| demos, history, field turns, media parts | §3, §7b | 02–04, 53, 54 |
-| derived lens: anchors, closes, tails, bare slots, ambiguity, collisions | §4 | 20, 21, 27, 30–33, 38, 39, 69, 70, 80 |
+| turns: record, slots (messages and text), guards, writers, projections, replay, ids, media parts | §3, §3a, §7b | 02–04, 53, 54, 103, 107, 116, 122, 128–148 |
+| derived reader: anchors, closes, tails, bare slots, ambiguity, collisions | §4 | 20, 21, 27, 30–33, 38, 39, 69, 70, 80 |
 | scalar text rules: strip, integer and number grammars, spelling, overflow | §7a | 35–37, 44, 51, 52, 89, 90 |
 | format resolution order and bind-time format refusals | §5 | 14, 48–50, 55, 56, 67, 68 |
 | vocabulary references, factory failures, version pins, unknown names | §5, §6, §9 | 09, 13, 24, 26, 77, 81, 82 |
 | shipped-format admission (never run at load); placement refusals | §5 | 57–62 (`udf:python`) |
-| strategies: predicates, `choose`, `requires`, fragments, controls, placement, visibility | §6 | 10, 34, 63–66, 73–76, 78 |
-| literal routings: `between`, `line_prefixed`, `channel:`, sub-roles | §6 | 07, 41, 64, 71 |
+| transports: predicates, `choose`, `requires`, tell, request_settings, put, visibility | §6 | 10, 34, 63–66, 73–76, 78 |
+| literal find rules: `between`, `line_prefixed`, `part:`, sub-purposes | §6 | 07, 41, 64, 71 |
 | response part validation and coalescing | §6, §8 | 83–88 |
 | streaming refinement, event timing, linear per-feed work | §8 | every parse case, replayed at every split, trace-compared |
 | plan faces: skeleton, prefix | §3 | 72 |
@@ -41,14 +41,14 @@ needed to implement it: `between` and `line_prefixed` are plain scans.
 | extension mechanics: declare, bind, refuse, roundtrip | §10 | 91–95 |
 
 The standard vocabulary (`format/json`, `format/table`,
-`format/scaled_number`, the reasoning strategies, `lens/json_object`) is
+`format/scaled_number`, the reasoning transports, `reader/json_object`) is
 **not** core: it is claimable separately, by the same rule as extensions
 (`vocab/README.md`; cases 15–19, 22, 23, 25, 28, 29, 45, 46).
 
 ## Extensions
 
 Everything else is a named, versioned contract (`extensions/README.md`).
-For a routing pattern the contract must define syntax, flags, Unicode
+For a find rule pattern the contract must define syntax, flags, Unicode
 rules, match selection, capture priority, empty matches, consumption,
 and failures — or state, as `pattern/legacy-re2` does, exactly where it
 leaves behavior unspecified. A library name alone establishes nothing;

@@ -1,4 +1,4 @@
-"""One program, three reasoning strategies, two providers — live, through lm15.
+"""One program, three reasoning transports, two providers — live, through lm15.
 
     set -a; source ~/Projects/lm15-dev/.env; set +a
     PYTHONPATH=~/Projects/lmcc/python:~/Projects/lm15-dev/lm15-python python integration/lm15_reasoning.py
@@ -17,7 +17,7 @@ from lm15 import AnthropicLM, Config, OpenAILM
 
 @dataclasses.dataclass
 class Solution:
-    reasoning: lmcc.Role["reasoning", str]
+    reasoning: lmcc.Purpose["reasoning", str]
     answer: int
 
 
@@ -35,8 +35,8 @@ registry = lmcc.Registry()
 lmcc_std.install(registry)
 
 
-def run(name, strategy, capabilities, lm, model):
-    plan = solve.bind(lmcc.adapter(messages=XML, strategies={"reasoning": strategy}),
+def run(name, transport, capabilities, lm, model):
+    plan = solve.bind(lmcc.adapter(messages=XML, transports={"reasoning": transport}),
                       capabilities=capabilities, registry=registry)
     request = lmcc_lm15.request(plan.render(problem=PROBLEM), model=model, config=Config(max_tokens=4000))
 
@@ -57,19 +57,19 @@ def main():
     # API has no stop field (lm15 refuses rather than omit), Claude honors one.
     instruct = {"instruct": True}
     native = {"instruct": True, "native_reasoning": True, "stop_sequences": True}
-    auto = lmcc.Strategy(choose=[
-        {"when": {"capability": "native_reasoning"}, "use": lmcc_std.strategies.native_reasoning({"effort": "low"})},
-        {"else": lmcc_std.strategies.reasoning_tags({})}])
+    auto = lmcc.Transport(choose=[
+        {"when": {"capability": "native_reasoning"}, "use": lmcc_std.reasoning.native_reasoning({"effort": "low"})},
+        {"else": lmcc_std.reasoning.reasoning_tags({})}])
 
     run("prefix_cot", "prefix_cot", instruct, openai, "gpt-4.1-mini")
     run("reasoning_tags", "reasoning_tags", instruct, openai, "gpt-4.1-mini")
     run("native_reasoning", lmcc.use("native_reasoning", effort="low"), native, claude, "claude-sonnet-4-5")
     run("auto → tags", auto, instruct, openai, "gpt-4.1-mini")
     run("auto → native", auto, native, claude, "claude-sonnet-4-5")
-    print("all strategies hold: same program, batch == stream, answer == 29")
+    print("all transports hold: same program, batch == stream, answer == 29")
 
 
-def test_reasoning_strategies_end_to_end():
+def test_reasoning_transports_end_to_end():
     import pytest
     if not (os.environ.get("OPENAI_API_KEY") and os.environ.get("ANTHROPIC_API_KEY")):
         pytest.skip("needs OPENAI_API_KEY and ANTHROPIC_API_KEY")

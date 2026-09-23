@@ -1,0 +1,81 @@
+{
+ "name": "refuse-bind-turns-writer-missing",
+ "kind": "refuse",
+ "requires": [
+  "pattern/legacy-re2"
+ ],
+ "entry": {
+  "name": "derived_v1",
+  "versions": {
+   "kernel": "0.7.0",
+   "vocab": {}
+  },
+  "extensions": {
+   "pattern/legacy-re2": "0.1.0"
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n\nAnswer in exactly this form:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "directive": "turns"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  },
+  "transports": {
+   "reasoning": {
+    "in_template": false,
+    "find": [
+     {
+      "from": "text",
+      "pattern": "Thought: ([^\\n]+)",
+      "to": "@purpose",
+      "remove": true
+     }
+    ]
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Answer.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "reasoning",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    },
+    "purpose": "reasoning"
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "expect": {
+  "code": "spelling-drift",
+  "at": "bind",
+  "fix": {
+   "action": "edit-entry",
+   "path": "transports['reasoning'].spelling"
+  }
+ }
+}

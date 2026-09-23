@@ -1,7 +1,7 @@
 # LMCC — agent operating manual
 
 You are an agent working in this repository. This file is your cockpit:
-the map, the physics, the controls, and the protocol. Read it first;
+the map, the physics, the request_settings, and the protocol. Read it first;
 verify it second (`./check`); trust it only after it runs green.
 
 **One sentence.** LMCC is the calling convention for calling a model:
@@ -15,21 +15,21 @@ normative form.
 ```
   L5  programs            your code: @lmcc.fn signatures + values in, values out
   L4  vocabulary packs    python/lmcc_std, go/lmccstd (+ anyone's): formats,
-                          strategies, lenses — plugged into sockets, zero privilege
+                          transports, readers — plugged into sockets, zero privilege
       frontends           python/lmcc_dspy (any dspy.Signature), Go struct tags,
                           @lmcc.fn; any syntax lowers, none is the contract
   L3  the plan            bind(adapter × signature × capabilities) → Plan
                           all refusals fire HERE, before any money is spent
-  L2  the artifact        template + parse + strategies by role + formats by
+  L2  the artifact        template + reader + transports by purpose + formats by
                           type — never a field name (schema/entry.schema.json);
                           renders to an lm15 request minus model, parses an
                           lm15 message/response (contract/LM15_CONTRACT_PIN);
                           a shipped format is the one place it carries code,
                           declared (language, deps, sha256, author)
   L1  kernel mechanics    python/lmcc/ (reference) and go/lmcc/ (independent)
-                          — core (signature, shapes, text rules, parts, spans),
-                          template (3 constructs), lens (derived), formats
-                          (defaults, resolution, UDF admission), strategy,
+                          — core (signature, shapes, text rules, parts, captures),
+                          template (3 constructs), reader (derived), formats
+                          (defaults, resolution, UDF admission), transport,
                           plan (bind/render/parse/skeleton/prefix), serde
   L0  the contract        contract/ — spec (meaning), schema (form),
                           corpus (byte-exact truth), harness (the judge)
@@ -58,14 +58,14 @@ Every design answer in this repo derives from three rules. When you face
 a decision, derive from these before inventing anything:
 
 1. **One description, many directions.** The template's output pattern
-   renders the prompt, writes the demos and history turns, and derives
+   renders the prompt, writes earlier turns (examples and conversations), and derives
    the parser — one object, drift unrepresentable. Any feature that
    would create a second copy of a contract is wrong by construction.
 2. **Data over code at every seam; code declared where it must exist.**
-   Artifacts, plans, strategies, predicates, anchors: plain data. The
+   Artifacts, plans, transports, predicates, anchors: plain data. The
    one place an artifact carries code is a shipped format, and it says
    so on the entry; loading never runs it. Type → format decides *how* a
-   value is spelled; role → strategy decides *where* it travels; the
+   value is spelled; purpose → transport decides *where* it travels; the
    template decides where visible things sit (v3 §6b).
 3. **Refuse loudly, before money.** Bake is the gate. Every failure has
    a stable code (`contract/spec/errors.md`), names its exact offender,
@@ -77,20 +77,21 @@ a decision, derive from these before inventing anything:
 
 | invariant | enforced by |
 |---|---|
-| corpus is byte-exact authority | `contract/harness/runner.py` (127 cases; 6 need `udf:python`, 6 need `pattern/legacy-re2`) |
-| formatted turns use the same argument writer for history and the representative bind probe; raw-code whitespace is preserved and marker collisions refuse | corpus 116–127; `tests/test_heredoc_turns.py`; `go/lmccstd/code_test.go`; notebook `docs/howto/12-conversational-heredoc-tools.md` |
-| tools and citations are live roles: the same program runs native (lm15 `tool_call`/`citation` parts, `Request.tools`) and as text (`fenced_tools`, `inline_citations`); a call turn is a reply (`suffices`); a text spelling of a past call must read back through its own routing (`turns` probe, `turns-drift`) | corpus 100–112; `tests/test_tools_citations.py`; `python/integration/lm15_tools_citations.py` (live, by hand) |
-| the wire is lm15: parts `type`, messages `parts`, `system` a request field, controls a partial lm15 request validated at `config.<field>`/`tools`; `render().request(model)` feeds lm15's `request_from_dict` unchanged | every render case's `expect.request`; cases 96–98; `tests/lm15/test_bridge.py` through a real lm15 at the pinned commit (`./check` step 7) |
-| the contract is portable: an independent Go kernel passes every claimable case byte-exactly, and both kernels raise the same refusal-code set (minus the declared placement-only code) | `./check` step 5 (`runner.py --driver go/bin/lmcc-conform`), `tests/test_coherence.py` |
+| corpus is byte-exact authority | `contract/harness/runner.py` (148 cases; 6 need `udf:python`, 9 need `pattern/legacy-re2`) |
+| one record, the turn, replaces demos and history (kernel §3a): examples, past exchanges and the exchange in progress are written by the plan's own writers; a recorded reply this plan reads back is replayed verbatim; hidden fields have derived or declared writers checked at bind; call ids stay unique; a tool's images survive text transports | corpus 03, 53, 54, 103, 107, 116, 122, 128–148; `tests/test_turns.py` |
+| formatted turns use the same argument writer for past calls and the representative bind probe; raw-code whitespace is preserved and marker collisions refuse | corpus 116–127; `tests/test_heredoc_turns.py`; `go/lmccstd/code_test.go`; notebook `docs/howto/12-conversational-heredoc-tools.md` |
+| tools and citations are live purposes: the same program runs native (lm15 `tool_call`/`citation` parts, `Request.tools`) and as text (`fenced_tools`, `inline_citations`); a call turn is a reply (`complete_reply`); a text spelling of a past call must read back through its own find rule (`turns` probe, `spelling-drift`) | corpus 100–112; `tests/test_tools_citations.py`; `python/integration/lm15_tools_citations.py` (live, by hand) |
+| the wire is lm15: parts `type`, messages `parts`, `system` a request field, request_settings a partial lm15 request validated at `config.<field>`/`tools`; `render().request(model)` feeds lm15's `request_from_dict` unchanged | every render case's `expect.request`; cases 96–98; `tests/lm15/test_bridge.py` through a real lm15 at the pinned commit (`./check` step 7) |
+| the contract is portable: an independent Go kernel passes every claimable case byte-exactly, and both kernels raise the same refusal-code set (minus the declared put-only code). **Go is at kernel 0.6**: it is held to the `kernel-0.6` corpus, and its gap to 0.7 is a declared, exact list (plan 12) | `./check` step 5 (`runner.py --driver go/bin/lmcc-conform --cases <kernel-0.6 corpus>`), `tests/test_coherence.py` (`GO_AT_06_*`) |
 | text primitives are portable: ASCII strip, explicit integer/number grammars, ECMAScript number spelling (kernel §7a) | corpus 35–37, 44, 45; `tests/test_text_rules.py`; `go/lmcc/text_test.go` |
-| the core needs no regex: a `pattern` routing requires a declared `pattern/*` extension; a core-only host refuses before model I/O; both kernels bind the same natives at the same versions; every native has an indexed spec | corpus 40, 42, 91–95; `tests/test_extensions.py`; `go/lmcc/extensions_test.go`; `tests/test_coherence.py` |
+| the core needs no regex: a `pattern` find rule requires a declared `pattern/*` extension; a core-only host refuses before model I/O; both kernels bind the same natives at the same versions; every native has an indexed spec | corpus 40, 42, 91–95; `tests/test_extensions.py`; `go/lmcc/extensions_test.go`; `tests/test_coherence.py` |
 | `split(join(x)) == x` for marker-free, trimmed `x`; `join` refuses collisions (`value-collides`) | `tests/test_kernel.py`, `test_text_rules.py`; corpus 38 |
-| the artifact never names a field: strategies by role, formats by type/structural key | `schema/entry.schema.json`; corpus 55 |
+| the artifact never names a field: transports by purpose, formats by type/structural key | `schema/entry.schema.json`; corpus 55 |
 | resolution order: artifact type → structural key → runtime binding → kernel default → `*` → `no-format` | `tests/test_formats.py`; corpus 48–50, 55–56 |
-| shipped formats are admitted (hash, self-containment, placement) and never run by `load` | `tests/test_formats.py`; corpus 57–62; Go answers `unclaimed` |
-| streaming refines batch: every text/part split has identical final values or full refusal; field deltas concatenate independently of chunking; both kernels emit the same events at the same feeds; per-feed work does not grow with the reply | corpus harness replays every parse and parse-refusal case whole, one scalar at a time, and at every split through both kernels and compares the Go stream trace with the reference; seeded random multi-chunk fuzz, marker-overlap and scaling tests in `tests/test_streaming.py` and `go/lmcc/stream_test.go` |
+| shipped formats are admitted (hash, self-containment, put) and never run by `load` | `tests/test_formats.py`; corpus 57–62; Go answers `unclaimed` |
+| streaming refines batch: every text/part split has identical final values or full refusal; field deltas concatenate independently of chunking; both kernels write the same events at the same feeds; per-feed work does not grow with the reply | corpus harness replays every parse and parse-refusal case whole, one scalar at a time, and at every split through both kernels and compares the Go stream trace with the reference; seeded random multi-chunk fuzz, marker-overlap and scaling tests in `tests/test_streaming.py` and `go/lmcc/stream_test.go` |
 | all refusals fire at bind, never mid-render | refuse-corpus cases (`at: bind`) |
-| every refusal before render carries a `fix` from the closed action vocabulary; both kernels emit the same one; render/parse refusals carry none | `spec/errors.md` (code → fix column, action table), `schema/fix.schema.json`, every pre-render refuse case pins `expect.fix`, `tests/test_coherence.py` (call-site rule in both kernels), `tests/test_fix_hints.py` |
+| every refusal before render carries a `fix` from the closed action vocabulary; both kernels write the same one; render/parse refusals carry none | `spec/errors.md` (code → fix column, action table), `schema/fix.schema.json`, every pre-render refuse case pins `expect.fix`, `tests/test_coherence.py` (call-site rule in both kernels), `tests/test_fix_hints.py` |
 | data-only entries load with zero registrations | corpus case 08 + empty-registry harness default |
 | kernel imports stdlib only, ships zero vocabulary | `tests/test_agent_surface.py` |
 | artifacts never contain signatures | `schema/entry.schema.json` |
@@ -103,17 +104,17 @@ a decision, derive from these before inventing anything:
 
 ## Sense — how to see the system state
 
-- `plan.describe()` → the whole plan as a plain dict (lens, anchors,
+- `plan.describe()` → the whole plan as a plain dict (reader, anchors,
   visible/hidden fields, each field's format and *what resolved it*,
-  routings, placements, fragments, patch, skeleton, `versions`).
+  find rules, puts, tell, request settings, skeleton, `versions`).
   `plan.explain()` is its pretty-printer. Read plans, not code.
 - `plan.skeleton()` (prefill, stops) and `plan.prefix()` (cache-stable
   messages) — what the plan knows about the reply and the prompt.
 - `stream = plan.stream()` → `stream.feed(delta)` emits started/raw-delta
   events; `stream.finish()` returns EOF events + typed values. Read
-  `plan.describe()["streaming"]` before assuming a route/lens streams.
-- `registry.describe()` → every named format, type binding, strategy,
-  lens, and whether this runtime places UDFs.
+  `plan.describe()["streaming"]` before assuming a route/reader streams.
+- `registry.describe()` → every named format, type binding, transport,
+  reader, and whether this runtime places UDFs.
 - `adapter.dump()` → the artifact. Diff two of them to see any change.
 - Every `Refusal` has `.code` (stable, in `spec/errors.md`), `.hint`
   (names the offender), `.fix` (the next action as data, on every
@@ -136,10 +137,10 @@ The order is the point: meaning, then truth, then code.
 
 Checklists:
 
-- **new format/strategy/lens**: spec file in `contract/spec/vocab/` →
+- **new format/transport/reader**: spec file in `contract/spec/vocab/` →
   corpus cases (`"vocab": ["std"]` or your pack) → register through the
   socket in a pack (never the kernel) → row in `spec/vocab/README.md`.
-  A format declares `accepts`, `direction`, `emits`, `round_trip`.
+  A format declares `accepts`, `direction`, `writes`, `round_trip`.
 - **new capability fact**: row in `spec/vocab/capabilities.md` (minor
   version bump) → a corpus case that predicates on it.
 - **new error code**: row in `spec/errors.md` (with its fix action, or
@@ -150,16 +151,16 @@ Checklists:
   code fires is breaking.
 - **new fix action**: row in the action table of `spec/errors.md` →
   branch in `schema/fix.schema.json` → a corpus case pinning it → both
-  kernels emit it. Renaming an action or a parameter is breaking.
+  kernels write it. Renaming an action or a parameter is breaking.
 - **kernel change**: touches `spec/kernel.md` first; expect corpus
   changes to be reviewed as contract changes; implement in `python/`
   and `go/` — the corpus will not pass until both agree.
 - **anything that touches streaming**: preserve the §8 refinement law;
-  add every-split tests in both harness drivers; never emit a prefix a
+  add every-split tests in both harness drivers; never write a prefix a
   later delta can revise; make every forced buffer visible in
   `plan.describe()["streaming"]`.
 - **anything that touches the wire** (a part, a message, a request field):
-  the word is lm15's, never a synonym; a new lm15 field the patch may
+  the word is lm15's, never a synonym; a new lm15 field the request settings may
   set goes into the pinned `Config` list in both kernels *and* the spec,
   with the contract pin bumped deliberately. lmcc's own objects (events,
   refusals, plans) stay in lmcc's words.

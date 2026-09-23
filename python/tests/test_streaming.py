@@ -3,16 +3,16 @@
 import pytest
 
 import lmcc
-from lmcc.parse import Lens
+from lmcc.reader import Reader
 
 LEGACY = {"pattern/legacy-re2": "0.1.0"}
 
 
-def tagged(*, outputs=None, strategies=None, formats=None):
+def tagged(*, outputs=None, transports=None, formats=None):
     sig = lmcc.signature("Answer.", inputs={"q": str}, outputs=outputs or {"answer": str})
     adapter = lmcc.adapter(messages=[
         lmcc.system("{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"),
-        lmcc.user("{q}")], strategies=strategies, formats=formats)
+        lmcc.user("{q}")], transports=transports, formats=formats)
     return sig, adapter
 
 
@@ -72,30 +72,30 @@ def test_eof_releases_unclosed_field_and_trailing_internal_whitespace():
     assert result.events[-1] == {"kind": "field_done", "field": "answer", "value": "a  b"}
 
 
-def routed_plan(routing):
-    strategy = lmcc.Strategy(visible=False, routings=[{**routing, "to": "@role"}])
+def routed_plan(rule):
+    transport = lmcc.Transport(in_template=False, find=[{**rule, "to": "@purpose"}])
     sig = lmcc.signature("Answer.", inputs={"q": str},
-                         outputs={"reasoning": lmcc.field(str, role="reasoning"), "answer": str})
+                         outputs={"reasoning": lmcc.field(str, purpose="reasoning"), "answer": str})
     adapter = lmcc.adapter(messages=[
         lmcc.system("{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"),
-        lmcc.user("{q}")], strategies={"reasoning": strategy},
-        extensions=LEGACY if "pattern" in routing else None)
+        lmcc.user("{q}")], transports={"reasoning": transport},
+        extensions=LEGACY if "pattern" in rule else None)
     return adapter.bind(sig)
 
 
-def test_between_routing_streams_after_close_and_consumes_before_lens():
-    plan = routed_plan({"from": "text", "between": ["<think>", "</think>"], "consume": True})
+def test_between_rule_streams_after_close_and_removes_before_reader():
+    plan = routed_plan({"from": "text", "between": ["<think>", "</think>"], "remove": True})
     stream = plan.stream()
     assert stream.feed("<thi") == []
     assert stream.feed("nk>  why ") == []       # unclosed capture is not yet real to batch
-    routed = stream.feed(" now </think><answer>\nyes\n</answer>")
-    assert deltas(routed) == {"reasoning": "why  now", "answer": "yes"}
+    found = stream.feed(" now </think><answer>\nyes\n</answer>")
+    assert deltas(found) == {"reasoning": "why  now", "answer": "yes"}
     result = stream.finish()
     assert result.values == {"answer": "yes", "reasoning": "why  now"}
 
 
-def test_line_routing_waits_for_newline_and_preserves_lens_newline():
-    plan = routed_plan({"from": "text", "line_prefixed": "THINK: ", "consume": True})
+def test_line_rule_waits_for_newline_and_preserves_reader_newline():
+    plan = routed_plan({"from": "text", "line_prefixed": "THINK: ", "remove": True})
     stream = plan.stream()
     assert stream.feed("THINK: first") == []
     events = stream.feed(" line\n<answer>\nok\n</answer>")
@@ -104,7 +104,7 @@ def test_line_routing_waits_for_newline_and_preserves_lens_newline():
 
 
 def test_channel_part_deltas_coalesce_and_stream():
-    plan = routed_plan({"from": "channel:thinking"})
+    plan = routed_plan({"from": "part:thinking"})
     stream = plan.stream()
     assert stream.feed({"type": "thinking", "text": "  rea"}) == [
         {"kind": "field_started", "field": "reasoning"},
@@ -116,7 +116,7 @@ def test_channel_part_deltas_coalesce_and_stream():
     assert result.values == {"answer": "ok", "reasoning": "reason"}
 
 
-def test_pattern_routing_buffers_only_its_field_when_non_consuming():
+def test_pattern_rule_buffers_only_its_field_when_not_removing():
     plan = routed_plan({"from": "text", "pattern": r"THINK\((.*?)\)"})
     assert plan.describe()["streaming"]["mode"] == "hybrid"
     stream = plan.stream()
@@ -127,26 +127,26 @@ def test_pattern_routing_buffers_only_its_field_when_non_consuming():
     assert deltas(result.events) == {"reasoning": "why"}
 
 
-def test_consuming_pattern_buffers_lens_too_and_says_why():
-    plan = routed_plan({"from": "text", "pattern": r"THINK\((.*?)\)", "consume": True})
+def test_removing_pattern_buffers_reader_too_and_says_why():
+    plan = routed_plan({"from": "text", "pattern": r"THINK\((.*?)\)", "remove": True})
     description = plan.describe()["streaming"]
     assert description["mode"] == "buffered"
-    assert "consuming pattern" in description["lens"]["reason"]
+    assert "removing pattern" in description["reader"]["reason"]
     stream = plan.stream()
     assert stream.feed("THINK(why)<answer>\nyes\n</answer>") == []
     result = stream.finish()
     assert result.values == {"answer": "yes", "reasoning": "why"}
 
 
-def test_multiple_routings_to_one_field_buffer_to_preserve_declaration_order():
-    strategy = lmcc.Strategy(visible=False, routings=[
-        {"from": "text", "between": ["<late>", "</late>"], "to": "@role"},
-        {"from": "text", "between": ["<early>", "</early>"], "to": "@role"}])
+def test_multiple_find_rules_to_one_field_buffer_to_preserve_declaration_order():
+    transport = lmcc.Transport(in_template=False, find=[
+        {"from": "text", "between": ["<late>", "</late>"], "to": "@purpose"},
+        {"from": "text", "between": ["<early>", "</early>"], "to": "@purpose"}])
     sig = lmcc.signature("x", inputs={"q": str},
-                         outputs={"notes": lmcc.field(str, role="notes"), "answer": str})
+                         outputs={"notes": lmcc.field(str, purpose="notes"), "answer": str})
     adapter = lmcc.adapter(messages=[
         lmcc.system("{% for f in outputs %}<{f.name}>{f.value}</{f.name}>{% endfor %}"),
-        lmcc.user("{q}")], strategies={"notes": strategy})
+        lmcc.user("{q}")], transports={"notes": transport})
     plan = adapter.bind(sig)
     stream = plan.stream()
     events = stream.feed("<early>E</early><late>L</late><answer>A</answer>")
@@ -156,12 +156,12 @@ def test_multiple_routings_to_one_field_buffer_to_preserve_declaration_order():
     assert deltas(result.events)["notes"] == "L\nE"
 
 
-def test_vocabulary_lens_without_streaming_face_buffers_visibly():
+def test_vocabulary_reader_without_streaming_face_buffers_visibly():
     import lmcc_std
     registry = lmcc.Registry()
     lmcc_std.install(registry)
     sig = lmcc.signature("x", inputs={"q": str}, outputs={"answer": str})
-    adapter = lmcc.adapter(messages=[lmcc.user("{q}")], parse={"kind": "json_object"})
+    adapter = lmcc.adapter(messages=[lmcc.user("{q}")], reader={"kind": "json_object"})
     plan = adapter.bind(sig, {"native_structured_output": True}, registry=registry)
     assert plan.describe()["streaming"]["mode"] == "buffered"
     stream = plan.stream()
@@ -186,7 +186,7 @@ class PipeReducer:
         return {name: bits[i] for i, name in enumerate(self.names)}
 
 
-class PipeLens(Lens):
+class PipeReader(Reader):
     def split(self, text, field_names):
         return dict(zip(field_names, text.split("|")))
 
@@ -197,11 +197,11 @@ class PipeLens(Lens):
         return PipeReducer(field_names)
 
 
-def test_vocabulary_lens_optional_streaming_face_is_checked_against_batch():
+def test_vocabulary_reader_optional_streaming_face_is_checked_against_batch():
     registry = lmcc.Registry()
-    registry.register_lens("pipe", lambda spec: PipeLens())
+    registry.register_reader("pipe", lambda spec: PipeReader())
     sig = lmcc.signature("x", inputs={"q": str}, outputs={"a": str, "b": str})
-    plan = lmcc.adapter(messages=[lmcc.user("{q}")], parse={"kind": "pipe"}).bind(sig, registry=registry)
+    plan = lmcc.adapter(messages=[lmcc.user("{q}")], reader={"kind": "pipe"}).bind(sig, registry=registry)
     assert plan.describe()["streaming"]["mode"] == "incremental"
     stream = plan.stream()
     assert deltas(stream.feed("first|sec")) == {"a": "first"}
@@ -210,20 +210,20 @@ def test_vocabulary_lens_optional_streaming_face_is_checked_against_batch():
     assert deltas(result.events) == {"b": "sec"}
 
 
-class MissingPipeLens(PipeLens):
+class MissingPipeReader(PipeReader):
     def stream(self, field_names):
         return PipeReducer(field_names[:1])
 
 
-def test_vocabulary_lens_stream_must_report_every_batch_field():
+def test_vocabulary_reader_stream_must_report_every_batch_field():
     registry = lmcc.Registry()
-    registry.register_lens("bad_pipe", lambda spec: MissingPipeLens())
+    registry.register_reader("bad_pipe", lambda spec: MissingPipeReader())
     sig = lmcc.signature("x", inputs={"q": str}, outputs={"a": str, "b": str})
-    plan = lmcc.adapter(messages=[lmcc.user("{q}")], parse={"kind": "bad_pipe"}).bind(
+    plan = lmcc.adapter(messages=[lmcc.user("{q}")], reader={"kind": "bad_pipe"}).bind(
         sig, registry=registry)
     stream = plan.stream()
     stream.feed("first|second")
-    with pytest.raises(RuntimeError, match="lens stream fields"):
+    with pytest.raises(RuntimeError, match="reader stream fields"):
         stream.finish()
 
 
@@ -261,24 +261,24 @@ def test_stream_state_misuse_is_not_a_contract_refusal():
 #
 # The harness replays every corpus response at every single split. These
 # tests add random multi-chunk splits over random replies, including
-# marker fragments and Unicode, against the same plan set the Go kernel
-# fuzzes (go/lmcc/stream_test.go): names, templates and routings match.
+# marker tell and Unicode, against the same plan set the Go kernel
+# fuzzes (go/lmcc/stream_test.go): names, templates and find_rules match.
 
 import random
 import time
 
 
-def fuzz_plan(template, routings=None, outputs=None):
+def fuzz_plan(template, find_rules=None, outputs=None):
     outputs = dict(outputs or {"answer": str})
-    strategies = None
-    if routings is not None:
-        outputs = {"reasoning": lmcc.field(str, role="reasoning"), **outputs}
-        strategies = {"reasoning": lmcc.Strategy(
-            visible=False, routings=[{**r, "to": "@role"} for r in routings])}
+    transports = None
+    if find_rules is not None:
+        outputs = {"reasoning": lmcc.field(str, purpose="reasoning"), **outputs}
+        transports = {"reasoning": lmcc.Transport(
+            in_template=False, find=[{**r, "to": "@purpose"} for r in find_rules])}
     sig = lmcc.signature("x", inputs={"q": str}, outputs=outputs)
     adapter = lmcc.adapter(messages=[lmcc.system(template), lmcc.user("{q}")],
-                           strategies=strategies,
-                           extensions=LEGACY if any("pattern" in r for r in routings or []) else None)
+                           transports=transports,
+                           extensions=LEGACY if any("pattern" in r for r in find_rules or []) else None)
     return adapter.bind(sig)
 
 
@@ -293,16 +293,16 @@ def fuzz_plans():
         "tagged_one": fuzz_plan(TAGGED),
         "dspy": fuzz_plan(DSPY, outputs={"reasoning": str, "answer": str}),
         "markdown": fuzz_plan(MARKDOWN, outputs={"reasoning": str, "answer": str}),
-        "between": fuzz_plan(TAGGED, [{"from": "text", "between": ["<think>", "</think>"], "consume": True}]),
+        "between": fuzz_plan(TAGGED, [{"from": "text", "between": ["<think>", "</think>"], "remove": True}]),
         "between_keep": fuzz_plan(TAGGED, [{"from": "text", "between": ["<think>", "</think>"]}]),
-        "between_same": fuzz_plan(TAGGED, [{"from": "text", "between": ["```", "```"], "consume": True}]),
-        "line": fuzz_plan(TAGGED, [{"from": "text", "line_prefixed": "THINK: ", "consume": True}]),
+        "between_same": fuzz_plan(TAGGED, [{"from": "text", "between": ["```", "```"], "remove": True}]),
+        "line": fuzz_plan(TAGGED, [{"from": "text", "line_prefixed": "THINK: ", "remove": True}]),
         "line_keep": fuzz_plan(TAGGED, [{"from": "text", "line_prefixed": "THINK: "}]),
         "pattern": fuzz_plan(TAGGED, [{"from": "text", "pattern": r"T\((.*?)\)"}]),
-        "pattern_consume": fuzz_plan(TAGGED, [{"from": "text", "pattern": r"T\((.*?)\)", "consume": True}]),
-        "channel": fuzz_plan(TAGGED, [{"from": "channel:thinking"}]),
+        "pattern_remove": fuzz_plan(TAGGED, [{"from": "text", "pattern": r"T\((.*?)\)", "remove": True}]),
+        "channel": fuzz_plan(TAGGED, [{"from": "part:thinking"}]),
         "double": fuzz_plan(TAGGED, [{"from": "text", "between": ["<late>", "</late>"]},
-                                    {"from": "text", "line_prefixed": "N: ", "consume": True}]),
+                                    {"from": "text", "line_prefixed": "N: ", "remove": True}]),
     }
 
 
@@ -389,7 +389,7 @@ def test_fuzz_random_chunking_refines_batch():
             chunks = gen.chunks(response)
         where = f"run {run} {name}: {response!r} as {chunks!r}"
         try:
-            batch = ("ok", plan._parse_with_spans(response))
+            batch = ("ok", plan._parse_with_captures(response))
         except lmcc.Refusal as err:
             batch = ("refuse", err.describe())
         stream = plan.stream()
@@ -407,7 +407,7 @@ def test_fuzz_random_chunking_refines_batch():
             assert batch[1] == streamed[1], where
             continue
         successes += 1
-        values, spans = batch[1]
+        values, captures = batch[1]
         assert streamed[1] == values, where
         joined, started, done = {}, {}, {}
         for e in events:
@@ -419,10 +419,10 @@ def test_fuzz_random_chunking_refines_batch():
             else:
                 done[e["field"]] = done.get(e["field"], 0) + 1
                 assert e["value"] == values[e["field"]], where
-        for field, span in spans.items():
-            assert joined.get(field, "") == span.text, where
+        for field, capture in captures.items():
+            assert joined.get(field, "") == capture.text, where
             assert started.get(field) == 1 and done.get(field) == 1, where
-        assert set(started) <= set(spans) and set(done) <= set(spans), where
+        assert set(started) <= set(captures) and set(done) <= set(captures), where
     assert successes > 500, "the generator lost its coverage"
 
 

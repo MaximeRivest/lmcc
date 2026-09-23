@@ -6,12 +6,12 @@ action without reading the English hint. Try again.
 Every refusal that fires at construct, signature, load, or bind carries
 a `fix`: `{"action": ..., ...parameters}`. The action vocabulary is
 closed ([errors.md, "Fix actions"](../../contract/spec/errors.md)).
-Parameters are names: a field, a role, a fact, a vocabulary name, a
+Parameters are names: a field, a purpose, a fact, a vocabulary name, a
 path into the artifact.
 
 ## 1. An artifact that needs two repairs
 
-This entry references the `json` format and a strategy that needs a
+This entry references the `json` format and a transport that needs a
 capability. Load it with an empty registry and no declared facts.
 
 ```python
@@ -27,7 +27,7 @@ class Person:
 
 @dataclasses.dataclass
 class Out:
-    reasoning: lmcc.Role["reasoning", str]
+    reasoning: lmcc.Purpose["reasoning", str]
     person: Person
 
 @lmcc.fn
@@ -35,13 +35,13 @@ def extract(text: str) -> Out:
     """Extract the person."""
 
 entry = {
-    "name": "x", "versions": {"kernel": "0.6.0", "vocab": {}},
+    "name": "x", "versions": {"kernel": "0.7.0", "vocab": {}},
     "template": [
         {"role": "system", "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"},
         {"role": "user", "text": "{text}"}],
-    "parse": {"kind": "derived"},
-    "strategies": {"reasoning": {"requires": ["native_reasoning"], "visible": False,
-                                 "routings": [{"from": "channel:thinking", "to": "@role"}]}},
+    "reader": {"kind": "derived"},
+    "transports": {"reasoning": {"requires": ["native_reasoning"], "in_template": False,
+                                 "find": [{"from": "part:thinking", "to": "@purpose"}]}},
     "formats": {"Person": {"use": "json"}},
 }
 ```
@@ -103,7 +103,7 @@ try:
     extract.bind(lmcc.load(no_anchor, registry=registry), capabilities=capabilities, registry=registry)
     raise AssertionError("should have refused")
 except lmcc.Refusal as r:
-    assert r.code == "not-lensable"
+    assert r.code == "not-readable"
     assert r.fix == {"action": "edit-template", "path": "template[0]", "field": "person"}
 ```
 
@@ -118,8 +118,8 @@ try:
 except lmcc.Refusal as r:
     assert r.describe() == {
         "code": "version-incompatible",
-        "hint": "kernel: artifact needs 0.9.0, this implementation provides 0.6.0",
-        "fix": {"action": "match-version", "entry": "kernel", "needs": "0.9.0", "provides": "0.6.0"},
+        "hint": "kernel: artifact needs 0.9.0, this implementation provides 0.7.0",
+        "fix": {"action": "match-version", "entry": "kernel", "needs": "0.9.0", "provides": "0.7.0"},
         "partial": None}
 ```
 
@@ -133,9 +133,9 @@ met:
 
 | action | parameters | seen with |
 |---|---|---|
-| `install-vocabulary` | `kind`, `name` | `unknown-format`, `unknown-strategy`, `unknown-parse-kind` |
+| `install-vocabulary` | `kind`, `name` | `unknown-format`, `unknown-transport`, `unknown-reader` |
 | `declare-capability` | `fact` | `capability-missing` |
-| `edit-template` | `path`, `slot`?, `field`? | `field-uncovered`, `not-lensable`, `unknown-slot` |
+| `edit-template` | `path`, `slot`?, `field`? | `field-uncovered`, `not-readable`, `unknown-slot` |
 | `match-version` | `entry`, `needs`, `provides` | `version-incompatible` |
 
 Refusals at render and parse carry `fix: None`. What to do about a bad

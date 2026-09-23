@@ -7,7 +7,7 @@
  "entry": {
   "name": "derived_v1",
   "versions": {
-   "kernel": "0.6.0",
+   "kernel": "0.7.0",
    "vocab": {}
   },
   "template": [
@@ -20,18 +20,18 @@
     "text": "{q}"
    }
   ],
-  "parse": {
+  "reader": {
    "kind": "derived"
   },
-  "strategies": {
+  "transports": {
    "reasoning": {
-    "visible": false,
-    "routings": [
+    "in_template": false,
+    "find": [
      {
       "from": "text",
       "pattern": "Thought: ([^\\n]+)",
-      "to": "@role",
-      "consume": true
+      "to": "@purpose",
+      "remove": true
      }
     ]
    }
@@ -53,7 +53,7 @@
     "shape": {
      "type": "string"
     },
-    "role": "reasoning"
+    "purpose": "reasoning"
    },
    {
     "name": "answer",
@@ -69,7 +69,7 @@
   "fix": {
    "action": "declare-extension",
    "family": "pattern",
-   "path": "strategies['reasoning'].routings[0]"
+   "path": "transports['reasoning'].find[0]"
   },
   "at": "load"
  }

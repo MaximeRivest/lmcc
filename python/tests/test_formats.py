@@ -11,7 +11,7 @@ from lmcc import formats as F
 
 PATTERN = lmcc.adapter(messages=[
     lmcc.system("{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"),
-    lmcc.demos(), lmcc.user("{text}")])
+    lmcc.turns(), lmcc.user("{text}")])
 
 
 @dataclasses.dataclass
@@ -35,11 +35,11 @@ def test_type_binding_at_runtime_is_the_lmcc_format_surface():
     reg = lmcc.Registry()
     reg.format(Person,
                write=lambda p: json.dumps(p.__dict__),
-               read=lambda span: Person(**json.loads(span.text)),
+               read=lambda capture: Person(**json.loads(capture.text)),
                describe=lambda: "name and age, as JSON")
     plan = extract.bind(PATTERN, registry=reg)
     assert plan.describe()["outputs"][0]["resolved_by"] == "runtime:Person"
-    req = plan.render(text="t", demos=[{"text": "d", "extract": Person("Ann", 41)}])
+    req = plan.render(text="t", turns=[plan.example({"text": "d"}, {"extract": Person("Ann", 41)})])
     assert req.system == "<extract>\nname and age, as JSON\n</extract>\n"
     assert req.messages[1]["parts"][0]["text"] == '<extract>\n{"name": "Ann", "age": 41}\n</extract>'
     assert plan.parse('<extract>\n{"name": "Bo", "age": 7}\n</extract>') == {"extract": Person("Bo", 7)}
@@ -55,7 +55,7 @@ def test_resolution_order_artifact_type_then_structural_then_runtime_then_kernel
     plan = adp.bind(sig, registry=reg)
     d = {o["name"]: o["resolved_by"] for o in plan.describe()["outputs"]}
     assert d == {"a": "artifact:Name", "b": "artifact:integer"}
-    assert plan.render(text="t", demos=[{"text": "d", "a": "ann", "b": 3}]).messages[1]["parts"][0]["text"] == \
+    assert plan.render(text="t", turns=[plan.example({"text": "d"}, {"a": "ann", "b": 3})]).messages[1]["parts"][0]["text"] == \
         "<a>\nANN\n</a>\n<b>\n<3>\n</b>"
     plain = lmcc.adapter(messages=PATTERN.template).bind(sig, registry=reg)
     assert {o["resolved_by"] for o in plain.describe()["outputs"]} == {"kernel"}
@@ -94,11 +94,11 @@ def test_composing_format_refuses_at_its_path():
         def write(self, value, field):
             return "\n".join("- " + str(v) for v in value)
 
-        def read(self, span, field):
+        def read(self, capture, field):
             items = field.shape.get("items", {})
             if F.kernel_default(items) is None:
                 lmcc.refuse("no-format", f"{field.name}[]: elements of shape {items} have no format")
-            return [lmcc.core.read_value(items, line[2:], where=field.name) for line in span.text.split("\n")]
+            return [lmcc.core.read_value(items, line[2:], where=field.name) for line in capture.text.split("\n")]
 
     reg.register_format("lines", lambda o: Lines())
     sig = lmcc.signature("x", inputs={"text": str}, outputs={"rows": list[int]})
@@ -128,17 +128,17 @@ def test_ship_and_load_udf():
     def write(p, f):
         return p["name"] + " (" + str(p["age"]) + ")"
 
-    def read(span, f):
-        name, _, rest = span.text.rpartition(" (")
+    def read(capture, f):
+        name, _, rest = capture.text.rpartition(" (")
         return {"name": name, "age": int(rest[:-1])}
 
     fmt = F.make(write=write, read=read, accepts=("Person",))
     entry = F.ship(fmt, authored_by="tests")
-    assert set(entry) >= {"language", "write", "read", "sha256", "accepts", "emits", "round_trip", "reads"}
+    assert set(entry) >= {"language", "write", "read", "sha256", "accepts", "writes", "round_trip", "reads"}
     assert entry["sha256"] == F.digest({"write": entry["write"], "read": entry["read"]})
     loaded = F.load_udf(entry, where="formats['Person']")
     assert loaded.write({"name": "Ann", "age": 41}, None) == "Ann (41)"
-    assert loaded.read(lmcc.Span.of_text("Bo (7)"), None) == {"name": "Bo", "age": 7}
+    assert loaded.read(lmcc.Capture.of_text("Bo (7)"), None) == {"name": "Bo", "age": 7}
 
     tampered = {**entry, "sha256": "0" * 64}
     with pytest.raises(lmcc.Refusal) as err:
@@ -173,8 +173,8 @@ def test_artifact_with_udf_loads_only_when_allowed():
     def write(p, f):
         return str(p)
 
-    def read(span, f):
-        return span.text
+    def read(capture, f):
+        return capture.text
 
     adp = lmcc.adapter(messages=PATTERN.template, formats={"Person": F.make(write=write, read=read)})
     entry = adp.dump(registry=lmcc.Registry())
@@ -186,11 +186,11 @@ def test_artifact_with_udf_loads_only_when_allowed():
     assert again.dump(registry=lmcc.Registry(allow_udf=True)) == entry
 
 
-def test_demo_not_renderable_for_lossy_formats():
+def test_turn_not_renderable_for_lossy_formats():
     reg = lmcc.Registry()
     reg.register_format("lossy", lambda o: F.make(write=lambda v: "x", read=lambda s: s.text, round_trip=False))
     sig = lmcc.signature("x", inputs={"text": str}, outputs={"a": str})
     plan = lmcc.adapter(messages=PATTERN.template, formats={"string": "lossy"}).bind(sig, registry=reg)
     with pytest.raises(lmcc.Refusal) as err:
-        plan.render(text="t", demos=[{"text": "d", "a": "v"}])
-    assert err.value.code == "demo-not-renderable"
+        plan.render(text="t", turns=[plan.example({"text": "d"}, {"a": "v"})])
+    assert err.value.code == "turn-not-renderable"
