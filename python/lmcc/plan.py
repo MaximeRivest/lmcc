@@ -586,10 +586,23 @@ class Plan:
         that renders an input — the cache-stable bytes."""
         stop = None
         input_names = {f.name for f in self.visible_inputs}
-        for i, (msg, nodes) in enumerate(self.adapter.compiled_messages()):
+        compiled = self.adapter.compiled_messages()
+        for i, (msg, nodes) in enumerate(compiled):
             if nodes is not None and _depends_on_inputs(nodes, input_names):
                 stop = i
                 break
+        # an input put into a message makes that message depend on inputs too
+        put_roles = {place.split(":", 1)[1] for fname, place in self.puts
+                     if place.startswith("message:")
+                     and self.signature.field_named(fname).direction == "input"}
+        for i, (msg, nodes) in enumerate(compiled):
+            if nodes is not None and msg["role"] in put_roles:
+                stop = i if stop is None else min(stop, i)
+                break
+        system_varies = "system" in put_roles or (stop is not None and any(
+            nodes is not None and msg["role"] == "system" for msg, nodes in compiled[stop:]))
+        if system_varies:        # the system leads the request: nothing before it is stable
+            return {"messages": []}
         rendered = self._render(Turn(self.fingerprint, {}), self._slot_values(turns), stop_at=stop)
         out: dict = {}
         if rendered.system is not None:
@@ -794,6 +807,17 @@ class Plan:
         if d["request_settings"]:
             lines.append(f"request_settings: {d['request_settings']}")
         return "\n".join(lines)
+
+
+def _bare_slots(nodes) -> set[str]:
+    """Field names placed by bare slots, including inside guards."""
+    out: set[str] = set()
+    for n in nodes:
+        if isinstance(n, Slot) and "." not in n.path:
+            out.add(n.path)
+        elif isinstance(n, Guard):
+            out |= _bare_slots(n.body)
+    return out
 
 
 def _depends_on_inputs(nodes, input_names: set[str]) -> bool:
@@ -1209,6 +1233,28 @@ def bind(adapter: Adapter, sig: core.SignatureCore, capabilities: dict, registry
         _merge_setting(plan, "config.stop", list(stops), owner="(skeleton)", setting_owner=setting_owner,
                        conflict_path=f"transports[{setting_owner.get('config.stop')!r}].request_settings['config.stop']")
 
+    # 4b. a put into the request may not share a path with a fixed setting
+    # or another put: the later write would silently win (plan 09 G15).
+    def overlaps(a: str, b: str) -> bool:
+        return a == b or a.startswith(b + ".") or b.startswith(a + ".")
+    fixed = [path for path, _ in setting_leaves(plan.request_settings)]
+    seen: list[tuple[str, str]] = []
+    for fname, place in plan.puts:
+        if not place.startswith("request."):
+            continue
+        path = place[len("request."):]
+        where = f"transports[{sig.field_named(fname).purpose.split('.')[0]!r}].put"
+        clash = next((q for q in fixed if overlaps(path, q)), None)
+        other = next((g for g, q in seen if overlaps(path, q)), None)
+        if clash is not None or other is not None:
+            refuse("setting-conflict",
+                   f"field {fname!r} is put at request {path!r}, which "
+                   + (f"the request setting {clash!r} also sets" if clash is not None
+                      else f"field {other!r} is also put at")
+                   + " — one would silently overwrite the other",
+                   fix={"action": "edit-entry", "path": where})
+        seen.append((fname, path))
+
     # 5. template validation + input coverage.
     known = {f.name for f in sig.fields}
     input_names = {f.name for f in plan.visible_inputs}
@@ -1224,7 +1270,19 @@ def bind(adapter: Adapter, sig: core.SignatureCore, capabilities: dict, registry
                + ", ".join(sorted(repr(n) for n in uncovered)),
                fix={"action": "edit-template", "path": "template", "field": min(uncovered)})
 
-    # 6. a found field that is also a in_template section is ambiguous.
+    # 6. a field the template writes and a transport also carries is ambiguous:
+    # an output both read from its section and found; an input both in a
+    # slot and put elsewhere (it would be sent twice; plan 09 F14).
+    put_inputs = {fname for fname, _ in plan.puts
+                  if sig.field_named(fname).direction == "input"}
+    for i, (msg, nodes) in enumerate(adapter.compiled_messages()):
+        if nodes is None:
+            continue
+        for fname in sorted(_bare_slots(nodes) & put_inputs):
+            refuse("field-double-covered",
+                   f"template[{i}]: input {fname!r} has a slot here and is also put by its "
+                   f"transport — it would be sent twice; drop the slot or the put",
+                   fix={"action": "edit-template", "path": f"template[{i}]", "field": fname})
     visible_out = {f.name for f in plan.visible_outputs}
     for fname, _ in plan.find_rules:
         if fname in visible_out:

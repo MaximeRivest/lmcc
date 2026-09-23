@@ -30,8 +30,8 @@ parameters, is breaking.
 | `not-readable` | bind | `edit-template` | the template cannot be read backwards; hint names the defect |
 | `purpose-ambiguous` | bind | `edit-signature` | one purpose on two fields |
 | `field-uncovered` | bind | `edit-template` | a visible input never rendered by the template |
-| `field-double-covered` | bind | `edit-entry` | a field is both in the template and found by a transport |
-| `setting-conflict` | bind | `edit-entry` | two transports, or a reader and a transport, set one request-control leaf (`config.<field>`, `tools`) to different values; the same value from both is not a conflict |
+| `field-double-covered` | bind | `edit-entry`, `edit-template` | an output is both in the template and found by a transport (`edit-entry`); an input has a bare slot and is also `put` (`edit-template`, naming the message and field) |
+| `setting-conflict` | bind | `edit-entry` | two transports, or a reader and a transport, set one request-control leaf (`config.<field>`, `tools`) to different values; the same value from both is not a conflict; or a `put` into the request shares a path (equal, or one inside the other) with a fixed setting or another `put`, fix at that put |
 | `no-format` | bind (or, for composing formats, write/read) | `bind-format` | a structured shape with no format; hint carries the path (`answer`, `answer[].age`) |
 | `format-shape-mismatch` | bind | `bind-format` | a format bound to a field whose shape it does not accept |
 | `format-direction` | bind | `bind-format` | an input-only format on an output field, or the reverse |

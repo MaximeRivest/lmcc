@@ -214,7 +214,10 @@ close or tail]}` (a `grammar` face is a stated gap). `prefix()` is the
 rendered request prefix that does not depend on inputs
 (`{"system"?, "messages"}`: everything before the first message that
 renders an input, turn slots included; `prefix(turns?)` takes the same
-slot values as `render`) — the cache-stable bytes.
+slot values as `render`) — the cache-stable bytes. A message an input is
+`put` into (§6) renders an input too. When the system text depends on
+inputs, nothing is stable: the prefix is `{"messages": []}` (cases 170,
+171; plan 09 F19).
 
 ## 3a. Turns: examples, past exchanges, and the one in progress
 
@@ -664,8 +667,14 @@ instead of a slot; `tell` text appends to the named message (created if
 absent, system first). Both target the template's own messages, never a
 message a turn slot wrote: the current input's sources never land in a
 past turn's question; request_settings deep-merge into the request settings (§3;
-`setting-conflict` on a disagreeing leaf).
-A field both in the template and found by a transport is `field-double-covered`.
+`setting-conflict` on a disagreeing leaf). A `put` into the request whose
+path equals, contains or lies inside a fixed setting's path (the
+skeleton's `config.stop` included) or another `put`'s refuses
+`setting-conflict` at bind: its value is only known at render, and one
+write would silently replace the other (case 173; plan 09 G15).
+A field both in the template and found by a transport is `field-double-covered`;
+so is an input with a bare slot (a guard's body included) that a transport
+also `put`s: it would be sent twice (case 172; plan 09 F14).
 
 Batch parse normalizes response parts, before the find rules run, by the same logical-part
 rule as streaming (§8): adjacent same-type text-bearing parts coalesce,
