@@ -6,13 +6,28 @@ build-backend = "setuptools.build_meta"
 name = "lmcc"
 version = "0.8.0"   # equals the kernel version (lmcc.KERNEL_VERSION)
 description = "The language model calling convention: typed signatures to messages and replies to typed values"
+readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
+authors = [{ name = "Maxime Rivest" }]
+keywords = ["llm", "language models", "prompting", "parsing", "structured output"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Libraries",
+]
+
+[project.urls]
+Homepage = "https://github.com/MaximeRivest/lmcc"
+Source = "https://github.com/MaximeRivest/lmcc"
+Specification = "https://github.com/MaximeRivest/lmcc/blob/master/contract/spec/kernel.md"
 
 [project.optional-dependencies]
 dspy = ["dspy>=3.0", "pydantic>=2"]
-# lm15 is not on PyPI yet: a git commit, bumped deliberately (see python/lmcc_lm15/check)
-lm15 = ["lm15 @ git+https://github.com/lm15-dev/lm15-python@33a5c52"]
+# lm15 at an exact release, bumped deliberately (see python/lmcc_lm15/check)
+lm15 = ["lm15==1.0.0rc1"]
 
 [tool.setuptools]
 packages = ["lmcc", "lmcc_std", "lmcc_dspy", "lmcc_lm15"]

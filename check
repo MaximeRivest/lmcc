@@ -80,7 +80,7 @@ EOF
 step "5/6 dspy frontend: feature catalog against a real DSPy"
 python/lmcc_dspy/check
 
-step "6/6 lm15 bridge: typed requests, responses and streams against a real lm15 (pinned commit)"
+step "6/6 lm15 bridge: typed requests, responses and streams against a real lm15 (pinned release)"
 python/lmcc_lm15/check
 
 printf '\nALL GREEN\n'

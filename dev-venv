@@ -11,7 +11,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 if command -v uv >/dev/null 2>&1; then UV=uv; else UV="nix run nixpkgs#uv --"; fi
-LM15_PIN=$(grep -o '"lm15 @ [^"]*"' python/pyproject.toml | tr -d '"')
+LM15_PIN=$(grep -o '"lm15[=@][^"]*"' python/pyproject.toml | tr -d '"')
 [ -x .venv/bin/python ] || $UV venv -q .venv --python 3.12
 $UV pip install -q --python .venv/bin/python -e ./python "$LM15_PIN" ipython jedi
 .venv/bin/python -c 'import lmcc, lmcc_std, lmcc_lm15, lm15; print("lmcc", lmcc.__version__, "| lm15", lm15.__version__, "| python", __import__("sys").version.split()[0])'
