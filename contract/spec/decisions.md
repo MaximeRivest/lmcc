@@ -1027,6 +1027,15 @@ switch (kernel 0.8, before release).** Ratified with the maintainer on
 - **Replay.** A recorded reply that needed a value repair is written back
   from its values, like one that needed a marker repair.
 
+Found live the same day (`python/integration/lm15_repairs.py`, 9
+models, 3 layouts): frontier models wrote every layout exactly;
+`gpt-oss-20b` once put a label mid-line (`... experience. Sentiment:
+negative`), so a marker's leading line feeds became optional (case 169);
+small models (3B–12B) mostly abandoned the markers altogether, which
+stays a refusal — reading bare values by their order would be a guess —
+now with a hint that says so. A reasoning model that spent its tokens
+thinking was cut off and refused `parse-truncated`, as intended.
+
 Costs, stated: two passes and two holding stream stages; `describe()`
 gains `strict` and the stream's `repairs` entry; `reasoning_tags` moves to
 0.3.0, so artifacts pinning 0.2.0 refuse `version-incompatible`. Not done:

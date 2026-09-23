@@ -9,7 +9,11 @@ as a combinator pack: misspelled markers are repaired by one rule (kernel
 §4a), every repair and old tolerance is reported by `plan.read`, and a
 reply cut at its length limit refuses `parse-truncated`. What this plan
 still covers: declared recovery beyond markers (value spellings, fenced
-JSON, find rule delimiters), with the census gate below.
+JSON), with the census gate below. D-43 added value slips and opt-in
+delimiter repair. First live evidence (2026-09-23, 9 models × 3 layouts ×
+3 tasks, `python/integration/lm15_repairs.py`): frontier models slipped
+never; one mid-line label (now repaired); small models abandon the
+layout, which no repair should read.
 
 **Motivation.** The lens inverts what the template wrote. Real replies
 add sloppiness the template never wrote: case-drifted labels, fenced

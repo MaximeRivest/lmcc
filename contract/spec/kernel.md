@@ -494,21 +494,28 @@ marker is **repairable** when its key is not empty and no other marker string of
 and lowercase ASCII, remembering each remaining character's position.
 A **loose occurrence** of a marker is a match of its key in that
 sequence, found leftmost first and without overlap (the next search
-starts after the match). Its **core** runs in the reader text from the
+starts after the match). A marker's **leading line feeds** are left out
+of the key searched: `\nSentiment:` also matches `Sentiment:` written in
+the middle of a line (a live reply from `gpt-oss-20b` did exactly this,
+case 169). Its **core** runs in the reader text from the
 first matched character to the last. The line feed is not ignorable, so
 a core crosses a line only where its marker does. Its **span** is the
 core widened over decoration:
 
-- **left** — the ignorable characters directly before the core's first
-  character that is not a line feed (a marker that starts a line, such as
-  `\nAnswer:`, keeps its line feed outside the decoration), back to the
-  previous character that is not ignorable, or the start of text. Among them, the decoration starts at the first `*`, `_` or `#` whose
+- **left** — the ignorable characters directly before the core, back to
+  the previous character that is not ignorable, or the start of text. Among them, the decoration starts at the first `*`, `_` or `#` whose
   preceding character is §7a whitespace or the start of text; if there
   is none, there is no left decoration.
 - **right** — when the left decoration holds a `*` or `_`, the run of
   `*` and `_` directly after the core.
 
-The span starts at the earlier of the core's start and the decoration's.
+The span starts at the decoration's start, else the core's; then, for a
+marker with `n` leading line feeds, it widens left over spaces (U+0009,
+U+000B, U+000C, U+000D, U+0020) and up to `n` line feeds directly before
+them, when there are any. So `\n### Answer:` is seen whole, and
+`Sentiment:` mid-line is rewritten to `\nSentiment:`. The streaming stage
+holds a trailing line feed and the spaces after it while such a marker
+could still follow.
 
 **Choosing.** A marker is **written exactly** when it occurs as plain
 text, as §4 searches it, and that occurrence does not lie inside a

@@ -1,5 +1,9 @@
 # The corpus
 
+**A label mid-line (kernel 0.8, D-43).** Case 169 is a real reply from
+`gpt-oss-20b` (shortened), captured by `python/integration/lm15_repairs.py`
+on 2026-09-23: the model wrote `Sentiment:` in the middle of a line.
+
 **Value and delimiter repairs, `strict` (kernel 0.8, D-43).** Cases
 162–168 were authored from kernel §4a and §7a before running them; all
 passed on the first run. 155 and 159 were rewritten from D-42's

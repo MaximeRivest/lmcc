@@ -99,6 +99,17 @@ def test_the_exact_spelling_wins_over_a_mention():
     assert r.values == {"reasoning": "the <ANSWER> tag comes next", "answer": 4} and r.clean
 
 
+def test_a_label_written_mid_line_is_repaired():
+    r = plan(LABELS).read("Reasoning: x, so the Answer: 4")
+    assert r.values == {"reasoning": "x, so the", "answer": 4}
+    assert r.repairs == [{"repair": "marker", "marker": "\nAnswer:", "saw": "Answer:"}]
+
+
+def test_a_mid_line_mention_does_not_beat_a_label_on_its_own_line():
+    r = plan(LABELS).read("Reasoning: the Answer: is below\nAnswer: 4")
+    assert r.values == {"reasoning": "the Answer: is below", "answer": 4} and r.clean
+
+
 def test_a_repair_never_joins_lines():
     assert outcome(plan(LABELS), "Reasoning: x\nAns\nwer: 4")[0] == "refuse"
 

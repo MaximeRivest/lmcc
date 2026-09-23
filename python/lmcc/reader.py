@@ -151,10 +151,11 @@ def repairable_markers(markers: list[str]) -> tuple[list[str], list[str]]:
     """(repairable, unrepaired): markers with a non-empty key that no other
     marker string shares, and the rest, each in first-seen order."""
     distinct = list(dict.fromkeys(m for m in markers if m))
+    key = lambda m: marker_key(m).lstrip("\n")   # noqa: E731
     by_key: dict[str, list[str]] = {}
     for m in distinct:
-        by_key.setdefault(marker_key(m), []).append(m)
-    ok = [m for m in distinct if marker_key(m) and len(by_key[marker_key(m)]) == 1]
+        by_key.setdefault(key(m), []).append(m)
+    ok = [m for m in distinct if key(m) and len(by_key[key(m)]) == 1]
     return ok, [m for m in distinct if m not in ok]
 
 
@@ -168,20 +169,32 @@ def decoration_start(text: str, run_start: int, core_start: int) -> int | None:
     return None
 
 
+HORIZONTAL = frozenset(" \t\x0b\x0c\r")
+
+
 def occurrence_span(text: str, core_start: int, core_end: int,
-                    run_start: int, word_start: int) -> tuple[int, int]:
-    """The span of a loose occurrence: its core widened over decoration.
-    Decoration sits before the core's first character that is not a line
-    feed (``word_start``, whose ignorable run starts at ``run_start``): a
-    marker that begins a line keeps its line feed outside the decoration."""
-    left = decoration_start(text, run_start, word_start)
-    if left is None:
-        return core_start, core_end
-    end = core_end
-    if any(c in EMPHASIS for c in text[left:word_start]):
-        while end < len(text) and text[end] in EMPHASIS:
-            end += 1
-    return min(core_start, left), end
+                    run_start: int, lead: int) -> tuple[int, int]:
+    """The span of a loose occurrence (kernel §4a): its core widened over
+    decoration, then over the line feeds the marker starts with (``lead``)
+    when the text has them directly before it (spaces between allowed)."""
+    left = decoration_start(text, run_start, core_start)
+    start, end = core_start, core_end
+    if left is not None:
+        start = left
+        if any(c in EMPHASIS for c in text[left:core_start]):
+            while end < len(text) and text[end] in EMPHASIS:
+                end += 1
+    if lead:
+        q = start
+        while q > 0 and text[q - 1] in HORIZONTAL:
+            q -= 1
+        taken = 0
+        while taken < lead and q > 0 and text[q - 1] == "\n":
+            q -= 1
+            taken += 1
+        if taken:
+            start = q
+    return start, end
 
 
 def _normalized(text: str) -> tuple[str, list[int], list[int]]:
@@ -204,17 +217,17 @@ def _normalized(text: str) -> tuple[str, list[int], list[int]]:
 def loose_occurrences(text: str, marker: str, norm=None) -> list[tuple[int, int]]:
     """Every loose occurrence of ``marker`` as its span (start, end),
     leftmost first, without overlap in the key sequence."""
-    key = marker_key(marker)
+    full = marker_key(marker)
+    key = full.lstrip("\n")        # leading line feeds are layout, not the marker's word
     if not key:
         return []
+    lead = len(full) - len(key)
     chars, pos, runs = norm or _normalized(text)
-    lead = len(key) - len(key.lstrip("\n"))
     out: list[tuple[int, int]] = []
     k = chars.find(key)
     while k >= 0:
         last = k + len(key) - 1
-        w = min(k + lead, last)
-        out.append(occurrence_span(text, pos[k], pos[last] + 1, runs[w], pos[w]))
+        out.append(occurrence_span(text, pos[k], pos[last] + 1, runs[k], lead))
         k = chars.find(key, k + len(key))
     return out
 
@@ -265,9 +278,11 @@ def repair_markers(text: str, markers: list[str]) -> tuple[str, list[dict]]:
 def refuse_missing(raw: dict[str, str], field_names: list[str]) -> None:
     missing = [n for n in field_names if n not in raw]
     if missing:
-        refuse("parse-missing-fields",
-               "reply is missing pattern section(s): " + ", ".join(repr(n) for n in missing),
-               partial=raw)
+        hint = "reply is missing pattern section(s): " + ", ".join(repr(n) for n in missing)
+        if not raw and len(field_names) > 1:
+            hint += (" — it has none of the template's markers: the model did not follow the "
+                     "layout (reading values by their order would be a guess)")
+        refuse("parse-missing-fields", hint, partial=raw)
 
 
 class ReaderResult:

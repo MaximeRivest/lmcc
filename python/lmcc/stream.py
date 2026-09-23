@@ -448,9 +448,10 @@ class _MarkerRepair:
 
     def __init__(self, markers: list[str]):
         self.markers = list(markers)
-        self.keys = [(marker_key(m), m, min(len(marker_key(m)) - len(marker_key(m).lstrip("\n")),
-                                            len(marker_key(m)) - 1))
+        self.keys = [(marker_key(m).lstrip("\n"), m,
+                      len(marker_key(m)) - len(marker_key(m).lstrip("\n")))
                      for m in self.markers]
+        self.lead = max(lead for _, _, lead in self.keys)
         self.longest = max(len(k) for k, _, _ in self.keys)
         self.prefixes = _Prefixes([k for k, _, _ in self.keys])
         self.pieces: list[str] = []
@@ -497,22 +498,31 @@ class _MarkerRepair:
                 n = len(key)
                 if n <= len(self.window) and key[-1] == self.window[-1][0] and \
                         "".join(ch for ch, _, _ in self.window[-n:]) == key:
-                    _, core_start, first_run = self.window[-n]
-                    _, word_start, run = self.window[-n + lead]
-                    self.pending.append((marker, first_run, core_start, word_start, run, i + 1))
+                    _, core_start, run = self.window[-n]
+                    self.pending.append((marker, run, core_start, lead, i + 1))
         # resolve occurrences whose span is known
         waiting = []
         for item in self.pending:
-            marker, first_run, core_start, word_start, run, core_end = item
-            left = decoration_start_at(self._at, run, word_start)
+            marker, run, core_start, lead, core_end = item
+            left = decoration_start_at(self._at, run, core_start)
             end = core_end
-            if left is not None and any(self._at(j) in EMPHASIS for j in range(left, word_start)):
+            if left is not None and any(self._at(j) in EMPHASIS for j in range(left, core_start)):
                 while end < self.length and self._at(end) in EMPHASIS:
                     end += 1
                 if end == self.length:
                     waiting.append(item)
                     continue
-            start = core_start if left is None else min(core_start, left)
+            start = core_start if left is None else left
+            if lead:
+                q = start
+                while q > self.released and self._at(q - 1) in " \t\x0b\x0c\r":
+                    q -= 1
+                taken = 0
+                while taken < lead and q > self.released and self._at(q - 1) == "\n":
+                    q -= 1
+                    taken += 1
+                if taken:
+                    start = q
             if self._text(start, end) != marker:
                 self.held_from = start
                 break
@@ -524,8 +534,14 @@ class _MarkerRepair:
         n = self.prefixes.hold("".join(ch for ch, _, _ in self.window))
         if n:
             limit = min(limit, self.window[-n][2])
-        for _, first_run, _, _, _, _ in self.pending:
-            limit = min(limit, first_run)
+        for _, run, _, _, _ in self.pending:
+            limit = min(limit, run)
+        # a span may take the line feeds (and spaces) just before it: hold them
+        for _ in range(self.lead):
+            while limit > self.released and self._at(limit - 1) in " \t\x0b\x0c\r":
+                limit -= 1
+            if limit > self.released and self._at(limit - 1) == "\n":
+                limit -= 1
         limit = max(limit, self.released)
         out = self.buf[:limit - self.released]
         if out:

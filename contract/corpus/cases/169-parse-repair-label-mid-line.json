@@ -1,0 +1,76 @@
+{
+ "name": "parse-repair-label-mid-line",
+ "kind": "parse",
+ "entry": {
+  "name": "repairs_v1",
+  "versions": {
+   "kernel": "0.8.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\nReasoning: {reasoning}\nSentiment: {sentiment}\nStars: {stars}"
+   },
+   {
+    "role": "user",
+    "text": "{question}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Read the review.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "reasoning",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "sentiment",
+    "direction": "output",
+    "shape": {
+     "enum": [
+      "positive",
+      "negative",
+      "mixed"
+     ]
+    }
+   },
+   {
+    "name": "stars",
+    "direction": "output",
+    "shape": {
+     "type": "integer"
+    }
+   }
+  ]
+ },
+ "response": "Reasoning: A 50-minute wait and cold pasta. This indicates a strongly negative experience. Sentiment: negative  \nStars: 1",
+ "expect": {
+  "values": {
+   "reasoning": "A 50-minute wait and cold pasta. This indicates a strongly negative experience.",
+   "sentiment": "negative",
+   "stars": 1
+  },
+  "repairs": [
+   {
+    "repair": "marker",
+    "marker": "\nSentiment:",
+    "saw": "Sentiment:"
+   }
+  ]
+ }
+}
