@@ -377,7 +377,7 @@ for bad in ("{instruction}\n<answer>\n{answer}\n</answer>",                    #
 
 ```output
 '{instruction}\n<answer>\n{answer}\n</answer>' → Refusal[not-readable]  fix={'action': 'edit-template', 'path': 'template[0]', 'field': 'answer'}
-  field 'answer': no literal text before its hole — nothing anchors the parser; put the field's marker before the hole
+  field 'answer': no literal text before its hole — nothing anchors the parser; put the field's marker before the hole, on
 '{instruction}\n{% for f in outputs %}{f.value}\n{% endfor %}' → Refusal[not-readable]  fix={'action': 'edit-template', 'path': 'template[0]', 'field': 'answer'}
   field 'answer': no literal text before its hole — nothing anchors the parser; put the field's marker before the hole
 ```

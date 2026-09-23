@@ -959,10 +959,13 @@ def _derive_reader(plan: Plan) -> DerivedReader:
         whole = (not loops and len(anchors) == 1
                  and not core.strip(texts.get(("rest", holes[0][1].path), "x")))
         if not core.rstrip(prefix) and not whole:
-            refuse("not-readable",
-                   f"field {name!r}: no literal text before its hole — nothing anchors the "
-                   f"parser; put the field's marker before the hole",
-                   fix={**here, "field": name})
+            hint = (f"field {name!r}: no literal text before its hole — nothing anchors the "
+                    f"parser; put the field's marker before the hole")
+            if not loops:
+                hint += (f", on the same line: a bare slot's marker is the text on its own "
+                         f"line (write 'Answer: {{{name}}}' or '<{name}>{{{name}}}</{name}>', "
+                         f"not a marker on the line above), or use an outputs loop")
+            refuse("not-readable", hint, fix={**here, "field": name})
     seen: dict[str, str] = {}
     for name, prefix, _suffix in anchors:
         key = core.rstrip(prefix)
