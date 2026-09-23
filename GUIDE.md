@@ -142,6 +142,44 @@ batch parsing captured. Regex find rules and readers without a streaming
 face buffer until EOF; `plan.describe()["streaming"]` states every such
 choice and its reason.
 
+### Replies that are almost right
+
+Models misspell the layout they were shown. lmcc reads the reply the
+model actually wrote and says what it repaired. `read` gives the values
+and the repairs; `parse` gives the values alone:
+
+```python
+reading = plan.read("**<Title>**\nDune\n</TITLE>\n<year>\n1965\n</year>\n<confident>\nyes\n</confident>")
+assert reading.values == {"title": "Dune", "year": 1965, "confident": True}
+assert reading.repairs == [
+    {"repair": "marker", "marker": "<title>", "saw": "**<Title>**"},
+    {"repair": "marker", "marker": "</title>", "saw": "</TITLE>"}]
+```
+
+The rule is one sentence: a marker matches ignoring letter case, spaces,
+and markdown's `*`, `_` and `#`, but never across a line. It holds for
+any signature, because it is about the markers, not about field names.
+It never guesses: if the exact marker appears anywhere, the misspelled
+one is just text, and two readings refuse `parse-ambiguous`. Turn it off
+with `reader={"kind": "derived", "markers": "exact"}`.
+
+One thing is never repaired: a reply the provider cut at its length
+limit. Pass the lm15 response (not just its text) and an answer that may
+have been cut refuses `parse-truncated`, instead of reading as finished:
+
+```python
+cut = {"message": {"role": "assistant", "parts": [{"type": "text", "text": "<title>\nDune Mess"}]},
+       "finish_reason": "length"}
+try:
+    plan.parse(cut)
+    raise AssertionError("should have refused")
+except lmcc.Refusal as err:
+    assert err.code == "parse-truncated"
+```
+
+The whole story, streaming included, is
+[how-to 14](docs/howto/14-read-imperfect-replies.md).
+
 ## 5. Refusal is the interface
 
 Every failure has a stable code (`contract/spec/errors.md`), a hint that

@@ -54,7 +54,8 @@ parameters, is breaking.
 | `value-collides` | render | — | a spelled turn value contains a marker the reader or its writer reads |
 | `parse-value` | parse | — | text a kernel-default format cannot read (`+5`, `maybe`, `null` where not nullable) |
 | `parse-missing-fields` | parse | — | the reply lacks fields the reader expects; `partial` carries what was read |
-| `parse-ambiguous` | parse | — | an anchor, close, tail, or JSON member appears twice — refused, never guessed |
+| `parse-ambiguous` | parse | — | an anchor, close, tail, or JSON member appears twice — refused, never guessed; also two repaired marker spans that overlap (kernel §4a) |
+| `parse-truncated` | parse | — | the provider cut the reply (`finish_reason: "length"`) and an output is missing or its capture ran to the end of the text; `partial` carries the outputs that ended before the cut (kernel §4a) |
 | `reader-error` | parse | — | the reply does not fit the reader's document form at all |
 | `response-malformed` | parse | — | the response is neither text nor an object with a content part list, or a part is not an object with string kind and optional string text (also checked at feed) |
 

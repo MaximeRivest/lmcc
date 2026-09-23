@@ -17,6 +17,10 @@ Every LMCC word, one sentence each, in the order you need them. If a sentence he
 | **plan** | The checked result of `bind`. It renders requests and parses replies. |
 | **render** | Build the exact request from input values. Pure: no network, no cost. |
 | **parse** | Turn a reply into typed output values, or refuse. It never guesses. |
+| **read** | `parse` plus the list of repairs the reader made to get the values. |
+| **marker** | Fixed text of the template the reader looks for in a reply, such as `<answer>` or `Answer:`. |
+| **repair** | Reading a misspelled marker (`<Answer>`, `**Answer:**`) as the template's spelling. Always reported, never a guess; `markers: "exact"` turns it off. |
+| **truncated** | A reply the provider cut at its length limit (`finish_reason: "length"`); an output that may be cut refuses `parse-truncated`. |
 | **refusal** | A named error with a `fix`: the next thing to do, as data. |
 
 ## Level 2: your own types

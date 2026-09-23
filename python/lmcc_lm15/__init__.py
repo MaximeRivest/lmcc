@@ -27,10 +27,10 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from lm15 import Config, Message, Request, Response, StreamDeltaEvent
+from lm15 import Config, Message, Request, Response, StreamDeltaEvent, StreamEndEvent
 from lm15.serde import config_to_dict, delta_to_dict, message_to_dict, request_from_dict, response_to_dict
 
-from lmcc.plan import Plan, RenderResult
+from lmcc.plan import Plan, Reading, RenderResult
 from lmcc.stream import StreamResult
 from lmcc.turn import Turn
 
@@ -69,9 +69,15 @@ def request(rendered: RenderResult, *, model: str, config: Config | None = None,
 
 def parse(plan: Plan, response: Response | Message) -> dict:
     """Typed values from an lm15 ``Response`` or assistant ``Message``."""
+    return read(plan, response).values
+
+
+def read(plan: Plan, response: Response | Message) -> Reading:
+    """Typed values and repairs (kernel §4a) from an lm15 ``Response`` or
+    ``Message``; a response cut at its length limit refuses ``parse-truncated``."""
     if isinstance(response, Message):
-        return plan.parse(message_to_dict(response))
-    return plan.parse(response_to_dict(response))
+        return plan.read(message_to_dict(response))
+    return plan.read(response_to_dict(response))
 
 
 def stream(plan: Plan, events: Iterable[object]) -> tuple[list[dict], StreamResult]:
@@ -81,11 +87,14 @@ def stream(plan: Plan, events: Iterable[object]) -> tuple[list[dict], StreamResu
     in order, the ``StreamResult`` from ``finish``)."""
     s = plan.stream()
     out: list[dict] = []
+    finish_reason = None
     for event in events:
+        if isinstance(event, StreamEndEvent):
+            finish_reason = event.finish_reason
         if not isinstance(event, StreamDeltaEvent):
             continue
         out.extend(s.feed(delta_to_dict(event.delta)))
-    result = s.finish()
+    result = s.finish(finish_reason)
     out.extend(result.events)
     return out, result
 
@@ -93,5 +102,6 @@ def stream(plan: Plan, events: Iterable[object]) -> tuple[list[dict], StreamResu
 def step(rendered: RenderResult, response: Response | Message) -> Turn:
     """The rendered turn with this reply recorded as its next model step:
     ``rendered.step`` over lm15's own canonical JSON of the message."""
-    message = response if isinstance(response, Message) else response.message
-    return rendered.step(message_to_dict(message))
+    if isinstance(response, Message):
+        return rendered.step(message_to_dict(response))
+    return rendered.step(response_to_dict(response))   # finish_reason: truncation (§4a)

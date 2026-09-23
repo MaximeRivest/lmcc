@@ -399,7 +399,7 @@ def test_fuzz_random_chunking_refines_batch():
                 events.extend(stream.feed(chunk))
             result = stream.finish()
             events.extend(result.events)
-            streamed = ("ok", result.values)
+            streamed = ("ok", result.values, result.repairs)
         except lmcc.Refusal as err:
             streamed = ("refuse", err.describe())
         assert batch[0] == streamed[0], where
@@ -407,8 +407,9 @@ def test_fuzz_random_chunking_refines_batch():
             assert batch[1] == streamed[1], where
             continue
         successes += 1
-        values, captures = batch[1]
+        values, captures, repairs = batch[1]
         assert streamed[1] == values, where
+        assert streamed[2] == repairs, where
         joined, started, done = {}, {}, {}
         for e in events:
             if e["kind"] == "field_delta":

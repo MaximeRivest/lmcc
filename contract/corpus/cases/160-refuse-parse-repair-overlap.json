@@ -1,0 +1,55 @@
+{
+ "name": "refuse-parse-repair-overlap",
+ "kind": "refuse",
+ "entry": {
+  "name": "repairs_v1",
+  "versions": {
+   "kernel": "0.8.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\nX: {x} END\nLEND: {y}"
+   },
+   {
+    "role": "user",
+    "text": "{question}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Answer the question.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "x",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "y",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "response": "x: 1 end\nlend: 2",
+ "expect": {
+  "code": "parse-ambiguous",
+  "at": "parse"
+ }
+}

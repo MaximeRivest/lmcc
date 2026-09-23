@@ -119,6 +119,17 @@ Two rules keep it honest: a pattern that cannot be read backwards
 refuses at bind (`not-readable`, naming the field); a reply that reads
 two ways refuses at parse (`parse-ambiguous`). lmcc never guesses.
 
+Models misspell layouts, so the reader forgives the obvious slips, by one
+rule and out loud: `<Answer>` or `**answer**` reads as `<answer>`, and
+`plan.read` says so. A reply the provider cut at its length limit is
+never read as a finished answer (`parse-truncated`).
+
+```python
+reading = plan.read("<Answer>\nRayleigh scattering.\n</Answer>")
+assert reading.values == {"answer": "Rayleigh scattering."}
+assert [r["saw"] for r in reading.repairs] == ["<Answer>", "</Answer>"]
+```
+
 **The JSON rule.** "Reply with a JSON object" names a format, not a
 pattern, so it cannot be read backwards. Spell the pattern — it reads
 back:
@@ -324,7 +335,7 @@ loads it lays out the same bytes.
 contract/          the authority (no code)
   spec/            kernel.md (the convention), errors.md, vocab/ specs
   schema/          entry, signature, case — JSON Schema
-  corpus/          148 byte-exact cases — the real source of truth
+  corpus/          161 byte-exact cases — the real source of truth
   LM15_CONTRACT_PIN the lm15 contract commit the wire layer is
   harness/         runs any implementation against the corpus (a driver
                    in any language speaks JSON Lines; python_driver.py

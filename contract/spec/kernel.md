@@ -1,12 +1,27 @@
 # The LMCC kernel — normative specification
 
-**Version 0.7.0** (kernel). Status: the v3 design (`plans/08`). One
+**Version 0.8.0** (kernel). Status: the v3 design (`plans/08`). One
 implementation, `python/lmcc`, passes the corpus; it is the reference while
 the language is being designed. Other languages are rebuilt from this
 document and the corpus, and join through the driver protocol (§9); the
 Go kernel that passed kernel 0.6 is kept at the git tag `kernel-0.6`
 (D-41). Where this document and the corpus disagree, fix the corpus first,
 then the implementation.
+
+**What 0.8 changes (D-42).** The derived reader repairs a misspelled
+marker — `<Answer>` for `<answer>`, `**Answer:**` for `Answer:`,
+`[[## answer ##]]` for `[[ ## answer ## ]]` — by one exact rule, and
+reports every repair (§4a); an adapter turns it off with `reader:
+{"kind": "derived", "markers": "exact"}`. The exact spelling always
+wins, so no reply that 0.7 read changes values, with one stated exception
+(decoration around an exact marker, §4a). A reply the provider cut at
+its length limit (`finish_reason: "length"`) is no longer read as a
+finished answer: an output that may have been cut refuses
+`parse-truncated`. `plan.read(reply)` returns the values and the repairs;
+`parse` is its values. A recorded reply that needed a marker repair is
+written back from its values, so a conversation never teaches the model
+its own slip (§3a). Every 0.7 artifact refuses `version-incompatible`;
+migrating one is changing its kernel pin.
 
 **What 0.7 changes (D-39).** One record, the **turn**, replaces demos
 and history. A turn is one call of one signature: the inputs, the steps
@@ -145,10 +160,11 @@ bind(adapter, signature, capabilities, registry) → plan   every refusal fires 
 plan.render(inputs | turn, turns?) → rendered            pure (§3a)
 rendered.request(model?) → lm15 request                    {system?, messages, config?, tools?}
 rendered.step(reply) → turn                                pure: parse + record (§3a)
-plan.parse(response) → {field: value}                      pure
+plan.read(response) → {values: {field: value}, repairs: [repair]}   pure (§4a)
+plan.parse(response) → {field: value}                      plan.read(response).values
 plan.stream() → stream                                     pure, sans-I/O
 stream.feed(delta) → [event, …]
-stream.finish() → {events: [event, …], values: {field: value}}
+stream.finish(finish_reason?) → {events, values, repairs}
 plan.describe() · plan.explain() · plan.skeleton() · plan.prefix()
 ```
 
@@ -185,7 +201,8 @@ in parsing.
 
 **Parse input** is a string (the reply text), an lm15 message
 (`{"role", "parts"}`; the role is not read), or an lm15 response
-(`{"message": {…}, …}`; only `message` is read). Past exchanges and
+(`{"message": {…}, "finish_reason"?, …}`; only `message` and
+`finish_reason` are read — the latter for truncation, §4a). Past exchanges and
 examples enter a request only as turns (§3a).
 
 `skeleton()` is what the derived reader knows the reply must contain:
@@ -298,10 +315,12 @@ with an unanswered call, or a tool step answering no pending call,
 refuses `turn-invalid` naming the turn and the step.
 
 **A model step's message.** With `replay: "recorded"` (the default), a
-step with a recorded `message` that this plan parses into exactly the
-step's outputs (JSON equality) is written verbatim: the plan reads it as
-it was, so it is a valid spelling of those values, and nothing the
-model wrote is lost. Otherwise — and always with `replay: "values"` —
+step with a recorded `message` that this plan reads into exactly the
+step's outputs (JSON equality), with no `marker` or `unclosed` repair
+(§4a), is written verbatim: the plan reads it as it was, so it is a
+valid spelling of those values, and nothing the model wrote is lost. A
+reply that needed such a repair is a misspelling; replayed verbatim it
+would teach the model its own slip. Otherwise — and always with `replay: "values"` —
 the message is written from the outputs:
 
 1. for each `part:<type>` find rule that does not read the calls
@@ -426,6 +445,100 @@ pattern; it cannot be read backwards. Spell the pattern
 document-form reader from vocabulary: `reader.kind` may name a registered
 reader (`reader/json_object`), which declares the capability facts it needs
 and the request settings it adds. Unknown kinds refuse `unknown-reader`.
+
+## 4a. Repairs and truncation: reading the reply the model actually wrote
+
+Models misspell the layout they were shown: `<Answer>` for `<answer>`,
+`**Answer:**` for `Answer:`, `[[## answer ##]]` for `[[ ## answer ## ]]`,
+`### Answer:` for `Answer:`. The derived reader repairs these by the one
+rule below, and reports every repair and every tolerance it applied. It
+never guesses: when a repair leaves two readings, the reply refuses as
+§4 says. Value spellings (`42.`, `Yes`) are the format's business (§5),
+not the reader's.
+
+```
+reader: {"kind": "derived", "markers"?: "forgiving" | "exact"}   default "forgiving"
+```
+
+Any other key, or another `markers` value, refuses `entry-malformed`
+(fix `edit-entry`, path `reader.markers` or `reader`). With `"exact"`,
+no marker is repaired; the other reports and truncation still apply.
+
+**Markers and keys.** The markers are the ones §4 searches: each
+field's anchor (right-stripped), each non-empty close and the tail
+(stripped). The **ignorable** characters are U+0009, U+000B, U+000C,
+U+000D, U+0020 (§7a whitespace without the line feed) and `*`, `_`, `#`
+(markdown emphasis and headings). A text's **key** is the text with
+every ignorable character removed and ASCII `A`–`Z` lowercased. A
+marker is **repairable** when its key is not empty and no other marker
+string of the plan has the same key; `describe()["reader"]["unrepaired"]`
+lists the others.
+
+**Occurrences.** Remove the ignorable characters from the reader text
+and lowercase ASCII, remembering each remaining character's position.
+A **loose occurrence** of a marker is a match of its key in that
+sequence, found leftmost first and without overlap (the next search
+starts after the match). Its **core** runs in the reader text from the
+first matched character to the last. The line feed is not ignorable, so
+a core crosses a line only where its marker does. Its **span** is the
+core widened over decoration:
+
+- **left** — the ignorable characters directly before the core's first
+  character that is not a line feed (a marker that starts a line, such as
+  `\nAnswer:`, keeps its line feed outside the decoration), back to the
+  previous character that is not ignorable, or the start of text. Among them, the decoration starts at the first `*`, `_` or `#` whose
+  preceding character is §7a whitespace or the start of text; if there
+  is none, there is no left decoration.
+- **right** — when the left decoration holds a `*` or `_`, the run of
+  `*` and `_` directly after the core.
+
+The span starts at the earlier of the core's start and the decoration's.
+
+**Choosing.** A marker is **written exactly** when it occurs as plain
+text, as §4 searches it, and that occurrence does not lie inside a
+longer span of one of its loose occurrences (inside one, it is the word
+of a decorated spelling: `Answer:` in `**Answer:**`). For each repairable
+marker written exactly, nothing is repaired — the exact spelling wins and
+other spellings are content. Otherwise every
+loose occurrence of it is repaired: its span is rewritten to the marker.
+Two repaired spans that overlap refuse `parse-ambiguous`. The reader
+then reads the rewritten text exactly as §4 says, so two repaired
+anchors of one field refuse `parse-ambiguous`, like two exact ones.
+
+Consequences, stated: a reply 0.7 read gives the same values, except
+when decoration touches an exact marker: `**Answer:** 42` was the answer
+`** 42` and is now `42` (reported). A marker the model writes in another
+case while also writing it exactly elsewhere is content, never a
+second anchor.
+
+**The report.** `plan.read(reply).repairs` lists, first the marker
+repairs in reply order, then the reader's tolerances in the order of the
+rewritten text:
+
+| repair | when | keys |
+|---|---|---|
+| `marker` | a marker's span was rewritten | `marker`, `saw` (the span as written) |
+| `unclosed` | a field with a non-empty close ended at the next marker or the tail without it | `field`, `close` |
+| `ignored` | text that is not whitespace, outside every capture and marker: before the first marker, between a field's close and the next marker, after the tail | `saw` (stripped) |
+
+A capture that runs to the end of the text without its close is not
+reported: that is what a provider stop sequence produces (§3). Replies
+read by a vocabulary reader report nothing. The report is data, in the
+same order in every implementation; the corpus pins it
+(`expect.repairs`).
+
+**Truncation.** An lm15 response whose `finish_reason` is `"length"`
+was cut by the provider. It is read as usual; then parse refuses
+`parse-truncated` — before any format reads — when a visible output is
+missing, or when the derived reader's capture of a visible output ran to
+the end of the text (no close, next marker or tail after it). The hint
+names the field; `partial` carries the raw text of the outputs that
+ended before the cut. `parse-ambiguous` still comes first;
+`parse-truncated` takes the place of `parse-missing-fields`. A vocabulary reader cannot say where its captures
+end, so with it a cut reply always refuses `parse-truncated`. A text or
+a message carries no finish reason and is read as before. A cut reply
+whose outputs all ended before the cut is read normally: the model was
+talking after its answer.
 
 ## 5. Formats: how a type is written and read
 
@@ -661,9 +774,10 @@ string or one lm15 part delta `{"type": string, "text"?, …}` (an lm15
 `TextDelta`/`ThinkingDelta` as canonical JSON; `part_index` and other
 keys are metadata) and returns zero or more structurally fixed events. `field_done.value` is the same
 host-typed value as `parse()` (and therefore need not be JSON data).
-`stream.finish()` marks end-of-stream
-and returns `StreamResult(events, values)`: the final events caused by
-EOF and the same typed values as batch `parse`. EOF can end a field and
+`stream.finish(finish_reason?)` marks end-of-stream
+and returns `StreamResult(events, values, repairs)`: the final events caused by
+EOF and the same typed values and repairs as batch `read`. `finish_reason`
+is the lm15 stream end's (§4a truncation); absent, none is known. EOF can end a field and
 release its held trailing whitespace, so final events cannot honestly
 be returned by `feed`; this is why `finish` returns both. Calling
 `feed` after `finish`, or `finish` twice, is host API misuse, not a
@@ -724,8 +838,19 @@ at `finish`. Find rule behavior is:
   `finish`, because batch `capture.text` concatenates by find rule order,
   not response arrival order.
 
+Marker repair (§4a) is a stage between the find rules and the derived
+reader. It passes text on unchanged while nothing can need a repair,
+holding only a suffix that could still grow into a loose occurrence or
+its decoration. From the first span that needs a repair (a loose
+occurrence whose span is not its marker) it holds the rest of the reply
+until `finish`, where the batch rewrite decides: a later exact marker
+can still make that span content. A well-spelled reply therefore streams
+as before; a misspelled one streams up to its first slip. The repairs
+themselves are known at `finish` only.
+
 `plan.describe()["streaming"]` declares `mode` (`incremental`,
 `hybrid`, or `buffered`), the reader mode, each find rule's mode and reason,
+`markers` (`"forgiving"` with the reason the stage can hold, or `"exact"`),
 and `field_done: "finish"`; buffering is visible, never hidden.
 
 **Refusal law.** `finish()` runs the same structural parse and typed
@@ -851,9 +976,12 @@ by definition, what 0.2 did (`spec/extensions/pattern-legacy-re2.md`),
 so the meaning is preserved exactly; nothing is relabeled silently
 because nothing is assumed: an undeclared `pattern` refuses.
 
-## Deliberate gaps (0.7)
+## Deliberate gaps (0.8)
 
-The `grammar` face of `skeleton()`, parse combinators (plan 02), a
+Repairs of find rule delimiters (`<Think>` for `<think>`) and of
+provider parts; forgiving kernel-default value reads (an enum member in
+another case); the `grammar` face of `skeleton()`, declared parse
+combinators beyond marker repair (plan 02), a
 rigorously specified pattern dialect with library evidence (plan 10,
 remaining items), and field-level layouts of a turn in the text form
 (`{% for f in t.inputs %}`; plan 12). Each lands as a versioned addition.

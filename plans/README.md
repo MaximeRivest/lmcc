@@ -14,7 +14,7 @@ code is at the git tag `kernel-0.6`.
 | plan | one line | size |
 |---|---|---|
 | `01-streaming.md` | ✅ sans-I/O reducer; every parse case replayed at every scalar/part split through both kernels | M |
-| `02-parse-combinators.md` | declared recovery pipelines for messy replies (level 1) | M |
+| `02-parse-combinators.md` | declared recovery pipelines for messy replies (level 1) · kernel 0.8 (D-42) did the obvious part in the kernel: marker repair, the repair report, truncation; what stays open is declared recovery beyond markers | M |
 | `03-turns-face.md` | ✅ `turns` face on strategies + the bind-time probe (`turns-drift`); native turns pass verbatim as lm15 messages | M |
 | `04-tools-citations-strategies.md` | ✅ `native_tools`/`fenced_tools`, `native_citations`/`inline_citations`, five formats; roles live; proven live on two providers | M |
 | `05-second-implementation.md` | ✅ Go kernel; harness passes byte-exact (84/90 claimed; 6 `udf:python` cases declared unclaimed) | L |

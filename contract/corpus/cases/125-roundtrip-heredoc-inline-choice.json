@@ -6,7 +6,7 @@
  "entry": {
   "name": "tools_v1",
   "versions": {
-   "kernel": "0.7.0",
+   "kernel": "0.8.0",
    "vocab": {
     "format/code_arguments": "0.1.0",
     "format/function_tool": "0.1.0",
@@ -86,7 +86,7 @@
   "entry": {
    "name": "tools_v1",
    "versions": {
-    "kernel": "0.7.0",
+    "kernel": "0.8.0",
     "vocab": {
      "format/code_arguments": "0.1.0",
      "format/function_tool": "0.1.0",

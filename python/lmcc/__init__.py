@@ -15,7 +15,7 @@ from .extensions import ExtensionBinding, PatternBinding, native_extensions
 from .fn import Fn, One, Purpose, fn
 from .formats import Format, make as make_format, ship
 from .reader import Reader
-from .plan import Plan, RenderResult, bind
+from .plan import Plan, Reading, RenderResult, bind
 from .registry import Registry, default_registry
 from .serde import KERNEL_VERSION, dump, load
 from .transport import Transport
@@ -35,7 +35,7 @@ def format(host_type, **kw):
 
 __all__ = [
     "Adapter", "ExtensionBinding", "Field", "Fn", "Format", "KERNEL_VERSION", "Reader",
-    "ModelStep", "One", "PatternBinding", "Plan",
+    "ModelStep", "One", "PatternBinding", "Plan", "Reading",
     "Refusal", "Registry", "RenderResult", "Purpose", "SignatureCore", "Capture", "Transport",
     "Stream", "StreamResult", "ToolStep", "Turn",
     "adapter", "assistant", "bind", "default_registry", "developer", "dump",

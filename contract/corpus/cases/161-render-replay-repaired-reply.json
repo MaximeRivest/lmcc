@@ -1,0 +1,112 @@
+{
+ "name": "render-replay-repaired-reply",
+ "kind": "render",
+ "entry": {
+  "name": "repairs_v1",
+  "versions": {
+   "kernel": "0.8.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "directive": "turns"
+   },
+   {
+    "role": "user",
+    "text": "{question}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Answer the question.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "question": "And of Italy?"
+ },
+ "turns": {
+  "turns": [
+   {
+    "inputs": {
+     "question": "Capital of France?"
+    },
+    "steps": [
+     {
+      "kind": "model",
+      "outputs": {
+       "answer": "Paris"
+      },
+      "message": {
+       "role": "assistant",
+       "parts": [
+        {
+         "type": "text",
+         "text": "<Answer>\nParis\n</Answer>"
+        }
+       ]
+      }
+     }
+    ],
+    "outputs": {
+     "answer": "Paris"
+    }
+   }
+  ]
+ },
+ "expect": {
+  "request": {
+   "system": "Answer the question.\n<answer>\n...\n</answer>\n",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "Capital of France?"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "<answer>\nParis\n</answer>"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "And of Italy?"
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

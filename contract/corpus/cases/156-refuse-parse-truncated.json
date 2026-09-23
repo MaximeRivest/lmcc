@@ -1,0 +1,66 @@
+{
+ "name": "refuse-parse-truncated",
+ "kind": "refuse",
+ "entry": {
+  "name": "repairs_v1",
+  "versions": {
+   "kernel": "0.8.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "role": "user",
+    "text": "{question}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Answer the question.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "reasoning",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "response": {
+  "message": {
+   "role": "assistant",
+   "parts": [
+    {
+     "type": "text",
+     "text": "<reasoning>\nFirst, the capital\n</reasoning>\n<answer>\nThe capital of France is"
+    }
+   ]
+  },
+  "finish_reason": "length"
+ },
+ "expect": {
+  "code": "parse-truncated",
+  "at": "parse"
+ }
+}

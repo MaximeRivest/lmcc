@@ -114,11 +114,16 @@ class PythonDriver:
                 result = baked.render(lmcc.Turn.from_dict(current), turns=slots)
                 return _compare(expect["request"], result.request(), "request")
             if kind == "parse":
-                values = baked.parse(case["response"])
+                reading = baked.read(case["response"])
+                values = reading.values
                 compared = _compare(expect["values"], values, "values")
                 if not compared["ok"]:
                     return compared
-                result = _check_stream_success(baked, case["response"], values)
+                if "repairs" in expect:
+                    compared = _compare(expect["repairs"], reading.repairs, "repairs")
+                    if not compared["ok"]:
+                        return compared
+                result = _check_stream_success(baked, case["response"], values, reading.repairs)
                 if result["ok"]:
                     result["stream_trace"] = _stream_trace(baked, case["response"])
                 return result
@@ -199,7 +204,15 @@ def _delta_text(events: list[dict]) -> dict[str, str]:
     return out
 
 
-def _check_stream_success(plan, response: object, batch_values: dict) -> dict:
+def _finish_reason(response: object):
+    """The lm15 finish reason a stream learns at its end (kernel §4a)."""
+    if isinstance(response, dict) and isinstance(response.get("message"), dict):
+        return response.get("finish_reason")
+    return None
+
+
+def _check_stream_success(plan, response: object, batch_values: dict,
+                          batch_repairs: list | None = None) -> dict:
     baseline = None
     for n, chunks in enumerate(_stream_chunkings(response)):
         stream = plan.stream()
@@ -207,12 +220,14 @@ def _check_stream_success(plan, response: object, batch_values: dict) -> dict:
         try:
             for chunk in chunks:
                 events.extend(_feed_chunk(plan, stream, response, chunk))
-            result = stream.finish()
+            result = stream.finish(_finish_reason(response))
             events.extend(result.events)
         except Exception as exc:  # noqa: BLE001 — conformance detail
             return {"ok": False, "detail": f"stream split {n} refused/failed: {exc}"}
         if result.values != batch_values:
             return _compare(batch_values, result.values, f"stream split {n} values")
+        if batch_repairs is not None and result.repairs != batch_repairs:
+            return _compare(batch_repairs, result.repairs, f"stream split {n} repairs")
         deltas = _delta_text(events)
         if baseline is None:
             baseline = deltas
@@ -229,7 +244,7 @@ def _check_stream_refusal(plan, response: object, batch_error) -> dict:
         try:
             for chunk in chunks:
                 _feed_chunk(plan, stream, response, chunk)
-            stream.finish()
+            stream.finish(_finish_reason(response))
         except lmcc.Refusal as err:
             if err.describe() == expected:
                 continue
@@ -272,7 +287,7 @@ def _stream_trace(plan, response: object) -> list:
     try:
         for chunk in _trace_chunking(response):
             trace.append([_event_digest(e) for e in _feed_chunk(plan, stream, response, chunk)])
-        trace.append([_event_digest(e) for e in stream.finish().events])
+        trace.append([_event_digest(e) for e in stream.finish(_finish_reason(response)).events])
     except lmcc.Refusal as err:
         trace.append({"refusal": err.code})
     return trace

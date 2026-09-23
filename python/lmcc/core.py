@@ -617,6 +617,15 @@ def normalize_response_parts(parts: list[dict]) -> list[dict]:
     return out
 
 
+def finish_reason(response: object) -> str | None:
+    """The lm15 ``finish_reason`` of a response, or None for a text or a
+    message (kernel §3, §4a)."""
+    if isinstance(response, dict) and isinstance(response.get("message"), dict):
+        reason = response.get("finish_reason")
+        return reason if isinstance(reason, str) else None
+    return None
+
+
 def response_text_and_parts(response: object) -> tuple[str, list[dict]]:
     """Accept the reply text, an lm15 message ``{"role", "parts"}``, or an
     lm15 response ``{"message": {...}, ...}`` (kernel §3)."""

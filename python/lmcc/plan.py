@@ -16,7 +16,7 @@ from . import core, formats as _formats
 from .adapter import Adapter
 from .errors import Refusal, refuse
 from . import extensions as _extensions
-from .reader import DerivedReader, Reader, apply_find_rules
+from .reader import DerivedReader, Reader, apply_find_rules, refuse_missing
 from .serde import KERNEL_VERSION
 import json
 
@@ -67,9 +67,22 @@ class RenderResult:
         model step: values, the message as it came, and the request's hash
         (kernel §3a). Pure."""
         message = as_message(reply)
-        values = self.plan.parse(message)
+        values = self.plan.parse(reply)   # a response's finish_reason counts (§4a)
         return self.turn.with_step(ModelStep(values, message, sha256(self.request()),
                                              self.plan.calls_field))
+
+
+@dataclass
+class Reading:
+    """A reply, read (kernel §4a): the typed ``values`` and the ``repairs``
+    the reader made — misspelled markers, unclosed fields, ignored text —
+    in a fixed order. ``clean`` is True when nothing was repaired."""
+    values: dict
+    repairs: list = dc_field(default_factory=list)
+
+    @property
+    def clean(self) -> bool:
+        return not self.repairs
 
 
 class _WriteContext:
@@ -194,7 +207,7 @@ class Plan:
             refuse("format-write-error", f"field {f.name!r}: format failed to write: {exc}")
         return core.as_parts(written, where=f"field {f.name!r}")
 
-    def read(self, f: core.Field, capture: core.Capture) -> object:
+    def read_field(self, f: core.Field, capture: core.Capture) -> object:
         fmt = self.format_for(f)
         try:
             return fmt.read(capture, f)
@@ -454,7 +467,9 @@ class Plan:
         written = None
         if self.adapter.replay == "recorded" and step.message is not None:
             try:
-                same = to_json(self.parse(step.message)) == to_json(step.outputs)
+                reading = self.read(step.message)
+                same = to_json(reading.values) == to_json(step.outputs) and not any(
+                    r["repair"] in ("marker", "unclosed") for r in reading.repairs)
             except Refusal:
                 same = False
             if same:
@@ -588,40 +603,84 @@ class Plan:
 
     # ------------------------------------------------------------ parse
 
-    def _parse_with_captures(self, response: object) -> tuple[dict, dict[str, core.Capture]]:
-        """The one batch parse path, shared by ``parse`` and stream EOF.
+    def _parse_with_captures(self, response: object) -> tuple[dict, dict[str, core.Capture], list[dict]]:
+        """The one batch parse path, shared by ``read``, ``parse`` and
+        stream EOF: (values, captures, repairs).
 
         Returning captures internally lets streaming prove that its emitted
         raw deltas equal the batch captures without inventing another parser.
         """
+        cut = core.finish_reason(response) == "length"
         text, parts = core.response_text_and_parts(response)
         text, found = apply_find_rules(text, parts, self.find_rules, self.pattern_binding())
         complete = any(r.get("complete_reply") and found.get(name) is not None and found[name].parts
                        for name, r in self.find_rules)
+        names = [f.name for f in self.visible_outputs]
+        derived = isinstance(self.reader, DerivedReader)
+        repairs: list[dict] = []
+        to_end: set[str] = set()
+        missing_err: Refusal | None = None
         try:
-            raw = self.reader.split(text, [f.name for f in self.visible_outputs])
-        except Refusal as err:
-            if complete and err.code == "parse-missing-fields" and isinstance(err.partial, dict):
-                raw = err.partial   # a call turn: what was found is read, the rest omitted (§6)
+            if derived:
+                result = self.reader.read(text, names, allow_missing=True)
+                raw, repairs, to_end = result.raw, result.repairs, result.to_end
             else:
+                raw = self.reader.split(text, names)
+        except Refusal as err:
+            if cut and not derived:
+                self._refuse_cut("", {}, why=err.hint)
+            if not (err.code == "parse-missing-fields" and isinstance(err.partial, dict)):
                 raise
+            raw, missing_err = dict(err.partial), err
         except Exception as exc:  # noqa: BLE001
+            if cut and not derived:
+                self._refuse_cut("", {}, why=str(exc))
             refuse("reader-error",
                    f"reader {self.adapter.reader.get('kind')!r} failed to read the reply: {exc}")
+        missing = [n for n in names if n not in raw]
+        if cut:
+            ended = {k: v for k, v in raw.items() if k not in to_end}
+            if missing:
+                self._refuse_cut(f"before field {missing[0]!r}", ended)
+            if to_end:
+                self._refuse_cut(f"inside field {next(n for n in names if n in to_end)!r}", ended)
+            if not derived:
+                self._refuse_cut("", ended)
+        if missing and not complete:   # a call turn omits what it did not write (§6)
+            if missing_err is not None:
+                raise missing_err
+            refuse_missing(raw, names)
         captures: dict[str, core.Capture] = {
             f.name: core.Capture.of_text(raw[f.name]) for f in self.visible_outputs if f.name in raw}
         captures.update(found)
         values: dict = {}
         for f in self.visible_outputs:
             if f.name in captures:
-                values[f.name] = self.read(f, captures[f.name])
+                values[f.name] = self.read_field(f, captures[f.name])
         for name, capture in found.items():
-            values[name] = self.read(self.signature.field_named(name), capture)
-        return values, captures
+            values[name] = self.read_field(self.signature.field_named(name), capture)
+        return values, captures, repairs
+
+    def _refuse_cut(self, where: str, partial: dict, *, why: str = "") -> None:
+        """Kernel §4a: the provider cut the reply; say where, keep what ended."""
+        if where:
+            hint = f"the provider cut the reply at its length limit {where}"
+        else:
+            hint = (f"the provider cut the reply at its length limit; reader "
+                    f"{self.adapter.reader.get('kind')!r} cannot tell which outputs ended before it")
+            if why:
+                hint += f" ({why})"
+        refuse("parse-truncated", hint + "; raise max_tokens or ask for less", partial=partial)
+
+    def read(self, response: object) -> Reading:
+        """The typed values of a reply and every repair the reader made to
+        read them (kernel §4a). Pure."""
+        values, _captures, repairs = self._parse_with_captures(response)
+        return Reading(values, repairs)
 
     def parse(self, response: object) -> dict:
-        values, _captures = self._parse_with_captures(response)
-        return values
+        """The typed values of a reply: ``read(response).values``."""
+        return self.read(response).values
 
     # ---------------------------------------------------------- describe
 
@@ -655,6 +714,9 @@ class Plan:
         out["streaming"] = describe_streaming(self)
         if isinstance(self.reader, DerivedReader):
             out["reader"]["anchors"] = [list(a) for a in self.reader.anchors]
+            out["reader"]["markers"] = self.reader.mode
+            if self.reader.mode == "forgiving" and self.reader.unrepaired:
+                out["reader"]["unrepaired"] = list(self.reader.unrepaired)
             if self.reader.tail:
                 out["reader"]["tail"] = self.reader.tail
         elif hasattr(self.reader, "spec"):
@@ -862,7 +924,7 @@ def _derive_reader(plan: Plan) -> DerivedReader:
                    f"must tell fields apart",
                    fix={**here, "field": name})
         seen[key] = name
-    return DerivedReader(anchors, tail)
+    return DerivedReader(anchors, tail, plan.adapter.reader.get("markers", "forgiving"))
 
 
 def _instantiate(loop: Loop, f: core.Field, plan: Plan, *, fix: dict) -> tuple[str, str]:
@@ -1182,7 +1244,7 @@ def bind(adapter: Adapter, sig: core.SignatureCore, capabilities: dict, registry
             spelled = plan._call_text(r, probe)
             _, found = apply_find_rules(spelled, [], own, plan.pattern_binding())
             if found.get(calls_field) is not None and found[calls_field].parts:
-                read_back = plan.read(sig.field_named(calls_field), found[calls_field])
+                read_back = plan.read_field(sig.field_named(calls_field), found[calls_field])
         except Refusal:
             read_back = None
         first = read_back[0] if isinstance(read_back, list) and len(read_back) == 1 else None

@@ -16,6 +16,7 @@ from .template import RESERVED_SLOTS, compile_template, turn_slots
 
 _SLOT_NAME = __import__("re").compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 REPLAY = ("recorded", "values")
+MARKERS = ("forgiving", "exact")   # the derived reader's marker matching (kernel §4a)
 
 
 def system(text: str) -> dict:
@@ -168,6 +169,16 @@ def adapter(*, messages: list[dict] | None = None, template: list[dict] | dict |
     if not isinstance(kind, str) or not kind:
         refuse("unknown-reader", "reader.kind must name a reader",
                fix={"action": "edit-entry", "path": "reader"})
+    if kind == "derived":
+        extra = set(reader) - {"kind", "markers"}
+        if extra:
+            refuse("entry-malformed", f"reader: the derived reader takes 'kind' and 'markers', "
+                                      f"not {sorted(extra)}",
+                   fix={"action": "edit-entry", "path": "reader"})
+        if reader.get("markers", "forgiving") not in MARKERS:
+            refuse("entry-malformed", f"reader.markers must be one of {MARKERS}, not "
+                                      f"{reader.get('markers')!r}",
+                   fix={"action": "edit-entry", "path": "reader.markers"})
     s_bindings: dict[str, object] = {}
     for purpose, value in (transports or {}).items():
         where = f"transports[{purpose!r}]"

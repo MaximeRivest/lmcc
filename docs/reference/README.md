@@ -33,7 +33,7 @@ Adapters and templates (kernel §2):
 
 | name | what | section |
 |---|---|---|
-| `adapter` | `adapter(messages=, reader=, transports=, formats=, name=, replay=)` | §2 |
+| `adapter` | `adapter(messages=, reader=, transports=, formats=, name=, replay=)`; `reader={"kind": "derived", "markers": "exact"}` turns marker repair off | §2, §4a |
 | `Adapter` | `.template`, `.reader`, `.transports`, `.formats`, `.replay`, `.bind()`, `.dump()` | §2 |
 | `system`, `user`, `assistant`, `message` | one template message `{role, text}` | §2 |
 | `turns` | `turns(slot="turns")`: a turn slot in messages form `{directive: "turns", slot?}` | §2, §3a |
@@ -48,11 +48,12 @@ Bind, render, parse, stream (kernel §3, §4, §8):
 | name | what | section |
 |---|---|---|
 | `bind` | `bind(adapter, signature, capabilities, registry) -> Plan`; every refusal fires here | §3 |
-| `Plan` | `.render()`, `.parse()`, `.stream()`, `.describe()`, `.explain()`, `.skeleton()`, `.prefix()` | §3 |
+| `Plan` | `.render()`, `.read()`, `.parse()`, `.stream()`, `.describe()`, `.explain()`, `.skeleton()`, `.prefix()` | §3 |
 | `RenderResult` | `.system`, `.messages`, `.request_settings`, `.request(model=None)` — an lm15 request minus its model | §3 |
 | `Reader` | one reply document form: `split`, `join`, `format`, `requires`, `request_settings`, `skeleton`, `stream` | §4 |
-| `Stream` | `.feed(delta) -> [event]`, `.finish() -> StreamResult` | §8 |
-| `StreamResult` | `.events`, `.values` | §8 |
+| `Reading` | what `plan.read(reply)` returns: `.values`, `.repairs` (marker, unclosed, ignored — in order), `.clean` | §4a |
+| `Stream` | `.feed(delta) -> [event]`, `.finish(finish_reason=None) -> StreamResult` | §8 |
+| `StreamResult` | `.events`, `.values`, `.repairs` | §8 |
 
 Formats (kernel §5, §7):
 
@@ -77,10 +78,10 @@ Registry and artifact (kernel §5, §6, §9):
 | `Registry` | `Registry(allow_udf=, extensions=)`: `register_format`, `register_transport`, `register_reader`, `register_extension`, `format`, `describe` — `extensions=()` is a core-only host | §5, §6, §10 |
 | `native_extensions()`, `ExtensionBinding`, `PatternBinding` | what this runtime binds by default; the protocol a host implements to bind its own | §10 |
 | `lmcc_lm15.request(rendered, model=, config=, override=)` | an `lm15.Request`; the plan's request settings are the base, a contradicting Config raises `ConfigConflict` | §3 |
-| `lmcc_lm15.parse(plan, response)`, `lmcc_lm15.stream(plan, events)`, `lmcc_lm15.step(rendered, response)` | typed values from an `lm15.Response`/`Message`; drive the sans-I/O stream; record a reply as a turn's next step | §3, §3a, §8 |
+| `lmcc_lm15.parse(plan, response)`, `lmcc_lm15.read(plan, response)`, `lmcc_lm15.stream(plan, events)`, `lmcc_lm15.step(rendered, response)` | typed values (and repairs) from an `lm15.Response`/`Message`; drive the sans-I/O stream; record a reply as a turn's next step. Each passes the response's `finish_reason`, so a cut reply refuses `parse-truncated` | §3, §3a, §4a, §8 |
 | `default_registry` | the registry `lmcc.format` and `Fn.bind` use when none is given | §5 |
 | `dump`, `load` | the artifact ([entry.schema.json](../../contract/schema/entry.schema.json)); `load` never runs a UDF | §5, §9 |
-| `KERNEL_VERSION` | `"0.7.0"` | §9 |
+| `KERNEL_VERSION` | `"0.8.0"` | §9 |
 
 Refusals:
 

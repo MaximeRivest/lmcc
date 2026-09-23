@@ -1,0 +1,69 @@
+{
+ "name": "parse-repair-markdown-labels",
+ "kind": "parse",
+ "entry": {
+  "name": "repairs_v1",
+  "versions": {
+   "kernel": "0.8.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\nReasoning: {reasoning}\nAnswer: {answer}"
+   },
+   {
+    "role": "user",
+    "text": "{question}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Answer the question.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "reasoning",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "integer"
+    }
+   }
+  ]
+ },
+ "response": "**Reasoning:** half of ten\n\n### Answer:\n5",
+ "expect": {
+  "values": {
+   "reasoning": "half of ten",
+   "answer": 5
+  },
+  "repairs": [
+   {
+    "repair": "marker",
+    "marker": "Reasoning:",
+    "saw": "**Reasoning:**"
+   },
+   {
+    "repair": "marker",
+    "marker": "\nAnswer:",
+    "saw": "\n### Answer:"
+   }
+  ]
+ }
+}

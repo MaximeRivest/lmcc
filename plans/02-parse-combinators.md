@@ -4,6 +4,13 @@
 version, not a mandatory engine in every kernel. Plan 10 gates the extension
 contract, migration, and backend choice. Existing 0.2 evidence stays historical.
 
+**Kernel 0.8 update (D-42):** the obvious part landed in the kernel, not
+as a combinator pack: misspelled markers are repaired by one rule (kernel
+§4a), every repair and old tolerance is reported by `plan.read`, and a
+reply cut at its length limit refuses `parse-truncated`. What this plan
+still covers: declared recovery beyond markers (value spellings, fenced
+JSON, find rule delimiters), with the census gate below.
+
 **Motivation.** The lens inverts what the template wrote. Real replies
 add sloppiness the template never wrote: case-drifted labels, fenced
 blocks, truncation. Today that residue has no declared home — the gap

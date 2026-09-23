@@ -80,8 +80,8 @@ def test_native_reasoning_options_spell_lm15_reasoning():
     assert req.config.reasoning == Reasoning(effort="low", thinking_budget=1024)
 
 
-def _response(*parts):
-    return Response(id="r", model="m", message=Message.assistant(parts), finish_reason="stop",
+def _response(*parts, finish_reason="stop"):
+    return Response(id="r", model="m", message=Message.assistant(parts), finish_reason=finish_reason,
                     usage=Usage(input_tokens=1, output_tokens=1, total_tokens=2))
 
 
@@ -106,6 +106,28 @@ def test_stream_events_drive_the_plan_to_the_batch_values():
     assert deltas == "two and two"
     batch = lmcc_lm15.parse(plan, _response(ThinkingPart("two and two"), TextPart("<answer>\n4\n</answer>")))
     assert batch == result.values
+
+
+def test_a_response_cut_at_its_length_limit_refuses_in_parse_step_and_stream():
+    plan = plan_for("native_reasoning", {"instruct": True, "native_reasoning": True})
+    cut = _response(ThinkingPart("two and two"), TextPart("<answer>\n4"), finish_reason="length")
+    for attempt in (lambda: lmcc_lm15.parse(plan, cut),
+                    lambda: lmcc_lm15.step(plan.render(problem="2+2"), cut),
+                    lambda: lmcc_lm15.stream(plan, [
+                        StreamDeltaEvent(delta=TextDelta(text="<answer>\n4", part_index=0)),
+                        StreamEndEvent(finish_reason="length")])):
+        with pytest.raises(lmcc.Refusal) as err:
+            attempt()
+        assert err.value.code == "parse-truncated"
+    # the same bytes with a normal stop read as before (a stop sequence ate the close)
+    assert lmcc_lm15.parse(plan, _response(TextPart("<answer>\n4"))) == {"reasoning": "", "answer": 4}
+
+
+def test_read_reports_repairs_on_an_lm15_response():
+    plan = plan_for("native_reasoning", {"instruct": True, "native_reasoning": True})
+    reading = lmcc_lm15.read(plan, _response(TextPart("<Answer>\n4\n</Answer>")))
+    assert reading.values == {"reasoning": "", "answer": 4}
+    assert [r["saw"] for r in reading.repairs] == ["<Answer>", "</Answer>"]
 
 
 def test_json_reader_patch_is_a_valid_lm15_response_format():

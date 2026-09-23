@@ -32,13 +32,18 @@ adapter = lmcc.adapter(messages=[
 ])
 plan = book.bind(adapter)
 assert plan.describe()["streaming"] == {
-    "mode": "incremental", "reader": {"mode": "incremental"}, "find": [], "field_done": "finish"}
+    "mode": "incremental", "reader": {"mode": "incremental"}, "find": [], "field_done": "finish",
+    "markers": {"mode": "forgiving",
+                "reason": "from the first misspelled marker the rest of the reply waits for finish"}}
 ```
 
 `incremental`: field text is released as it arrives. `buffered`: it
-waits for EOF, and the reason is stated.
+waits for EOF, and the reason is stated. `markers` says what a misspelled
+marker does to streaming: a reply written as the template says streams
+as it arrives; from a slip such as `<Answer>` on, the rest waits for
+`finish`, where it is repaired ([how-to 14](14-read-imperfect-replies.md)).
 
-## 2. Feed text deltas, remove events
+## 2. Feed text deltas, read the events
 
 ```python
 stream = plan.stream()
@@ -132,7 +137,9 @@ assert p3.describe()["streaming"] == {
     "reader": {"mode": "buffered", "reason": "a removing pattern find rule can revise the reader's text"},
     "find": [{"field": "reasoning", "from": "text", "mode": "buffered",
                   "reason": "a pattern find rule waits for EOF"}],
-    "field_done": "finish"}
+    "field_done": "finish",
+    "markers": {"mode": "forgiving",
+                "reason": "from the first misspelled marker the rest of the reply waits for finish"}}
 s = p3.stream()
 assert s.feed("THOUGHT: hm\n<answer>\n4\n</answer>") == []
 assert s.finish().values == {"answer": 4, "reasoning": "hm"}

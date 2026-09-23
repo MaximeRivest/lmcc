@@ -76,6 +76,7 @@ back from `<think>` captures and removes them before the reader runs.
 assert d["reader"] == {
     "kind": "derived",
     "anchors": [["answer", "<answer>\n", "\n</answer>\n"], ["tags", "<tags>\n", "\n</tags>\n"]],
+    "markers": "forgiving",
     "tail": "</done>"}
 assert d["skeleton"] == {"prefill": "<answer>\n", "stops": ["</done>"]}
 ```
@@ -89,8 +90,10 @@ a reply does not parse, compare its bytes with these.
 assert d["streaming"] == {
     "mode": "incremental", "reader": {"mode": "incremental"},
     "find": [{"field": "reasoning", "from": "text", "mode": "incremental"}],
-    "field_done": "finish"}
-assert d["versions"] == {"kernel": "0.7.0",
+    "field_done": "finish",
+    "markers": {"mode": "forgiving",
+                "reason": "from the first misspelled marker the rest of the reply waits for finish"}}
+assert d["versions"] == {"kernel": "0.8.0",
                          "vocab": {"format/json": "0.1.0", "transport/reasoning_tags": "0.2.0"}}
 assert d["capabilities"] == {"instruct": True}
 ```

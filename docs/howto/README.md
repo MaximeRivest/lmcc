@@ -12,7 +12,7 @@ Need a definition? See [docs/reference](../reference/README.md).
 | [01-extract-structured-value.md](01-extract-structured-value.md) | return one dataclass with `One[T]` and a format |
 | [02-return-several-outputs.md](02-return-several-outputs.md) | return several typed values from a dataclass |
 | [03-adaptive-reasoning.md](03-adaptive-reasoning.md) | serve a reasoning purpose through `choose`, by declared capabilities |
-| [04-stream-a-reply.md](04-stream-a-reply.md) | remove `plan.stream()` events; refusal at `finish()` |
+| [04-stream-a-reply.md](04-stream-a-reply.md) | read `plan.stream()` events as they arrive; refusal at `finish()` |
 | [05-preview-cost-and-cache.md](05-preview-cost-and-cache.md) | `prefix()`, `skeleton()`, and pure `render()` |
 | [06-repair-from-a-fix.md](06-repair-from-a-fix.md) | act on a refusal's `fix` in code |
 | [07-ship-an-adapter-as-json.md](07-ship-an-adapter-as-json.md) | dump, load with no registrations, ship a UDF with `allow_udf` |
@@ -22,6 +22,7 @@ Need a definition? See [docs/reference](../reference/README.md).
 | [11-call-tools-and-cite-sources.md](11-call-tools-and-cite-sources.md) | tools and citations, native or text: call turns, `written_as`, `turns` + probe, the whole-reply pattern |
 | [12-conversational-heredoc-tools.md](12-conversational-heredoc-tools.md) | raw-code tool calls, one turn per exchange, writers of past calls and representative probes |
 | [13-research-tool-reasoning-cross-design.md](13-research-tool-reasoning-cross-design.md) | build a 3 × 3 tool-transport/reasoning experiment from scratch, using only the kernel and Python's standard library |
+| [14-read-imperfect-replies.md](14-read-imperfect-replies.md) | read what the model actually wrote: marker repairs and their report, `markers: "exact"`, a reply cut at its length limit, streaming |
 
 Run a guide as a notebook (mrmd / rat): `./dev-venv` once builds the
 project venv (lmcc editable, the pinned lm15, IPython) and registers the

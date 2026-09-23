@@ -22,7 +22,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from . import core
-from .reader import DerivedReader, Reader, _text_captures
+from .reader import (DerivedReader, EMPHASIS, IGNORABLE, Reader, _fold, _text_captures,
+                     marker_key, repair_markers)
 
 _WS = core.WHITESPACE
 
@@ -33,6 +34,11 @@ class StreamResult:
 
     events: list[dict]
     values: dict
+    repairs: list = None  # type: ignore[assignment]
+
+    def __post_init__(self):
+        if self.repairs is None:
+            object.__setattr__(self, "repairs", [])
 
 
 # ------------------------------------------------------------ primitives
@@ -430,6 +436,113 @@ class _DerivedReducer:
                 if section.fixed is not None}
 
 
+# ---------------------------------------------------------- marker repair
+
+
+class _MarkerRepair:
+    """Kernel §4a/§8: the stage between the find rules and the derived
+    reader. It passes text on unchanged, holding only what could still grow
+    into a loose occurrence or its decoration; from the first span that
+    needs a repair it holds everything until EOF, where the batch rewrite
+    decides (a later exact marker can still make that span content)."""
+
+    def __init__(self, markers: list[str]):
+        self.markers = list(markers)
+        self.keys = [(marker_key(m), m, min(len(marker_key(m)) - len(marker_key(m).lstrip("\n")),
+                                            len(marker_key(m)) - 1))
+                     for m in self.markers]
+        self.longest = max(len(k) for k, _, _ in self.keys)
+        self.prefixes = _Prefixes([k for k, _, _ in self.keys])
+        self.pieces: list[str] = []
+        self.buf = ""            # text[released:]
+        self.before = ""         # text[released - 1], for decoration checks
+        self.released = 0
+        self.length = 0
+        self.run_start = 0       # start of the trailing ignorable run
+        self.window: list[tuple[str, int, int]] = []   # (folded char, position, run start)
+        self.pending: list[tuple[str, int, int, int]] = []  # awaiting their right decoration
+        self.held_from: int | None = None
+        self.holding_reason: str | None = None
+
+    def _at(self, j: int) -> str:
+        return self.buf[j - self.released] if j >= self.released else self.before
+
+    def _text(self, a: int, b: int) -> str:
+        return self.buf[a - self.released:b - self.released]
+
+    def feed(self, delta: str, final: bool) -> str:
+        a = self.length
+        self.pieces.append(delta)
+        self.buf += delta
+        self.length += len(delta)
+        if final:
+            text = "".join(self.pieces)
+            rewritten, _ = repair_markers(text, self.markers)
+            if rewritten[:self.released] != text[:self.released]:
+                raise RuntimeError("marker repair revised text it had already passed on")
+            out = rewritten[self.released:]
+            self.released, self.buf = len(text), ""
+            return out
+        if self.held_from is not None:
+            return ""
+        for offset, c in enumerate(delta):
+            i = a + offset
+            if c in IGNORABLE:
+                continue
+            self.window.append((_fold(c), i, self.run_start))
+            self.run_start = i + 1
+            if len(self.window) > self.longest:
+                del self.window[0]
+            for key, marker, lead in self.keys:
+                n = len(key)
+                if n <= len(self.window) and key[-1] == self.window[-1][0] and \
+                        "".join(ch for ch, _, _ in self.window[-n:]) == key:
+                    _, core_start, first_run = self.window[-n]
+                    _, word_start, run = self.window[-n + lead]
+                    self.pending.append((marker, first_run, core_start, word_start, run, i + 1))
+        # resolve occurrences whose span is known
+        waiting = []
+        for item in self.pending:
+            marker, first_run, core_start, word_start, run, core_end = item
+            left = decoration_start_at(self._at, run, word_start)
+            end = core_end
+            if left is not None and any(self._at(j) in EMPHASIS for j in range(left, word_start)):
+                while end < self.length and self._at(end) in EMPHASIS:
+                    end += 1
+                if end == self.length:
+                    waiting.append(item)
+                    continue
+            start = core_start if left is None else min(core_start, left)
+            if self._text(start, end) != marker:
+                self.held_from = start
+                break
+        self.pending = [] if self.held_from is not None else waiting
+        # the release point: nothing that could still start a repaired span
+        limit = self.length if self.held_from is None else self.held_from
+        if self.run_start < self.length:
+            limit = min(limit, self.run_start)
+        n = self.prefixes.hold("".join(ch for ch, _, _ in self.window))
+        if n:
+            limit = min(limit, self.window[-n][2])
+        for _, first_run, _, _, _, _ in self.pending:
+            limit = min(limit, first_run)
+        limit = max(limit, self.released)
+        out = self.buf[:limit - self.released]
+        if out:
+            self.before = out[-1]
+            self.buf = self.buf[len(out):]
+            self.released = limit
+        return out
+
+
+def decoration_start_at(at, run_start: int, core_start: int) -> int | None:
+    """``reader.decoration_start`` over a character accessor."""
+    for i in range(run_start, core_start):
+        if at(i) in "*_#" and (i == 0 or at(i - 1) in core.WHITESPACE):
+            return i
+    return None
+
+
 # -------------------------------------------------------------- describe
 
 
@@ -469,7 +582,13 @@ def describe_streaming(plan) -> dict:
     modes.append(reader_mode)
     mode = "incremental" if set(modes) == {"incremental"} else (
         "buffered" if set(modes) == {"buffered"} else "hybrid")
-    return {"mode": mode, "reader": reader, "find": routes, "field_done": "finish"}
+    out = {"mode": mode, "reader": reader, "find": routes, "field_done": "finish"}
+    if isinstance(plan.reader, DerivedReader):
+        out["markers"] = ({"mode": "forgiving",
+                           "reason": "from the first misspelled marker the rest of the reply "
+                                     "waits for finish"}
+                          if plan.reader.repairable else {"mode": "exact"})
+    return out
 
 
 # ----------------------------------------------------------------- stream
@@ -505,6 +624,8 @@ class Stream:
         self._counted: dict[str, int] = {}   # captures already turned into deltas
         self._derived = (_DerivedReducer(plan.reader, self._fields, names)
                          if isinstance(plan.reader, DerivedReader) else None)
+        self._repair = (_MarkerRepair(plan.reader.repairable)
+                        if self._derived is not None and plan.reader.repairable else None)
         make_reader_stream = getattr(plan.reader, "stream", None)
         self._reader_stream = (None if self._derived is not None or make_reader_stream is None
                              else make_reader_stream(names))
@@ -520,18 +641,24 @@ class Stream:
         self._run(text, part, final=False)
         return self._events(final=False)
 
-    def finish(self) -> StreamResult:
+    def finish(self, finish_reason: str | None = None) -> StreamResult:
+        """End of stream. ``finish_reason`` is the lm15 stream end's; with
+        ``"length"`` a cut output refuses ``parse-truncated`` (kernel §4a)."""
         if self._finished:
             raise RuntimeError("stream is already finished")
         self._finished = True
         response: object = {"role": "assistant", "parts": self._materialized_parts()} if self._part_mode \
             else "".join(self._pieces)
+        if finish_reason is not None:
+            message = response if isinstance(response, dict) else \
+                {"role": "assistant", "parts": [core.text_part(response)]}
+            response = {"message": message, "finish_reason": finish_reason}
         # Batch is the final authority. It preserves refusal code, fix,
         # partial, structural order, and typed-read order exactly.
-        values, captures = self.plan._parse_with_captures(response)
+        values, captures, repairs = self.plan._parse_with_captures(response)
         self._run("", None, final=True)
         events = self._events(final=True, final_captures=captures, values=values)
-        return StreamResult(events, values)
+        return StreamResult(events, values, repairs)
 
     def _append(self, delta: object) -> tuple[str, tuple[str, str | None, bool] | None]:
         """Record the delta; return (text delta, part delta) where the part
@@ -601,6 +728,8 @@ class Stream:
                     done += 1
                 self._counted[field] = done
         if self._derived is not None:
+            if self._repair is not None:
+                stage_text = self._repair.feed(stage_text, final)
             self._derived.feed(stage_text, final)
         elif self._reader_stream is not None:
             prefixes = self._reader_stream.feed(stage_text) if stage_text or not final else {}

@@ -4,7 +4,7 @@
  "entry": {
   "name": "lp_v1",
   "versions": {
-   "kernel": "0.7.0",
+   "kernel": "0.8.0",
    "vocab": {}
   },
   "template": [

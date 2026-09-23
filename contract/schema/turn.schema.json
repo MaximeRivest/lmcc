@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:lmcc:schema:turn:0.7.0",
+  "$id": "urn:lmcc:schema:turn:0.8.0",
   "title": "LMCC turn",
   "description": "One call of one signature (kernel §3a): inputs, steps, outputs. Examples, past exchanges and the exchange in progress are turns.",
   "type": "object",

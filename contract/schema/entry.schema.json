@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:lmcc:schema:entry:0.7.0",
+  "$id": "urn:lmcc:schema:entry:0.8.0",
   "title": "LMCC adapter entry",
   "description": "The artifact (kernel.md §2, §5, §6): a template, a reader, transports by purpose, formats by type — never a field name.",
   "type": "object",
@@ -103,6 +103,13 @@
         "kind": {
           "type": "string",
           "minLength": 1
+        },
+        "markers": {
+          "enum": [
+            "forgiving",
+            "exact"
+          ],
+          "description": "the derived reader's marker matching (kernel §4a); default forgiving"
         }
       }
     },

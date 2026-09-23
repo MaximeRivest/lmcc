@@ -90,12 +90,12 @@ def test_artifact_round_trips_and_loads_with_zero_ambient_state():
 
 
 @pytest.mark.parametrize("entry, code", [
-    ({"versions": {"kernel": "0.7.0"}, "template": {"messages": []}, "reader": {"kind": "derived"}}, "entry-malformed"),
+    ({"versions": {"kernel": "0.8.0"}, "template": {"messages": []}, "reader": {"kind": "derived"}}, "entry-malformed"),
     ({"versions": {"kernel": "9.0.0"}, "template": [], "reader": {"kind": "derived"}}, "version-incompatible"),
-    ({"versions": {"kernel": "0.7.0"}, "template": [], "reader": {"kind": "nope"}}, "unknown-reader"),
-    ({"versions": {"kernel": "0.7.0"}, "template": [], "reader": {"kind": "derived"}, "formats": {"X": {"use": "nope"}}}, "unknown-format"),
-    ({"versions": {"kernel": "0.7.0"}, "template": [], "reader": {"kind": "derived"}, "transports": {"r": {"use": "nope"}}}, "unknown-transport"),
-    ({"versions": {"kernel": "0.7.0"}, "template": [], "reader": {"kind": "derived"}, "formats": {"X": {"language": "python"}}}, "entry-malformed"),
+    ({"versions": {"kernel": "0.8.0"}, "template": [], "reader": {"kind": "nope"}}, "unknown-reader"),
+    ({"versions": {"kernel": "0.8.0"}, "template": [], "reader": {"kind": "derived"}, "formats": {"X": {"use": "nope"}}}, "unknown-format"),
+    ({"versions": {"kernel": "0.8.0"}, "template": [], "reader": {"kind": "derived"}, "transports": {"r": {"use": "nope"}}}, "unknown-transport"),
+    ({"versions": {"kernel": "0.8.0"}, "template": [], "reader": {"kind": "derived"}, "formats": {"X": {"language": "python"}}}, "entry-malformed"),
 ])
 def test_load_refuses_by_name(entry, code):
     with pytest.raises(lmcc.Refusal) as err:

@@ -7,7 +7,7 @@
  "entry": {
   "name": "format_json_v1",
   "versions": {
-   "kernel": "0.7.0",
+   "kernel": "0.8.0",
    "vocab": {
     "reader/json_object": "0.1.0",
     "format/json": "0.1.0"

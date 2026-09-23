@@ -1,5 +1,19 @@
 # The corpus
 
+**Repairs and truncation (kernel 0.8, D-42).** Cases 149–161 were
+authored by hand from kernel §4a before running them; two expectations
+were wrong and corrected from the spec, not from the output (161's
+placeholder `...` and trailing line feed, both older rules). 149–152 pin
+marker repairs (case, markdown labels, DSPy-style spacing, the exact
+spelling winning), 153 and 160 the two ambiguity refusals, 154 the report
+of old tolerances, 155 `markers: "exact"`, 156–158 truncation, 159 a bad
+`markers` value, 161 a repaired reply replayed from its values. Each rule
+was broken on purpose and caught by at least one case; case 160 was
+redesigned until an implementation that keeps the longest of two
+overlapping repairs fails it. Every other case changed only its kernel pin
+(and 13 its provided version); no value changed, including case 80, which
+shaped the definition of "written exactly".
+
 **Vocabulary (kernel 0.7, D-40).** Every case was rewritten as JSON, never as
 text, so a message's `role` could not be confused with a field's: entry keys
 (`transports`, `reader`, `find`, `put`, `tell`, `request_settings`,

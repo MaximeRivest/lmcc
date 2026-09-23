@@ -943,3 +943,58 @@ Host-language assumptions can creep in unnoticed until the next port; the
 port is the test. Removed with Go: `./check`'s Go step, the `--cases`
 harness option, the Go sections of the reference, and the `GO_AT_06`
 declarations.
+
+**D-42 · The derived reader repairs misspelled markers, reports every
+tolerance, and refuses a cut reply (kernel 0.8, §4a).** Real models
+misspell the layout they are shown (`<Answer>`, `**Answer:**`,
+`[[## answer ##]]`), and 0.7 refused those replies while it silently
+read a reply cut at the length limit as a finished answer. Both were
+wrong in the direction that matters: brittle where the meaning was plain,
+lenient where it was not.
+
+Ratified with the maintainer on 2026-09-23. The choices:
+
+- **In the kernel, on by default.** The repair is a reading rule of the
+  derived reader, like the whitespace-stripped anchors it already had, not
+  vocabulary: only the kernel can check it for ambiguity, keep the §8
+  refinement law and report it. Most adapters are never configured, so
+  the default decides how reliable LMCC is. `"markers": "exact"` turns
+  it off.
+- **One rule, not a list.** A marker matches ignoring ASCII case, spaces,
+  and `*`, `_`, `#`, and its span widens over markdown decoration. It is
+  general over signatures because it is stated over markers, never over
+  field names. Line feeds are content, so a repair never joins lines.
+- **The exact spelling wins.** A marker written exactly anywhere turns
+  every loose spelling of it into content. So a reply 0.7 read keeps its
+  values, and a model that mentions `answer:` in its reasoning does not
+  make a correct reply ambiguous. Cost: a streamed reply holds from its
+  first misspelled marker until `finish`, because a later exact marker can
+  still undo the repair.
+- **Never a guess.** Two repaired spans that overlap, or two repaired
+  anchors of one field, refuse `parse-ambiguous`. No closest-match
+  scoring, no second model call.
+- **Everything reported.** `plan.read` returns the repairs with the
+  values, including the tolerances 0.7 applied silently (`unclosed`,
+  `ignored`), so a caller can count a model's slips, alert on them or
+  refuse them. A missing close at the end of the text is not reported:
+  a provider stop sequence produces exactly that.
+- **Repaired replies replay from values** (§3a), so a conversation shows
+  the model the layout, not its slip. `ignored` text does not trigger
+  this: chatter around an answer is not a layout error.
+- **Truncation is correctness, not a repair.** With `finish_reason:
+  "length"`, an output that is missing or ran to the end of the text
+  refuses `parse-truncated`; the caller decides whether to retry with more
+  tokens. Only lm15 responses carry the reason; a bare text or message
+  is read as before.
+
+Costs, stated: one behavior change for replies 0.7 read (decoration
+touching an exact marker is now removed from the neighboring captures,
+and reported); a new refusal for cut replies that 0.7 accepted; a new
+method (`read`) beside `parse`; the stream holds after a slip. Rejected:
+a repair list shipped as vocabulary (a pack cannot keep the kernel's
+guarantees, and the obvious repairs would be re-declared by every
+adapter); per-field alternative spellings (they name fields, so an
+adapter stops being general); repairing everywhere, exact or not (it
+would make correct replies ambiguous). Not done in 0.8, as stated in
+the kernel's gaps: find rule delimiters, provider parts, forgiving
+default value reads.

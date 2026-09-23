@@ -1,0 +1,59 @@
+{
+ "name": "refuse-parse-truncated-whole-reply",
+ "kind": "refuse",
+ "entry": {
+  "name": "repairs_v1",
+  "versions": {
+   "kernel": "0.8.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{answer}"
+   },
+   {
+    "role": "user",
+    "text": "{question}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Answer the question.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "response": {
+  "message": {
+   "role": "assistant",
+   "parts": [
+    {
+     "type": "text",
+     "text": "Paris is the capital of France and"
+    }
+   ]
+  },
+  "finish_reason": "length"
+ },
+ "expect": {
+  "code": "parse-truncated",
+  "at": "parse"
+ }
+}
