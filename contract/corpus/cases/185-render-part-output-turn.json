@@ -1,0 +1,128 @@
+{
+ "name": "render-part-output-turn",
+ "kind": "render",
+ "entry": {
+  "name": "parts_v1",
+  "versions": {
+   "kernel": "0.8.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "directive": "turns"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Illustrate.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "caption",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "picture",
+    "direction": "output",
+    "shape": {
+     "media": "image"
+    }
+   },
+   {
+    "name": "note",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "q": "a dog"
+ },
+ "turns": {
+  "turns": [
+   {
+    "inputs": {
+     "q": "a cat"
+    },
+    "steps": [],
+    "outputs": {
+     "caption": "A cat",
+     "picture": {
+      "source": {
+       "type": "url",
+       "url": "https://example.com/cat.png"
+      }
+     },
+     "note": "done"
+    }
+   }
+  ]
+ },
+ "expect": {
+  "request": {
+   "system": "Illustrate.\n<caption>\n...\n</caption>\n<picture>\n(image)\n</picture>\n<note>\n...\n</note>\n",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "a cat"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "<caption>\nA cat\n</caption>\n<picture>\n"
+      },
+      {
+       "type": "image",
+       "source": {
+        "type": "url",
+        "url": "https://example.com/cat.png"
+       }
+      },
+      {
+       "type": "text",
+       "text": "\n</picture>\n<note>\ndone\n</note>"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "a dog"
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

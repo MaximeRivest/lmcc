@@ -573,7 +573,7 @@ order, then fields found by find rules in find rule order):
 | `marker` | a marker's or delimiter's span was rewritten | `marker`, `saw` (the span as written) |
 | `value` | a kernel-default read needed the forgiving read (§7a) | `field`, `saw` (the stripped capture), `as` (the value as §7a writes it) |
 | `unclosed` | a field with a non-empty close ended at the next marker or the tail without it | `field`, `close` |
-| `ignored` | text that is not whitespace, outside every capture and marker: before the first marker, between a field's close and the next marker, after the tail | `saw` (stripped) |
+| `ignored` | text that is not whitespace, outside every capture and marker: before the first marker, between a field's close and the next marker, after the tail | `saw` (stripped); or, for a non-text part outside every capture (§4b), `part` (its type) |
 
 A capture that runs to the end of the text without its close is not
 reported: that is what a provider stop sequence produces (§3). Replies
@@ -581,6 +581,42 @@ read by a vocabulary reader report nothing. The report is data, in the
 same order in every implementation; the corpus pins it
 (`expect.repairs`). A recorded reply whose reading has a `marker`,
 `unclosed` or `value` repair is written back from its values (§3a).
+
+## 4b. Parts inside the pattern: interleaved replies
+
+A reply is a sequence of parts. The reader reads the text parts as one
+text (§3, other parts are transparent to markers); every other part is an
+**atom** at a position in that text: the length of the text parts before
+it. Parts of a type a `part:<type>` find rule reads belong to that rule
+and are not atoms.
+
+**Reading.** An atom's position is followed through every edit made to
+the text before the reader (pass 1 repairs, removing find rules, pass 2
+repairs, §4a); an atom inside a span an edit removed or rewrote belongs to
+no field. An atom whose position lies within a field's section — from the
+end of its anchor to the start of its close, or of the next marker, or
+the end of the text, both ends included — belongs to that field. The
+field's capture is then the section's text split at its atoms, in order:
+text, atom, text…, with the outer whitespace of the whole stripped and
+empty text pieces dropped. Its `.text` is exactly the section's text as
+without atoms (§4), so a text-reading format reads the same value as
+before; a format that reads parts (the kernel's media default reads the
+first part of its kind, §7b) gets them. Every other atom is reported as
+`{"repair": "ignored", "part": <type>}`, after the reader's tolerances, in
+reply order. A vocabulary reader sees no atoms.
+
+**Writing.** A visible output whose format writes parts (`writes:
+"parts"`, round-tripping) is written at its hole: the text before it, its
+parts, the text after it, in one message. So a past turn with an image
+output reads back as written (case 185). A text value containing U+FFFC
+(the placeholder for that spot) refuses `value-collides`.
+
+Streaming is unchanged: field deltas are text; atoms arrive with the
+values at `finish`, which are batch's (§8). Not covered, stated: atoms
+inside a find rule's match (they are ignored, not given to that rule's
+field), and structured values made of several parts (a list of text and
+image pairs) — those need a format that reads a parts capture, which is
+vocabulary.
 
 **Truncation.** An lm15 response whose `finish_reason` is `"length"`
 was cut by the provider. It is read as usual; then parse refuses

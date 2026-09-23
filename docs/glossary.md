@@ -21,6 +21,8 @@ Every LMCC word, one sentence each, in the order you need them. If a sentence he
 | **marker** | Fixed text of the template the reader looks for in a reply, such as `<answer>` or `Answer:`. |
 | **repair** | Reading a misspelled marker (`<Answer>`, `**Answer:**`) as the template's spelling. Also a value slip (`42.`, `"positive"`, `None`) and a misspelled reasoning tag (`<Think>`). Always reported, never a guess. |
 | **strict** | An adapter setting: `strict=True` reads replies exactly, with no repairs. |
+| **prefill** | A template's last message, when it is an assistant message: the start of the reply, written for the model. Sent only to models that declare `assistant_prefill`; the reply is read as continuing it. |
+| **atom** | A reply part that is not text (an image, audio) and that no transport claims. It sits at a position in the text, so the field whose section contains it gets it. |
 | **truncated** | A reply the provider cut at its length limit (`finish_reason: "length"`); an output that may be cut refuses `parse-truncated`. |
 | **refusal** | A named error with a `fix`: the next thing to do, as data. |
 

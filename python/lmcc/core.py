@@ -572,8 +572,9 @@ class Capture:
     ``text`` is the text parts, each stripped, joined by newlines (kernel
     §6); ``of(kind)`` selects parts by kind."""
 
-    def __init__(self, parts: list[dict]):
+    def __init__(self, parts: list[dict], text: str | None = None):
         self.parts = list(parts)
+        self._text = text      # the reader's span text, when parts interleave (kernel §4b)
 
     @classmethod
     def of_text(cls, text: str) -> "Capture":
@@ -582,7 +583,10 @@ class Capture:
     @property
     def text(self) -> str:
         """Every part that carries text (text, thinking, ...), stripped,
-        joined by newlines (kernel §6)."""
+        joined by newlines (kernel §6); for a reader capture holding
+        non-text parts, its span's text exactly as without them (§4b)."""
+        if self._text is not None:
+            return self._text
         return "\n".join(strip(p["text"]) for p in self.parts
                          if isinstance(p.get("text"), str))
 

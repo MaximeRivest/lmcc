@@ -1122,3 +1122,35 @@ ended with an assistant message for another purpose now means a prefill
 the fact, the author's message is silently not sent — visible in
 `describe()`, not in the request. Whether a prefill helps a given model is
 the adapter author's question, not measured here.
+
+**D-47 · Parts sit at positions in the reply; captures keep them
+(kernel 0.8, §4b).** Ratified with the maintainer on 2026-09-23 as the
+answer to "replies that interleave text with other parts". Before, the
+reader read the text parts as one text and every other part was only
+reachable by type (`part:<type>` find rules), so a template could not say
+"the image goes here": an image output in the pattern refused
+`parse-value`, and a past turn with one refused `turn-not-renderable`.
+
+The rule: a part that is not text and that no `part:` rule reads is an
+atom at its text position; positions follow every text edit; a field's
+capture holds the atoms inside its section, in order, while its `.text`
+stays exactly what it was. Writing is the mirror (a parts-writing output
+is written at its hole), so one template describes both directions again.
+
+Chosen over alternatives: a sentinel character in the text (it would
+break the pinned rule that other parts are transparent to markers, plan
+09 H4, and make streamed text depend on invisible characters); a new
+reader kind for mixed replies (a second description of the same layout);
+positional `part:` rules (they name positions, not meanings). No existing
+value changes: text formats read the same `.text`; only replies that used
+to refuse now read.
+
+Found live (gemini-2.5-flash-image, three runs): once text, image and
+text landed in the three fields; once the model drew no image (refused
+`parse-value`); once it stopped after the image (refused
+`parse-missing-fields`). The model is the unreliable part, not the
+reading. Not covered, stated in §4b: atoms inside a find rule's match,
+structured values made of several parts (vocabulary: a format that reads
+a parts capture), stray text beside an image in a media field (the media
+default reads the image and ignores the text, unreported), and streaming
+events for atoms (they arrive with the values at `finish`).

@@ -1,0 +1,93 @@
+{
+ "name": "parse-claimed-part-not-placed",
+ "kind": "parse",
+ "entry": {
+  "name": "parts_v1",
+  "versions": {
+   "kernel": "0.8.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "directive": "turns"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  },
+  "transports": {
+   "reasoning": {
+    "in_template": false,
+    "find": [
+     {
+      "from": "part:thinking",
+      "to": "@purpose"
+     }
+    ]
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Illustrate.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "reasoning",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    },
+    "purpose": "reasoning"
+   },
+   {
+    "name": "caption",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "response": {
+  "role": "assistant",
+  "parts": [
+   {
+    "type": "thinking",
+    "text": "hm"
+   },
+   {
+    "type": "text",
+    "text": "<caption>\nA "
+   },
+   {
+    "type": "thinking",
+    "text": "more"
+   },
+   {
+    "type": "text",
+    "text": "cat\n</caption>"
+   }
+  ]
+ },
+ "expect": {
+  "values": {
+   "caption": "A cat",
+   "reasoning": "hm\nmore"
+  },
+  "repairs": []
+ }
+}

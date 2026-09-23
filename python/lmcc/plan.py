@@ -523,8 +523,25 @@ class Plan:
             else:   # spelling.value
                 piece = spell_turn(w["template"], {"value": text})
             (before if w["position"] == "before" else after).append(piece)
-        spelled = [(f.name, self._spelled_text(f, outputs[f.name]))
-                   for f in self.visible_outputs if f.name in outputs]
+        # §4b: a visible output whose format writes parts sits in the pattern
+        # at its hole; a placeholder marks the spot until the text is split
+        spelled, placed_parts = [], []
+        for f in self.visible_outputs:
+            if f.name not in outputs:
+                continue
+            fmt = self.format_for(f)
+            if fmt.writes == "parts" and isinstance(self.reader, DerivedReader):
+                if not fmt.round_trip:
+                    refuse("turn-not-renderable", f"field {f.name!r}: format "
+                           f"{fmt.name or '(inline)'} does not round-trip")
+                placed_parts.append(self.write(f, outputs[f.name]))
+                spelled.append((f.name, _PART_SPOT))
+            else:
+                text_value = self._spelled_text(f, outputs[f.name])
+                if _PART_SPOT in text_value:
+                    refuse("value-collides", f"field {f.name!r}: its value contains U+FFFC, "
+                                             f"which marks where a part goes")
+                spelled.append((f.name, text_value))
         body = self.reader.join(spelled) if spelled else ""
         text = "\n".join(p for p in before + [body] + after if p)
         ids: dict = {}
@@ -556,7 +573,13 @@ class Plan:
                         ids[p["id"]] = f"s{k}_{p['id']}"
                         p = {**p, "id": ids[p["id"]]}
                     call_parts.append(p)
-        if text:
+        if placed_parts:
+            pieces = text.split(_PART_SPOT)
+            for piece, written in zip(pieces, placed_parts + [[]]):
+                if piece:
+                    parts.append(core.text_part(piece))
+                parts += [dict(x) for x in written]
+        elif text:
             parts.append(core.text_part(text))
         parts += call_parts
         if not parts:
@@ -646,12 +669,14 @@ class Plan:
         """
         cut = core.finish_reason(response) == "length"
         text, parts = core.response_text_and_parts(response)
-        if continued and self.prefill:   # the reply continues the prefill (§3)
-            text = self.prefill + text
+        lead = self.prefill if continued and self.prefill else ""
+        text = lead + text              # the reply continues the prefill (§3)
+        atoms = _atoms(parts, self.find_rules, len(lead))   # §4b: non-text parts, placed
+        edits: list = []
         repairs: list[dict] = []
         if self.find_repairable:        # §4a, pass 1: delimiters of repairing find rules
-            text, repairs = repair_markers(text, self.find_repairable)
-        text, found = apply_find_rules(text, parts, self.find_rules, self.pattern_binding())
+            text, repairs = repair_markers(text, self.find_repairable, edits)
+        text, found = apply_find_rules(text, parts, self.find_rules, self.pattern_binding(), edits)
         complete = any(r.get("complete_reply") and found.get(name) is not None and found[name].parts
                        for name, r in self.find_rules)
         names = [f.name for f in self.visible_outputs]
@@ -660,7 +685,7 @@ class Plan:
         missing_err: Refusal | None = None
         try:
             if derived:
-                result = self.reader.read(text, names, allow_missing=True)
+                result = self.reader.read(text, names, allow_missing=True, edits=edits)
                 raw, to_end = result.raw, result.to_end
                 repairs += result.repairs
             else:
@@ -691,6 +716,12 @@ class Plan:
             refuse_missing(raw, names)
         captures: dict[str, core.Capture] = {
             f.name: core.Capture.of_text(raw[f.name]) for f in self.visible_outputs if f.name in raw}
+        if atoms and derived:           # §4b: each non-text part joins the capture it sits in
+            placed, ignored = _place_atoms(atoms, edits, result)
+            for name, inside in placed.items():
+                if name in captures:
+                    captures[name] = _interleaved(result.text, result.spans[name], inside, raw[name])
+            repairs += [{"repair": "ignored", "part": p.get("type")} for p in ignored]
         captures.update(found)
         values: dict = {}
         for f in self.visible_outputs:
@@ -828,6 +859,70 @@ class Plan:
         if d["request_settings"]:
             lines.append(f"request_settings: {d['request_settings']}")
         return "\n".join(lines)
+
+
+_PART_SPOT = "\ufffc"   # where a written part goes in a pattern (§4b)
+
+
+def _atoms(parts: list[dict], find_rules, shift: int) -> list[tuple[int, dict]]:
+    """Kernel §4b: every part that is not text and that no ``part:`` find
+    rule reads, with its position in the reply text (the length of the
+    text parts before it)."""
+    claimed = {r["from"].split(":", 1)[1] for _, r in find_rules if r["from"].startswith("part:")}
+    out, pos = [], shift
+    for p in parts:
+        if p.get("type") == "text":
+            pos += len(p.get("text", ""))
+        elif p.get("type") not in claimed:
+            out.append((pos, p))
+    return out
+
+
+def _map(offset: int, stages: list) -> int | None:
+    """Follow a position through text edits (§4b); None when an edit
+    removed or rewrote the text around it."""
+    for stage in stages:
+        shift = 0
+        for start, end, new_len in stage:
+            if offset <= start:
+                break
+            if offset < end:
+                return None
+            shift += new_len - (end - start)
+        offset += shift
+    return offset
+
+
+def _place_atoms(atoms, edits, result) -> tuple[dict, list]:
+    placed: dict[str, list] = {}
+    ignored: list = []
+    for offset, part in atoms:
+        o = _map(offset, edits)
+        owner = None if o is None else next(
+            (name for name, (a, b) in result.spans.items() if a <= o <= b), None)
+        if owner is None:
+            ignored.append(part)
+        else:
+            placed.setdefault(owner, []).append((o, part))
+    return placed, ignored
+
+
+def _interleaved(text: str, span: tuple[int, int], inside: list, raw: str) -> core.Capture:
+    """The span's text split at its parts, outer whitespace stripped, empty
+    pieces dropped; ``.text`` stays the span's text (§4b)."""
+    a, b = span
+    seq: list[dict] = []
+    pos = a
+    for o, part in sorted(inside, key=lambda x: x[0]):
+        seq.append(core.text_part(text[pos:o]))
+        seq.append(part)
+        pos = o
+    seq.append(core.text_part(text[pos:b]))
+    if seq[0].get("type") == "text":
+        seq[0] = core.text_part(seq[0]["text"].lstrip(core.WHITESPACE))
+    if seq[-1].get("type") == "text":
+        seq[-1] = core.text_part(seq[-1]["text"].rstrip(core.WHITESPACE))
+    return core.Capture([p for p in seq if p.get("type") != "text" or p["text"]], text=raw)
 
 
 def _bare_slots(nodes) -> set[str]:

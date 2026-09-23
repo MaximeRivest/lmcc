@@ -186,6 +186,9 @@
                     },
                     "as": {
                       "type": "string"
+                    },
+                    "part": {
+                      "type": "string"
                     }
                   },
                   "additionalProperties": false

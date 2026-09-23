@@ -52,8 +52,9 @@ def _text_captures(text: str, rule: dict, pattern=None) -> list[tuple[int, int, 
 
 
 def apply_find_rules(text: str, parts: list[dict], find_rules: list[tuple[str, dict]],
-                   pattern=None) -> tuple[str, dict[str, core.Capture]]:
-    """Run all find_rules; return (remaining text, {field: Capture})."""
+                   pattern=None, edits: list | None = None) -> tuple[str, dict[str, core.Capture]]:
+    """Run all find_rules; return (remaining text, {field: Capture}). With
+    ``edits``, each removing rule appends its removed spans (kernel §4b)."""
     found: dict[str, core.Capture] = {}
     for field_name, r in find_rules:
         if r["from"].startswith("part:"):
@@ -63,6 +64,8 @@ def apply_find_rules(text: str, parts: list[dict], find_rules: list[tuple[str, d
             captures = _text_captures(text, r, pattern)
             capture = core.Capture([core.text_part(cap) for _, _, cap in captures])
             if r.get("remove") and captures:
+                if edits is not None:
+                    edits.append([(start, end, 0) for start, end, _ in captures])
                 pieces, pos = [], 0
                 for start, end, _ in captures:
                     pieces.append(text[pos:start])
@@ -245,7 +248,8 @@ def written_exactly(text: str, marker: str, spans: list[tuple[int, int]]) -> boo
     return False
 
 
-def repair_markers(text: str, markers: list[str]) -> tuple[str, list[dict]]:
+def repair_markers(text: str, markers: list[str], edits: list | None = None
+                   ) -> tuple[str, list[dict]]:
     """Kernel §4a: rewrite every misspelled marker to its template spelling
     unless the marker is written exactly somewhere. Returns the rewritten
     text and the ``marker`` repairs in reply order."""
@@ -267,6 +271,8 @@ def repair_markers(text: str, markers: list[str]) -> tuple[str, list[dict]]:
     pieces: list[str] = []
     repairs: list[dict] = []
     pos = 0
+    if edits is not None:
+        edits.append([(a, b, len(marker)) for a, b, marker in chosen])
     for a, b, marker in chosen:
         pieces += [text[pos:a], marker]
         repairs.append({"repair": "marker", "marker": marker, "saw": text[a:b]})
@@ -289,12 +295,15 @@ class ReaderResult:
     """What the derived reader found: raw captures, the tolerances it
     applied (kernel §4a), and which fields ran to the end of the text."""
 
-    __slots__ = ("raw", "repairs", "to_end")
+    __slots__ = ("raw", "repairs", "to_end", "spans", "text")
 
-    def __init__(self, raw: dict[str, str], repairs: list[dict], to_end: set[str]):
+    def __init__(self, raw: dict[str, str], repairs: list[dict], to_end: set[str],
+                 spans: dict | None = None, text: str = ""):
         self.raw = raw
         self.repairs = repairs
         self.to_end = to_end
+        self.spans = spans or {}   # field -> (start, end) of its capture in ``text`` (§4b)
+        self.text = text           # the text read, after marker repairs
 
 
 class DerivedReader(Reader):
@@ -325,12 +334,13 @@ class DerivedReader(Reader):
     def split(self, text: str, field_names: list[str]) -> dict[str, str]:
         return self.read(text, field_names).raw
 
-    def read(self, text: str, field_names: list[str], *, allow_missing: bool = False) -> ReaderResult:
+    def read(self, text: str, field_names: list[str], *, allow_missing: bool = False,
+             edits: list | None = None) -> ReaderResult:
         """Kernel §4 and §4a: repair markers, then read the rewritten text.
         With ``allow_missing`` the caller decides what a missing field means."""
         repairs: list[dict] = []
         if self.repairable:
-            text, repairs = repair_markers(text, self.repairable)
+            text, repairs = repair_markers(text, self.repairable, edits)
         wanted = [a for a in self.anchors if a[0] in field_names]
         boundaries: list[tuple[int, int, str | None, str]] = []
         for name, prefix, suffix in wanted:
@@ -359,6 +369,7 @@ class DerivedReader(Reader):
                 boundaries.append((t_idx, t_idx, None, ""))
         boundaries.sort(key=lambda b: (b[0], b[1]))
         raw: dict[str, str] = {}
+        spans: dict[str, tuple[int, int]] = {}
         to_end: set[str] = set()
         notes: list[dict] = []
 
@@ -376,7 +387,9 @@ class DerivedReader(Reader):
                 continue
             chunk = text[after:len(text) if last else boundaries[i + 1][0]]
             close = core.strip(suffix)
-            raw[name] = core.strip(_cut_at_close(chunk, close, name))
+            cut = _cut_at_close(chunk, close, name)
+            raw[name] = core.strip(cut)
+            spans[name] = (after, after + len(cut))
             idx = chunk.find(close) if close else -1
             if idx >= 0:
                 ignored(chunk[idx + len(close):])
@@ -386,7 +399,7 @@ class DerivedReader(Reader):
                 notes.append({"repair": "unclosed", "field": name, "close": close})
         if not allow_missing:
             refuse_missing(raw, field_names)
-        return ReaderResult(raw, repairs + notes, to_end)
+        return ReaderResult(raw, repairs + notes, to_end, spans, text)
 
     def join(self, spelled: list[tuple[str, str]]) -> str:
         by_name = dict(spelled)

@@ -179,6 +179,14 @@ except lmcc.Refusal as err:
     assert err.code == "parse-truncated"
 ```
 
+Two more things the template can say. A last `lmcc.assistant("<answer>\n")`
+message is a **prefill**: the start of the reply, sent to models that
+declare `assistant_prefill` and left out for others, with the reply read
+as its continuation either way. And a field whose type is an image (or
+any non-text part) can sit in the pattern like any other: when a model
+replies with text, an image and more text, the image goes to the field
+whose section it falls in (kernel §4b).
+
 The whole story, streaming included, is
 [how-to 14](docs/howto/14-read-imperfect-replies.md).
 
