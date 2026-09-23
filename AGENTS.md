@@ -184,9 +184,9 @@ Checklists:
 
 `./dev-venv` builds `.venv` (lmcc editable + `lmcc_std` + `lmcc_lm15` with
 the pinned lm15 + IPython) and registers the rat runtime `py@lmcc` on it,
-so every `docs/howto/*.md` runs as an mrmd notebook. `lmcc` is not on PyPI
-yet (checked 2026-09-23; the name is free); install it editable from
-`python/`. The package version equals the kernel version.
+so every `docs/howto/*.md` runs as an mrmd notebook. `lmcc` is on PyPI since
+0.8.0 (2026-09-23; released by `.github/workflows/release.yml`, see
+RELEASING.md); for development, install it editable from `python/`. The package version equals the kernel version.
 
 ## Verify — one command
 
