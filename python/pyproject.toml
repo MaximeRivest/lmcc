@@ -8,13 +8,13 @@ version = "0.8.0"   # equals the kernel version (lmcc.KERNEL_VERSION)
 description = "The language model calling convention: typed signatures to messages and replies to typed values"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = { text = "Apache-2.0" }
 authors = [{ name = "Maxime Rivest" }]
 keywords = ["llm", "language models", "prompting", "parsing", "structured output"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Topic :: Software Development :: Libraries",
 ]
