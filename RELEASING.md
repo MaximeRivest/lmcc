@@ -3,8 +3,10 @@
 The package version equals the kernel version (`python/pyproject.toml`,
 `lmcc.KERNEL_VERSION`; `tests/test_package_version.py` checks it).
 
-Before the first release, decide the license: `pyproject.toml` says MIT,
-but the repository has no LICENSE file yet.
+Releases publish through `.github/workflows/release.yml` (PyPI Trusted
+Publishing, no stored token): publish a GitHub Release tagged `v<kernel
+version>`, and the workflow builds, checks and uploads. The manual steps
+below are the same checks, for a local dry run.
 
 ```bash
 ./check                                        # all green
