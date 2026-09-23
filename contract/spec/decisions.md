@@ -1040,3 +1040,40 @@ Costs, stated: two passes and two holding stream stages; `describe()`
 gains `strict` and the stream's `repairs` entry; `reasoning_tags` moves to
 0.3.0, so artifacts pinning 0.2.0 refuse `version-incompatible`. Not done:
 `line_prefixed` prefixes and provider parts (kernel gaps).
+
+**D-44 · Plan 09's defects, rechecked against kernel 0.8 and closed.**
+On 2026-09-23 every Bin 1 finding of the clean-room audit was re-run
+against the Python kernel. Already fixed: A4, B5, E3 (batch 1), F23
+(turns replaced demos), B2/D1 (pointers had been corrected). Withdrawn
+with the custom regex work: E6 (D-31). Fixed now, each with a case:
+
+- F19 — `prefix()` counts a message an input is `put` into as
+  input-dependent, and has no stable prefix when the system text depends
+  on inputs (170, 171).
+- F14 — an input with a bare slot that is also `put` refuses
+  `field-double-covered` (fix `edit-template`) instead of being sent
+  twice (172). Refusing, not silently dropping the slot: the audit's
+  proposal would have hidden an authoring mistake.
+- G15 — a request `put` overlapping a fixed setting or another `put`
+  refuses `setting-conflict` at bind (173).
+- A6 — the capability vocabulary is closed, as D-06 and D-29 (R2, option
+  B) ratified: a predicate or `requires` naming an unknown fact refuses
+  `entry-malformed` at its exact path (174). Case 78's undeclared
+  `prefill` became `stop_sequences`, a deliberate corpus repair; its
+  expectation keeps its meaning (no branch applies). A `choose` branch's
+  `when` is now validated at all. The caller's capability dict may still
+  hold extra keys.
+- G25 — a media value whose `type` contradicts the field's kind refuses
+  `value-invalid` (175) instead of being relabeled.
+- G4 — `scaled_number` with `round` declares `round_trip: false`
+  (0.2.0); a rounded output cannot be written into a past turn (176).
+- A1 — kernel §5's resolution list puts the artifact's `*` after the
+  kernel default, as the code and cases 48, 49, 107 always did.
+- D2 — the harness requires a refusal's stage to equal `expect.at`.
+- D3 — the harness requires each field's streamed deltas to join to
+  exactly the raw text batch captured, and tests prove it catches a
+  stream that drops them (`tests/test_harness_checks.py`).
+
+Costs, stated: artifacts naming private facts in predicates now refuse;
+`scaled_number` moves to 0.2.0; templates that both slot and put one
+input now refuse instead of sending it twice.

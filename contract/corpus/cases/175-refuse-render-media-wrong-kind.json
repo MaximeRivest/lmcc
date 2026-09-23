@@ -1,0 +1,62 @@
+{
+ "name": "refuse-render-media-wrong-kind",
+ "kind": "refuse",
+ "entry": {
+  "name": "sections_v1",
+  "versions": {
+   "kernel": "0.8.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n{% endfor %}</done>"
+   },
+   {
+    "role": "user",
+    "text": "{question}\n{photo}\nthanks"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Describe.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "photo",
+    "direction": "input",
+    "shape": {
+     "media": "image"
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "question": "what is this?",
+  "photo": {
+   "type": "audio",
+   "data": "AAAA",
+   "media_type": "audio/wav"
+  }
+ },
+ "expect": {
+  "code": "value-invalid",
+  "at": "render"
+ }
+}

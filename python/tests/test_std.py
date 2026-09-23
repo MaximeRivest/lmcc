@@ -77,9 +77,12 @@ def test_scaled_number_rounding_and_spelling():
     sig = lmcc.signature("x", inputs={"text": str}, outputs={"p": float})
     plan = lmcc.adapter(messages=PATTERN, formats={"number": lmcc.use("scaled_number", scale=100, suffix="%", round=1)}
                         ).bind(sig, registry=_registry())
-    demo = plan.render(text="t", turns=[plan.example({"text": "d"}, {"p": 0.12345})]).messages[1]["parts"][0]["text"]
-    assert demo == "<p>\n12.3%\n</p>"
+    # a rounded value would not read back as written: no past turn with it (plan 09 G4)
+    with pytest.raises(lmcc.Refusal) as err:
+        plan.render(text="t", turns=[plan.example({"text": "d"}, {"p": 0.12345})])
+    assert err.value.code == "turn-not-renderable"
     assert plan.parse("<p>\n83%\n</p>") == {"p": 0.83}
+    assert plan.format_for(plan.signature.field_named("p")).write(0.12345, None) == "12.3%"
 
 
 def test_json_object_reader_is_a_gated_mode():

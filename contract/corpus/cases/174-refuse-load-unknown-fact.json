@@ -1,5 +1,5 @@
 {
- "name": "refuse-bind-choose-no-branch",
+ "name": "refuse-load-unknown-fact",
  "kind": "refuse",
  "entry": {
   "name": "choose_without_else_v1",
@@ -44,7 +44,7 @@
          "capability": "instruct"
         },
         {
-         "capability": "stop_sequences"
+         "capability": "prefill"
         }
        ]
       },
@@ -98,28 +98,11 @@
   "instruct": true
  },
  "expect": {
-  "code": "capability-missing",
+  "code": "entry-malformed",
   "fix": {
-   "action": "satisfy-predicate",
-   "purpose": "reasoning",
-   "predicate": {
-    "any": [
-     {
-      "capability": "native_reasoning"
-     },
-     {
-      "all": [
-       {
-        "capability": "instruct"
-       },
-       {
-        "capability": "stop_sequences"
-       }
-      ]
-     }
-    ]
-   }
+   "action": "edit-entry",
+   "path": "transports['reasoning'].choose[1].when.all[1]"
   },
-  "at": "bind"
+  "at": "load"
  }
 }

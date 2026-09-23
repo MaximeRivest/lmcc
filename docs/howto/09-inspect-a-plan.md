@@ -132,7 +132,7 @@ assert plan.explain() == "\n".join([
 ```python
 d = registry.describe()
 assert d["formats"] == {"code_arguments": "0.1.0", "code_calls": "0.1.0",
-                        "citations": "0.1.0", "function_tool": "0.1.0", "json": "0.1.0", "scaled_number": "0.1.0",
+                        "citations": "0.1.0", "function_tool": "0.1.0", "json": "0.1.0", "scaled_number": "0.2.0",
                         "source_list": "0.1.0", "table": "0.1.0", "tool_calls": "0.1.0", "tool_catalog": "0.1.0"}
 assert d["transports"] == {"heredoc_tools": "0.1.0",
                            "fenced_tools": "0.1.0", "inline_citations": "0.1.0", "native_citations": "0.1.0",

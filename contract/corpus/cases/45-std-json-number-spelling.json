@@ -11,7 +11,7 @@
    "vocab": {
     "format/json": "0.1.0",
     "format/table": "0.1.0",
-    "format/scaled_number": "0.1.0"
+    "format/scaled_number": "0.2.0"
    }
   },
   "template": [

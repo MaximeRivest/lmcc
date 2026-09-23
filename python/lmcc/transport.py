@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field as dc_field
 
+from . import core
 from .errors import refuse
 
 _KEYS = ("when", "requires", "in_template", "tell", "request_settings", "put", "written_as", "find", "spelling")
@@ -146,10 +147,17 @@ class Transport:
     def validate(self, *, where: str) -> None:
         if self.choose is not None:
             for i, alt in enumerate(self.choose):
+                if "when" in alt:
+                    validate_predicate(alt["when"], where=f"{where}.choose[{i}].when")
                 (alt.get("else") or alt["use"]).validate(where=f"{where}.choose[{i}]")
             return
         if self.when is not None:
             validate_predicate(self.when, where=f"{where}.when")
+        for i, fact in enumerate(self.requires):
+            if fact not in core.CAPABILITY_FACTS:
+                refuse("entry-malformed", f"{where}.requires: {fact!r} is not a capability fact; "
+                                          f"known: {sorted(core.CAPABILITY_FACTS)}",
+                       fix={"action": "edit-entry", "path": f"{where}.requires[{i}]"})
         for i, r in enumerate(self.find):
             validate_find_rule(r, where=f"{where}.find[{i}]")
         for target, place in self.put.items():
@@ -353,17 +361,21 @@ def validate_predicate(p: object, *, where: str) -> None:
                fix={"action": "edit-entry", "path": where})
     key, value = next(iter(p.items()))
     if key == "capability":
+        if isinstance(value, str) and value not in core.CAPABILITY_FACTS:
+            refuse("entry-malformed", f"{where}: {value!r} is not a capability fact; known: "
+                                      f"{sorted(core.CAPABILITY_FACTS)}",
+                   fix={"action": "edit-entry", "path": where})
         if not isinstance(value, str):
             refuse("entry-malformed", f"{where}: 'capability' names a fact",
                    fix={"action": "edit-entry", "path": where})
     elif key == "not":
-        validate_predicate(value, where=where)
+        validate_predicate(value, where=f"{where}.not")
     elif key in ("all", "any"):
         if not isinstance(value, list):
             refuse("entry-malformed", f"{where}: {key!r} takes a list",
                    fix={"action": "edit-entry", "path": where})
-        for q in value:
-            validate_predicate(q, where=where)
+        for j, q in enumerate(value):
+            validate_predicate(q, where=f"{where}.{key}[{j}]")
     else:
         refuse("entry-malformed", f"{where}: unknown predicate key {key!r}; known: {_PREDICATE_KEYS}",
                fix={"action": "edit-entry", "path": where})

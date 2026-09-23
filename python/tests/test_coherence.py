@@ -204,6 +204,13 @@ def test_extension_index_is_complete():
         assert name in rows and rows[name][0] == version, f"{name} {version} is not indexed"
 
 
+def test_kernel_fact_list_is_the_vocabulary_table():
+    import re
+    table = (ROOT / "contract" / "spec" / "vocab" / "capabilities.md").read_text()
+    facts = set(re.findall(r"^\| `([a-z_]+)` \|", table, re.M))
+    assert facts == set(lmcc.core.CAPABILITY_FACTS)
+
+
 def test_capability_facts_used_by_std_are_in_the_vocabulary():
     """Std transports/readers may only name declared capability facts."""
     vocab = set(re.findall(r"^\| `([a-z_]+)` \|",

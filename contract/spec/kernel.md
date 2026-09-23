@@ -589,12 +589,14 @@ mechanical hint). A format declares:
 
 1. the artifact's `formats[type]` — exact type name;
 2. the artifact's most specific structural key: `list[object]` before
-   `list[*]` before `object` before `string` … before `*`; `media:image`
-   before `media:*`;
+   `list[*]` before `object` before `string` …; `media:image` before
+   `media:*` — never `*` here;
 3. the runtime's type binding (code, per language, never serialized);
 4. the kernel default: scalars, enums and nullables by §7a; a media
    value that is already a part passes through;
-5. refuse `no-format`, naming the field and its shape.
+5. the artifact's `*` — so a wildcard format catches what nothing else
+   spells, and never overrides a scalar default (cases 48, 49, 107);
+6. refuse `no-format`, naming the field and its shape.
 
 A format owns the whole value it accepts; the kernel never nests
 formats. A format that composes (a list layout writing each element) asks
@@ -803,7 +805,8 @@ from a tool's name or from the model.
 
 Scalars, enums and nullables write and read by §7a; strings are one
 text part, verbatim. A field whose shape is `{"media": type}` writes a
-value that is the part's data (a dict; a `type` key in it is ignored) as
+value that is the part's data (a dict; a `type` key equal to the field's
+kind is ignored, a different one refuses `value-invalid` — plan 09 G25) as
 that lm15 part (`{"type": type, …}`), and reads the first part of that
 type from its capture as its data **without** the `type` key: the field's
 shape already says the type, so a value round-trips unchanged whether it

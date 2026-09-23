@@ -97,12 +97,15 @@ class PythonDriver:
         if unclaimed:
             return {"ok": True, "detail": "", "unclaimed": unclaimed}
         registry = self._registry(case)
+        stage = "load"
         try:
             adapter = lmcc.load(case["entry"], registry=registry)
             if kind == "roundtrip":
                 dumped = lmcc.dump(adapter, registry)
                 return _compare(expect["entry"], dumped, "entry")
+            stage = "signature"
             sig = lmcc.signature_from_dict(case["signature"])
+            stage = "bind"
             baked = adapter.bind(sig, case.get("capabilities", {}),
                                  registry=registry)
             if kind == "plan":
@@ -123,21 +126,29 @@ class PythonDriver:
                     compared = _compare(expect["repairs"], reading.repairs, "repairs")
                     if not compared["ok"]:
                         return compared
-                result = _check_stream_success(baked, case["response"], values, reading.repairs)
+                _, captures, _ = baked._parse_with_captures(case["response"])
+                raw = {name: c.text for name, c in captures.items() if c.text}
+                result = _check_stream_success(baked, case["response"], values, reading.repairs,
+                                               raw=raw)
                 if result["ok"]:
                     result["stream_trace"] = _stream_trace(baked, case["response"])
                 return result
             if kind == "refuse":
                 if "inputs" in case:
+                    stage = "render"
                     current, slots = case_turns(case)
                     baked.render(lmcc.Turn.from_dict(current), turns=slots)
                 if "response" in case:
+                    stage = "parse"
                     baked.parse(case["response"])
                 return {"ok": False,
                         "detail": f"expected refusal {expect['code']!r}, "
                                   f"but nothing refused"}
             return {"ok": False, "detail": f"unknown case kind {kind!r}"}
         except lmcc.Refusal as err:
+            if kind == "refuse" and err.code == expect["code"] and stage != expect.get("at", stage):
+                return {"ok": False,
+                        "detail": f"refusal [{err.code}] fired at {stage}, the case says {expect['at']}"}
             if kind == "refuse" and err.code == expect["code"]:
                 if "fix" in expect:
                     compared = _compare(expect["fix"], err.fix, f"fix of [{err.code}]")
@@ -212,7 +223,9 @@ def _finish_reason(response: object):
 
 
 def _check_stream_success(plan, response: object, batch_values: dict,
-                          batch_repairs: list | None = None) -> dict:
+                          batch_repairs: list | None = None, raw: dict | None = None) -> dict:
+    """Every chunking gives the batch values and repairs, and (kernel §8)
+    each field's deltas join to exactly the raw text batch captured."""
     baseline = None
     for n, chunks in enumerate(_stream_chunkings(response)):
         stream = plan.stream()
@@ -229,6 +242,8 @@ def _check_stream_success(plan, response: object, batch_values: dict,
         if batch_repairs is not None and result.repairs != batch_repairs:
             return _compare(batch_repairs, result.repairs, f"stream split {n} repairs")
         deltas = _delta_text(events)
+        if raw is not None and deltas != raw:
+            return _compare(raw, deltas, f"stream split {n} deltas against batch raw text")
         if baseline is None:
             baseline = deltas
         elif deltas != baseline:

@@ -198,6 +198,9 @@ class TableFormat(Format):
         cells.append("".join(cur))
         return cells
 
+SCALED_NUMBER_VERSION = "0.2.0"   # 0.2: round_trip is false with `round`
+
+
 class ScaledNumberFormat(Format):
     """Numbers spelled at a friendlier scale, e.g. 0.78 ⇄ "78%".
 
@@ -210,6 +213,8 @@ class ScaledNumberFormat(Format):
         self.scale = options.get("scale", 1)
         self.suffix = options.get("suffix", "")
         self.round = options.get("round")
+        # rounding loses digits: a rounded value does not read back (plan 09 G4)
+        self.round_trip = self.round is None
 
     def describe(self, field):
         example = f"{83 if self.scale == 100 else 0.83}{self.suffix}"
@@ -241,5 +246,5 @@ def _read(shape: dict, text: str, where: str):
 def install(registry, *, exist_ok: bool = True) -> None:
     registry.register_format("json", JsonFormat, version=VERSION, exist_ok=exist_ok)
     registry.register_format("table", TableFormat, version=VERSION, exist_ok=exist_ok)
-    registry.register_format("scaled_number", ScaledNumberFormat, version=VERSION,
+    registry.register_format("scaled_number", ScaledNumberFormat, version=SCALED_NUMBER_VERSION,
                              exist_ok=exist_ok)

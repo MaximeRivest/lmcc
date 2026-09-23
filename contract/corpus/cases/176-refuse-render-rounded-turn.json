@@ -1,6 +1,6 @@
 {
- "name": "std-scaled-number",
- "kind": "parse",
+ "name": "refuse-render-rounded-turn",
+ "kind": "refuse",
  "vocab": [
   "std"
  ],
@@ -58,10 +58,24 @@
    }
   ]
  },
- "response": "<confidence>\n83%\n</done>",
  "expect": {
-  "values": {
-   "confidence": 0.83
-  }
+  "code": "turn-not-renderable",
+  "at": "render"
+ },
+ "inputs": {
+  "q": "now"
+ },
+ "turns": {
+  "turns": [
+   {
+    "inputs": {
+     "q": "then"
+    },
+    "steps": [],
+    "outputs": {
+     "confidence": 0.784
+    }
+   }
+  ]
  }
 }

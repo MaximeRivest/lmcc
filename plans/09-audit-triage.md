@@ -1,5 +1,13 @@
 # Plan 09 — audit triage: 114 findings from the clean-room TypeScript implementation and the docs review
 
+**Status 2026-09-23 (kernel 0.8, D-44).** Bin 4 was ratified (D-29).
+Bin 1 is closed: every defect was re-run against today's kernel; fixed
+earlier: A4, B5, E3, F23, B2/D1; withdrawn: E6 (D-31); fixed now with
+cases 170–176 and harness tests: F19, F14, G15, A6, G25, G4, A1, D2, D3.
+The batch plan below assumed a Go kernel and reserved case numbers that
+are now used by other cases; read it as history. Bins 2 and 3 are
+rechecked in the section "Recheck of Bins 2 and 3" at the end.
+
 **D-31 update:** regex execution is a declared optional extension in the next
 version, not a mandatory engine in every kernel. Plan 10 gates the extension
 contract, migration, and backend choice. Existing 0.2 evidence stays historical.

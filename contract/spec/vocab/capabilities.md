@@ -21,6 +21,8 @@ version of this file; changing one's meaning is breaking.
 | `image_input` | accepts image parts |
 | `stop_sequences` | the request honors `config.stop` (lm15 `Config.stop`); the plan then asks to stop at the reader's tail (kernel §3) |
 
-An absent key means **false**. Unknown keys are ignored by predicates
-(they can only be named by the vocabulary above), so declaring extra
-private facts is harmless but conveys nothing portable.
+An absent key means **false**. A predicate or `requires` naming a fact
+not in this table refuses `entry-malformed` at load, at its path (D-29
+R2, D-44): a typo in a transport must not silently read as "false". The
+caller's own dict may hold extra keys; nothing can name them, so they
+are harmless and convey nothing portable.

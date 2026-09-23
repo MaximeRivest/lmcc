@@ -129,6 +129,10 @@ class MediaFormat(Format):
         if not isinstance(value, dict):
             refuse("value-invalid",
                    f"field {field.name!r}: a media value must be a plain dict of part data")
+        if "type" in value and value["type"] != kind:
+            refuse("value-invalid",
+                   f"field {field.name!r}: a {value['type']!r} part given where a {kind!r} "
+                   f"part is declared")
         return [{"type": kind, **{k: v for k, v in value.items() if k != "type"}}]
 
     def read(self, capture, field):

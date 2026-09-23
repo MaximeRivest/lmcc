@@ -478,6 +478,13 @@ def read_value(shape: dict, text: str, *, where: str) -> object:
     return text
 
 
+# The capability facts a predicate or `requires` may name: the closed
+# vocabulary of contract/spec/vocab/capabilities.md (D-06, D-29 R2).
+# tests/test_coherence.py checks this set equals that table.
+CAPABILITY_FACTS = frozenset({
+    "instruct", "completion", "native_reasoning", "native_function_calling",
+    "native_citations", "native_structured_output", "image_input", "stop_sequences"})
+
 QUOTES = ("\"", "'", "`")
 
 

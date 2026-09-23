@@ -1,4 +1,4 @@
-# format/scaled_number — 0.1.0
+# format/scaled_number — 0.2.0
 
 Spells a number at a friendlier scale — canonically 0.78 ⇄ `78%`. Exists
 because models write percentages more reliably than unit-interval decimals.
@@ -19,5 +19,12 @@ special case), then the suffix.
 **read.** Trim; strip the suffix if present; read with the kernel
 number grammar; divide by `scale`. Failure → `format-read-error` naming
 the field.
+
+**Round trip.** With `round`, `round_trip` is **false**: `0.784` writes
+`78%` and reads back `0.78`, so a rounded output cannot be written into
+a past turn (`turn-not-renderable`); as an input it renders normally
+(0.2.0, plan 09 G4). Without `round` it declares true; scaling in
+binary64 can still move the last digit (`0.07 × 100 = 7.000000000000001`),
+a stated limit of this format, not of the kernel.
 
 **Corpus.** `19-std-scaled-number.json`, `45-std-json-number-spelling.json`.
