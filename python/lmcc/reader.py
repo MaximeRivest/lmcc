@@ -285,19 +285,18 @@ class ReaderResult:
 class DerivedReader(Reader):
     """The template read backwards. ``anchors`` are ``(name, prefix,
     suffix)`` per in_template output field, instantiated at bind; ``tail`` is
-    the literal after the pattern (kernel §4). ``markers`` is
-    ``"forgiving"`` (repair misspelled markers, kernel §4a) or ``"exact"``."""
+    the literal after the pattern (kernel §4). With ``repair`` misspelled
+    markers are repaired (kernel §4a); a strict adapter passes False."""
 
     def __init__(self, anchors: list[tuple[str, str, str]], tail: str = "",
-                 markers: str = "forgiving"):
+                 repair: bool = True):
         self.anchors = list(anchors)
         self.tail = tail
-        self.mode = markers
         searched = [core.rstrip(p) for _, p, _ in self.anchors] + \
                    [core.strip(s) for _, _, s in self.anchors] + [core.strip(self.tail)]
         self.repairable, self.unrepaired = repairable_markers(searched)
-        if markers == "exact":
-            self.repairable = []
+        if not repair:
+            self.repairable, self.unrepaired = [], []
 
     def markers(self) -> list[str]:
         out = []

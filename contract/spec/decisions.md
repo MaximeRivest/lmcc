@@ -998,3 +998,36 @@ adapter stops being general); repairing everywhere, exact or not (it
 would make correct replies ambiguous). Not done in 0.8, as stated in
 the kernel's gaps: find rule delimiters, provider parts, forgiving
 default value reads.
+
+**D-43 · Value slips and reasoning tags are repaired too; one `strict`
+switch (kernel 0.8, before release).** Ratified with the maintainer on
+2026-09-23, amending D-42 before 0.8 was published.
+
+- **Values.** When the kernel's exact read of a scalar, enum or nullable
+  refuses, a forgiving read tries: one pair of quotes or backticks off,
+  one trailing period off, `null`/`none` in any case for a nullable, an
+  enum member in another ASCII case when exactly one matches (§7a).
+  Reported as `value` repairs. It runs only after the exact read failed,
+  so no value 0.7 read changes; strings are never touched. `N/A` stays a
+  refusal (it could be content), and so does `42.0` (a different
+  spelling, not a slip). Only the kernel's default reads forgive; a
+  format someone writes reads what they wrote it to.
+- **Find rule delimiters opt in.** A `between` rule may declare
+  `repair: true`; its delimiters are repaired by the §4a rule in a first
+  pass over the reply, before the find rules. `reasoning_tags` opts in
+  (0.3.0). Opt-in, not default, because a find rule can capture raw code
+  (`heredoc_tools`), where a loose match inside the code would cut it.
+  The reader's own pass runs after the find rules, so a tag named inside
+  removed reasoning is never an exact marker for it.
+- **One switch.** `strict: true` on the adapter turns every repair off.
+  It replaces D-42's `reader.markers: "exact"`, which was never
+  published: one plain word for "read exactly or refuse" is easier to
+  learn than a per-kind option, and nobody asked for markers strict but
+  values forgiving (a custom format still gives that).
+- **Replay.** A recorded reply that needed a value repair is written back
+  from its values, like one that needed a marker repair.
+
+Costs, stated: two passes and two holding stream stages; `describe()`
+gains `strict` and the stream's `repairs` entry; `reasoning_tags` moves to
+0.3.0, so artifacts pinning 0.2.0 refuse `version-incompatible`. Not done:
+`line_prefixed` prefixes and provider parts (kernel gaps).

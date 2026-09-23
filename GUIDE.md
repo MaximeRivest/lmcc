@@ -160,8 +160,10 @@ The rule is one sentence: a marker matches ignoring letter case, spaces,
 and markdown's `*`, `_` and `#`, but never across a line. It holds for
 any signature, because it is about the markers, not about field names.
 It never guesses: if the exact marker appears anywhere, the misspelled
-one is just text, and two readings refuse `parse-ambiguous`. Turn it off
-with `reader={"kind": "derived", "markers": "exact"}`.
+one is just text, and two readings refuse `parse-ambiguous`. Small value
+slips are forgiven the same way (`42.`, `"yes"`, `Positive` for the enum
+member `positive`, `None` for an optional value), and reported too. An
+adapter built with `strict=True` turns every repair off.
 
 One thing is never repaired: a reply the provider cut at its length
 limit. Pass the lm15 response (not just its text) and an answer that may

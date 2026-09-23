@@ -1,0 +1,51 @@
+{
+ "name": "refuse-parse-value-not-a-slip",
+ "kind": "refuse",
+ "entry": {
+  "name": "repairs_v1",
+  "versions": {
+   "kernel": "0.8.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "role": "user",
+    "text": "{question}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Answer the question.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "count",
+    "direction": "output",
+    "shape": {
+     "type": [
+      "integer",
+      "null"
+     ]
+    }
+   }
+  ]
+ },
+ "response": "<count>\nN/A\n</count>",
+ "expect": {
+  "code": "parse-value",
+  "at": "parse"
+ }
+}

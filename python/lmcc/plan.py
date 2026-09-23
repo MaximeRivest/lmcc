@@ -16,8 +16,10 @@ from . import core, formats as _formats
 from .adapter import Adapter
 from .errors import Refusal, refuse
 from . import extensions as _extensions
-from .reader import DerivedReader, Reader, apply_find_rules, refuse_missing
+from .reader import (DerivedReader, Reader, apply_find_rules, refuse_missing,
+                     repair_markers, repairable_markers)
 from .serde import KERNEL_VERSION
+import enum
 import json
 
 from .transport import Transport, setting_leaves, spell_turn, validate_setting_path
@@ -154,6 +156,8 @@ class Plan:
     request_settings: dict = dc_field(default_factory=dict)
     formats: dict[str, _FormatChoice] = dc_field(default_factory=dict)
     reader: Reader | None = None
+    find_repairable: list = dc_field(default_factory=list)   # §4a pass 1 delimiters
+    find_unrepaired: list = dc_field(default_factory=list)
     extensions: dict = dc_field(default_factory=dict)   # name -> extensions.Resolved (kernel §10)
     turn_input_formats: dict = dc_field(default_factory=dict)   # purpose -> bound argument writer
     rule_owner: list = dc_field(default_factory=list)       # parallel to find_rules: _Resolved
@@ -469,7 +473,7 @@ class Plan:
             try:
                 reading = self.read(step.message)
                 same = to_json(reading.values) == to_json(step.outputs) and not any(
-                    r["repair"] in ("marker", "unclosed") for r in reading.repairs)
+                    r["repair"] in ("marker", "unclosed", "value") for r in reading.repairs)
             except Refusal:
                 same = False
             if same:
@@ -612,18 +616,21 @@ class Plan:
         """
         cut = core.finish_reason(response) == "length"
         text, parts = core.response_text_and_parts(response)
+        repairs: list[dict] = []
+        if self.find_repairable:        # §4a, pass 1: delimiters of repairing find rules
+            text, repairs = repair_markers(text, self.find_repairable)
         text, found = apply_find_rules(text, parts, self.find_rules, self.pattern_binding())
         complete = any(r.get("complete_reply") and found.get(name) is not None and found[name].parts
                        for name, r in self.find_rules)
         names = [f.name for f in self.visible_outputs]
         derived = isinstance(self.reader, DerivedReader)
-        repairs: list[dict] = []
         to_end: set[str] = set()
         missing_err: Refusal | None = None
         try:
             if derived:
                 result = self.reader.read(text, names, allow_missing=True)
-                raw, repairs, to_end = result.raw, result.repairs, result.to_end
+                raw, to_end = result.raw, result.to_end
+                repairs += result.repairs
             else:
                 raw = self.reader.split(text, names)
         except Refusal as err:
@@ -656,10 +663,27 @@ class Plan:
         values: dict = {}
         for f in self.visible_outputs:
             if f.name in captures:
-                values[f.name] = self.read_field(f, captures[f.name])
+                values[f.name] = self._read_forgiving(f, captures[f.name], repairs)
         for name, capture in found.items():
-            values[name] = self.read_field(self.signature.field_named(name), capture)
+            values[name] = self._read_forgiving(self.signature.field_named(name), capture, repairs)
         return values, captures, repairs
+
+    def _read_forgiving(self, f: core.Field, capture: core.Capture, repairs: list) -> object:
+        """Read one field; a kernel-default scalar read that refuses gets
+        the §7a forgiving read, reported as a ``value`` repair."""
+        try:
+            return self.read_field(f, capture)
+        except Refusal as err:
+            if (self.adapter.strict or err.code != "parse-value"
+                    or not isinstance(self.format_for(f), _formats.ScalarFormat)):
+                raise
+            value = core.forgive_value(f.shape, capture.text, where=f"field {f.name!r}")
+            repairs.append({"repair": "value", "field": f.name, "saw": core.strip(capture.text),
+                            "as": core.spell_value(f.shape, value, where=f"field {f.name!r}")})
+            ann = f.annotation
+            if isinstance(ann, type) and issubclass(ann, enum.Enum) and value is not None:
+                value = ann(value)
+            return value
 
     def _refuse_cut(self, where: str, partial: dict, *, why: str = "") -> None:
         """Kernel §4a: the provider cut the reply; say where, keep what ended."""
@@ -708,14 +732,14 @@ class Plan:
             "puts": [{"field": name, "at": place} for name, place in self.puts],
             "tell": dict(self.tell),
             "request_settings": _deep_copy(self.request_settings),
+            "strict": self.adapter.strict,
             "skeleton": self.skeleton(),
         }
         from .stream import describe_streaming
         out["streaming"] = describe_streaming(self)
         if isinstance(self.reader, DerivedReader):
             out["reader"]["anchors"] = [list(a) for a in self.reader.anchors]
-            out["reader"]["markers"] = self.reader.mode
-            if self.reader.mode == "forgiving" and self.reader.unrepaired:
+            if self.reader.unrepaired:
                 out["reader"]["unrepaired"] = list(self.reader.unrepaired)
             if self.reader.tail:
                 out["reader"]["tail"] = self.reader.tail
@@ -924,7 +948,7 @@ def _derive_reader(plan: Plan) -> DerivedReader:
                    f"must tell fields apart",
                    fix={**here, "field": name})
         seen[key] = name
-    return DerivedReader(anchors, tail, plan.adapter.reader.get("markers", "forgiving"))
+    return DerivedReader(anchors, tail, repair=not plan.adapter.strict)
 
 
 def _instantiate(loop: Loop, f: core.Field, plan: Plan, *, fix: dict) -> tuple[str, str]:
@@ -1166,6 +1190,10 @@ def bind(adapter: Adapter, sig: core.SignatureCore, capabilities: dict, registry
         plan.reader = _derive_reader(plan)
     else:
         plan.reader = registry.reader(adapter.reader)
+    # §4a pass 1: delimiters of find rules that ask to be repaired
+    delimiters = [d for _, r in plan.find_rules if r.get("repair") for d in r["between"]]
+    plan.find_repairable, plan.find_unrepaired = ([], []) if adapter.strict else \
+        repairable_markers(delimiters)
     for fact in plan.reader.requires():
         if not capabilities.get(fact):
             refuse("capability-missing",

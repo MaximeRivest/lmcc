@@ -1,5 +1,12 @@
 # The corpus
 
+**Value and delimiter repairs, `strict` (kernel 0.8, D-43).** Cases
+162–168 were authored from kernel §4a and §7a before running them; all
+passed on the first run. 155 and 159 were rewritten from D-42's
+`reader.markers` to `strict` (renamed accordingly). Cases 15 and 81 pin
+`transport/reasoning_tags` 0.3.0. Each new rule was broken on purpose and
+caught.
+
 **Repairs and truncation (kernel 0.8, D-42).** Cases 149–161 were
 authored by hand from kernel §4a before running them; two expectations
 were wrong and corrected from the spec, not from the output (161's

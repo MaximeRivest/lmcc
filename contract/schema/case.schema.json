@@ -168,7 +168,8 @@
                       "enum": [
                         "marker",
                         "unclosed",
-                        "ignored"
+                        "ignored",
+                        "value"
                       ]
                     },
                     "marker": {
@@ -181,6 +182,9 @@
                       "type": "string"
                     },
                     "close": {
+                      "type": "string"
+                    },
+                    "as": {
                       "type": "string"
                     }
                   },

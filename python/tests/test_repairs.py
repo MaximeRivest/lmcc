@@ -113,21 +113,23 @@ def test_two_misspelled_anchors_refuse():
         == ("refuse", "parse-ambiguous")
 
 
-def test_exact_markers_turn_repair_off():
-    exact = lmcc.adapter(messages=TAGS.template, reader={"kind": "derived", "markers": "exact"})
-    p = plan(exact)
+def test_strict_turns_every_repair_off():
+    strict = lmcc.adapter(messages=TAGS.template, strict=True)
+    p = plan(strict)
     assert outcome(p, "<Reasoning>\nx\n</Reasoning>\n<answer>\n4\n</answer>") == ("refuse", "parse-missing-fields")
-    assert p.describe()["reader"]["markers"] == "exact"
-    assert p.describe()["streaming"]["markers"] == {"mode": "exact"}
+    assert outcome(p, "<reasoning>\nx\n</reasoning>\n<answer>\n4.\n</answer>") == ("refuse", "parse-value")
+    assert p.describe()["strict"] is True
+    assert p.describe()["streaming"]["repairs"] == {"mode": "strict"}
+    assert lmcc.load(strict.dump()).strict is True
 
 
-@pytest.mark.parametrize("reader,path", [
-    ({"kind": "derived", "markers": "loose"}, "reader.markers"),
-    ({"kind": "derived", "strict": True}, "reader"),
+@pytest.mark.parametrize("kw,path", [
+    ({"strict": "yes"}, "strict"),
+    ({"reader": {"kind": "derived", "markers": "exact"}}, "reader"),
 ])
-def test_bad_reader_options_refuse_with_a_fix(reader, path):
+def test_bad_options_refuse_with_a_fix(kw, path):
     with pytest.raises(lmcc.Refusal) as err:
-        lmcc.adapter(messages=TAGS.template, reader=reader)
+        lmcc.adapter(messages=TAGS.template, **kw)
     assert err.value.code == "entry-malformed" and err.value.fix == {"action": "edit-entry", "path": path}
 
 
@@ -225,7 +227,7 @@ PIECES = {
     "dspy": ["[[ ## reasoning ## ]]", "[[## Reasoning ##]]", "[[ ## answer ## ]]", "[[##answer##]]",
            "[[ ## completed ## ]]", "[[## completed##]]", "## answer", "# "],
 }
-FILLER = ["4", " 4 ", "x", "\n", " ", "*", "**", "_", "#", "an", "ans", "<", "**bold**", "Sure!", "12"]
+FILLER = ["4", " 4 ", "4.", "`4`", "\"4\"", "x", "\n", " ", "*", "**", "_", "#", "an", "ans", "<", "**bold**", "Sure!", "12"]
 
 
 @pytest.mark.parametrize("name", ["tags", "labels", "dspy"])
@@ -241,3 +243,48 @@ def test_fuzz_streaming_repairs_refine_batch(name):
         batch = outcome(p, reply, finish_reason=reason)
         assert outcome(p, reply, chunks, finish_reason=reason) == batch, (run, reply, chunks)
         assert outcome(p, reply, list(reply), finish_reason=reason) == batch, (run, reply)
+
+
+# ---------------------------------------------------------- values, tags
+
+
+@pytest.mark.parametrize("text,value", [("42.", 42), ("`42`", 42), ("\"42\"", 42), ("'42.'", 42)])
+def test_integer_slips_read(text, value):
+    r = plan().read(f"<reasoning>\nx\n</reasoning>\n<answer>\n{text}\n</answer>")
+    assert r.values["answer"] == value and r.repairs[-1]["repair"] == "value"
+
+
+@pytest.mark.parametrize("text", ["42.0", "4 2", "42..", "forty-two", "N/A", "none"])
+def test_not_a_slip_still_refuses(text):
+    assert outcome(plan(), f"<reasoning>\nx\n</reasoning>\n<answer>\n{text}\n</answer>") \
+        == ("refuse", "parse-value")
+
+
+def test_a_string_is_never_repaired():
+    @lmcc.fn
+    def say(question: str) -> str:
+        """Say it."""
+    p = say.bind(TAGS, capabilities={"instruct": True})
+    r = p.read("<say>\n\"None.\"\n</say>")
+    assert r.values == {"say": "\"None.\""} and r.clean
+
+
+def test_reasoning_tags_are_repaired_but_code_delimiters_are_not():
+    import lmcc_std
+    reg = lmcc.Registry()
+    lmcc_std.install(reg)
+
+    @dataclasses.dataclass
+    class Thought:
+        reasoning: lmcc.Purpose["reasoning", str]
+        answer: int
+
+    @lmcc.fn
+    def think(question: str) -> Thought:
+        """Think."""
+    p = think.bind(lmcc.adapter(messages=TAGS.template, transports={"reasoning": "reasoning_tags"}),
+                   capabilities={"instruct": True}, registry=reg)
+    r = p.read("<THINK>hm</Think><answer>\n4\n</answer>")
+    assert r.values == {"answer": 4, "reasoning": "hm"}
+    heredoc = reg.transport("heredoc_tools", {})
+    assert not any(rule.get("repair") for rule in heredoc.find)

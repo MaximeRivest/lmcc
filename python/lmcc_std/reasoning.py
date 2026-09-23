@@ -19,7 +19,7 @@ from lmcc.transport import Transport
 
 VERSION = "0.1.0"
 # 0.2.0: past reasoning is written before the answer in turns (kernel 0.7 §3a).
-REASONING_TAGS_VERSION = "0.2.0"
+REASONING_TAGS_VERSION = "0.3.0"   # 0.3: tags repaired like markers (kernel §4a)
 
 
 def prefix_cot(options: dict) -> Transport:
@@ -39,7 +39,7 @@ def reasoning_tags(options: dict) -> Transport:
         tell={"system": f"After every sentence of output, add your "
                              f"thinking inside {open_tag}...{close_tag} tags."},
         find=[{"from": "text", "between": [open_tag, close_tag],
-                   "to": "@purpose", "remove": True}],
+                   "to": "@purpose", "remove": True, "repair": True}],
         spelling={"position": "before"},
         in_template=False,
     )

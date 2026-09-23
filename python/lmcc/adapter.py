@@ -16,7 +16,6 @@ from .template import RESERVED_SLOTS, compile_template, turn_slots
 
 _SLOT_NAME = __import__("re").compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 REPLAY = ("recorded", "values")
-MARKERS = ("forgiving", "exact")   # the derived reader's marker matching (kernel §4a)
 
 
 def system(text: str) -> dict:
@@ -62,6 +61,7 @@ class Adapter:
     name: str = "adapter"
     extensions: dict[str, str] = dc_field(default_factory=dict)      # "<family>/<name>" -> version needed (kernel §10)
     replay: str = "recorded"                # how written model steps are spelled (kernel §3a)
+    strict: bool = False                    # True: read replies exactly, no repairs (kernel §4a)
 
     def bind(self, signature, capabilities: dict | None = None, *, registry=None):
         from .plan import bind as _bind
@@ -120,7 +120,7 @@ def adapter(*, messages: list[dict] | None = None, template: list[dict] | dict |
             reader: dict | None = None, transports: dict | None = None,
             formats: dict | None = None, name: str = "adapter",
             extensions: dict[str, str] | None = None, replay: str = "recorded",
-            declare_defaults: bool = True) -> Adapter:
+            strict: bool = False, declare_defaults: bool = True) -> Adapter:
     """Build an adapter. ``transports`` values: a name, a :class:`Transport`,
     a data dict, or ``use(...)``. ``formats`` keys: type names or structural
     keys; values: a name, ``use(...)``, a shipped dict, or a Format.
@@ -131,7 +131,8 @@ def adapter(*, messages: list[dict] | None = None, template: list[dict] | dict |
     the dumped artifact carries the line either way. ``replay``:
     ``"recorded"`` writes a past model step's recorded reply when this plan
     reads it back into the same values, ``"values"`` always writes it from
-    its values (kernel §3a)."""
+    its values (kernel §3a). ``strict=True`` reads replies exactly as the
+    template spells them: no marker, delimiter or value repairs (kernel §4a)."""
     if messages is None:
         messages = template.get("messages") if isinstance(template, dict) else template
     if not isinstance(messages, list):
@@ -169,16 +170,13 @@ def adapter(*, messages: list[dict] | None = None, template: list[dict] | dict |
     if not isinstance(kind, str) or not kind:
         refuse("unknown-reader", "reader.kind must name a reader",
                fix={"action": "edit-entry", "path": "reader"})
-    if kind == "derived":
-        extra = set(reader) - {"kind", "markers"}
-        if extra:
-            refuse("entry-malformed", f"reader: the derived reader takes 'kind' and 'markers', "
-                                      f"not {sorted(extra)}",
-                   fix={"action": "edit-entry", "path": "reader"})
-        if reader.get("markers", "forgiving") not in MARKERS:
-            refuse("entry-malformed", f"reader.markers must be one of {MARKERS}, not "
-                                      f"{reader.get('markers')!r}",
-                   fix={"action": "edit-entry", "path": "reader.markers"})
+    if kind == "derived" and set(reader) != {"kind"}:
+        refuse("entry-malformed", f"reader: the derived reader takes only 'kind', not "
+                                  f"{sorted(set(reader) - {'kind'})}",
+               fix={"action": "edit-entry", "path": "reader"})
+    if not isinstance(strict, bool):
+        refuse("entry-malformed", f"strict must be true or false, not {strict!r}",
+               fix={"action": "edit-entry", "path": "strict"})
     s_bindings: dict[str, object] = {}
     for purpose, value in (transports or {}).items():
         where = f"transports[{purpose!r}]"
@@ -213,7 +211,8 @@ def adapter(*, messages: list[dict] | None = None, template: list[dict] | dict |
     if declare_defaults:
         declared = default_declaration(s_bindings, declared)
     adp = Adapter(template=list(messages), reader=dict(reader), transports=s_bindings,
-                  formats=f_bindings, name=name, extensions=declared, replay=replay)
+                  formats=f_bindings, name=name, extensions=declared, replay=replay,
+                  strict=strict)
     adp.compiled_messages()  # surface template syntax errors immediately
     adp.turn_slots()         # and turn-slot put errors
     return adp

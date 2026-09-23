@@ -25,7 +25,7 @@ import re
 import typing
 from dataclasses import dataclass, field as dc_field
 
-from .errors import refuse
+from .errors import Refusal, refuse
 
 DIRECTIONS = ("input", "output")
 
@@ -476,6 +476,42 @@ def read_value(shape: dict, text: str, *, where: str) -> object:
     if t == "boolean":
         return read_boolean(text, where=where)
     return text
+
+
+QUOTES = ("\"", "'", "`")
+
+
+def _ascii_lower(text: str) -> str:
+    return "".join(chr(ord(c) + 32) if "A" <= c <= "Z" else c for c in text)
+
+
+def forgive_value(shape: dict, text: str, *, where: str) -> object:
+    """Kernel §7a, forgiving reads: called only after the exact read of
+    ``text`` refused. Tries, in order, the text without one pair of
+    matching quotes or backticks, then also without one trailing period;
+    then, on those, a nullable's ``null``/``none`` and an enum member in
+    any ASCII case when exactly one member matches. Refuses with the
+    exact read's refusal when nothing applies. Strings never get here:
+    their exact read cannot fail."""
+    base, nullable = nullable_base(shape)
+    t = strip(text)
+    t1 = strip(t[1:-1]) if len(t) >= 2 and t[0] == t[-1] and t[0] in QUOTES else t
+    t2 = strip(t1[:-1]) if t1.endswith(".") and not t1.endswith("..") else t1
+    candidates = [c for c in dict.fromkeys([t1, t2]) if c != t and c]
+    for c in candidates:
+        try:
+            return read_value(shape, c, where=where)
+        except Refusal:
+            pass
+    for c in dict.fromkeys([t1, t2]):
+        low = _ascii_lower(c)
+        if nullable and low in ("null", "none"):
+            return None
+        if "enum" in base:
+            hits = [v for v in base["enum"] if isinstance(v, str) and _ascii_lower(v) == low]
+            if len(hits) == 1:
+                return hits[0]
+    return read_value(shape, text, where=where)   # the exact refusal
 
 
 STRUCTURAL_SCALARS = ("string", "integer", "number", "boolean")

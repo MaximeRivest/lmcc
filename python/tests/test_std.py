@@ -114,5 +114,5 @@ def test_reasoning_transports_by_name():
     plan = adp.bind(sig, {"instruct": True}, registry=_registry())
     assert plan.parse("<think>a</think><answer>\n1\n</answer>") == {"answer": 1, "reasoning": "a"}
     entry = adp.dump(registry=_registry())
-    assert entry["versions"]["vocab"] == {"transport/reasoning_tags": "0.2.0"}
+    assert entry["versions"]["vocab"] == {"transport/reasoning_tags": "0.3.0"}
     assert entry["transports"]["reasoning"] == {"use": "reasoning_tags"}

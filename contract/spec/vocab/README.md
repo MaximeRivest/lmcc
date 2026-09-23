@@ -25,7 +25,7 @@ Purpose names are themselves vocabulary — what each name means and
 its alignment with the wire layer's part kinds live in `purposes.md`.
 The capability facts predicates may name live in `capabilities.md`.
 
-Current entries (all 0.1.0 except `transport/reasoning_tags` 0.2.0, provided by `python/lmcc_std`):
+Current entries (all 0.1.0 except `transport/reasoning_tags` 0.3.0, provided by `python/lmcc_std`):
 
 | entry | spec |
 |---|---|

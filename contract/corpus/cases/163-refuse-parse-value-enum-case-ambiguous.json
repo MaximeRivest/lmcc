@@ -1,5 +1,5 @@
 {
- "name": "refuse-parse-markers-exact",
+ "name": "refuse-parse-value-enum-case-ambiguous",
  "kind": "refuse",
  "entry": {
   "name": "repairs_v1",
@@ -18,8 +18,7 @@
    }
   ],
   "reader": {
-   "kind": "derived",
-   "markers": "exact"
+   "kind": "derived"
   }
  },
  "signature": {
@@ -33,17 +32,20 @@
     }
    },
    {
-    "name": "answer",
+    "name": "status",
     "direction": "output",
     "shape": {
-     "type": "string"
+     "enum": [
+      "ok",
+      "OK"
+     ]
     }
    }
   ]
  },
- "response": "<Answer>\nParis\n</Answer>",
+ "response": "<status>\nOk\n</status>",
  "expect": {
-  "code": "parse-missing-fields",
+  "code": "parse-value",
   "at": "parse"
  }
 }

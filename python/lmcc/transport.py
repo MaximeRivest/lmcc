@@ -315,7 +315,8 @@ def validate_find_rule(r: dict, *, where: str) -> None:
     if not isinstance(to, str) or not _TO.match(to):
         refuse("entry-malformed", f"{where}: 'to' is '@purpose' or '@purpose.<sub>'",
                fix={"action": "edit-entry", "path": where})
-    unknown = set(r) - {"from", "to", "remove", "between", "pattern", "line_prefixed", "complete_reply"}
+    unknown = set(r) - {"from", "to", "remove", "between", "pattern", "line_prefixed",
+                        "complete_reply", "repair"}
     if unknown:
         refuse("entry-malformed", f"{where}: unknown rule key(s) {sorted(unknown)}",
                fix={"action": "edit-entry", "path": where})
@@ -334,6 +335,13 @@ def validate_find_rule(r: dict, *, where: str) -> None:
         elif not isinstance(v, str) or not v:
             refuse("entry-malformed", f"{where}: {k} is a non-empty string",
                    fix={"action": "edit-entry", "path": where})
+    if "repair" in r and (r["repair"] is not True and r["repair"] is not False
+                          or src != "text" or "between" not in r):
+        refuse("entry-malformed", f"{where}: 'repair' is true or false, on a between rule only "
+                                  f"(its delimiters are repaired like markers, kernel §4a)",
+               fix={"action": "edit-entry", "path": where})
+    if src == "text":
+        pass
     elif kinds or r.get("remove"):
         refuse("entry-malformed", f"{where}: a channel rule takes no text extractor and no remove",
                fix={"action": "edit-entry", "path": where})

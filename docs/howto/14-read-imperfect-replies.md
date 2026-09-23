@@ -2,8 +2,8 @@
 
 **Goal.** Get typed values from the reply a model actually wrote, which is
 often not quite the layout it was shown: `<Answer>` for `<answer>`,
-`**Answer:**` for `Answer:`, a fence around everything, a cheerful
-sentence before it. Know exactly what lmcc repaired, turn repairs off
+`**Answer:**` for `Answer:`, `42.` for `42`, a fence around everything, a
+cheerful sentence before it. Know exactly what lmcc repaired, turn repairs off
 when you want the strict behavior, and never mistake a reply the
 provider cut short for a finished answer.
 
@@ -174,16 +174,63 @@ def strict_parse(p, reply):
     return reading.values
 ```
 
-## 5. Turning repairs off
+## 5. Values and reasoning tags
 
-Marker repairs are on by default. An adapter that wants the exact layout
-or nothing says so, and it travels with the adapter when you save it:
+Small slips in a *value* are forgiven the same way, and reported as
+`value` repairs: one pair of quotes or backticks around it, one trailing
+period, an enum member in another letter case (when only one member
+matches), `None` for an optional value.
 
 ```python
-exact = lmcc.adapter(messages=tags.template, reader={"kind": "derived", "markers": "exact"})
+import enum
+
+class Mood(enum.Enum):
+    positive = "positive"
+    negative = "negative"
+
+@dataclasses.dataclass
+class Review:
+    mood: Mood
+    stars: int | None
+
+@lmcc.fn
+def review(text: str) -> Review:
+    """Read the review."""
+
+rp = review.bind(lmcc.adapter(messages=[tags.template[0], lmcc.user("{text}")]),
+                 capabilities={"instruct": True})
+r = rp.read("<mood>\n`Positive`\n</mood>\n<stars>\nNone\n</stars>")
+print(r.values)
+for x in r.repairs:
+    print(x)
+```
+
+```output
+{'mood': <Mood.positive: 'positive'>, 'stars': None}
+{'repair': 'value', 'field': 'mood', 'saw': '`Positive`', 'as': 'positive'}
+{'repair': 'value', 'field': 'stars', 'saw': 'None', 'as': 'null'}
+```
+
+`N/A`, `42.0` or `four` stay refusals: those are not slips of the
+spelling, and reading them would be a guess. Text fields are never
+touched: `"None."` in a text field is the text `"None."`.
+
+The `reasoning_tags` transport opts its `<think>` tags into the same rule,
+so `<Think>…</THINK>` is read as reasoning instead of leaking into the
+answer. Transports that capture raw code do not opt in: inside code, a
+loose match could cut the code.
+
+## 6. Turning repairs off
+
+Repairs are on by default. An adapter that wants the exact layout and
+exact values, or a refusal, says `strict=True`. The setting is saved
+with the adapter:
+
+```python
+exact = lmcc.adapter(messages=tags.template, strict=True)
 ep = solve.bind(exact, capabilities={"instruct": True})
 refuses(lambda: ep.parse("<Reasoning>\nx\n</Reasoning>\n<answer>\n4\n</answer>"))
-assert exact.dump()["reader"] == {"kind": "derived", "markers": "exact"}
+assert exact.dump()["strict"] is True
 ```
 
 ```output
@@ -191,7 +238,7 @@ Refusal[parse-missing-fields]  partial={'answer': '4'}
   reply is missing pattern section(s): 'reasoning'
 ```
 
-## 6. A reply cut short is never a finished answer
+## 7. A reply cut short is never a finished answer
 
 When a model runs out of tokens, the provider stops it mid-sentence and
 says so: lm15's `finish_reason` is `"length"`. Pass the whole lm15
@@ -226,7 +273,7 @@ print(plan.parse(response("<reasoning>\nshort\n</reasoning>\n<answer>\n12\n</ans
 With `lmcc_lm15`, `lmcc_lm15.parse`, `lmcc_lm15.read`, `lmcc_lm15.step`
 and `lmcc_lm15.stream` all pass the finish reason for you.
 
-## 7. Streaming
+## 8. Streaming
 
 A reply spelled as the template says streams exactly as before. From the
 first misspelled marker on, the rest of the reply waits for `finish`,
@@ -249,13 +296,13 @@ streamed early: ['thinking', ' hard']
 ```
 
 `stream.finish(finish_reason)` takes the provider's finish reason, so a
-cut stream refuses like a cut reply. `plan.describe()["streaming"]["markers"]`
+cut stream refuses like a cut reply. `plan.describe()["streaming"]["repairs"]`
 states the holding rule.
 
-## 8. Conversations stay clean
+## 9. Conversations stay clean
 
 A past reply is normally replayed exactly as the model wrote it. A reply
-that needed a marker repair is written back in the template's spelling
+that needed a marker or value repair is written back in the template's spelling
 instead, so the conversation does not teach the model its own slip:
 
 ```python
@@ -275,10 +322,9 @@ six sevens
 </answer>
 ```
 
-## What is not repaired (yet)
+## What is not repaired
 
-Values: `42.` for an integer or `Positive` for the enum member
-`positive` are the format's business; write a forgiving format for your
-type (GUIDE §9). Reasoning tags found by a transport (`<Think>` for
-`<think>`) and provider parts are read exactly. These are stated in the
-kernel's list of gaps.
+Line prefixes of `line_prefixed` find rules, and parts from the provider,
+are read exactly. Formats you write yourself read what you tell them to:
+make them as forgiving as you like (GUIDE §9). Both are listed in the
+kernel's gaps.

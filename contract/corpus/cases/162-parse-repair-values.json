@@ -1,0 +1,105 @@
+{
+ "name": "parse-repair-values",
+ "kind": "parse",
+ "entry": {
+  "name": "repairs_v1",
+  "versions": {
+   "kernel": "0.8.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "role": "user",
+    "text": "{question}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Answer the question.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "mood",
+    "direction": "output",
+    "shape": {
+     "enum": [
+      "positive",
+      "negative"
+     ]
+    }
+   },
+   {
+    "name": "count",
+    "direction": "output",
+    "shape": {
+     "type": "integer"
+    }
+   },
+   {
+    "name": "ok",
+    "direction": "output",
+    "shape": {
+     "type": "boolean"
+    }
+   },
+   {
+    "name": "note",
+    "direction": "output",
+    "shape": {
+     "type": [
+      "integer",
+      "null"
+     ]
+    }
+   }
+  ]
+ },
+ "response": "<mood>\n`Positive`\n</mood>\n<count>\n42.\n</count>\n<ok>\n\"yes\"\n</ok>\n<note>\nNone\n</note>",
+ "expect": {
+  "values": {
+   "mood": "positive",
+   "count": 42,
+   "ok": true,
+   "note": null
+  },
+  "repairs": [
+   {
+    "repair": "value",
+    "field": "mood",
+    "saw": "`Positive`",
+    "as": "positive"
+   },
+   {
+    "repair": "value",
+    "field": "count",
+    "saw": "42.",
+    "as": "42"
+   },
+   {
+    "repair": "value",
+    "field": "ok",
+    "saw": "\"yes\"",
+    "as": "true"
+   },
+   {
+    "repair": "value",
+    "field": "note",
+    "saw": "None",
+    "as": "null"
+   }
+  ]
+ }
+}

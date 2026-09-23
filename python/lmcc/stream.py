@@ -583,11 +583,10 @@ def describe_streaming(plan) -> dict:
     mode = "incremental" if set(modes) == {"incremental"} else (
         "buffered" if set(modes) == {"buffered"} else "hybrid")
     out = {"mode": mode, "reader": reader, "find": routes, "field_done": "finish"}
-    if isinstance(plan.reader, DerivedReader):
-        out["markers"] = ({"mode": "forgiving",
-                           "reason": "from the first misspelled marker the rest of the reply "
-                                     "waits for finish"}
-                          if plan.reader.repairable else {"mode": "exact"})
+    out["repairs"] = ({"mode": "strict"} if plan.adapter.strict else
+                      {"mode": "forgiving",
+                       "reason": "from the first misspelled marker the rest of the reply waits "
+                                 "for finish"})
     return out
 
 
@@ -626,6 +625,7 @@ class Stream:
                          if isinstance(plan.reader, DerivedReader) else None)
         self._repair = (_MarkerRepair(plan.reader.repairable)
                         if self._derived is not None and plan.reader.repairable else None)
+        self._repair_find = _MarkerRepair(plan.find_repairable) if plan.find_repairable else None
         make_reader_stream = getattr(plan.reader, "stream", None)
         self._reader_stream = (None if self._derived is not None or make_reader_stream is None
                              else make_reader_stream(names))
@@ -707,6 +707,8 @@ class Stream:
 
     def _run(self, text: str, part: tuple[str, str | None, bool] | None, *, final: bool) -> None:
         stage_text = text
+        if self._repair_find is not None:      # §4a pass 1, before the find rules
+            stage_text = self._repair_find.feed(stage_text, final)
         for field, stage in self._stages:
             if isinstance(stage, _PartSource):
                 if part is not None:

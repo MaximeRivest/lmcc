@@ -11,8 +11,11 @@ then the implementation.
 **What 0.8 changes (D-42).** The derived reader repairs a misspelled
 marker — `<Answer>` for `<answer>`, `**Answer:**` for `Answer:`,
 `[[## answer ##]]` for `[[ ## answer ## ]]` — by one exact rule, and
-reports every repair (§4a); an adapter turns it off with `reader:
-{"kind": "derived", "markers": "exact"}`. The exact spelling always
+reports every repair (§4a); so do the delimiters of a find rule that
+declares `repair: true` (`<Think>` for `<think>`), and the kernel's
+default reads forgive a value slip (`42.`, `"positive"`, `Positive`,
+`None`, §7a). An adapter turns every repair off with `strict: true`.
+The exact spelling always
 wins, so no reply that 0.7 read changes values, with one stated exception
 (decoration around an exact marker, §4a). A reply the provider cut at
 its length limit (`finish_reason: "length"`) is no longer read as a
@@ -316,7 +319,7 @@ refuses `turn-invalid` naming the turn and the step.
 
 **A model step's message.** With `replay: "recorded"` (the default), a
 step with a recorded `message` that this plan reads into exactly the
-step's outputs (JSON equality), with no `marker` or `unclosed` repair
+step's outputs (JSON equality), with no `marker`, `unclosed` or `value` repair
 (§4a), is written verbatim: the plan reads it as it was, so it is a
 valid spelling of those values, and nothing the model wrote is lost. A
 reply that needed such a repair is a misspelling; replayed verbatim it
@@ -453,26 +456,39 @@ Models misspell the layout they were shown: `<Answer>` for `<answer>`,
 `### Answer:` for `Answer:`. The derived reader repairs these by the one
 rule below, and reports every repair and every tolerance it applied. It
 never guesses: when a repair leaves two readings, the reply refuses as
-§4 says. Value spellings (`42.`, `Yes`) are the format's business (§5),
-not the reader's.
+§4 says. Value slips are repaired by the kernel's default reads (§7a),
+and reported here too.
 
 ```
-reader: {"kind": "derived", "markers"?: "forgiving" | "exact"}   default "forgiving"
+adapter entry: {"strict"?: true | false}   default false
+find rule:     {"from": "text", "between": [open, close], "repair"?: true | false}
 ```
 
-Any other key, or another `markers` value, refuses `entry-malformed`
-(fix `edit-entry`, path `reader.markers` or `reader`). With `"exact"`,
-no marker is repaired; the other reports and truncation still apply.
+`strict: true` turns off every repair: markers, delimiters, values. The
+other reports (`unclosed`, `ignored`) and truncation still apply. A
+`strict` that is not a boolean refuses `entry-malformed` (fix
+`edit-entry`, path `strict`); so does `repair` on a rule that is not a
+`between` text rule, or not a boolean (path: the rule). The derived
+reader takes no key besides `kind` (path `reader`).
 
-**Markers and keys.** The markers are the ones §4 searches: each
-field's anchor (right-stripped), each non-empty close and the tail
-(stripped). The **ignorable** characters are U+0009, U+000B, U+000C,
+**Two passes.** Pass 1 runs on the reply text before the find rules
+(§6), over the delimiters of every `between` rule that declares `repair:
+true`. Pass 2 runs on the text the find rules leave for the derived
+reader, over its markers. Each pass is the rule below, with its own
+markers; a mention removed by a find rule (a tag named inside
+reasoning) is therefore never an exact marker for pass 2. Repair is
+opt-in for find rules because their captures can be raw code, where a
+loose match inside the code would cut it; a transport that captures
+prose (`reasoning_tags`) opts in.
+
+**Markers and keys.** The markers of pass 2 are the ones §4 searches:
+each field's anchor (right-stripped), each non-empty close and the tail
+(stripped); the markers of pass 1 are the delimiters, as written. The **ignorable** characters are U+0009, U+000B, U+000C,
 U+000D, U+0020 (§7a whitespace without the line feed) and `*`, `_`, `#`
 (markdown emphasis and headings). A text's **key** is the text with
 every ignorable character removed and ASCII `A`–`Z` lowercased. A
-marker is **repairable** when its key is not empty and no other marker
-string of the plan has the same key; `describe()["reader"]["unrepaired"]`
-lists the others.
+marker is **repairable** when its key is not empty and no other marker string of its pass has the same key;
+`describe()["reader"]["unrepaired"]` lists pass 2's others.
 
 **Occurrences.** Remove the ignorable characters from the reader text
 and lowercase ASCII, remembering each remaining character's position.
@@ -511,13 +527,16 @@ when decoration touches an exact marker: `**Answer:** 42` was the answer
 case while also writing it exactly elsewhere is content, never a
 second anchor.
 
-**The report.** `plan.read(reply).repairs` lists, first the marker
-repairs in reply order, then the reader's tolerances in the order of the
-rewritten text:
+**The report.** `plan.read(reply).repairs` lists, in this order: pass
+1's marker repairs in reply order, pass 2's in the order of its text, the
+reader's tolerances in the order of the rewritten text, then value
+repairs in the order outputs are read (visible outputs in signature
+order, then fields found by find rules in find rule order):
 
 | repair | when | keys |
 |---|---|---|
-| `marker` | a marker's span was rewritten | `marker`, `saw` (the span as written) |
+| `marker` | a marker's or delimiter's span was rewritten | `marker`, `saw` (the span as written) |
+| `value` | a kernel-default read needed the forgiving read (§7a) | `field`, `saw` (the stripped capture), `as` (the value as §7a writes it) |
 | `unclosed` | a field with a non-empty close ended at the next marker or the tail without it | `field`, `close` |
 | `ignored` | text that is not whitespace, outside every capture and marker: before the first marker, between a field's close and the next marker, after the tail | `saw` (stripped) |
 
@@ -525,7 +544,8 @@ A capture that runs to the end of the text without its close is not
 reported: that is what a provider stop sequence produces (§3). Replies
 read by a vocabulary reader report nothing. The report is data, in the
 same order in every implementation; the corpus pins it
-(`expect.repairs`).
+(`expect.repairs`). A recorded reply whose reading has a `marker`,
+`unclosed` or `value` repair is written back from its values (§3a).
 
 **Truncation.** An lm15 response whose `finish_reason` is `"length"`
 was cut by the provider. It is read as usual; then parse refuses
@@ -608,7 +628,8 @@ Transport = { when?: Predicate, requires?: [fact], in_template?: bool = true,
          | { choose: [{when: Predicate, use: Transport}…, {else: Transport}] }
 FindRule  = { from: "text" | "part:<part type>",
              between?: [open, close] | pattern?: regex | line_prefixed?: prefix,
-             to: "@purpose" | "@purpose.<sub>", remove?: bool, complete_reply?: bool }
+             to: "@purpose" | "@purpose.<sub>", remove?: bool, complete_reply?: bool,
+             repair?: bool }                       (repair: between only, §4a)
 Spelling = { call?: text, result?: text, input_format?: {use, options?},
              probe?: {name, input, id?}, value?: text | null,
              position?: "before" | "after" }   (slots {id} {name} {input} {output}; value: {value})
@@ -747,6 +768,16 @@ from a tool's name or from the model.
   written `true`/`false`.
 - **Enum** — the stripped text equals a member's spelling.
 - **Null** — nullable shapes only: written `null`, read `null` exactly.
+- **Forgiving reads** — when the exact read of a kernel-default scalar,
+  enum or nullable refuses and the adapter is not `strict`, the reader
+  tries, in order: the stripped text without one pair of matching `"`,
+  `'` or `` ` `` around it; then that without one trailing `.` (not
+  `..`), each re-read exactly; then, on those two texts, a nullable's
+  `null` or `none` in any ASCII case, and an enum's string member equal
+  in ASCII case when exactly one member is. The first that reads wins
+  and is reported (§4a); if none does, the exact refusal stands. Strings
+  never get here. `N/A` and `42.0` stay refusals: one could be content,
+  the other is a different spelling, not a slip.
 - **Rounding** — half-to-even in binary64: `roundeven(x·10ⁿ)/10ⁿ`.
 - **Regex** — none in the core. A `pattern` find rule's syntax and matching
   are the declared `pattern/*` extension's (§10); the kernel never
@@ -756,9 +787,11 @@ from a tool's name or from the model.
 
 Scalars, enums and nullables write and read by §7a; strings are one
 text part, verbatim. A field whose shape is `{"media": type}` writes a
-value that is already a part dict as that lm15 part (`{"type": type, …}`)
-and reads the first part of that type from its capture. Nothing structured
-has a default.
+value that is the part's data (a dict; a `type` key in it is ignored) as
+that lm15 part (`{"type": type, …}`), and reads the first part of that
+type from its capture as its data **without** the `type` key: the field's
+shape already says the type, so a value round-trips unchanged whether it
+was given with `type` or not. Nothing structured has a default.
 
 ## 8. Streaming parse (sans-I/O)
 
@@ -850,7 +883,8 @@ themselves are known at `finish` only.
 
 `plan.describe()["streaming"]` declares `mode` (`incremental`,
 `hybrid`, or `buffered`), the reader mode, each find rule's mode and reason,
-`markers` (`"forgiving"` with the reason the stage can hold, or `"exact"`),
+`repairs` (`{"mode": "strict"}`, or `"forgiving"` with the reason a repair
+stage can hold),
 and `field_done: "finish"`; buffering is visible, never hidden.
 
 **Refusal law.** `finish()` runs the same structural parse and typed
@@ -978,9 +1012,7 @@ because nothing is assumed: an undeclared `pattern` refuses.
 
 ## Deliberate gaps (0.8)
 
-Repairs of find rule delimiters (`<Think>` for `<think>`) and of
-provider parts; forgiving kernel-default value reads (an enum member in
-another case); the `grammar` face of `skeleton()`, declared parse
+Repairs of `line_prefixed` prefixes and of provider parts; the `grammar` face of `skeleton()`, declared parse
 combinators beyond marker repair (plan 02), a
 rigorously specified pattern dialect with library evidence (plan 10,
 remaining items), and field-level layouts of a turn in the text form

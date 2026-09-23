@@ -1,4 +1,4 @@
-# The reasoning transports — 0.1.0 (`reasoning_tags` 0.2.0)
+# The reasoning transports — 0.1.0 (`reasoning_tags` 0.3.0)
 
 Three ways to serve one `reasoning` purpose. Same signature, same program;
 the choice is a function of the model, made at bake. All three are pure
@@ -23,8 +23,9 @@ Requires `instruct`. **Hidden** (`in_template: false`). Options: `open`
 > After every sentence of output, add your thinking inside
 > {open}...{close} tags.
 
-Find rule: `{from: text, between: [open, close], to: @purpose, remove: true}`
-— the captures are removed from the text the reader sees, so thinking never
+Find rule: `{from: text, between: [open, close], to: @purpose, remove: true,
+repair: true}` — the tags are repaired like markers (kernel §4a: `<Think>`
+reads as `<think>`, unless the adapter is `strict`); the captures are removed from the text the reader sees, so thinking never
 pollutes other fields; the field's format reads `capture.text` (the
 matches, stripped, joined by newlines). Spelling: `{position: before}` — in
 an earlier turn written from values, the reasoning is written between its
@@ -42,3 +43,6 @@ part:thinking, to: @purpose}`.
 
 **Corpus.** `10-refuse-bind-capability.json` (predicate refusal),
 `15-std-reasoning-tags.json` (find + strip).
+
+**0.3.0** — the find rule declares `repair: true` (kernel 0.8, D-43): a
+misspelled tag is read and reported, not left in the answer.

@@ -103,13 +103,6 @@
         "kind": {
           "type": "string",
           "minLength": 1
-        },
-        "markers": {
-          "enum": [
-            "forgiving",
-            "exact"
-          ],
-          "description": "the derived reader's marker matching (kernel §4a); default forgiving"
         }
       }
     },
@@ -142,6 +135,10 @@
         "values"
       ],
       "description": "how a written model step is spelled (kernel §3a): the recorded reply when this plan reads it back into the same values (default), or always from values"
+    },
+    "strict": {
+      "type": "boolean",
+      "description": "true: read replies exactly, no repairs (kernel §4a)"
     }
   },
   "additionalProperties": false,
@@ -209,6 +206,9 @@
           "type": "boolean"
         },
         "complete_reply": {
+          "type": "boolean"
+        },
+        "repair": {
           "type": "boolean"
         }
       },
@@ -283,6 +283,9 @@
                 "type": "boolean"
               },
               "complete_reply": {
+                "type": "boolean"
+              },
+              "repair": {
                 "type": "boolean"
               }
             },

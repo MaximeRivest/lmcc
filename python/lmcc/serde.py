@@ -139,7 +139,8 @@ def load(entry: dict, *, registry=None) -> Adapter:
     adp = make_adapter(messages=template, reader=reader_spec, transports=transports,
                         formats=formats, name=entry.get("name", "adapter"),
                         extensions=entry.get("extensions"),
-                        replay=entry.get("replay", "recorded"), declare_defaults=False)
+                        replay=entry.get("replay", "recorded"), strict=entry.get("strict", False),
+                       declare_defaults=False)
     _extensions.resolve(adp, registry)   # kernel §10: refuse here, before any plan
     for where, ref in spelling_format_refs(adp, registry):
         registry.named_format(ref["use"], ref.get("options"), where=where)
@@ -204,6 +205,8 @@ def dump(adp: Adapter, registry) -> dict:
                  **{k: v for k, v in entry.items() if k not in ("name", "versions")}}
     if adp.replay != "recorded":
         entry["replay"] = adp.replay
+    if adp.strict:
+        entry["strict"] = True
     if transports:
         entry["transports"] = transports
     if formats:

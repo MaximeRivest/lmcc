@@ -1,5 +1,5 @@
 {
- "name": "refuse-load-reader-markers",
+ "name": "refuse-parse-strict",
  "kind": "refuse",
  "entry": {
   "name": "repairs_v1",
@@ -18,9 +18,9 @@
    }
   ],
   "reader": {
-   "kind": "derived",
-   "markers": "loose"
-  }
+   "kind": "derived"
+  },
+  "strict": true
  },
  "signature": {
   "instructions": "Answer the question.",
@@ -41,12 +41,9 @@
    }
   ]
  },
+ "response": "<Answer>\nParis\n</Answer>",
  "expect": {
-  "code": "entry-malformed",
-  "fix": {
-   "action": "edit-entry",
-   "path": "reader.markers"
-  },
-  "at": "load"
+  "code": "parse-missing-fields",
+  "at": "parse"
  }
 }

@@ -1,0 +1,97 @@
+{
+ "name": "parse-repair-find-delimiters",
+ "kind": "parse",
+ "entry": {
+  "name": "repairs_v1",
+  "versions": {
+   "kernel": "0.8.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "role": "user",
+    "text": "{question}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  },
+  "transports": {
+   "reasoning": {
+    "in_template": false,
+    "find": [
+     {
+      "from": "text",
+      "between": [
+       "<think>",
+       "</think>"
+      ],
+      "to": "@purpose",
+      "remove": true,
+      "repair": true
+     }
+    ]
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Answer the question.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "reasoning",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    },
+    "purpose": "reasoning"
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "response": "<Think>the tag <answer> comes next</THINK>\n<Answer>\nParis\n</Answer>",
+ "expect": {
+  "values": {
+   "answer": "Paris",
+   "reasoning": "the tag <answer> comes next"
+  },
+  "repairs": [
+   {
+    "repair": "marker",
+    "marker": "<think>",
+    "saw": "<Think>"
+   },
+   {
+    "repair": "marker",
+    "marker": "</think>",
+    "saw": "</THINK>"
+   },
+   {
+    "repair": "marker",
+    "marker": "<answer>",
+    "saw": "<Answer>"
+   },
+   {
+    "repair": "marker",
+    "marker": "</answer>",
+    "saw": "</Answer>"
+   }
+  ]
+ }
+}

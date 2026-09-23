@@ -61,10 +61,10 @@ is served by a transport, not by the pattern.
 ```python
 assert d["transports"] == {"reasoning": "reasoning_tags"}
 assert d["find"] == [{"field": "reasoning", "from": "text",
-                          "between": ["<think>", "</think>"], "remove": True}]
+                          "between": ["<think>", "</think>"], "remove": True, "repair": True}]
 assert d["tell"] == {
     "system": "After every sentence of output, add your thinking inside <think>...</think> tags."}
-assert d["puts"] == [] and d["request_settings"] == {}
+assert d["puts"] == [] and d["request_settings"] == {} and d["strict"] is False
 ```
 
 The transport added `tell` text to the system message. It reads the field
@@ -76,7 +76,6 @@ back from `<think>` captures and removes them before the reader runs.
 assert d["reader"] == {
     "kind": "derived",
     "anchors": [["answer", "<answer>\n", "\n</answer>\n"], ["tags", "<tags>\n", "\n</tags>\n"]],
-    "markers": "forgiving",
     "tail": "</done>"}
 assert d["skeleton"] == {"prefill": "<answer>\n", "stops": ["</done>"]}
 ```
@@ -91,10 +90,10 @@ assert d["streaming"] == {
     "mode": "incremental", "reader": {"mode": "incremental"},
     "find": [{"field": "reasoning", "from": "text", "mode": "incremental"}],
     "field_done": "finish",
-    "markers": {"mode": "forgiving",
+    "repairs": {"mode": "forgiving",
                 "reason": "from the first misspelled marker the rest of the reply waits for finish"}}
 assert d["versions"] == {"kernel": "0.8.0",
-                         "vocab": {"format/json": "0.1.0", "transport/reasoning_tags": "0.2.0"}}
+                         "vocab": {"format/json": "0.1.0", "transport/reasoning_tags": "0.3.0"}}
 assert d["capabilities"] == {"instruct": True}
 ```
 
@@ -138,7 +137,7 @@ assert d["formats"] == {"code_arguments": "0.1.0", "code_calls": "0.1.0",
 assert d["transports"] == {"heredoc_tools": "0.1.0",
                            "fenced_tools": "0.1.0", "inline_citations": "0.1.0", "native_citations": "0.1.0",
                            "native_reasoning": "0.1.0", "native_tools": "0.1.0", "prefix_cot": "0.1.0",
-                           "reasoning_tags": "0.2.0"}
+                           "reasoning_tags": "0.3.0"}
 assert d["readers"] == {"derived": "kernel", "json_object": "0.1.0"} and d["allow_udf"] is False
 assert d["extensions"] == {"pattern/legacy-re2": {"version": "0.1.0", "binding": "python:re"}}
 assert [b["type"] for b in d["type_bindings"]] == ["list[Tool]", "list[ToolCall]", "list[Citation]", "list[Source]"]

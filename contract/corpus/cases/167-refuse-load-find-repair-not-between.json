@@ -1,25 +1,20 @@
 {
- "name": "refuse-load-transport-options-malformed",
+ "name": "refuse-load-find-repair-not-between",
  "kind": "refuse",
- "vocab": [
-  "std"
- ],
  "entry": {
-  "name": "empty_tags_v1",
+  "name": "repairs_v1",
   "versions": {
    "kernel": "0.8.0",
-   "vocab": {
-    "transport/reasoning_tags": "0.3.0"
-   }
+   "vocab": {}
   },
   "template": [
    {
     "role": "system",
-    "text": "{instruction}\n\nAnswer in exactly this form:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
    },
    {
     "role": "user",
-    "text": "{q}"
+    "text": "{question}"
    }
   ],
   "reader": {
@@ -27,19 +22,22 @@
   },
   "transports": {
    "reasoning": {
-    "use": "reasoning_tags",
-    "options": {
-     "open": "",
-     "close": ""
-    }
+    "in_template": false,
+    "find": [
+     {
+      "from": "part:thinking",
+      "to": "@purpose",
+      "repair": true
+     }
+    ]
    }
   }
  },
  "signature": {
-  "instructions": "Answer.",
+  "instructions": "Answer the question.",
   "fields": [
    {
-    "name": "q",
+    "name": "question",
     "direction": "input",
     "shape": {
      "type": "string"
@@ -66,7 +64,7 @@
   "code": "entry-malformed",
   "fix": {
    "action": "edit-entry",
-   "path": "transports['reasoning']"
+   "path": "transports['reasoning'].find[0]"
   },
   "at": "load"
  }

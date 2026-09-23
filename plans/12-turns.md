@@ -72,11 +72,14 @@ The prototype now implements turn slots without touching the kernel: a slot is a
 ### Open decisions, updated
 
 1. ~~Continuation duplication~~: resolved by change 1.
-2. Legacy verbatim lm15 history without values: render frozen, or refuse.
+2. ~~Legacy verbatim lm15 history without values~~: refused; 0.7 removed lm15-message history items (kernel.md, "What 0.7 changes").
 3. ~~`meta.plan` fingerprint~~: replaced by the required `signature` field.
-4. Tool outputs as parts: yes. The prototype stores parts; text writers join the text parts.
-5. **New:** F6 id qualification, and F7 request hashing instead of storage.
-6. **New:** F11 empty-slot text (per-slot `before`/`after`?), F13 `{m.kind}`.
+4. ~~Tool outputs as parts~~: yes, shipped.
+5. ~~F6 id qualification, F7 request hashing~~: shipped (see "What shipped").
+6. ~~F11 empty-slot text, F13 `{m.kind}`~~: shipped as slot guards and `{m.kind}`.
+
+All decisions above are resolved (checked 2026-09-23). What stays open is
+"Still open" above: live providers, and ports.
 
 ---
 
