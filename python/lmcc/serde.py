@@ -17,7 +17,7 @@ from .adapter import Adapter, adapter as make_adapter
 from .errors import refuse
 from .transport import Transport, spelling_format_refs
 
-KERNEL_VERSION = "0.8.0"
+KERNEL_VERSION = "0.8.1"
 
 
 def _parse_version(version: object, *, what: str) -> tuple[int, int, int]:

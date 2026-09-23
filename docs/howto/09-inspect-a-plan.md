@@ -92,7 +92,7 @@ assert d["streaming"] == {
     "field_done": "finish",
     "repairs": {"mode": "forgiving",
                 "reason": "from the first misspelled marker the rest of the reply waits for finish"}}
-assert d["versions"] == {"kernel": "0.8.0",
+assert d["versions"] == {"kernel": "0.8.1",
                          "vocab": {"format/json": "0.1.0", "transport/reasoning_tags": "0.3.0"}}
 assert d["capabilities"] == {"instruct": True}
 ```

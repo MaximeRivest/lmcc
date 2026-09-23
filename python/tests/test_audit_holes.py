@@ -46,7 +46,7 @@ def test_c2_g22_dump_records_current_versions():
     e = copy.deepcopy(entry)
     e["versions"] = {"kernel": "0.8.9", "vocab": {"format/scaled_number": "0.2.3"}}
     dumped = lmcc.load(e, registry=reg()).dump(registry=reg())
-    assert dumped["versions"] == {"kernel": "0.8.0", "vocab": {"format/scaled_number": "0.2.0"}}
+    assert dumped["versions"] == {"kernel": lmcc.KERNEL_VERSION, "vocab": {"format/scaled_number": "0.2.0"}}
 
 
 # E4 — an integer is written from an integer, never from an integral float

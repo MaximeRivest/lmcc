@@ -1,12 +1,19 @@
 # The LMCC kernel — normative specification
 
-**Version 0.8.0** (kernel). Status: the v3 design (`plans/08`). One
+**Version 0.8.1** (kernel). Status: the v3 design (`plans/08`). One
 implementation, `python/lmcc`, passes the corpus; it is the reference while
 the language is being designed. Other languages are rebuilt from this
 document and the corpus, and join through the driver protocol (§9); the
 Go kernel that passed kernel 0.6 is kept at the git tag `kernel-0.6`
 (D-41). Where this document and the corpus disagree, fix the corpus first,
 then the implementation.
+
+**What 0.8.1 adds (D-46, D-47).** The prefill (§3): a template's last
+assistant message is the start of the reply, sent under `assistant_prefill`
+and read as its beginning. Parts inside the pattern (§4b): a non-text part
+goes to the field whose section it sits in, and past turns write it back in
+place. Additions only: 0.8.0 artifacts load unchanged (patch versions are
+compatible, §9).
 
 **What 0.8 changes (D-42).** The derived reader repairs a misspelled
 marker — `<Answer>` for `<answer>`, `**Answer:**` for `Answer:`,
