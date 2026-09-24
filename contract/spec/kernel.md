@@ -8,10 +8,11 @@ Go kernel that passed kernel 0.6 is kept at the git tag `kernel-0.6`
 (D-41). Where this document and the corpus disagree, fix the corpus first,
 then the implementation.
 
-**What 0.8.2 adds (D-48).** `replay: "verbatim"` writes every recorded
+**What 0.8.2 adds (D-48, D-49).** `replay: "verbatim"` writes every recorded
 reply exactly as it came, including repaired and unreadable ones (§3a),
 so a multi-turn conversation's requests extend each other exactly, as
-training needs.
+training needs. A guard may have an `{% else %}`, and an input guard
+treats `false` as absent (§3a).
 
 **What 0.8.1 adds (D-46, D-47).** The prefill (§3): a template's last
 assistant message is the start of the reply, sent under `assistant_prefill`
@@ -166,8 +167,8 @@ guards and turn loops are §3a's. The adapter may carry `replay`:
 `"recorded"` (the default, never written by `dump`), `"values"` or
 `"verbatim"` (§3a).
 
-Every input must be reachable from a slot or an inputs loop
-(`field-uncovered`).
+Every input must be reachable from a slot, an inputs loop, or a guard
+that names it (`field-uncovered`).
 
 ## 3. Bind, render, parse
 
@@ -317,7 +318,11 @@ is a program value.
   has at least one turn (for `steps`, one step). It does not place the
   slot; it names a slot the template places. A guard may instead name an
   **input** field: its body renders when that input has a value that is
-  not null, `""` or `[]`. So `{% if context %}Context: {context}{% endif %}`
+  not null, `false`, `""` or `[]`. A guard may hold one `{% else %}`:
+  its branch renders when the body does not. In a past turn's user side,
+  an input guard reads that turn's inputs (so the message is written as it
+  was sent), and a turn-slot guard renders neither branch (the turns the
+  slot held then are not known). So `{% if context %}Context: {context}{% endif %}`
   lets a past turn be written without its bulky input, where a bare
   `{context}` would refuse `missing-input` (case 177). An output pattern
   inside any guard is `not-readable`, as before.

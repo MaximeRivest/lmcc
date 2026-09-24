@@ -1,0 +1,105 @@
+{
+ "name": "render-input-guard-else",
+ "kind": "render",
+ "entry": {
+  "name": "else_v1",
+  "versions": {
+   "kernel": "0.8.2",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n<answer>{answer}</answer>"
+   },
+   {
+    "directive": "turns"
+   },
+   {
+    "role": "user",
+    "text": "{% if first %}Sort these names: {names}{% else %}Now add these names: {names}{% endif %}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Sort.",
+  "fields": [
+   {
+    "name": "names",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "first",
+    "direction": "input",
+    "shape": {
+     "type": "boolean"
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "names": "Cy",
+  "first": false
+ },
+ "turns": {
+  "turns": [
+   {
+    "inputs": {
+     "names": "Bo, Ann",
+     "first": true
+    },
+    "steps": [],
+    "outputs": {
+     "answer": "Ann, Bo"
+    }
+   }
+  ]
+ },
+ "expect": {
+  "request": {
+   "system": "Sort.\n<answer>...</answer>",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "Sort these names: Bo, Ann"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "<answer>Ann, Bo</answer>"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "Now add these names: Cy"
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

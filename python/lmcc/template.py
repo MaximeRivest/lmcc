@@ -27,7 +27,7 @@ slot; an output's value is its placeholder).
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .errors import refuse
 
@@ -38,6 +38,7 @@ _TOKEN = re.compile(
     r"|(?P<loop>\{%\s*for\s+(?P<var>[A-Za-z_]\w*)\s+in\s+(?P<source>[A-Za-z_]\w*)\s*%\})"
     r"|(?P<end>\{%\s*endfor\s*%\})"
     r"|(?P<guard>\{%\s*if\s+(?P<gname>[A-Za-z_]\w*)\s*%\})"
+    r"|(?P<else>\{%\s*else\s*%\})"
     r"|(?P<endif>\{%\s*endif\s*%\})"
     r"|(?P<slot>\{(?P<path>[A-Za-z_][\w.]*)\})",
     re.ASCII,
@@ -72,8 +73,14 @@ class Loop:
 
 @dataclass
 class Guard:
-    slot: str    # a turn slot name
+    slot: str    # a turn slot or an input field
     body: list
+    orelse: list = field(default_factory=list)    # {% else %} … (kernel §3a)
+    has_else: bool = False
+
+    @property
+    def branches(self) -> list:
+        return self.body + self.orelse
 
 
 Node = Text | Slot | Loop | Guard
@@ -118,6 +125,12 @@ def compile_template(text: str, *, where: str = "template") -> list[Node]:
             current.append(guard)
             stack.append((guard, current))
             current = guard.body
+        elif m.group("else"):
+            if not stack or not isinstance(stack[-1][0], Guard) or stack[-1][0].has_else:
+                refuse("template-syntax", f"{where}: {{% else %}} outside an {{% if %}}, or twice",
+                       fix={"action": "edit-template", "path": where})
+            stack[-1][0].has_else = True
+            current = stack[-1][0].orelse
         elif m.group("end") or m.group("endif"):
             want, word = (Loop, "endfor") if m.group("end") else (Guard, "endif")
             if not stack or not isinstance(stack[-1][0], want):
@@ -152,8 +165,10 @@ def _check_turn_loops(nodes: list[Node], where: str) -> None:
                                f"{{{node.var}.role}}, {{{node.var}.kind}} and "
                                f"{{{node.var}.text}} exist; got {{{n.path}}}",
                                fix={"action": "edit-template", "path": where})
-        elif isinstance(node, (Loop, Guard)):
+        elif isinstance(node, Loop):
             _check_turn_loops(node.body, where)
+        elif isinstance(node, Guard):
+            _check_turn_loops(node.branches, where)
 
 
 def turn_slots(nodes: list[Node]) -> tuple[list[str], list[str]]:
@@ -165,7 +180,7 @@ def turn_slots(nodes: list[Node]) -> tuple[list[str], list[str]]:
             placed.append(node.source)
         elif isinstance(node, Guard):
             guarded.append(node.slot)
-            p, g = turn_slots(node.body)
+            p, g = turn_slots(node.branches)
             placed += p
             guarded += g
         elif isinstance(node, Loop):
@@ -221,7 +236,9 @@ def validate_nodes(nodes: list[Node], *, known_fields: set[str],
                        f"{where}: {{% if {node.slot} %}} names neither a turn slot this template "
                        f"places nor an input field",
                        fix={"action": "edit-template", "path": where, "slot": node.slot})
-            covered |= validate_nodes(node.body, known_fields=known_fields, slots=slots,
+            if node.slot in input_fields:
+                covered.add(node.slot)      # an input that decides a guard shapes the prompt
+            covered |= validate_nodes(node.branches, known_fields=known_fields, slots=slots,
                                       input_fields=input_fields, where=where,
                                       in_loop_var=in_loop_var)
         elif isinstance(node, Loop):
@@ -249,8 +266,9 @@ def render_nodes(nodes: list[Node], env, out: list[dict], buf: list[str],
         elif isinstance(node, Slot):
             _render_slot(node, env, out, buf, loop_ctx)
         elif isinstance(node, Guard):
-            if env.slot_filled(node.slot):
-                render_nodes(node.body, env, out, buf, loop_ctx)
+            state = env.guard(node.slot)       # True, False, or None: neither branch
+            if state is not None:
+                render_nodes(node.body if state else node.orelse, env, out, buf, loop_ctx)
         elif isinstance(node, Loop) and node.over_turns:
             for role, kind, text in env.turn_messages(node.source):
                 attrs = {"role": role, "kind": kind, "text": text}

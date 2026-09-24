@@ -108,14 +108,21 @@ class _Env:
     def turn_messages(self, slot: str) -> list:
         return self.texts.get(slot, [])
 
+    def guard(self, name: str) -> bool | None:
+        """A guard's condition (kernel §3a). An input: true unless its value
+        is absent, null, false, "" or []. A turn slot: true when it has turns;
+        in a past turn's user side, None — neither branch renders, because
+        the turns that slot held when the turn was sent are not known."""
+        field = next((f for f in self.plan.signature.fields if f.name == name), None)
+        if field is not None and field.direction == "input":
+            value = self.values.get(name)
+            return not (value is None or value is False or value == "" or value == [])
+        if self.partial:
+            return None
+        return name in self.filled
+
     def slot_filled(self, slot: str) -> bool:
-        """A guard's condition (kernel §3a): a placed slot with turns, or an
-        input with a value (not null, "" or [])."""
-        if slot in self.filled:
-            return True
-        if slot in self.values and self.plan.signature.field_named(slot).direction == "input":
-            return self.values[slot] not in (None, "", [])
-        return False
+        return bool(self.guard(slot))
 
     @property
     def instruction(self) -> str:
@@ -936,7 +943,7 @@ def _bare_slots(nodes) -> set[str]:
         if isinstance(n, Slot) and "." not in n.path:
             out.add(n.path)
         elif isinstance(n, Guard):
-            out |= _bare_slots(n.body)
+            out |= _bare_slots(n.branches)
     return out
 
 
@@ -947,7 +954,7 @@ def _depends_on_inputs(nodes, input_names: set[str]) -> bool:
         if isinstance(n, Loop) and not n.over_turns and (
                 n.source == "inputs" or _depends_on_inputs(n.body, input_names)):
             return True
-        if isinstance(n, Guard) and (n.slot in input_names or _depends_on_inputs(n.body, input_names)):
+        if isinstance(n, Guard) and (n.slot in input_names or _depends_on_inputs(n.branches, input_names)):
             return True
     return False
 
@@ -1006,7 +1013,7 @@ def _output_holes(nodes, sig: core.SignatureCore, holes: list) -> None:
     for node in nodes:
         if isinstance(node, Guard):
             inner: list = []
-            _output_holes(node.body, sig, inner)
+            _output_holes(node.branches, sig, inner)
             if inner:
                 refuse("not-readable", "the output pattern cannot sit inside a {% if %} guard: "
                        "the reply's shape must not depend on which turns were given",

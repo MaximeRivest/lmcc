@@ -15,7 +15,7 @@ parameters, is breaking.
 
 | code | fires at | fix | meaning |
 |---|---|---|---|
-| `template-syntax` | construct | `edit-template` | bad template: bare brace, unclosed loop or guard, a turn slot placed twice or named `inputs`/`outputs`/`instruction`/`format`, an attribute other than `role`/`kind`/`text` in a turn loop, a slot, loop or guard in a last `assistant` message (the prefill, kernel §3) |
+| `template-syntax` | construct | `edit-template` | bad template: bare brace, unclosed loop or guard, a turn slot placed twice or named `inputs`/`outputs`/`instruction`/`format`, an attribute other than `role`/`kind`/`text` in a turn loop, a slot, loop or guard in a last `assistant` message (the prefill, kernel §3), an `{% else %}` outside an `{% if %}` or twice in one |
 | `unknown-slot` | bind | `edit-template`, `assign-purpose` | slot names no field, or a dotted slot outside its loop, or a guard names neither a placed turn slot nor an input field; or a find rule/put targets `@purpose.sub` and no field bears that purpose |
 | `unknown-reader` | construct/load/bind | `install-vocabulary`, `edit-entry` | `reader.kind` is neither `derived` nor a registered reader (`edit-entry` when it is not even a name) |
 | `unknown-format` | load/dump | `install-vocabulary` | a `{"use": name}` format reference names nothing registered |

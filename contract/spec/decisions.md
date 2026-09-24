@@ -1168,3 +1168,29 @@ with empty `outputs` and its message; the other modes write nothing for
 it, as before (case 190). Costs, stated: under `verbatim` the model sees
 its own slips again, which is the point for training and the wrong
 choice for serving; it is opt-in, and `recorded` stays the default.
+
+**D-49 · `{% else %}`, and `false` is absent for an input guard (kernel
+0.8.2).** Ratified with the maintainer on 2026-09-23. The alphabet-sort
+port showed a task whose first turn is worded differently from the rest;
+one function per task means the difference must be an input
+(`first_turn: bool`), and the template must word both cases. D-45's guard
+rendered its body for `false` (presence, not truth) and had no else, so
+a boolean input could not choose between two wordings.
+
+- An input guard is false when the value is absent, null, `false`, `""`
+  or `[]`; `{% else %}` renders when the body does not. One else per
+  guard, no `elif`, no expressions: a boolean or an optional input is
+  the condition.
+- An input named only by a guard counts as used (`field-uncovered` no
+  longer fires): it shapes the prompt.
+- In a past turn's user side, an input guard reads that turn's own
+  inputs, so the message is written exactly as it was sent (training
+  needs each request to extend the previous one). A turn-slot guard
+  renders neither branch there, as before; a turn-slot guard inside a
+  user message therefore re-renders differently once its turn is past,
+  and breaks that exact extension — stated here, refused later if it
+  proves a trap.
+
+Costs, stated: changes the output of a published rule (D-45, 0.8.0) for a
+`false` input, from body to nothing (no case pinned the old behavior);
+templates that relied on a boolean `false` rendering the body now do not.

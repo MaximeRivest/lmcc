@@ -1,0 +1,61 @@
+{
+ "name": "refuse-load-else-outside-if",
+ "kind": "refuse",
+ "entry": {
+  "name": "else_v1",
+  "versions": {
+   "kernel": "0.8.2",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n<answer>{answer}</answer>"
+   },
+   {
+    "directive": "turns"
+   },
+   {
+    "role": "user",
+    "text": "{names}{% else %}x"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Sort.",
+  "fields": [
+   {
+    "name": "names",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "first",
+    "direction": "input",
+    "shape": {
+     "type": "boolean"
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "expect": {
+  "code": "template-syntax",
+  "fix": {
+   "action": "edit-template",
+   "path": "template[2]"
+  },
+  "at": "load"
+ }
+}
