@@ -118,8 +118,8 @@ try:
 except lmcc.Refusal as r:
     assert r.describe() == {
         "code": "version-incompatible",
-        "hint": "kernel: artifact needs 0.9.0, this implementation provides 0.8.1",
-        "fix": {"action": "match-version", "entry": "kernel", "needs": "0.9.0", "provides": "0.8.1"},
+        "hint": "kernel: artifact needs 0.9.0, this implementation provides 0.8.2",
+        "fix": {"action": "match-version", "entry": "kernel", "needs": "0.9.0", "provides": "0.8.2"},
         "partial": None}
 ```
 

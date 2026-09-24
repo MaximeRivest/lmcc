@@ -1,0 +1,54 @@
+{
+ "name": "roundtrip-replay-verbatim",
+ "kind": "roundtrip",
+ "entry": {
+  "name": "replay_v1",
+  "versions": {
+   "kernel": "0.8.2",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "directive": "turns"
+   },
+   {
+    "role": "user",
+    "text": "{question}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  },
+  "replay": "verbatim"
+ },
+ "expect": {
+  "entry": {
+   "name": "replay_v1",
+   "versions": {
+    "kernel": "0.8.2",
+    "vocab": {}
+   },
+   "template": [
+    {
+     "role": "system",
+     "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+    },
+    {
+     "directive": "turns"
+    },
+    {
+     "role": "user",
+     "text": "{question}"
+    }
+   ],
+   "reader": {
+    "kind": "derived"
+   },
+   "replay": "verbatim"
+  }
+ }
+}

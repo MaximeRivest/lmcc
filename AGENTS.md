@@ -78,7 +78,7 @@ a decision, derive from these before inventing anything:
 
 | invariant | enforced by |
 |---|---|
-| corpus is byte-exact authority | `contract/harness/runner.py` (187 cases; 6 need `udf:python`, 9 need `pattern/legacy-re2`) |
+| corpus is byte-exact authority | `contract/harness/runner.py` (191 cases; 6 need `udf:python`, 9 need `pattern/legacy-re2`) |
 | one record, the turn, replaces demos and history (kernel §3a): examples, past exchanges and the exchange in progress are written by the plan's own writers; a recorded reply this plan reads back without a marker repair is replayed verbatim; hidden fields have derived or declared writers checked at bind; call ids stay unique; a tool's images survive text transports | corpus 03, 53, 54, 103, 107, 116, 122, 128–148; `tests/test_turns.py` |
 | formatted turns use the same argument writer for past calls and the representative bind probe; raw-code whitespace is preserved and marker collisions refuse | corpus 116–127; `tests/test_heredoc_turns.py`; notebook `docs/howto/12-conversational-heredoc-tools.md` |
 | tools and citations are live purposes: the same program runs native (lm15 `tool_call`/`citation` parts, `Request.tools`) and as text (`fenced_tools`, `inline_citations`); a call turn is a reply (`complete_reply`); a text spelling of a past call must read back through its own find rule (`turns` probe, `spelling-drift`) | corpus 100–112; `tests/test_tools_citations.py`; `python/integration/lm15_tools_citations.py` (live, by hand) |

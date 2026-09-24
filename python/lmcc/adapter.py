@@ -15,7 +15,7 @@ from .transport import Transport
 from .template import RESERVED_SLOTS, compile_template, turn_slots
 
 _SLOT_NAME = __import__("re").compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-REPLAY = ("recorded", "values")
+REPLAY = ("recorded", "values", "verbatim")
 
 
 def system(text: str) -> dict:
@@ -134,7 +134,8 @@ def adapter(*, messages: list[dict] | None = None, template: list[dict] | dict |
     the dumped artifact carries the line either way. ``replay``:
     ``"recorded"`` writes a past model step's recorded reply when this plan
     reads it back into the same values, ``"values"`` always writes it from
-    its values (kernel §3a). ``strict=True`` reads replies exactly as the
+    its values, ``"verbatim"`` always writes the recorded reply as it came
+    (kernel §3a; for training and logs). ``strict=True`` reads replies exactly as the
     template spells them: no marker, delimiter or value repairs (kernel §4a)."""
     if messages is None:
         messages = template.get("messages") if isinstance(template, dict) else template

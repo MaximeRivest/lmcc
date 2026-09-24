@@ -49,7 +49,7 @@
   "entry": {
    "name": "tools_v1",
    "versions": {
-    "kernel": "0.8.1",
+    "kernel": "0.8.2",
     "vocab": {
      "transport/heredoc_tools": "0.1.0",
      "format/code_arguments": "0.1.0",

@@ -484,6 +484,10 @@ class Plan:
         """Kernel §3a: the recorded reply when this plan reads it back into
         the same values; else the message written from the values."""
         written = None
+        if self.adapter.replay == "verbatim" and step.message is not None:
+            written = core.make_message("assistant", [dict(p) for p in step.message["parts"]])
+            ctx.model_steps += 1
+            return (written, {}) if with_ids else written
         if self.adapter.replay == "recorded" and step.message is not None:
             try:
                 values, _c, reps = self._parse_with_captures(step.message, continued=False)

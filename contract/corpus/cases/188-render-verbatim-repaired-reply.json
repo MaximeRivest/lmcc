@@ -1,0 +1,113 @@
+{
+ "name": "render-verbatim-repaired-reply",
+ "kind": "render",
+ "entry": {
+  "name": "replay_v1",
+  "versions": {
+   "kernel": "0.8.2",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "directive": "turns"
+   },
+   {
+    "role": "user",
+    "text": "{question}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  },
+  "replay": "verbatim"
+ },
+ "signature": {
+  "instructions": "Answer.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "integer"
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "question": "and 6*8?"
+ },
+ "turns": {
+  "turns": [
+   {
+    "inputs": {
+     "question": "6*7?"
+    },
+    "steps": [
+     {
+      "kind": "model",
+      "outputs": {
+       "answer": 42
+      },
+      "message": {
+       "role": "assistant",
+       "parts": [
+        {
+         "type": "text",
+         "text": "<Answer>\n42.\n</Answer>"
+        }
+       ]
+      }
+     }
+    ],
+    "outputs": {
+     "answer": 42
+    }
+   }
+  ]
+ },
+ "expect": {
+  "request": {
+   "system": "Answer.\n<answer>\n(integer)\n</answer>\n",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "6*7?"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "<Answer>\n42.\n</Answer>"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "and 6*8?"
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

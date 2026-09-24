@@ -1154,3 +1154,17 @@ structured values made of several parts (vocabulary: a format that reads
 a parts capture), stray text beside an image in a media field (the media
 default reads the image and ignores the text, unreported), and streaming
 events for atoms (they arrive with the values at `finish`).
+
+**D-48 · `replay: "verbatim"` (kernel 0.8.2).** Ratified with the
+maintainer on 2026-09-23 for training on lmfn programs through verifiers.
+A trainer builds one token sequence per conversation path, and a path
+holds only while each request extends the previous one exactly; the
+default `recorded` replay rewrites a repaired reply in the template's
+spelling (D-42) and writes nothing for a reply that could not be read,
+so one episode would split into several sequences, and the model would
+be trained on text it never wrote. `verbatim` writes every recorded
+reply exactly as it came. A step from an unreadable reply is recorded
+with empty `outputs` and its message; the other modes write nothing for
+it, as before (case 190). Costs, stated: under `verbatim` the model sees
+its own slips again, which is the point for training and the wrong
+choice for serving; it is opt-in, and `recorded` stays the default.

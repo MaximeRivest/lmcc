@@ -1,0 +1,99 @@
+{
+ "name": "render-recorded-unreadable-reply-dropped",
+ "kind": "render",
+ "entry": {
+  "name": "replay_v1",
+  "versions": {
+   "kernel": "0.8.2",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "directive": "turns"
+   },
+   {
+    "role": "user",
+    "text": "{question}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Answer.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "integer"
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "question": "and 6*8?"
+ },
+ "turns": {
+  "turns": [
+   {
+    "inputs": {
+     "question": "6*7?"
+    },
+    "steps": [
+     {
+      "kind": "model",
+      "outputs": {},
+      "message": {
+       "role": "assistant",
+       "parts": [
+        {
+         "type": "text",
+         "text": "I think it is forty-two"
+        }
+       ]
+      }
+     }
+    ],
+    "outputs": {}
+   }
+  ]
+ },
+ "expect": {
+  "request": {
+   "system": "Answer.\n<answer>\n(integer)\n</answer>\n",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "6*7?"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "and 6*8?"
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

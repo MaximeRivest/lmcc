@@ -1,12 +1,17 @@
 # The LMCC kernel — normative specification
 
-**Version 0.8.1** (kernel). Status: the v3 design (`plans/08`). One
+**Version 0.8.2** (kernel). Status: the v3 design (`plans/08`). One
 implementation, `python/lmcc`, passes the corpus; it is the reference while
 the language is being designed. Other languages are rebuilt from this
 document and the corpus, and join through the driver protocol (§9); the
 Go kernel that passed kernel 0.6 is kept at the git tag `kernel-0.6`
 (D-41). Where this document and the corpus disagree, fix the corpus first,
 then the implementation.
+
+**What 0.8.2 adds (D-48).** `replay: "verbatim"` writes every recorded
+reply exactly as it came, including repaired and unreadable ones (§3a),
+so a multi-turn conversation's requests extend each other exactly, as
+training needs.
 
 **What 0.8.1 adds (D-46, D-47).** The prefill (§3): a template's last
 assistant message is the start of the reply, sent under `assistant_prefill`
@@ -158,7 +163,8 @@ supplies; a bare slot with no value refuses `missing-input`.
 
 A loop over any source other than `inputs` and `outputs` is a turn loop;
 guards and turn loops are §3a's. The adapter may carry `replay`:
-`"recorded"` (the default, never written by `dump`) or `"values"` (§3a).
+`"recorded"` (the default, never written by `dump`), `"values"` or
+`"verbatim"` (§3a).
 
 Every input must be reachable from a slot or an inputs loop
 (`field-uncovered`).
@@ -358,7 +364,15 @@ step's outputs (JSON equality), with no `marker`, `unclosed` or `value` repair
 (§4a), is written verbatim: the plan reads it as it was, so it is a
 valid spelling of those values, and nothing the model wrote is lost. A
 reply that needed such a repair is a misspelling; replayed verbatim it
-would teach the model its own slip. Otherwise — and always with `replay: "values"` —
+would teach the model its own slip. With `replay: "verbatim"`, every
+step with a recorded `message` is written exactly as recorded, whatever
+it reads as, repaired or unreadable: the conversation is the model's own
+text, so each request extends the previous one exactly. That is what
+training on multi-turn conversations needs (a rewritten history splits
+one episode into several token sequences), and what a faithful log needs.
+A step recorded from a reply that could not be read has empty `outputs`
+and its `message`; only `verbatim` writes it (the other modes write
+nothing for it). Otherwise — and always with `replay: "values"` —
 the message is written from the outputs:
 
 1. for each `part:<type>` find rule that does not read the calls

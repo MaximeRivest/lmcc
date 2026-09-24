@@ -132,7 +132,8 @@
     "replay": {
       "enum": [
         "recorded",
-        "values"
+        "values",
+        "verbatim"
       ],
       "description": "how a written model step is spelled (kernel §3a): the recorded reply when this plan reads it back into the same values (default), or always from values"
     },
