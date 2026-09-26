@@ -41,6 +41,14 @@ the provider enforces it. Therefore, normatively:
     "required": [ "<field>", ... ], "additionalProperties": false } } }
 ```
 
+A field with a `desc` has it as its property's `description` (0.2.0):
+the shape with `description` set to the desc. JSON Schema's channel for
+what a member means, read by every provider that enforces a schema, and
+the *question* of a judgment in lm15's convention (MAP-14 D4: "the
+property's description is the question"). 0.1.0 sent no description, so
+a JSON reader lost every field's desc unless the template also printed
+`{format}` (cases 22, 28 changed for this; 206 pins it on a judgment).
+
 Without the capability, do not ask a model for JSON prose — use an
 invertible marker template and put JSON *inside* typed fields via
 formats.

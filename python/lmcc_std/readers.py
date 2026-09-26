@@ -42,6 +42,9 @@ class JsonObjectReader(Reader):
       ``parse-ambiguous``. Missing fields refuse ``parse-missing-fields``
       with the recovered raw values in ``.partial``.
 
+    A field's ``desc`` is its property's ``description`` (0.2.0): what the
+    member means, and a judgment's question (lm15 MAP-14).
+
     Writing (turns): spelled text that parses as **non-string** JSON embeds
     as that JSON value; anything else embeds as a JSON string. The document
     is the object with two-space indentation, members in field order.
@@ -73,7 +76,8 @@ class JsonObjectReader(Reader):
             "type": "json_schema",
             "schema": {
                 "type": "object",
-                "properties": {f.name: dict(f.shape) for f in fields},
+                "properties": {f.name: {**f.shape, "description": f.desc} if f.desc else dict(f.shape)
+                               for f in fields},
                 "required": [f.name for f in fields],
                 "additionalProperties": False,
             },

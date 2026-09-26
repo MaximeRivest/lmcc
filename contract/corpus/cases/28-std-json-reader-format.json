@@ -93,7 +93,8 @@
       "type": "object",
       "properties": {
        "answer": {
-        "type": "string"
+        "type": "string",
+        "description": "short answer"
        },
        "score": {
         "type": "integer"

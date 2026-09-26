@@ -46,7 +46,8 @@
       "card_delivery_estimate",
       "exchange_rate"
      ]
-    }
+    },
+    "desc": "What does the customer need?"
    },
    {
     "name": "count",
@@ -95,7 +96,8 @@
          "card_arrival",
          "card_delivery_estimate",
          "exchange_rate"
-        ]
+        ],
+        "description": "What does the customer need?"
        },
        "count": {
         "type": "integer"

@@ -1304,3 +1304,13 @@ nothing else changed in them). Probability keys stay lm15's strings
 (`"true"`, `"0"`); a host that wants typed keys lifts them itself.
 `measured_by` is per field although lm15's method is per part. Replies
 with data parts were not valid at the old pin, so no reading changes.
+
+Added the same day, within `reader/json_object` 0.2.0: a field's `desc`
+is its property's `description` in the schema the reader sends. Found
+when reproducing the banking77 Jev run through lmcc: lm15's judgment
+convention takes the question from the description (MAP-14 D4), and the
+reader dropped every desc, so the question could not be asked. It is
+JSON Schema's own channel and every enforcing provider reads it. Cost,
+stated: the request bytes of cases 22 and 28 changed (their fields have
+descs); a desc now costs its tokens twice when the template also prints
+`{format}`.
