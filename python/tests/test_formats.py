@@ -233,3 +233,39 @@ def test_reference_rejects_unknown_keys():
         lmcc.adapter(messages=[lmcc.system("{a}")], formats={"object": {"use": "json", "optoins": {}}})
     assert err.value.code == "entry-malformed"
     assert err.value.fix == {"action": "edit-entry", "path": "formats['object']"}
+
+
+def test_a_bound_host_type_lowers_through_the_registry():
+    """Kernel §1/§5 step 3: a type only the runtime knows (a DataFrame) lowers
+    to the shape its binding declares — default {}, structured — and the
+    bound format writes it. Before, the signature refused unmapped-type
+    before any binding was consulted, though the docstrings promised it."""
+    import lmcc
+
+    class Frame:
+        def __init__(self, rows):
+            self.rows = rows
+
+    reg = lmcc.Registry()
+    reg.format(Frame, write=lambda v: "\n".join(",".join(map(str, r)) for r in v.rows),
+               describe=lambda: "CSV rows")
+
+    @lmcc.fn(registry=reg)
+    def total(data: Frame) -> int:
+        """Add the numbers."""
+
+    (data, _) = total.signature.fields
+    assert (data.shape, data.type) == ({}, "Frame")
+    # inside a list it lowers too; the list itself still needs its own format (§5: no nesting)
+    many = lmcc.signature("x", inputs={"rows": list[Frame]}, outputs={"a": str}, registry=reg)
+    assert many.fields[0].shape == {"type": "array", "items": {}}
+    plan = total.bind(lmcc.adapter(messages=[lmcc.user("{data}\nTotal: {total}")]), registry=reg)
+    assert plan.render(data=Frame([[1, 2], [3, 4]])).messages[0]["parts"][0]["text"] == \
+        "1,2\n3,4\nTotal: (integer)"
+    assert plan.describe()["inputs"][0]["resolved_by"] == "runtime:Frame"
+
+    reg.format(dict, write=lambda v: "", shape={"type": "object"})   # a declared shape is kept
+    assert reg.shape_of(dict) == {"type": "object"}
+    with pytest.raises(lmcc.Refusal) as err:
+        lmcc.signature("x", inputs={"f": Frame}, outputs={"a": str}, registry=lmcc.Registry())
+    assert err.value.code == "unmapped-type" and "lmcc.format(Frame" in err.value.hint

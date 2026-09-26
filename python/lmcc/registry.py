@@ -42,6 +42,7 @@ class Registry:
                  extensions: "list[str] | tuple[str, ...] | None" = None) -> None:
         self.formats: dict[str, _Named] = {}
         self.type_bindings: list[tuple[object, Format | dict]] = []
+        self.type_shapes: list[tuple[object, dict]] = []   # host type -> the shape it lowers to
         self.transports: dict[str, _Named] = {}
         self.readers: dict[str, _Named] = {}
         self.allow_udf = allow_udf
@@ -96,10 +97,19 @@ class Registry:
         return fmt
 
     def format(self, host_type, *, write=None, read=None, describe=None,
-               use: str | None = None, options: dict | None = None, **facts) -> Format:
+               use: str | None = None, options: dict | None = None, shape: dict | None = None,
+               **facts) -> Format:
         """Bind a host type to a format, per runtime — ``lmcc.format(Person,
         write=..., read=...)`` or ``lmcc.format(pd.DataFrame, use="table",
-        options={...})``. Never serialized; ``ship`` does that on request."""
+        options={...})``. Never serialized; ``ship`` does that on request.
+
+        A type the kernel cannot lower itself (not a scalar, list, dict,
+        Literal, Enum or dataclass) lowers to ``shape`` in signatures built
+        with this registry: a JSON-Schema dict, default ``{}`` — structured,
+        contents unknown, so the bound format carries it (kernel §1, §5)."""
+        if shape is not None and not isinstance(shape, dict):
+            refuse("unmapped-type", f"{core.typename(host_type)}: shape must be a JSON-Schema dict",
+                   fix={"action": "edit-signature"})
         if use is not None:
             binding: Format | dict = {"use": use, "options": options or {}}
         else:
@@ -108,15 +118,27 @@ class Registry:
                        fix={"action": "edit-entry", "path": "write"})
             binding = make(write=write, read=read, describe=describe, **facts)
         self.type_bindings.append((host_type, binding))
+        self.type_shapes.append((host_type, dict(shape) if shape is not None else {}))
         return binding if isinstance(binding, Format) else self.named_format(use, options)
+
+    @staticmethod
+    def _matches(annotation: object, host_type: object) -> bool:
+        return annotation is host_type or annotation == host_type or (
+            isinstance(annotation, type) and isinstance(host_type, type)
+            and issubclass(annotation, host_type))
+
+    def shape_of(self, annotation: object) -> dict | None:
+        """The shape a bound host type lowers to, or None when it is not bound."""
+        for host_type, shape in self.type_shapes:
+            if annotation is not None and self._matches(annotation, host_type):
+                return dict(shape)
+        return None
 
     def type_binding(self, annotation: object) -> Format | None:
         if annotation is None:
             return None
         for host_type, binding in self.type_bindings:
-            if annotation is host_type or annotation == host_type or (
-                    isinstance(annotation, type) and isinstance(host_type, type)
-                    and issubclass(annotation, host_type)):
+            if self._matches(annotation, host_type):
                 if isinstance(binding, dict):
                     return self.named_format(binding["use"], binding.get("options"))
                 return binding
@@ -189,8 +211,9 @@ class Registry:
             "formats": {n: e.version for n, e in sorted(self.formats.items())},
             "type_bindings": [
                 {"type": core.typename(t), "format": (b["use"] if isinstance(b, dict)
-                                                     else b.name or "(inline)")}
-                for t, b in self.type_bindings],
+                                                     else b.name or "(inline)"),
+                 "shape": shape}
+                for (t, b), (_, shape) in zip(self.type_bindings, self.type_shapes)],
             "transports": {n: e.version for n, e in sorted(self.transports.items())},
             "readers": {"derived": "kernel",
                        **{n: e.version for n, e in sorted(self.readers.items())}},

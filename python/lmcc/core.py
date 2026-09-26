@@ -346,9 +346,15 @@ def annotation_to_shape(ann: object, registry=None, *, field_name: str = "?") ->
         props = {f.name: annotation_to_shape(hints[f.name], registry, field_name=f"{field_name}.{f.name}")
                  for f in dataclasses.fields(ann)}
         return {"type": "object", "properties": props, "required": [f.name for f in dataclasses.fields(ann)]}
+    if registry is None:
+        from .registry import default_registry as registry
+    bound = registry.shape_of(ann)      # the host socket: a type bound with lmcc.format
+    if bound is not None:
+        return bound
     refuse("unmapped-type",
            f"field {field_name!r}: cannot map annotation {ann!r} to a shape; "
-           f"pass a JSON-Schema dict, or lower it in your frontend",
+           f"bind the type with lmcc.format({typename(ann)}, ...), pass a JSON-Schema "
+           f"dict, or lower it in your frontend",
            fix={"action": "edit-signature", "field": field_name})
 
 

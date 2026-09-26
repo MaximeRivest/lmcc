@@ -134,7 +134,11 @@ name only. `purpose` is what the field is for in the exchange
 outputs, dataclass return for several, docstring → instructions,
 `Purpose["reasoning", T]` for purposes), `lmcc_dspy`, JSON, or a host language's own syntax —
 every syntax lowers to this form; none is the contract. A type a
-frontend cannot lower refuses `unmapped-type`, naming the field.
+frontend cannot lower refuses `unmapped-type`, naming the field. A type
+only the runtime knows (a DataFrame) lowers through the runtime's type
+binding (§5 step 3), which says its shape — in Python
+`lmcc.format(T, ..., shape=...)`, default `{}` (structured, so the bound
+format carries it); host API, never serialized (D-52).
 
 ## 2. Adapter and template
 

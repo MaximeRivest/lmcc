@@ -1240,3 +1240,20 @@ source code in a shipped UDF and text here — the same face in its two
 forms, distinguished by `language`. A reference with a key other than
 `use`, `options`, `describe` now refuses `entry-malformed`; it was
 silently ignored before (the schema already forbade it).
+
+**D-52 · A type bound at runtime lowers through its binding (Python
+host, kernel 0.8.3).** Found in the lmfn analytics review (2026-09-23):
+`annotation_to_shape` promised that foreign types "resolve through the
+host socket", took a registry, and never asked it, so
+`lmcc.format(pl.DataFrame, ...)` could not work — the signature refused
+`unmapped-type` before any format was looked up. A type binding now
+also says the shape the type lowers to (`shape=`, default `{}`); a
+signature built without a registry consults the default one, as bind
+does. The kernel's own constructs still lower mechanically first; the
+binding is consulted only for what would otherwise refuse, and the hint
+of that refusal now names `lmcc.format`. No contract bytes change: this
+is the Python frontend; the artifact still names the type only.
+
+Costs, stated: `{}` tells a JSON reader's schema nothing about the value
+(any JSON); declare `shape=` when a schema matters. A list of a bound
+type still needs its own format (§5: the kernel never nests formats).
