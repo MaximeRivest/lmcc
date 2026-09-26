@@ -119,7 +119,7 @@ def load(entry: dict, *, registry=None) -> Adapter:
                                  registry.formats[name].version)
             options = dict(f.get("options", {}))
             registry.named_format(name, options, where=where)  # resolve at load (§5)
-            formats[key] = {"use": name, "options": options}
+            formats[key] = {**f, "options": options}   # the constructor checks the keys
         elif "language" in f:
             for req in ("write", "sha256"):
                 if req not in f:
@@ -132,8 +132,11 @@ def load(entry: dict, *, registry=None) -> Adapter:
                        fix={"action": "place-udf", "language": str(f["language"]), "path": where})
             formats[key] = _formats.load_udf(f, where=where)
             formats[key].shipped = dict(f)  # kept whole for dump
+        elif "describe" in f:
+            formats[key] = dict(f)          # a description (§5); the constructor checks it
         else:
-            refuse("entry-malformed", f"{where}: a format entry is {{use}} or a shipped UDF",
+            refuse("entry-malformed", f"{where}: a format entry is {{use}}, a shipped UDF, "
+                                      f"or a description {{describe}}",
                    fix={"action": "edit-entry", "path": where})
 
     adp = make_adapter(messages=template, reader=reader_spec, transports=transports,
@@ -218,4 +221,6 @@ def _ref(binding: dict) -> dict:
     out = {"use": binding["use"]}
     if binding.get("options"):
         out["options"] = dict(binding["options"])
+    if "describe" in binding:
+        out["describe"] = binding["describe"]
     return out

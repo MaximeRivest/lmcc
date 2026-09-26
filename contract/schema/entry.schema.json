@@ -125,6 +125,9 @@
           },
           {
             "$ref": "#/$defs/shipped"
+          },
+          {
+            "$ref": "#/$defs/description"
           }
         ]
       }
@@ -429,6 +432,11 @@
         },
         "options": {
           "type": "object"
+        },
+        "describe": {
+          "type": "string",
+          "minLength": 1,
+          "description": "what the model is told instead of the format's own describe (kernel §5, descriptions)"
         }
       },
       "additionalProperties": false
@@ -486,6 +494,20 @@
           "items": {
             "type": "string"
           }
+        }
+      },
+      "additionalProperties": false
+    },
+    "description": {
+      "type": "object",
+      "required": [
+        "describe"
+      ],
+      "description": "a description alone: the format resolution picks is described by this text (kernel §5)",
+      "properties": {
+        "describe": {
+          "type": "string",
+          "minLength": 1
         }
       },
       "additionalProperties": false

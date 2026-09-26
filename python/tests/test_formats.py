@@ -194,3 +194,42 @@ def test_turn_not_renderable_for_lossy_formats():
     with pytest.raises(lmcc.Refusal) as err:
         plan.render(text="t", turns=[plan.example({"text": "d"}, {"a": "v"})])
     assert err.value.code == "turn-not-renderable"
+
+
+def test_description_is_data_names_its_entry_and_keeps_the_kernel_read():
+    """Kernel §5 descriptions (D-51): the banking77 'short' adapter — a student
+    that learned the intents is told `<intent>`, not the list — as pure data.
+    It dumps (no code to ship), plan.describe() names the entry, and the read
+    stays the kernel's: forgiving, reported, and off under strict."""
+    from typing import Literal
+
+    import lmcc
+
+    intent = Literal["card_arrival", "card_delivery_estimate"]
+    sig = lmcc.signature("Classify.", inputs={"text": str}, outputs={"answer": intent})
+    short = lmcc.adapter(messages=[lmcc.system("{instruction}\nIntent: {answer}"), lmcc.user("{text}")],
+                         formats={"enum": {"describe": "<intent>"}})
+    entry = short.dump()
+    assert entry["formats"] == {"enum": {"describe": "<intent>"}}
+    plan = lmcc.load(entry, registry=lmcc.Registry()).bind(sig)
+    assert plan.render(text="hi").system == "Classify.\nIntent: <intent>"
+    (out,) = plan.describe()["outputs"]
+    assert (out["format"], out["resolved_by"], out["described_by"]) == \
+        ("kernel-scalar", "kernel", "artifact:enum")
+    reading = plan.read("Intent: Card_Arrival")
+    assert reading.values == {"answer": "card_arrival"}
+    assert reading.repairs == [{"repair": "value", "field": "answer", "saw": "Card_Arrival",
+                                "as": "card_arrival"}]
+    strict = lmcc.adapter(messages=short.template, formats=short.formats, strict=True).bind(sig)
+    with pytest.raises(lmcc.Refusal) as err:
+        strict.read("Intent: Card_Arrival")
+    assert err.value.code == "parse-value"
+
+
+def test_reference_rejects_unknown_keys():
+    import lmcc
+
+    with pytest.raises(lmcc.Refusal) as err:
+        lmcc.adapter(messages=[lmcc.system("{a}")], formats={"object": {"use": "json", "optoins": {}}})
+    assert err.value.code == "entry-malformed"
+    assert err.value.fix == {"action": "edit-entry", "path": "formats['object']"}

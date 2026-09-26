@@ -1,0 +1,85 @@
+{
+ "name": "roundtrip-format-description",
+ "kind": "roundtrip",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "described_v1",
+  "versions": {
+   "kernel": "0.8.3",
+   "vocab": {
+    "format/json": "0.1.0"
+   }
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}{f.name} ({f.schema}): {f.value}\n{% endfor %}"
+   },
+   {
+    "role": "user",
+    "text": "{text}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  },
+  "formats": {
+   "Person": {
+    "describe": "a person, as JSON"
+   },
+   "object": {
+    "use": "json",
+    "describe": "a JSON object"
+   },
+   "enum": {
+    "describe": "<intent>"
+   },
+   "*": {
+    "use": "json",
+    "describe": "JSON"
+   }
+  }
+ },
+ "expect": {
+  "entry": {
+   "name": "described_v1",
+   "versions": {
+    "kernel": "0.8.3",
+    "vocab": {
+     "format/json": "0.1.0"
+    }
+   },
+   "template": [
+    {
+     "role": "system",
+     "text": "{instruction}\n{% for f in outputs %}{f.name} ({f.schema}): {f.value}\n{% endfor %}"
+    },
+    {
+     "role": "user",
+     "text": "{text}"
+    }
+   ],
+   "reader": {
+    "kind": "derived"
+   },
+   "formats": {
+    "Person": {
+     "describe": "a person, as JSON"
+    },
+    "object": {
+     "use": "json",
+     "describe": "a JSON object"
+    },
+    "enum": {
+     "describe": "<intent>"
+    },
+    "*": {
+     "use": "json",
+     "describe": "JSON"
+    }
+   }
+  }
+ }
+}

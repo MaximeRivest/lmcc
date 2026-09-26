@@ -1,0 +1,127 @@
+{
+ "name": "render-format-description-order",
+ "kind": "render",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "described_v1",
+  "versions": {
+   "kernel": "0.8.3",
+   "vocab": {
+    "format/json": "0.1.0"
+   }
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}{f.name} ({f.schema}): {f.value}\n{% endfor %}"
+   },
+   {
+    "role": "user",
+    "text": "{text}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  },
+  "formats": {
+   "Person": {
+    "describe": "a person, as JSON"
+   },
+   "object": {
+    "use": "json",
+    "describe": "a JSON object"
+   },
+   "enum": {
+    "describe": "<intent>"
+   },
+   "*": {
+    "use": "json",
+    "describe": "JSON"
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Describe.",
+  "fields": [
+   {
+    "name": "text",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "person",
+    "direction": "output",
+    "type": "Person",
+    "shape": {
+     "type": "object"
+    }
+   },
+   {
+    "name": "place",
+    "direction": "output",
+    "shape": {
+     "type": "object"
+    }
+   },
+   {
+    "name": "intent",
+    "direction": "output",
+    "shape": {
+     "enum": [
+      "card_arrival",
+      "card_delivery_estimate",
+      "exchange_rate"
+     ]
+    }
+   },
+   {
+    "name": "tags",
+    "direction": "output",
+    "shape": {
+     "type": "array"
+    }
+   },
+   {
+    "name": "score",
+    "direction": "output",
+    "shape": {
+     "type": "integer"
+    }
+   },
+   {
+    "name": "label",
+    "direction": "output",
+    "shape": {
+     "enum": [
+      "a",
+      "b"
+     ]
+    },
+    "desc": "a or b"
+   }
+  ]
+ },
+ "inputs": {
+  "text": "x"
+ },
+ "expect": {
+  "request": {
+   "system": "Describe.\nperson (a person, as JSON): a person, as JSON\nplace (a JSON object): a JSON object\nintent (<intent>): <intent>\ntags (JSON): JSON\nscore ((integer)): (integer)\nlabel (<intent>): a or b\n",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "x"
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

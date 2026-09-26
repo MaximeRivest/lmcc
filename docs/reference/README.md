@@ -33,7 +33,7 @@ Adapters and templates (kernel §2):
 
 | name | what | section |
 |---|---|---|
-| `adapter` | `adapter(messages=, reader=, transports=, formats=, name=, replay=)`; `reader={"kind": "derived", "markers": "exact"}` turns marker repair off | §2, §4a |
+| `adapter` | `adapter(messages=, reader=, transports=, formats=, name=, extensions=, replay=, strict=)`; `strict=True` turns every repair off; a `formats` value is a name, `use(...)`, a shipped format, a `Format`, or a description `{"describe": "<intent>"}` (what the model is told; the value is still written and read by the format resolution picks) | §2, §4a, §5 |
 | `Adapter` | `.template`, `.reader`, `.transports`, `.formats`, `.replay`, `.bind()`, `.dump()` | §2 |
 | `system`, `user`, `assistant`, `message` | one template message `{role, text}` | §2 |
 | `turns` | `turns(slot="turns")`: a turn slot in messages form `{directive: "turns", slot?}` | §2, §3a |

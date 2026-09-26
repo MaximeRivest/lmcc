@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field as dc_field
 
 from . import core, formats as _formats
-from .adapter import Adapter
+from .adapter import Adapter, is_description
 from .errors import Refusal, refuse
 from . import extensions as _extensions
 from .reader import (DerivedReader, Reader, apply_find_rules, refuse_missing,
@@ -40,6 +40,8 @@ class _Resolved:
 class _FormatChoice:
     format: _formats.Format
     resolved_by: str      # "artifact:<key>" | "runtime:<type>" | "kernel"
+    described: str | None = None       # the artifact's description (kernel §5), if any
+    described_by: str | None = None    # "artifact:<key>"
 
 
 @dataclass
@@ -197,18 +199,18 @@ class Plan:
         return self.formats[f.name].format
 
     def schema_hint(self, f: core.Field) -> str:
-        described = self.format_for(f).describe(f)
+        described = self.formats[f.name].described or self.format_for(f).describe(f)
         if described:
             return described
         return core.shape_summary(f.shape)
 
     def placeholder(self, f: core.Field) -> str:
-        """desc, else the format's describe, else the mechanical hint, else
+        """desc, else the artifact's description or the format's describe, else the mechanical hint, else
         a non-kernel format's type name, else ``...`` (kernel §2, §5)."""
         if f.desc:
             return f.desc
         fmt = self.format_for(f)
-        described = fmt.describe(f)
+        described = self.formats[f.name].described or fmt.describe(f)
         if described:
             return described
         if self.formats[f.name].resolved_by != "kernel" and f.type:
@@ -791,11 +793,13 @@ class Plan:
             "capabilities": dict(self.capabilities),
             "inputs": [{"name": f.name, "type": f.type, "shape": f.shape,
                         "format": self.formats[f.name].format.name or "(inline)",
-                        "resolved_by": self.formats[f.name].resolved_by}
+                        "resolved_by": self.formats[f.name].resolved_by,
+                        **self._described(f)}
                        for f in self.visible_inputs],
             "outputs": [{"name": f.name, "type": f.type, "shape": f.shape,
                          "format": self.formats[f.name].format.name or "(inline)",
                          "resolved_by": self.formats[f.name].resolved_by,
+                         **self._described(f),
                          "found": f.name in found}
                         for f in self.visible_outputs],
             "hidden": [f.name for f in self.signature.fields
@@ -856,6 +860,10 @@ class Plan:
         out["versions"] = {"kernel": KERNEL_VERSION, "vocab": vocab}
         _ = placed
         return out
+
+    def _described(self, f: core.Field) -> dict:
+        choice = self.formats[f.name]
+        return {"described_by": choice.described_by} if choice.described_by else {}
 
     def explain(self) -> str:
         d = self.describe()
@@ -1219,10 +1227,26 @@ def _resolve_format(plan: Plan, f: core.Field) -> _FormatChoice:
                    f"but the field is an {f.direction}", fix=rebind)
         return _FormatChoice(fmt, by)
 
-    if f.type and f.type in adp.formats:
+    choice = _choose_format(plan, f, materialize, check)
+    # kernel §5 descriptions: the first entry of steps 1-2 carrying text, then '*'
+    # only when the format came from '*'
+    keys = ([f.type] if f.type else []) + _formats.structural_keys(f.shape)
+    if choice.resolved_by == "artifact:*":
+        keys.append("*")
+    for key in keys:
+        entry = adp.formats.get(key)
+        if isinstance(entry, dict) and "language" not in entry and "describe" in entry:
+            choice.described, choice.described_by = entry["describe"], f"artifact:{key}"
+            break
+    return choice
+
+
+def _choose_format(plan: Plan, f: core.Field, materialize, check) -> _FormatChoice:
+    adp, reg = plan.adapter, plan.registry
+    if f.type and f.type in adp.formats and not is_description(adp.formats[f.type]):
         return check(materialize(adp.formats[f.type], f.type), f"artifact:{f.type}", f.type)
     for key in _formats.structural_keys(f.shape):
-        if key in adp.formats:
+        if key in adp.formats and not is_description(adp.formats[key]):
             return check(materialize(adp.formats[key], key), f"artifact:{key}", key)
     bound = reg.type_binding(f.annotation)
     if bound is not None:

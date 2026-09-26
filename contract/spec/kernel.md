@@ -709,6 +709,25 @@ surprise or a host exception:
  "authored_by": "…"}
 ```
 
+**Descriptions (kernel 0.8.3).** What the model is told about a type is
+the adapter's to choose, as data: a `formats` entry may be a
+**description** `{"describe": text}`, and a reference may carry one
+(`{"use": "json", "describe": text}`). A description replaces the
+format's `describe` — in an output's placeholder (§2) and in
+`{f.schema}` — and changes nothing else: the value is written and read
+exactly as without it, so a kernel default keeps its forgiving read,
+`strict` and its repair report (§4a, §7a). A description alone chooses
+no format: resolution goes on past it as if the key were absent. The
+text that applies to a field is the `describe` of the first entry, in
+the order of steps 1–2 (type name, then structural keys most specific
+first), that carries one; then the `*` entry's, only when the format
+came from step 5. A field's `desc` still comes first (§2). `describe`
+that is not a non-empty string refuses `entry-malformed` (path
+`formats[key].describe`), and so does a description alone under `*`,
+which could describe nothing. `plan.describe()` names the entry in
+`described_by`. Motivation: a model trained on a task's 77 intents is
+told `<intent>`, not the list, with no code in the artifact (D-51).
+
 Loading never runs a UDF. A runtime that will not place code refuses
 `format-untrusted`; a tampered hash `udf-tampered`; source that reaches
 into globals `format-not-self-contained`; a language the host cannot

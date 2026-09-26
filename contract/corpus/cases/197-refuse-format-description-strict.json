@@ -1,0 +1,58 @@
+{
+ "name": "refuse-format-description-strict",
+ "kind": "refuse",
+ "entry": {
+  "name": "classify_short",
+  "versions": {
+   "kernel": "0.8.3",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\nIntent: {intent}"
+   },
+   {
+    "role": "user",
+    "text": "{text}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  },
+  "formats": {
+   "enum": {
+    "describe": "<intent>"
+   }
+  },
+  "strict": true
+ },
+ "signature": {
+  "instructions": "Classify the bank customer's message by what they need.",
+  "fields": [
+   {
+    "name": "text",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "intent",
+    "direction": "output",
+    "shape": {
+     "enum": [
+      "card_arrival",
+      "card_delivery_estimate",
+      "exchange_rate"
+     ]
+    }
+   }
+  ]
+ },
+ "response": "Intent: Card_Arrival",
+ "expect": {
+  "code": "parse-value",
+  "at": "parse"
+ }
+}

@@ -119,6 +119,58 @@ class Adapter:
         return slots
 
 
+def _description(value: dict, where: str) -> dict:
+    """The ``describe`` text of a format entry (kernel §5 descriptions)."""
+    if "describe" not in value:
+        return {}
+    text = value["describe"]
+    if not isinstance(text, str) or not text:
+        refuse("entry-malformed", f"{where}.describe: a description is non-empty text",
+               fix={"action": "edit-entry", "path": f"{where}.describe"})
+    return {"describe": text}
+
+
+def format_entry(key: str, value: object) -> object:
+    """One ``formats`` entry, normalized (kernel §5): a reference
+    ``{use, options?, describe?}``, a shipped UDF (kept whole), a
+    description ``{describe}``, or a host Format object."""
+    where = f"formats[{key!r}]"
+    if isinstance(value, str):
+        return {"use": value, "options": {}}
+    if isinstance(value, dict) and "use" in value:
+        extra = set(value) - {"use", "options", "describe"}
+        if extra or not isinstance(value.get("options", {}), dict):
+            refuse("entry-malformed", f"{where}: a reference is {{use, options?, describe?}}"
+                                      + (f", not {sorted(extra)}" if extra else ""),
+                   fix={"action": "edit-entry", "path": where})
+        return {"use": value["use"], "options": dict(value.get("options", {})),
+                **_description(value, where)}
+    if isinstance(value, dict) and "language" in value:
+        return dict(value)
+    if isinstance(value, dict) and "describe" in value:
+        if set(value) != {"describe"}:
+            refuse("entry-malformed", f"{where}: a description is {{describe}} alone, not "
+                                      f"{sorted(set(value) - {'describe'})}",
+                   fix={"action": "edit-entry", "path": where})
+        described = _description(value, where)
+        if key == "*":
+            refuse("entry-malformed",
+                   f"{where}: a description alone under '*' describes nothing — '*' reaches only "
+                   f"fields no other step spells, and a description chooses no format; put it "
+                   f"on the reference ({{\"use\": ..., \"describe\": ...}}) or under a type or key",
+                   fix={"action": "edit-entry", "path": where})
+        return described
+    if hasattr(value, "write"):
+        return value
+    refuse("entry-malformed", f"{where}: expected a name, use(...), a shipped format, a "
+                              f"description {{describe}}, or a Format",
+           fix={"action": "edit-entry", "path": where})
+
+
+def is_description(binding: object) -> bool:
+    return isinstance(binding, dict) and set(binding) == {"describe"}
+
+
 def adapter(*, messages: list[dict] | None = None, template: list[dict] | dict | None = None,
             reader: dict | None = None, transports: dict | None = None,
             formats: dict | None = None, name: str = "adapter",
@@ -126,7 +178,9 @@ def adapter(*, messages: list[dict] | None = None, template: list[dict] | dict |
             strict: bool = False, declare_defaults: bool = True) -> Adapter:
     """Build an adapter. ``transports`` values: a name, a :class:`Transport`,
     a data dict, or ``use(...)``. ``formats`` keys: type names or structural
-    keys; values: a name, ``use(...)``, a shipped dict, or a Format.
+    keys; values: a name, ``use(...)``, a shipped dict, a Format, or a
+    description ``{"describe": text}`` (what the model is told, kernel §5);
+    a reference dict may carry ``describe`` too.
     ``extensions``: ``{"<family>/<name>": version}`` the adapter needs
     (kernel §10); checked against the registry at bind. With
     ``declare_defaults`` (the constructor's convenience, not the loader's)
@@ -198,18 +252,7 @@ def adapter(*, messages: list[dict] | None = None, template: list[dict] | dict |
                    fix={"action": "edit-entry", "path": where})
     f_bindings: dict[str, object] = {}
     for key, value in (formats or {}).items():
-        where = f"formats[{key!r}]"
-        if isinstance(value, str):
-            f_bindings[key] = {"use": value, "options": {}}
-        elif isinstance(value, dict) and "use" in value:
-            f_bindings[key] = {"use": value["use"], "options": dict(value.get("options", {}))}
-        elif isinstance(value, dict) and "language" in value:
-            f_bindings[key] = dict(value)
-        elif hasattr(value, "write"):
-            f_bindings[key] = value
-        else:
-            refuse("entry-malformed", f"{where}: expected a name, use(...), a shipped format, or a Format",
-                   fix={"action": "edit-entry", "path": where})
+        f_bindings[key] = format_entry(key, value)
     from .extensions import default_declaration, validate_declaration
     declared = validate_declaration(extensions)
     if declare_defaults:

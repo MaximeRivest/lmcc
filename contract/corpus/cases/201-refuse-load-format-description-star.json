@@ -1,0 +1,37 @@
+{
+ "name": "refuse-load-format-description-star",
+ "kind": "refuse",
+ "entry": {
+  "name": "classify_short",
+  "versions": {
+   "kernel": "0.8.3",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\nIntent: {intent}"
+   },
+   {
+    "role": "user",
+    "text": "{text}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  },
+  "formats": {
+   "*": {
+    "describe": "anything"
+   }
+  }
+ },
+ "expect": {
+  "code": "entry-malformed",
+  "at": "load",
+  "fix": {
+   "action": "edit-entry",
+   "path": "formats['*']"
+  }
+ }
+}

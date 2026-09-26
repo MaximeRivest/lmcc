@@ -1209,3 +1209,34 @@ Costs, stated: only refusals change (they now read, reported as `value`
 repairs); every text 0.8.2 read gives the same value, because the new
 candidate is tried last. Still refused on purpose: text around the value
 (`The answer is card_arrival.`) — that is a sentence, not a slip.
+
+**D-51 · Descriptions: what the model is told about a type is data
+(kernel 0.8.3).** Ratified with the maintainer on 2026-09-26, from the
+banking77 review. The distilled student learned the 77 intents, so its
+adapter tells it `Intent: <intent>` instead of the list. The only way to
+say so was a code format (`make_format(write=..., read=..., describe=...)`)
+that copied the kernel's read, with three consequences found live: the
+adapter could not be dumped (a lambda cannot ship), the copied forgiving
+read bypassed `strict`, and its repairs went unreported. The format's
+`describe` was the one face that differed, and it is prose, not code.
+
+A `formats` entry may now be a description `{"describe": text}`, and a
+reference may carry `describe`. It replaces the chosen format's
+`describe` and nothing else; a description alone chooses no format
+(resolution continues), so the kernel default keeps its read, repairs
+and `strict`. The applying text is the first of type name, then
+structural keys, then `*` only for a format that came from `*` — a
+wildcard never re-describes a scalar, as it never re-spells one (D-19).
+A field's `desc` still wins: it is about this field, a description is
+about a type. Cases 195–201; each order rule was broken on purpose and
+caught by 199.
+
+Chosen over: a std format `scalar` with a `describe` option (a pack
+would have to claim the kernel's forgiving read, a privilege packs do
+not have); making the forgiving read available to code formats (the
+read is only honest where the kernel owns the grammar); a template
+construct (four constructs, by design). Costs, stated: `describe` means
+source code in a shipped UDF and text here — the same face in its two
+forms, distinguished by `language`. A reference with a key other than
+`use`, `options`, `describe` now refuses `entry-malformed`; it was
+silently ignored before (the schema already forbade it).
