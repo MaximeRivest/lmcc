@@ -82,7 +82,7 @@ Registry and artifact (kernel §5, §6, §9):
 | `lmcc_lm15.parse(plan, response)`, `lmcc_lm15.read(plan, response)`, `lmcc_lm15.stream(plan, events)`, `lmcc_lm15.step(rendered, response)` | typed values (and repairs) from an `lm15.Response`/`Message`; drive the sans-I/O stream; record a reply as a turn's next step. Each passes the response's `finish_reason`, so a cut reply refuses `parse-truncated` | §3, §3a, §4a, §8 |
 | `default_registry` | the registry `lmcc.format` and `Fn.bind` use when none is given | §5 |
 | `dump`, `load` | the artifact ([entry.schema.json](../../contract/schema/entry.schema.json)); `load` never runs a UDF | §5, §9 |
-| `KERNEL_VERSION` | `"0.8.2"` | §9 |
+| `KERNEL_VERSION` | `"0.8.3"` | §9 |
 
 Refusals:
 

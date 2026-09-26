@@ -1,6 +1,6 @@
 # The LMCC kernel — normative specification
 
-**Version 0.8.2** (kernel). Status: the v3 design (`plans/08`). One
+**Version 0.8.3** (kernel). Status: the v3 design (`plans/08`). One
 implementation, `python/lmcc`, passes the corpus; it is the reference while
 the language is being designed. Other languages are rebuilt from this
 document and the corpus, and join through the driver protocol (§9); the
@@ -877,9 +877,12 @@ from a tool's name or from the model.
   enum or nullable refuses and the adapter is not `strict`, the reader
   tries, in order: the stripped text without one pair of matching `"`,
   `'` or `` ` `` around it; then that without one trailing `.` (not
-  `..`), each re-read exactly; then, on those two texts, a nullable's
-  `null` or `none` in any ASCII case, and an enum's string member equal
-  in ASCII case when exactly one member is. The first that reads wins
+  `..`); then the stripped text without one trailing `.` and then
+  without one pair of matching quotes (`` `x`. ``, the period outside
+  the quotes, kernel 0.8.3) — each re-read exactly; then, on those three
+  texts in that order, a nullable's `null` or `none` in any ASCII case,
+  and an enum's string member equal in ASCII case when exactly one
+  member is. The first that reads wins
   and is reported (§4a); if none does, the exact refusal stands. Strings
   never get here. `N/A` and `42.0` stay refusals: one could be content,
   the other is a different spelling, not a slip.

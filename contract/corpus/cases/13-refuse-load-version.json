@@ -57,7 +57,7 @@
    "action": "match-version",
    "entry": "kernel",
    "needs": "9.0.0",
-   "provides": "0.8.2"
+   "provides": "0.8.3"
   },
   "at": "load"
  }

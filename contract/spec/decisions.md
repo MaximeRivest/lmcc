@@ -1194,3 +1194,18 @@ a boolean input could not choose between two wordings.
 Costs, stated: changes the output of a published rule (D-45, 0.8.0) for a
 `false` input, from body to nothing (no case pinned the old behavior);
 templates that relied on a boolean `false` rendering the body now do not.
+
+**D-50 · The forgiving read takes a period outside the quotes (kernel
+0.8.3).** Ratified with the maintainer on 2026-09-26, from a review of the
+banking77 work: models writing markdown answer `` `card_arrival`. `` — the
+value in backticks, then the sentence's period. §7a removed the quotes
+first and the period second, so the period outside the quotes blocked
+both and the reply refused. The forgiving read now also tries the text
+without one trailing period and then without one pair of quotes, after
+the two texts it tried before, and folds enum case and `null`/`none` over
+all three in that order. Case 194.
+
+Costs, stated: only refusals change (they now read, reported as `value`
+repairs); every text 0.8.2 read gives the same value, because the new
+candidate is tried last. Still refused on purpose: text around the value
+(`The answer is card_arrival.`) — that is a sentence, not a slip.

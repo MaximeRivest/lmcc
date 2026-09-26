@@ -1,0 +1,91 @@
+{
+ "name": "parse-repair-value-period-outside-quotes",
+ "kind": "parse",
+ "entry": {
+  "name": "repairs_v1",
+  "versions": {
+   "kernel": "0.8.3",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}{f.name}: {f.value}\n{% endfor %}"
+   },
+   {
+    "role": "user",
+    "text": "{question}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Classify.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "intent",
+    "direction": "output",
+    "shape": {
+     "enum": [
+      "card_arrival",
+      "card_delivery_estimate"
+     ]
+    }
+   },
+   {
+    "name": "count",
+    "direction": "output",
+    "shape": {
+     "type": "integer"
+    }
+   },
+   {
+    "name": "unit",
+    "direction": "output",
+    "shape": {
+     "enum": [
+      "kg",
+      "g"
+     ]
+    }
+   }
+  ]
+ },
+ "response": "intent: `Card_Arrival`.\ncount: \"42\".\nunit: 'g.'",
+ "expect": {
+  "values": {
+   "intent": "card_arrival",
+   "count": 42,
+   "unit": "g"
+  },
+  "repairs": [
+   {
+    "repair": "value",
+    "field": "intent",
+    "saw": "`Card_Arrival`.",
+    "as": "card_arrival"
+   },
+   {
+    "repair": "value",
+    "field": "count",
+    "saw": "\"42\".",
+    "as": "42"
+   },
+   {
+    "repair": "value",
+    "field": "unit",
+    "saw": "'g.'",
+    "as": "g"
+   }
+  ]
+ }
+}

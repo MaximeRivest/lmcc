@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lmcc"
-version = "0.8.2"   # equals the kernel version (lmcc.KERNEL_VERSION)
+version = "0.8.3"   # equals the kernel version (lmcc.KERNEL_VERSION)
 description = "The language model calling convention: typed signatures to messages and replies to typed values"
 readme = "README.md"
 requires-python = ">=3.10"

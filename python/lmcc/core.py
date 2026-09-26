@@ -497,21 +497,32 @@ def forgive_value(shape: dict, text: str, *, where: str) -> object:
     """Kernel §7a, forgiving reads: called only after the exact read of
     ``text`` refused. Tries, in order, the text without one pair of
     matching quotes or backticks, then also without one trailing period;
-    then, on those, a nullable's ``null``/``none`` and an enum member in
-    any ASCII case when exactly one member matches. Refuses with the
-    exact read's refusal when nothing applies. Strings never get here:
-    their exact read cannot fail."""
+    then the text without one trailing period and then without the quotes
+    (the period outside them); then, on those, a nullable's
+    ``null``/``none`` and an enum member in any ASCII case when exactly
+    one member matches. Refuses with the exact read's refusal when nothing
+    applies. Strings never get here: their exact read cannot fail."""
     base, nullable = nullable_base(shape)
+
+    def unquote(s: str) -> str:
+        return strip(s[1:-1]) if len(s) >= 2 and s[0] == s[-1] and s[0] in QUOTES else s
+
+    def unperiod(s: str) -> str:
+        return strip(s[:-1]) if s.endswith(".") and not s.endswith("..") else s
+
     t = strip(text)
-    t1 = strip(t[1:-1]) if len(t) >= 2 and t[0] == t[-1] and t[0] in QUOTES else t
-    t2 = strip(t1[:-1]) if t1.endswith(".") and not t1.endswith("..") else t1
-    candidates = [c for c in dict.fromkeys([t1, t2]) if c != t and c]
-    for c in candidates:
+    t1 = unquote(t)
+    t2 = unperiod(t1)
+    t3 = unquote(unperiod(t))
+    texts = list(dict.fromkeys([t1, t2, t3]))
+    for c in texts:
+        if c == t or not c:
+            continue
         try:
             return read_value(shape, c, where=where)
         except Refusal:
             pass
-    for c in dict.fromkeys([t1, t2]):
+    for c in texts:
         low = _ascii_lower(c)
         if nullable and low in ("null", "none"):
             return None

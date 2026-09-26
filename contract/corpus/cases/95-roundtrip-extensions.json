@@ -44,7 +44,7 @@
   "entry": {
    "name": "derived_v1",
    "versions": {
-    "kernel": "0.8.2",
+    "kernel": "0.8.3",
     "vocab": {}
    },
    "extensions": {
