@@ -4,9 +4,10 @@
 the spec text before the code; all passed once implemented, and every new
 rule was then broken on purpose. One break (uppercase hex in a data
 part's `\u00xx`) passed at first because case 203 held only `\u0001`;
-the case gained U+001F, and the break now fails it. Nine cases changed
-only a version pin: roundtrips record kernel 0.8.3, case 13 the provided
-kernel, and seven `reader/json_object` cases moved to 0.2.0.
+the case gained U+001F, and the break now fails it. Fifteen older cases
+changed only version pins: eight roundtrips record kernel 0.8.3, case 13
+the provided kernel, and seven `reader/json_object` cases moved to 0.2.0
+(26 is in both groups).
 
 **A label mid-line (kernel 0.8, D-43).** Case 169 is a real reply from
 `gpt-oss-20b` (shortened), captured by `python/integration/lm15_repairs.py`
