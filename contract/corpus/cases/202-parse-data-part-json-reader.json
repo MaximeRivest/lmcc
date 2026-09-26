@@ -1,0 +1,112 @@
+{
+ "name": "parse-data-part-json-reader",
+ "kind": "parse",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "classify_judged",
+  "versions": {
+   "kernel": "0.8.3",
+   "vocab": {
+    "reader/json_object": "0.2.0"
+   }
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}"
+   },
+   {
+    "role": "user",
+    "text": "{text}"
+   }
+  ],
+  "reader": {
+   "kind": "json_object",
+   "probabilities": "required"
+  }
+ },
+ "signature": {
+  "instructions": "Classify the bank customer's message by what they need.",
+  "fields": [
+   {
+    "name": "text",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "intent",
+    "direction": "output",
+    "shape": {
+     "enum": [
+      "card_arrival",
+      "card_delivery_estimate",
+      "exchange_rate"
+     ]
+    }
+   },
+   {
+    "name": "count",
+    "direction": "output",
+    "shape": {
+     "type": "integer"
+    }
+   },
+   {
+    "name": "note",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "capabilities": {
+  "native_structured_output": true
+ },
+ "response": {
+  "message": {
+   "role": "assistant",
+   "parts": [
+    {
+     "type": "data",
+     "value": {
+      "intent": "card_arrival",
+      "count": 7.0,
+      "note": "a \"b\"\nc"
+     },
+     "probabilities": {
+      "intent": {
+       "card_arrival": 0.78,
+       "card_delivery_estimate": 0.19,
+       "exchange_rate": 0.03
+      }
+     },
+     "method": "provider_classification"
+    }
+   ]
+  },
+  "finish_reason": "stop"
+ },
+ "expect": {
+  "values": {
+   "intent": "card_arrival",
+   "count": 7,
+   "note": "a \"b\"\nc"
+  },
+  "repairs": [],
+  "probabilities": {
+   "intent": {
+    "card_arrival": 0.78,
+    "card_delivery_estimate": 0.19,
+    "exchange_rate": 0.03
+   }
+  },
+  "measured_by": {
+   "intent": "provider_classification"
+  }
+ }
+}

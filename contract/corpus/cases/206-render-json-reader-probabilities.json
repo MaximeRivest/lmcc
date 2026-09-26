@@ -1,67 +1,65 @@
 {
- "name": "std-json-reader-format",
+ "name": "render-json-reader-probabilities",
  "kind": "render",
  "vocab": [
   "std"
  ],
  "entry": {
-  "name": "format_json_v1",
+  "name": "classify_judged",
   "versions": {
-   "kernel": "0.8.0",
+   "kernel": "0.8.3",
    "vocab": {
-    "reader/json_object": "0.2.0",
-    "format/json": "0.1.0"
+    "reader/json_object": "0.2.0"
    }
   },
   "template": [
    {
     "role": "system",
-    "text": "{instruction}\n\nAnswer like this:\n{format}"
+    "text": "{instruction}"
    },
    {
     "role": "user",
-    "text": "{question}"
+    "text": "{text}"
    }
   ],
   "reader": {
-   "kind": "json_object"
-  },
-  "formats": {
-   "list[*]": {
-    "use": "json"
-   }
+   "kind": "json_object",
+   "probabilities": "required"
   }
  },
  "signature": {
-  "instructions": "Answer.",
+  "instructions": "Classify the bank customer's message by what they need.",
   "fields": [
    {
-    "name": "question",
+    "name": "text",
     "direction": "input",
     "shape": {
      "type": "string"
     }
    },
    {
-    "name": "answer",
+    "name": "intent",
     "direction": "output",
     "shape": {
-     "type": "string"
-    },
-    "desc": "short answer"
+     "enum": [
+      "card_arrival",
+      "card_delivery_estimate",
+      "exchange_rate"
+     ]
+    }
    },
    {
-    "name": "score",
+    "name": "count",
     "direction": "output",
     "shape": {
      "type": "integer"
     }
    },
    {
-    "name": "payload",
+    "name": "note",
     "direction": "output",
     "shape": {
-     "type": "array"
+     "type": "string"
     }
    }
   ]
@@ -70,18 +68,18 @@
   "native_structured_output": true
  },
  "inputs": {
-  "question": "capital of France?"
+  "text": "Where is my card?"
  },
  "expect": {
   "request": {
-   "system": "Answer.\n\nAnswer like this:\n{\n  \"answer\": \"short answer\",\n  \"score\": \"(integer)\",\n  \"payload\": \"JSON matching this schema: {\\\"type\\\": \\\"array\\\"}\"\n}",
+   "system": "Classify the bank customer's message by what they need.",
    "messages": [
     {
      "role": "user",
      "parts": [
       {
        "type": "text",
-       "text": "capital of France?"
+       "text": "Where is my card?"
       }
      ]
     }
@@ -92,24 +90,29 @@
      "schema": {
       "type": "object",
       "properties": {
-       "answer": {
-        "type": "string"
+       "intent": {
+        "enum": [
+         "card_arrival",
+         "card_delivery_estimate",
+         "exchange_rate"
+        ]
        },
-       "score": {
+       "count": {
         "type": "integer"
        },
-       "payload": {
-        "type": "array"
+       "note": {
+        "type": "string"
        }
       },
       "required": [
-       "answer",
-       "score",
-       "payload"
+       "intent",
+       "count",
+       "note"
       ],
       "additionalProperties": false
      }
-    }
+    },
+    "probabilities": "required"
    }
   }
  }

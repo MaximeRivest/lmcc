@@ -27,7 +27,7 @@ Specification = "https://github.com/MaximeRivest/lmcc/blob/master/contract/spec/
 [project.optional-dependencies]
 dspy = ["dspy>=3.0", "pydantic>=2"]
 # lm15 at an exact release, bumped deliberately (see python/lmcc_lm15/check)
-lm15 = ["lm15==1.0.0rc1"]
+lm15 = ["lm15==1.0.1"]
 
 [tool.setuptools]
 packages = ["lmcc", "lmcc_std", "lmcc_dspy", "lmcc_lm15"]

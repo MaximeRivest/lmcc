@@ -84,6 +84,7 @@ def load(entry: dict, *, registry=None) -> Adapter:
                    fix={"action": "install-vocabulary", "kind": "reader", "name": str(reader_kind)})
         _check_vocab_version(f"reader/{reader_kind}", vocab_versions,
                              registry.readers[reader_kind].version)
+        registry.reader(reader_spec)    # resolve at load, like formats and transports (§5, §6)
 
     transports: dict[str, object] = {}
     for purpose, s in (entry.get("transports") or {}).items():

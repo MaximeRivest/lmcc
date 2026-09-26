@@ -202,7 +202,17 @@ class Registry:
                    f"reader kind {kind!r} is neither the kernel reader 'derived' nor a "
                    f"registered reader — install the package that provides it",
                    fix={"action": "install-vocabulary", "kind": "reader", "name": str(kind)})
-        return entry.factory(spec)
+        try:
+            reader = entry.factory(spec)
+        except Refusal:
+            raise
+        except Exception as exc:  # noqa: BLE001 — the socket owns this boundary
+            refuse("entry-malformed", f"reader: {kind!r} rejects its spec: {exc}",
+                   fix={"action": "edit-entry", "path": "reader"})
+        if not isinstance(reader, Reader):
+            refuse("entry-malformed", f"reader: {kind!r} built {type(reader).__name__}, not a Reader",
+                   fix={"action": "edit-entry", "path": "reader"})
+        return reader
 
     # ------------------------------------------------------------ describe
 

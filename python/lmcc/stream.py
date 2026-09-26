@@ -35,10 +35,13 @@ class StreamResult:
     events: list[dict]
     values: dict
     repairs: list = None  # type: ignore[assignment]
+    probabilities: dict = None  # type: ignore[assignment]
+    measured_by: dict = None  # type: ignore[assignment]
 
     def __post_init__(self):
-        if self.repairs is None:
-            object.__setattr__(self, "repairs", [])
+        for name in ("repairs", "probabilities", "measured_by"):
+            if getattr(self, name) is None:
+                object.__setattr__(self, name, [] if name == "repairs" else {})
 
 
 # ------------------------------------------------------------ primitives
@@ -676,10 +679,11 @@ class Stream:
             response = {"message": message, "finish_reason": finish_reason}
         # Batch is the final authority. It preserves refusal code, fix,
         # partial, structural order, and typed-read order exactly.
+        probabilities, measured_by = core.reply_probabilities(response)   # §3: checked first
         values, captures, repairs = self.plan._parse_with_captures(response)
         self._run("", None, final=True)
         events = self._events(final=True, final_captures=captures, values=values)
-        return StreamResult(events, values, repairs)
+        return StreamResult(events, values, repairs, probabilities, measured_by)
 
     def _append(self, delta: object) -> tuple[str, tuple[str, str | None, bool] | None]:
         """Record the delta; return (text delta, part delta) where the part
@@ -695,7 +699,7 @@ class Stream:
             if self._pieces:
                 self._append_part(core.text_part("".join(self._pieces)))
         part = self._append_part(dict(delta))
-        text = delta.get("text", "") if delta.get("type") == "text" else ""
+        text = core.part_text(delta) if delta.get("type") in ("text", "data") else ""   # §3
         if text:
             self._pieces.append(text)
         return text, part

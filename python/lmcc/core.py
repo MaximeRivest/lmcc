@@ -660,6 +660,96 @@ def validate_response_part(part: object) -> None:
         refuse("response-malformed", "response part must be an object with a string 'type' (an lm15 part)")
     if "text" in part and not isinstance(part["text"], str):
         refuse("response-malformed", "a response part's 'text' must be text")
+    if part["type"] == "data" and "value" not in part:
+        refuse("response-malformed", "a data part carries a 'value' (lm15 DataPart), even when it is null")
+
+
+# ------------------------------------------------------------- data parts (§3)
+
+_JSON_ESCAPES = {'"': '\\"', "\\": "\\\\", "\b": "\\b", "\f": "\\f", "\n": "\\n",
+                 "\r": "\\r", "\t": "\\t"}
+
+
+def _json_string(text: str) -> str:
+    out = ['"']
+    for c in text:
+        if c in _JSON_ESCAPES:
+            out.append(_JSON_ESCAPES[c])
+        elif ord(c) < 0x20:
+            out.append(f"\\u{ord(c):04x}")
+        else:
+            out.append(c)
+    out.append('"')
+    return "".join(out)
+
+
+def data_text(value: object) -> str:
+    """Kernel §3: a data part's value as the reply text in its place. Compact
+    JSON, members in order, strings minimally escaped (non-ASCII verbatim),
+    integers in decimal, other numbers by §7a — the same bytes in every
+    implementation."""
+    if value is None:
+        return "null"
+    if value is True:
+        return "true"
+    if value is False:
+        return "false"
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        return format_number(value)
+    if isinstance(value, str):
+        return _json_string(value)
+    if isinstance(value, list):
+        return "[" + ",".join(data_text(v) for v in value) + "]"
+    if isinstance(value, dict):
+        return "{" + ",".join(_json_string(k) + ":" + data_text(v) for k, v in value.items()) + "}"
+    refuse("response-malformed", f"a data part's value holds {type(value).__name__}, which is not JSON")
+
+
+def part_text(part: dict) -> str:
+    """The text a reply part contributes to the reply text (kernel §3): a text
+    part's text, a data part's value as JSON, nothing for every other part."""
+    kind = part.get("type")
+    if kind == "text":
+        return part.get("text", "")
+    if kind == "data":
+        return data_text(part.get("value"))
+    return ""
+
+
+def reply_probabilities(response: object) -> tuple[dict, dict]:
+    """Kernel §3: ``(probabilities, measured_by)`` from the reply's data parts,
+    checked as the response is taken in. A text reply has none."""
+    if isinstance(response, dict) and isinstance(response.get("message"), dict):
+        response = response["message"]
+    parts = response.get("parts") if isinstance(response, dict) else None
+    probabilities: dict = {}
+    measured_by: dict = {}
+    for part in parts if isinstance(parts, list) else []:
+        if not isinstance(part, dict) or part.get("type") != "data":
+            continue
+        dist, method = part.get("probabilities"), part.get("method")
+        if dist is None and method is None:
+            continue
+        if dist is None or method is None:
+            refuse("response-malformed", "a data part's 'probabilities' and 'method' come together "
+                                         "(lm15 INV-052)")
+        if not isinstance(method, str) or not isinstance(dist, dict):
+            refuse("response-malformed", "a data part's 'method' is text and its 'probabilities' "
+                                         "an object {field: {key: p}}")
+        for field, keys in dist.items():
+            if not isinstance(keys, dict) or not all(
+                    isinstance(p, (int, float)) and not isinstance(p, bool) and 0 <= p <= 1
+                    for p in keys.values()):
+                refuse("response-malformed", f"probabilities for {field!r} must map each answer key "
+                                             f"to a number in [0, 1]")
+            if field in probabilities:
+                refuse("parse-ambiguous", f"two data parts carry probabilities for {field!r} — "
+                                          f"refusing to guess which measured the answer")
+            probabilities[field] = dict(keys)
+            measured_by[field] = method
+    return probabilities, measured_by
 
 
 def normalize_response_parts(parts: list[dict]) -> list[dict]:
@@ -700,7 +790,7 @@ def response_text_and_parts(response: object) -> tuple[str, list[dict]]:
         response = response["message"]
     if isinstance(response, dict) and isinstance(response.get("parts"), list):
         parts = normalize_response_parts(response["parts"])
-        text = "".join(p.get("text", "") for p in parts if p.get("type") == "text")
+        text = "".join(part_text(p) for p in parts)
         return text, parts
     refuse("response-malformed",
            "response must be text, an lm15 message {role, parts}, or an lm15 response {message: ...}")

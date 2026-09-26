@@ -1257,3 +1257,50 @@ is the Python frontend; the artifact still names the type only.
 Costs, stated: `{}` tells a JSON reader's schema nothing about the value
 (any JSON); declare `shape=` when a schema matters. A list of a bound
 type still needs its own format (§5: the kernel never nests formats).
+
+**D-53 · lm15 1.0.1: data parts are read as text, and a reading carries
+probabilities (kernel 0.8.3, `reader/json_object` 0.2.0).** Ratified with
+the maintainer on 2026-09-26, from the banking77 review. Almost every
+banking77 experiment needed a distribution over the 77 intents (soft
+labels, confidence, escalation, Jev's answers), and all of it bypassed
+lmcc: a reading held one value per field. lm15 added judgments on
+2026-09-17 (`DataPart` with `probabilities` and `method`,
+`Config.probabilities`, MAP-14), and lmcc refused `config.probabilities`
+because its pinned `Config` list predated them. Worse, MAP-14 §3 makes
+every wire answer a judgment request with a `data` part in place of the
+text, so the JSON reader would have read nothing on any current lm15.
+
+- The pin moves to lm15 1.0.1 (contract 3763eec). The pinned `Config`
+  list gains `seed`, `frequency_penalty`, `presence_penalty`,
+  `probabilities`, and `logprobs` (already in lm15 at the old pin;
+  missing from lmcc's list by oversight).
+- A reply's data part is text in its place: its value's compact JSON,
+  numbers by §7a. One rule serves every reader, find rule, §4b and
+  streaming, and it is lm15's own rule for a data part on a text wire
+  (2026-09-19 D3), except numbers: `7.0` is `7`, so every implementation
+  reads the same value — lm15's `json.dumps` spelling is Python's.
+- `plan.read` and `stream.finish` return `probabilities` and
+  `measured_by`, verbatim from the data parts, checked before reading.
+  They are a measurement of the reply, not an output: the signature
+  stays the task, and a model that cannot measure leaves them `{}`.
+- `reader/json_object` 0.2.0 takes `probabilities` and asks for it with
+  `config.probabilities`; it now refuses unknown spec keys at load
+  (0.1.0 ignored them, so an old runtime would silently not ask). Every
+  reader is now resolved at load, like formats and transports.
+
+Chosen over: a signature field with a `probabilities` purpose (the
+signature would change with the model's abilities, and one purpose
+binds one field while the answer may hold several judgments); passing
+parts to vocabulary readers (a second read path beside the text); token
+logprobs (`Response.logprobs`) rebuilt into a distribution, as the
+OpenRouter scripts did by hand — that is lm15's to measure (its vLLM
+trie, MAP-14 D7), not the calling convention's to estimate. Cases
+202–208; every rule was broken on purpose and caught (the hex case of
+`\u00xx` only after case 203 gained U+001F).
+
+Costs, stated: artifacts pinned at `reader/json_object` 0.1.0 refuse
+`version-incompatible` until their pin moves (seven corpus cases moved,
+nothing else changed in them). Probability keys stay lm15's strings
+(`"true"`, `"0"`); a host that wants typed keys lifts them itself.
+`measured_by` is per field although lm15's method is per part. Replies
+with data parts were not valid at the old pin, so no reading changes.

@@ -137,3 +137,42 @@ def test_json_reader_patch_is_a_valid_lm15_response_format():
     req = lmcc_lm15.request(plan.render(q="?"), model="m")
     assert req.config.response_format["type"] == "json_schema"
     assert req.config.response_format["schema"]["required"] == ["answer", "n"]
+
+
+def test_a_judgment_answer_reads_through_lm15_data_parts():
+    """Kernel §3 (D-53): lm15 answers a judgment request with a DataPart, on
+    every wire. The json_object reader asks for the probabilities, the lm15
+    Request carries them, and an lm15 Response holding the DataPart reads
+    into values plus probabilities and how they were measured — through
+    lm15's own serde, batch and stream alike."""
+    from typing import Literal
+
+    from lm15 import DataPart
+
+    @lmcc.fn
+    def classify(text: str) -> Literal["card_arrival", "exchange_rate"]:
+        """Classify the bank customer's message by what they need."""
+
+    judged = lmcc.adapter(messages=[lmcc.system("{instruction}"), lmcc.user("{text}")],
+                          reader={"kind": "json_object", "probabilities": "if_available"})
+    plan = classify.bind(judged, capabilities={"native_structured_output": True}, registry=REG)
+    req = lmcc_lm15.request(plan.render(text="Where is my card?"), model="jev-latest")
+    assert req.config.probabilities == "if_available"
+    assert req.config.response_format["schema"]["properties"]["classify"]["enum"] == \
+        ["card_arrival", "exchange_rate"]
+
+    dist = {"classify": {"card_arrival": 0.9, "exchange_rate": 0.1}}
+    part = DataPart(value={"classify": "card_arrival"}, probabilities=dist,
+                    method="provider_classification")
+    response = Response(id="r", model="jev-latest", message=Message(role="assistant", parts=(part,)),
+                        finish_reason="stop", usage=Usage())
+    reading = lmcc_lm15.read(plan, response)
+    assert reading.values == {"classify": "card_arrival"}
+    assert reading.probabilities == dist
+    assert reading.measured_by == {"classify": "provider_classification"}
+    # a DataPart is not streamable in lm15; a stream carries it as one part delta
+    s = plan.stream()
+    s.feed(lm15.serde.part_to_dict(part))
+    done = s.finish("stop")
+    assert (done.values, done.probabilities, done.measured_by) == \
+        (reading.values, reading.probabilities, reading.measured_by)

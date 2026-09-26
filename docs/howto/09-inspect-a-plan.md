@@ -138,7 +138,7 @@ assert d["transports"] == {"heredoc_tools": "0.1.0",
                            "fenced_tools": "0.1.0", "inline_citations": "0.1.0", "native_citations": "0.1.0",
                            "native_reasoning": "0.1.0", "native_tools": "0.1.0", "prefix_cot": "0.1.0",
                            "reasoning_tags": "0.3.0"}
-assert d["readers"] == {"derived": "kernel", "json_object": "0.1.0"} and d["allow_udf"] is False
+assert d["readers"] == {"derived": "kernel", "json_object": "0.2.0"} and d["allow_udf"] is False
 assert d["extensions"] == {"pattern/legacy-re2": {"version": "0.1.0", "binding": "python:re"}}
 assert [b["type"] for b in d["type_bindings"]] == ["list[Tool]", "list[ToolCall]", "list[Citation]", "list[Source]"]
 ```

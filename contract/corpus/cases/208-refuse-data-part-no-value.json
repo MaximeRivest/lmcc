@@ -1,36 +1,31 @@
 {
- "name": "refuse-json-reader-duplicate-key",
+ "name": "refuse-data-part-no-value",
  "kind": "refuse",
- "vocab": [
-  "std"
- ],
  "entry": {
-  "name": "json_lens_v1",
+  "name": "answer_v1",
   "versions": {
-   "kernel": "0.8.0",
-   "vocab": {
-    "reader/json_object": "0.2.0"
-   }
+   "kernel": "0.8.3",
+   "vocab": {}
   },
   "template": [
    {
     "role": "system",
-    "text": "{instruction}"
+    "text": "{instruction}\nAnswer: {answer}"
    },
    {
     "role": "user",
-    "text": "{question}"
+    "text": "{q}"
    }
   ],
   "reader": {
-   "kind": "json_object"
+   "kind": "derived"
   }
  },
  "signature": {
   "instructions": "Answer.",
   "fields": [
    {
-    "name": "question",
+    "name": "q",
     "direction": "input",
     "shape": {
      "type": "string"
@@ -45,12 +40,20 @@
    }
   ]
  },
- "capabilities": {
-  "native_structured_output": true
+ "response": {
+  "role": "assistant",
+  "parts": [
+   {
+    "type": "text",
+    "text": "Answer: "
+   },
+   {
+    "type": "data"
+   }
+  ]
  },
- "response": "{\"answer\": \"A\", \"answer\": \"B\"}",
  "expect": {
-  "code": "parse-ambiguous",
+  "code": "response-malformed",
   "at": "parse"
  }
 }

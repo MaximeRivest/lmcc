@@ -193,6 +193,25 @@
                   },
                   "additionalProperties": false
                 }
+              },
+              "probabilities": {
+                "type": "object",
+                "description": "plan.read(response).probabilities (kernel §3): {field: {key: p}} from the reply's data parts",
+                "additionalProperties": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                }
+              },
+              "measured_by": {
+                "type": "object",
+                "description": "plan.read(response).measured_by (kernel §3): {field: method}",
+                "additionalProperties": {
+                  "type": "string"
+                }
               }
             }
           }

@@ -126,10 +126,15 @@ class PythonDriver:
                     compared = _compare(expect["repairs"], reading.repairs, "repairs")
                     if not compared["ok"]:
                         return compared
+                for key in ("probabilities", "measured_by"):     # kernel §3: data parts
+                    if key in expect:
+                        compared = _compare(expect[key], getattr(reading, key), key)
+                        if not compared["ok"]:
+                            return compared
                 _, captures, _ = baked._parse_with_captures(case["response"])
                 raw = {name: c.text for name, c in captures.items() if c.text}
                 result = _check_stream_success(baked, case["response"], values, reading.repairs,
-                                               raw=raw)
+                                               raw=raw, batch_reading=reading)
                 if result["ok"]:
                     result["stream_trace"] = _stream_trace(baked, case["response"])
                 return result
@@ -223,7 +228,8 @@ def _finish_reason(response: object):
 
 
 def _check_stream_success(plan, response: object, batch_values: dict,
-                          batch_repairs: list | None = None, raw: dict | None = None) -> dict:
+                          batch_repairs: list | None = None, raw: dict | None = None,
+                          batch_reading=None) -> dict:
     """Every chunking gives the batch values and repairs, and (kernel §8)
     each field's deltas join to exactly the raw text batch captured."""
     baseline = None
@@ -241,6 +247,10 @@ def _check_stream_success(plan, response: object, batch_values: dict,
             return _compare(batch_values, result.values, f"stream split {n} values")
         if batch_repairs is not None and result.repairs != batch_repairs:
             return _compare(batch_repairs, result.repairs, f"stream split {n} repairs")
+        for key in ("probabilities", "measured_by") if batch_reading is not None else ():
+            if getattr(result, key) != getattr(batch_reading, key):
+                return _compare(getattr(batch_reading, key), getattr(result, key),
+                                f"stream split {n} {key}")
         deltas = _delta_text(events)
         if raw is not None and deltas != raw:
             return _compare(raw, deltas, f"stream split {n} deltas against batch raw text")

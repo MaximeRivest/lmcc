@@ -83,9 +83,14 @@ class RenderResult:
 class Reading:
     """A reply, read (kernel §4a): the typed ``values`` and the ``repairs``
     the reader made — misspelled markers, unclosed fields, ignored text —
-    in a fixed order. ``clean`` is True when nothing was repaired."""
+    in a fixed order. ``clean`` is True when nothing was repaired.
+    ``probabilities`` (``{field: {key: p}}``) and ``measured_by``
+    (``{field: method}``) are what the reply's data parts measured about
+    its answers (kernel §3; lm15 judgments); ``{}`` when it carries none."""
     values: dict
     repairs: list = dc_field(default_factory=list)
+    probabilities: dict = dc_field(default_factory=dict)
+    measured_by: dict = dc_field(default_factory=dict)
 
     @property
     def clean(self) -> bool:
@@ -775,8 +780,9 @@ class Plan:
     def read(self, response: object) -> Reading:
         """The typed values of a reply and every repair the reader made to
         read them (kernel §4a). Pure."""
+        probabilities, measured_by = core.reply_probabilities(response)   # §3: checked first
         values, _captures, repairs = self._parse_with_captures(response)
-        return Reading(values, repairs)
+        return Reading(values, repairs, probabilities, measured_by)
 
     def parse(self, response: object) -> dict:
         """The typed values of a reply: ``read(response).values``."""
@@ -884,14 +890,14 @@ _PART_SPOT = "\ufffc"   # where a written part goes in a pattern (§4b)
 
 
 def _atoms(parts: list[dict], find_rules, shift: int) -> list[tuple[int, dict]]:
-    """Kernel §4b: every part that is not text and that no ``part:`` find
+    """Kernel §4b: every part that is not text (nor data, §3) and that no ``part:`` find
     rule reads, with its position in the reply text (the length of the
     text parts before it)."""
     claimed = {r["from"].split(":", 1)[1] for _, r in find_rules if r["from"].startswith("part:")}
     out, pos = [], shift
     for p in parts:
-        if p.get("type") == "text":
-            pos += len(p.get("text", ""))
+        if p.get("type") in ("text", "data"):      # a data part is text in its place (§3)
+            pos += len(core.part_text(p))
         elif p.get("type") not in claimed:
             out.append((pos, p))
     return out

@@ -14,7 +14,8 @@ from lmcc.reader import Reader
 
 from . import jsontext
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
+PROBABILITY_POLICIES = ("off", "if_available", "required")   # lm15 ProbabilityPolicy
 
 
 class JsonObjectReader(Reader):
@@ -48,6 +49,13 @@ class JsonObjectReader(Reader):
     """
 
     def __init__(self, spec: dict):
+        extra = set(spec) - {"kind", "probabilities"}
+        policy = spec.get("probabilities")
+        if extra or (policy is not None and policy not in PROBABILITY_POLICIES):
+            refuse("entry-malformed",
+                   f"reader: json_object takes 'probabilities' ({' | '.join(PROBABILITY_POLICIES)})"
+                   + (f", not {sorted(extra)}" if extra else f", not {policy!r}"),
+                   fix={"action": "edit-entry", "path": "reader"})
         self.spec = dict(spec)
 
     # ---------------------------------------------------------------- mode
@@ -56,7 +64,12 @@ class JsonObjectReader(Reader):
         return ["native_structured_output"]
 
     def request_settings(self, fields: list) -> dict:
-        return {"config": {"response_format": {
+        policy = self.spec.get("probabilities")
+        extra = {"probabilities": policy} if policy is not None else {}
+        return {"config": {**self._response_format(fields), **extra}}
+
+    def _response_format(self, fields: list) -> dict:
+        return {"response_format": {
             "type": "json_schema",
             "schema": {
                 "type": "object",
@@ -64,7 +77,7 @@ class JsonObjectReader(Reader):
                 "required": [f.name for f in fields],
                 "additionalProperties": False,
             },
-        }}}
+        }}
 
     # ---------------------------------------------------------------- read
 

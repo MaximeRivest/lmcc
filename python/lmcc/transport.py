@@ -24,7 +24,8 @@ _PUT = re.compile(r"^(request\.[a-z_][a-z0-9_.]*|message:(system|developer|user|
 # fields (contract/LM15_CONTRACT_PIN). Below that the value is opaque.
 LM15_CONFIG_FIELDS = frozenset((
     "max_tokens", "temperature", "top_p", "top_k", "stop", "response_format", "tool_choice",
-    "reasoning", "cache", "service_tier", "user_id", "store", "extensions"))
+    "reasoning", "cache", "seed", "frequency_penalty", "presence_penalty", "service_tier",
+    "user_id", "store", "logprobs", "probabilities", "extensions"))
 
 
 def validate_setting_path(path: str, *, where: str) -> None:

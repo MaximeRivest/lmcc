@@ -1,5 +1,13 @@
 # The corpus
 
+**Kernel 0.8.3 (D-50–D-53).** Cases 194–208 were authored by hand from
+the spec text before the code; all passed once implemented, and every new
+rule was then broken on purpose. One break (uppercase hex in a data
+part's `\u00xx`) passed at first because case 203 held only `\u0001`;
+the case gained U+001F, and the break now fails it. Nine cases changed
+only a version pin: roundtrips record kernel 0.8.3, case 13 the provided
+kernel, and seven `reader/json_object` cases moved to 0.2.0.
+
 **A label mid-line (kernel 0.8, D-43).** Case 169 is a real reply from
 `gpt-oss-20b` (shortened), captured by `python/integration/lm15_repairs.py`
 on 2026-09-23: the model wrote `Sentiment:` in the middle of a line.

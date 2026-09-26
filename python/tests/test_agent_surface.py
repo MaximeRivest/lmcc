@@ -69,5 +69,5 @@ def test_registry_describe_is_plain_data():
     json.dumps(d)
     assert d["formats"]["json"] == "0.1.0"
     assert d["readers"]["derived"] == "kernel"
-    assert d["readers"]["json_object"] == "0.1.0"
+    assert d["readers"]["json_object"] == "0.2.0"
     assert "reasoning_tags" in d["transports"]

@@ -8,6 +8,16 @@ Go kernel that passed kernel 0.6 is kept at the git tag `kernel-0.6`
 (D-41). Where this document and the corpus disagree, fix the corpus first,
 then the implementation.
 
+**What 0.8.3 adds (D-50–D-53).** The wire moves to lm15 1.0.1: a reply's
+data part (a judgment answer, lm15 MAP-14) is read as its value's JSON,
+and `plan.read` returns the `probabilities` it measured and how
+(`measured_by`, §3); the pinned request settings gain
+`config.probabilities` and four more lm15 fields. A `formats` entry may
+be a description, `{"describe": text}`: what the model is told about a
+type, as data, with the kernel's read kept (§5). The forgiving read takes
+a period outside the quotes (§7a). Additions only: 0.8.x artifacts load
+unchanged.
+
 **What 0.8.2 adds (D-48, D-49).** `replay: "verbatim"` writes every recorded
 reply exactly as it came, including repaired and unreadable ones (§3a),
 so a multi-turn conversation's requests extend each other exactly, as
@@ -181,11 +191,11 @@ bind(adapter, signature, capabilities, registry) → plan   every refusal fires 
 plan.render(inputs | turn, turns?) → rendered            pure (§3a)
 rendered.request(model?) → lm15 request                    {system?, messages, config?, tools?}
 rendered.step(reply) → turn                                pure: parse + record (§3a)
-plan.read(response) → {values: {field: value}, repairs: [repair]}   pure (§4a)
+plan.read(response) → {values, repairs, probabilities, measured_by}   pure (§4a, §3)
 plan.parse(response) → {field: value}                      plan.read(response).values
 plan.stream() → stream                                     pure, sans-I/O
 stream.feed(delta) → [event, …]
-stream.finish(finish_reason?) → {events, values, repairs}
+stream.finish(finish_reason?) → {events, values, repairs, probabilities, measured_by}
 plan.describe() · plan.explain() · plan.skeleton() · plan.prefix()
 ```
 
@@ -209,8 +219,10 @@ deep merge of every transport's `request_settings` and the reader's own, a
 partial lm15 request whose first path segment is `config` or `tools` and
 whose `config` keys are the pinned lm15 `Config` fields (`max_tokens`,
 `temperature`, `top_p`, `top_k`, `stop`, `response_format`,
-`tool_choice`, `reasoning`, `cache`, `service_tier`, `user_id`, `store`,
-`extensions`); anything else refuses `entry-malformed` at the control's
+`tool_choice`, `reasoning`, `cache`, `seed`, `frequency_penalty`,
+`presence_penalty`, `service_tier`, `user_id`, `store`, `logprobs`,
+`probabilities`, `extensions` — lm15 1.0.1, contract 3763eec, D-53);
+anything else refuses `entry-malformed` at the control's
 path. Below those two levels the value is opaque, as in lm15. Two
 sources disagreeing on one leaf is `setting-conflict`; agreeing is fine.
 The plan adds one control of its own: when the model declares
@@ -243,6 +255,34 @@ effectively wrote; a recorded message is read whole, never re-prefixed.
 (`{"message": {…}, "finish_reason"?, …}`; only `message` and
 `finish_reason` are read — the latter for truncation, §4a). Past exchanges and
 examples enter a request only as turns (§3a).
+
+**A data part in the reply** (lm15 `data`: the answer to a `json_schema`
+request whose schema declares a judgment, which lm15 returns in place of
+the text on every wire, lm15 MAP-14) is read as **text in its place**:
+its `value` as compact JSON — no whitespace, object members in their
+order, strings with `"`, `\` and U+0000–U+001F escaped (`\b` `\f` `\n`
+`\r` `\t`, the others `\u00xx` in lowercase hex) and every other
+character verbatim, `true`/`false`/`null`, integers in decimal, and
+every other number by §7a (`7.0` is `7`). So the reader that asked for
+JSON reads it, and every other rule sees text: find rules, markers,
+§4b (a data part is never an atom), streaming (§8: its text arrives
+whole, with the part). The spelling is lmcc's, not lm15's
+`data_part_text` byte for byte: numbers follow §7a so that every
+implementation reads the same value. A data part without `value`
+refuses `response-malformed`.
+
+Its `probabilities` and `method` are not text. `plan.read(response)`
+also returns `probabilities`, `{field: {key: p}}`, gathered verbatim from
+every data part of the reply (keys are lm15's: the answer keys as
+strings, `"true"`/`"false"` for a boolean, `"0"`…`"n-1"` for an ordered
+judgment), and `measured_by`, `{field: method}` (lm15's
+`JudgmentMethod`: how the numbers were measured, never a
+self-reported confidence). Both are `{}` for a reply without them, and
+the stream's `finish` returns them too. They are checked as the response
+is taken in, before any reading: a field named by two data parts refuses
+`parse-ambiguous`; probabilities that are not an object of objects of
+numbers in [0, 1], a `method` that is not text, or one present without
+the other refuse `response-malformed` (cases 202–208, D-53).
 
 `skeleton()` is what the derived reader knows the reply must contain:
 `{"prefill": text before the first output hole, "stops": [the last

@@ -9,7 +9,7 @@
   "versions": {
    "kernel": "0.8.0",
    "vocab": {
-    "reader/json_object": "0.1.0",
+    "reader/json_object": "0.2.0",
     "format/json": "0.1.0"
    }
   },
@@ -39,7 +39,7 @@
     "kernel": "0.8.3",
     "vocab": {
      "format/json": "0.1.0",
-     "reader/json_object": "0.1.0"
+     "reader/json_object": "0.2.0"
     }
    },
    "template": [

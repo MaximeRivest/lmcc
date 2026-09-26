@@ -1,0 +1,38 @@
+{
+ "name": "refuse-load-json-reader-option",
+ "kind": "refuse",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "classify_judged",
+  "versions": {
+   "kernel": "0.8.3",
+   "vocab": {
+    "reader/json_object": "0.2.0"
+   }
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}"
+   },
+   {
+    "role": "user",
+    "text": "{text}"
+   }
+  ],
+  "reader": {
+   "kind": "json_object",
+   "probabilities": "always"
+  }
+ },
+ "expect": {
+  "code": "entry-malformed",
+  "at": "load",
+  "fix": {
+   "action": "edit-entry",
+   "path": "reader"
+  }
+ }
+}
