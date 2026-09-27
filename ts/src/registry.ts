@@ -216,3 +216,6 @@ export class Registry {
 }
 
 brand(Registry, "Registry");
+
+/** The registry `bind`, `load` and `dump` use when you pass none. */
+export const defaultRegistry = new Registry();

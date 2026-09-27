@@ -21,8 +21,7 @@
  * ```
  */
 
-import { bindHook } from "./adapter.ts";
-import { Registry } from "./registry.ts";
+import { defaultRegistry } from "./registry.ts";
 import type { FormatSpec, Format } from "./formats.ts";
 import type { JsonObject } from "./json.ts";
 
@@ -44,12 +43,7 @@ export { find, put, when, choose } from "./helpers.ts";
 export { parseJson, jsonText, jsonEqual, formatNumber, JsonSyntaxError, type Json, type JsonObject } from "./json.ts";
 export { strip } from "./text.ts";
 
-import "./plan.ts";
-import "./serde.ts";
-
-/** The registry `bind`, `load` and `dump` use when you pass none. */
-export const defaultRegistry = new Registry();
-bindHook.defaultRegistry = () => defaultRegistry;
+export { defaultRegistry };
 
 /** Bind a type name to a format in the default registry (per runtime, never serialized). */
 export function format(type: string, spec: (FormatSpec | { use: string; options?: Record<string, unknown> }) & { shape?: JsonObject }): Format {

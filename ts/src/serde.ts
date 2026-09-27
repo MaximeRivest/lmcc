@@ -10,10 +10,10 @@
 
 import { refuse } from "./errors.ts";
 import { isObj } from "./core.ts";
-import { Adapter, adapter as makeAdapter, bindHook, isTransport, type Reference } from "./adapter.ts";
+import { adapter as makeAdapter, isTransport, type Adapter, type Reference } from "./adapter.ts";
 import { isFormat, loadUdf } from "./formats.ts";
 import { deepCopy } from "./json.ts";
-import type { Registry } from "./registry.ts";
+import { defaultRegistry, type Registry } from "./registry.ts";
 import { pyRepr, pyStr } from "./text.ts";
 import { Transport, validateSpelling } from "./transport.ts";
 import { resolveExtensions } from "./extensions.ts";
@@ -80,7 +80,7 @@ export function resolveAdapterExtensions(adp: Adapter, registry: Registry) {
 // ---------------------------------------------------------------------- load
 
 export function load(entry: unknown, opts: { registry?: Registry } = {}): Adapter {
-  const registry = opts.registry ?? bindHook.defaultRegistry();
+  const registry = opts.registry ?? defaultRegistry;
   if (!isObj(entry)) refuse("entry-malformed", "entry must be a JSON object", { fix: { action: "edit-entry", path: "" } });
   for (const key of ["template", "reader", "versions"]) {
     if (!(key in entry)) refuse("entry-malformed", `entry is missing required key ${pyRepr(key)}`, { fix: { action: "edit-entry", path: key } });
@@ -185,7 +185,7 @@ function ref(binding: Reference): Record<string, unknown> {
   return out;
 }
 
-export function dump(adp: Adapter, registry: Registry = bindHook.defaultRegistry()): Record<string, unknown> {
+export function dump(adp: Adapter, registry: Registry = defaultRegistry): Record<string, unknown> {
   const vocab: Record<string, string> = {};
   const transports: Record<string, unknown> = {};
   for (const purpose of Object.keys(adp.transports)) {
@@ -249,5 +249,3 @@ export function dump(adp: Adapter, registry: Registry = bindHook.defaultRegistry
   if (Object.keys(formats).length) entry["formats"] = formats;
   return entry;
 }
-
-bindHook.dump = dump;

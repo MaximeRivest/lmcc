@@ -13,7 +13,7 @@ import {
   asParts, Capture, forgiveValue, finishReason, formatKey, isObj, makeMessage, mergeTextParts, partText, replyProbabilities,
   responseTextAndParts, shapeSummary, spellValue, structuralKeys, textPart, type Field, type Message, type Part,
 } from "./core.ts";
-import { Adapter, bindHook, isDescription, type Reference } from "./adapter.ts";
+import { isDescription, type Adapter, type Reference } from "./adapter.ts";
 import { accepts as formatAccepts, isFormat, kernelDefault, loadUdf, SCALAR_DEFAULT, type Format } from "./formats.ts";
 import { deepCopy, isPlainObject, jsonEqual, jsonText } from "./json.ts";
 import {
@@ -1572,8 +1572,6 @@ function bindTurns(plan: Plan<any, any>): void {
     }
   }
 }
-
-bindHook.bind = (a, s, c, r) => bind(a, s, c, r);
 
 brand(RenderResult, "RenderResult");
 brand(Reading, "Reading");

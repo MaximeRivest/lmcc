@@ -13,9 +13,12 @@ import { compileTemplate, RESERVED_SLOTS, turnSlots as nodeTurnSlots, type Node 
 import { pyRepr } from "./text.ts";
 import { Transport } from "./transport.ts";
 import { defaultDeclaration, validateDeclaration } from "./extensions.ts";
-import type { Registry } from "./registry.ts";
+import { defaultRegistry, type Registry } from "./registry.ts";
 import type { Signature } from "./signature.ts";
-import type { Plan } from "./plan.ts";
+// plan.ts and serde.ts import this module back. The cycle is safe: each side
+// uses the other only inside function bodies, never while modules evaluate.
+import { bind, type Plan } from "./plan.ts";
+import { dump } from "./serde.ts";
 import { brand } from "./brand.ts";
 
 const SLOT_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -89,11 +92,11 @@ export class Adapter {
   }
 
   bind<I, O>(signature: Signature<I, O>, capabilities: Record<string, unknown> = {}, opts: { registry?: Registry } = {}): Plan<I, O> {
-    return bindHook.bind(this, signature, capabilities, opts.registry ?? bindHook.defaultRegistry()) as Plan<I, O>;
+    return bind(this, signature, capabilities, opts.registry ?? defaultRegistry);
   }
 
   dump(opts: { registry?: Registry } = {}): Record<string, unknown> {
-    return bindHook.dump(this, opts.registry ?? bindHook.defaultRegistry());
+    return dump(this, opts.registry ?? defaultRegistry);
   }
 
   /** The template's last message when it is an assistant message: the reply's prefill (§3). */
@@ -142,23 +145,6 @@ export class Adapter {
     return this.dump();
   }
 }
-
-/** Filled by plan.ts and serde.ts (avoids an import cycle). */
-export const bindHook: {
-  bind: (a: Adapter, s: Signature<unknown, unknown>, c: Record<string, unknown>, r: Registry) => unknown;
-  dump: (a: Adapter, r: Registry) => Record<string, unknown>;
-  defaultRegistry: () => Registry;
-} = {
-  bind: () => {
-    throw new Error("lmcc: plan module not loaded");
-  },
-  dump: () => {
-    throw new Error("lmcc: serde module not loaded");
-  },
-  defaultRegistry: () => {
-    throw new Error("lmcc: registry module not loaded");
-  },
-};
 
 function description(value: Record<string, unknown>, where: string): { describe?: string } {
   if (!("describe" in value)) return {};
