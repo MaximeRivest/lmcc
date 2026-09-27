@@ -59,7 +59,8 @@ export function request(rendered: RenderResult, opts: { model: string; config?: 
 }
 
 function canonical(response: Response | Message): Record<string, unknown> {
-  return response instanceof Response ? Response.toJSON(response) : Message.toJSON(response);
+  // by shape, not instanceof: a Response from another copy of lm15 is still a response
+  return "message" in response ? Response.toJSON(response as Response) : Message.toJSON(response as Message);
 }
 
 /** Typed values and repairs (§4a) from an lm15 `Response` or `Message`; a cut response refuses `parse-truncated`. */

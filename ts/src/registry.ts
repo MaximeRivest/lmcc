@@ -20,6 +20,8 @@ import { pyRepr, pyStr } from "./text.ts";
 import { Transport } from "./transport.ts";
 import { describeBinding, nativeExtensions, type ExtensionBinding } from "./extensions.ts";
 import type { JsonObject } from "./json.ts";
+import { brand, brandedByAnyVersion } from "./brand.ts";
+import { KERNEL_VERSION } from "./version.ts";
 
 export interface Named<F> {
   readonly factory: F;
@@ -186,7 +188,9 @@ export class Registry {
       refuse("entry-malformed", `reader: ${pyRepr(kind)} rejects its spec: ${(err as Error).message}`, { fix: { action: "edit-entry", path: "reader" } });
     }
     if (!(reader instanceof Reader)) {
-      refuse("entry-malformed", `reader: ${pyRepr(kind)} built something that is not a Reader`, { fix: { action: "edit-entry", path: "reader" } });
+      const other = brandedByAnyVersion(reader, "Reader")
+        ? " (a Reader of another lmcc version: install the pack against this lmcc, " + KERNEL_VERSION + ")" : "";
+      refuse("entry-malformed", `reader: ${pyRepr(kind)} built something that is not a Reader${other}`, { fix: { action: "edit-entry", path: "reader" } });
     }
     return reader;
   }
@@ -210,3 +214,5 @@ export class Registry {
     };
   }
 }
+
+brand(Registry, "Registry");

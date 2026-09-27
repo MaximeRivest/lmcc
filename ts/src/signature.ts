@@ -18,9 +18,10 @@
  */
 
 import { refuse } from "./errors.ts";
-import type { Json, JsonObject } from "./json.ts";
+import { deepCopy, type Json, type JsonObject } from "./json.ts";
 import { isObj, type Field, type Shape } from "./core.ts";
 import { isIdentifier, pyRepr, PURPOSE_RE } from "./text.ts";
+import { brand } from "./brand.ts";
 
 const DIRECTIONS = ["input", "output"];
 
@@ -39,6 +40,26 @@ export interface FieldSpec<T = unknown> {
 type SpecValue<S> = S extends FieldSpec<infer T> ? T : S extends TypedShape<infer T> ? (unknown extends T ? unknown : T) : unknown;
 export type ValuesOf<M> = { [K in keyof M]: SpecValue<M[K]> };
 
+/** A field as a caller writes it: `purpose` defaults to `"plain"`, `type` and `desc` to none. */
+export interface FieldInput {
+  readonly name: string;
+  readonly direction: "input" | "output";
+  readonly shape: Shape;
+  readonly type?: string | null;
+  readonly purpose?: string;
+  readonly desc?: string | null;
+}
+
+/**
+ * A signature (kernel §1): instructions and ordered fields. Constructing one
+ * validates it (`signature-malformed`, naming the offender), so an invalid
+ * signature cannot exist. Fields and shapes are copied and frozen: the
+ * signature's fingerprint (§3a) cannot change after it is made.
+ *
+ * `new Signature(instructions, fields)` is the surface for frontends that
+ * build fields themselves; `signature(...)` with the `t` builders and
+ * `signatureFromDict(...)` are the others.
+ */
 export class Signature<I = Record<string, unknown>, O = Record<string, unknown>> {
   readonly instructions: string;
   readonly fields: readonly Field[];
@@ -46,9 +67,26 @@ export class Signature<I = Record<string, unknown>, O = Record<string, unknown>>
   declare readonly __inputs?: I;
   declare readonly __outputs?: O;
 
-  constructor(instructions: string, fields: Field[]) {
+  constructor(instructions: string, fields: readonly FieldInput[]) {
+    if (typeof instructions !== "string") {
+      refuse("signature-malformed", `instructions must be text, not ${instructions === null ? "None" : Array.isArray(instructions) ? "list" : typeof instructions}`,
+        { fix: { action: "edit-signature" } });
+    }
+    if (!Array.isArray(fields)) refuse("signature-malformed", "a signature is an object with a fields list", { fix: { action: "edit-signature" } });
     this.instructions = instructions;
-    this.fields = Object.freeze([...fields]);
+    this.fields = Object.freeze(fields.map((input): Field => {
+      if (!isObj(input)) refuse("signature-malformed", "each field is an object", { fix: { action: "edit-signature" } });
+      const f = input as unknown as FieldInput;
+      return Object.freeze({
+        name: f.name,
+        direction: f.direction,
+        shape: deepFreeze(deepCopy(f.shape)),
+        type: f.type === undefined ? null : f.type,
+        purpose: f.purpose === undefined ? "plain" : f.purpose,
+        desc: f.desc === undefined ? null : f.desc,
+      });
+    }));
+    validate(this.fields);
   }
 
   get inputs(): Field[] {
@@ -72,10 +110,18 @@ function fixField(f: { name: unknown }): { action: string; field?: string } {
   return typeof f.name === "string" && f.name ? { action: "edit-signature", field: f.name } : { action: "edit-signature" };
 }
 
+function deepFreeze<T>(value: T): T {
+  if (typeof value === "object" && value !== null && !Object.isFrozen(value)) {
+    for (const v of Object.values(value)) deepFreeze(v);
+    Object.freeze(value);
+  }
+  return value;
+}
+
 /** The rules of schema/signature.schema.json plus name uniqueness. */
-export function validated<I, O>(sig: Signature<I, O>): Signature<I, O> {
+function validate(fields: readonly Field[]): void {
   const seen = new Set<string>();
-  for (const f of sig.fields) {
+  for (const f of fields) {
     const raw = f as unknown as Record<string, unknown>;
     if (!isIdentifier(f.name)) {
       refuse("signature-malformed", `field name ${pyRepr(f.name)} is not an ASCII identifier ([A-Za-z_][A-Za-z0-9_]*)`, { fix: fixField(f) });
@@ -96,7 +142,6 @@ export function validated<I, O>(sig: Signature<I, O>): Signature<I, O> {
       refuse("signature-malformed", `field ${pyRepr(f.name)}: desc must be a string`, { fix: fixField(f) });
     }
   }
-  return sig;
 }
 
 /** Load a signature from its plain-data form (the corpus form). */
@@ -104,7 +149,7 @@ export function signatureFromDict<I = Record<string, unknown>, O = Record<string
   if (!isObj(data) || !Array.isArray(data["fields"] ?? [])) {
     refuse("signature-malformed", "a signature is an object with a fields list", { fix: { action: "edit-signature" } });
   }
-  const fields: Field[] = [];
+  const fields: FieldInput[] = [];
   for (const f of (data["fields"] ?? []) as unknown[]) {
     if (!isObj(f)) refuse("signature-malformed", "each field is an object", { fix: { action: "edit-signature" } });
     fields.push({
@@ -112,12 +157,12 @@ export function signatureFromDict<I = Record<string, unknown>, O = Record<string
       direction: f["direction"] as "input" | "output",
       shape: f["shape"] as Shape,
       type: (f["type"] ?? null) as string | null,
-      purpose: (f["purpose"] === undefined ? "plain" : f["purpose"]) as string,
+      purpose: f["purpose"] as string | undefined,
       desc: (f["desc"] ?? null) as string | null,
     });
   }
   const instructions = data["instructions"] === undefined ? "" : (data["instructions"] as string);
-  return validated(new Signature<I, O>(instructions, fields));
+  return new Signature<I, O>(instructions, fields);
 }
 
 export function signatureToDict(sig: Signature<unknown, unknown>): JsonObject {
@@ -155,7 +200,7 @@ export function signature<IM extends Entries = {}, OM extends Entries = {}>(
   instructions: string,
   spec: { inputs?: IM; outputs?: OM } = {},
 ): Signature<ValuesOf<IM>, ValuesOf<OM>> {
-  const fields: Field[] = [];
+  const fields: FieldInput[] = [];
   for (const [direction, entries] of [["input", spec.inputs ?? {}], ["output", spec.outputs ?? {}]] as const) {
     for (const name of Object.keys(entries)) {
       const value = (entries as Entries)[name];
@@ -167,7 +212,7 @@ export function signature<IM extends Entries = {}, OM extends Entries = {}>(
       fields.push({ name, direction, shape: { ...f.shape }, type: f.type, purpose: f.purpose, desc: f.desc });
     }
   }
-  return validated(new Signature(instructions, fields));
+  return new Signature(instructions, fields);
 }
 
 type Members = readonly (string | number)[];
@@ -204,3 +249,5 @@ export const t = {
   /** Any JSON Schema, with the static type you declare: `t.json<Person[]>({type: "array"})`. */
   json: <T = unknown>(schema: JsonObject = {}): TypedShape<T> => ({ ...schema }),
 };
+
+brand(Signature, "Signature");

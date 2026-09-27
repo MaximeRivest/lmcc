@@ -292,6 +292,15 @@ export function compareCodePoints(a: string, b: string): number {
   return a.length - b.length;
 }
 
+/**
+ * Whether `value` converts itself to JSON (a `toJSON` method, the convention
+ * `JSON.stringify` follows): class instances, dates, and plain objects that
+ * carry one. Every JSON writer in lmcc asks this first, so all of them agree.
+ */
+export function hasToJSON(value: unknown): value is { toJSON: () => unknown } {
+  return typeof value === "object" && value !== null && typeof (value as { toJSON?: unknown }).toJSON === "function";
+}
+
 export function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   const proto = Object.getPrototypeOf(value);
@@ -322,10 +331,8 @@ export function jsonText(value: unknown, options: JsonTextOptions = {}): string 
       return String(v);
     }
     if (typeof v === "string") return jsonString(v);
+    if (hasToJSON(v)) return write(v.toJSON());
     if (Array.isArray(v)) return "[" + v.map(write).join(item) + "]";
-    if (typeof v === "object" && typeof (v as { toJSON?: unknown }).toJSON === "function" && !isPlainObject(v)) {
-      return write((v as { toJSON: () => unknown }).toJSON());
-    }
     if (isPlainObject(v)) {
       let keys = Object.keys(v).filter((k) => v[k] !== undefined);
       if (options.sortKeys) keys = [...keys].sort(compareCodePoints);

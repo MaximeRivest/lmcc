@@ -21,7 +21,7 @@ parameters, is breaking.
 | `unknown-format` | load/dump | `install-vocabulary` | a `{"use": name}` format reference names nothing registered |
 | `unknown-transport` | load/dump | `install-vocabulary` | a `{"use": name}` transport reference names nothing registered |
 | `entry-malformed` | construct/load | `edit-entry` | structural problem; hint names the path (includes a find rule with no source, a `pattern` the bound dialect rejects, a bad predicate, a control outside the pinned lm15 request fields, a `system` message that does not lead the template, and a vocabulary reference whose factory rejects its `options` or returns malformed data) |
-| `signature-malformed` | signature | `edit-signature` | field name not an ASCII identifier, duplicate name, bad direction, shape not an object |
+| `signature-malformed` | signature | `edit-signature` | instructions not text, field name not an ASCII identifier, duplicate name, bad direction, shape not an object |
 | `version-incompatible` | load/bind | `match-version` | artifact needs a kernel, vocabulary, or extension version this implementation cannot honor |
 | `extension-undeclared` | load/bind | `declare-extension` | a construct needs an extension family the artifact does not declare (a find rule carries `pattern` and no `pattern/*` is in `extensions`); hint names the construct's path |
 | `extension-unsupported` | load/bind | `bind-extension` | the artifact declares an extension this host binds no implementation of |

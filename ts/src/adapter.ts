@@ -16,6 +16,7 @@ import { defaultDeclaration, validateDeclaration } from "./extensions.ts";
 import type { Registry } from "./registry.ts";
 import type { Signature } from "./signature.ts";
 import type { Plan } from "./plan.ts";
+import { brand } from "./brand.ts";
 
 const SLOT_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 export const REPLAY = ["recorded", "values", "verbatim"] as const;
@@ -292,3 +293,5 @@ export function adapter(opts: AdapterOptions = {}): Adapter {
   adp.turnSlots();
   return adp;
 }
+
+brand(Adapter, "Adapter");

@@ -11,7 +11,9 @@ with `sha256sum` over hand-typed canonical bytes, not by either kernel.
 Breaking the rule on purpose in each kernel (Python's float spelling, a
 JavaScript `sort()`) fails them. Ten cases changed only the kernel version
 they record (nine roundtrips; case 13's provided version). The TypeScript
-kernel passes every case it claims through the driver protocol.
+kernel passes every case it claims through the driver protocol. Case 212
+(D-55: instructions that are not text refuse at signature) was authored
+first; the 0.8.3 Python kernel crashed on it with a host `TypeError`.
 
 **Kernel 0.8.3 (D-50–D-53).** Cases 194–208 were authored by hand from
 the spec text before the code; all passed once implemented, and every new

@@ -9,6 +9,8 @@
  */
 
 /** The next action as data: `{action, ...parameters}` from the closed vocabulary of errors.md. */
+import { brand } from "./brand.ts";
+
 export interface Fix {
   readonly action: string;
   readonly [parameter: string]: unknown;
@@ -44,6 +46,13 @@ export class Refusal extends Error {
   toJSON(): RefusalData {
     return this.describe();
   }
+}
+
+brand(Refusal, "Refusal", false);
+
+/** Whether `x` is a refusal from any copy or version of lmcc (`instanceof Refusal` is the same test). */
+export function isRefusal(x: unknown): x is Refusal {
+  return x instanceof Refusal;
 }
 
 export function refuse(code: string, hint: string, opts: { fix?: Fix | null; partial?: Record<string, unknown> | null } = {}): never {

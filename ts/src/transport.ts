@@ -12,6 +12,7 @@ import { CAPABILITY_FACTS, isObj } from "./core.ts";
 import { deepCopy } from "./json.ts";
 import type { FindRule } from "./reader.ts";
 import { pyRepr, pyTruthy } from "./text.ts";
+import { brand } from "./brand.ts";
 
 const KEYS = ["when", "requires", "in_template", "tell", "request_settings", "put", "written_as", "find", "spelling"];
 const PREDICATE_KEYS = ["capability", "not", "all", "any"];
@@ -112,6 +113,10 @@ export class Transport {
     if (data instanceof Transport) {
       data.validate(where);
       return data;
+    }
+    if (isObj(data) && typeof (data as { toDict?: unknown }).toDict === "function") {
+      // a Transport of another lmcc version: cross through its artifact form, checked as data
+      return Transport.fromDict((data as { toDict: () => unknown }).toDict(), where);
     }
     if (!isObj(data)) malformed(where, `${where}: a transport is an object`);
     if ("choose" in data) {
@@ -383,3 +388,5 @@ export function evalPredicate(p: Predicate, capabilities: Record<string, unknown
   if (key === "all") return (value as Predicate[]).every((q) => evalPredicate(q, capabilities));
   return (value as Predicate[]).some((q) => evalPredicate(q, capabilities));
 }
+
+brand(Transport, "Transport");

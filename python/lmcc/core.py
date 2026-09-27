@@ -251,6 +251,9 @@ def _fix_field(f: Field) -> dict:
 
 def _validated(sig: SignatureCore) -> SignatureCore:
     """The rules of schema/signature.schema.json plus name uniqueness."""
+    if not isinstance(sig.instructions, str):
+        refuse("signature-malformed", f"instructions must be text, not {type(sig.instructions).__name__}",
+               fix={"action": "edit-signature"})
     seen: set[str] = set()
     for f in sig.fields:
         if not is_identifier(f.name):

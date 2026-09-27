@@ -42,7 +42,8 @@
     "check": "tsc --noEmit",
     "test": "node --conditions=lmcc-source --test tests/*.test.ts",
     "conform": "cd ../python && python ../contract/harness/runner.py --driver 'node ../ts/conform/driver.ts'",
-    "prepublishOnly": "npm run build && npm run check && npm test"
+    "prepublishOnly": "npm run build && npm run check && npm test",
+    "prepare": "npm run build"
   },
   "peerDependencies": {
     "@lm15/lm15": "^1.0.0-rc.2"

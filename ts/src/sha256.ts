@@ -40,7 +40,7 @@ export function utf8(text: string): Uint8Array {
   return Uint8Array.from(out);
 }
 
-/** Lowercase hex SHA-256 of `text`'s UTF-8 bytes. */
+/** Lowercase hex SHA-256 of `text`'s UTF-8 bytes (a lone surrogate hashes as U+FFFD). Synchronous; runs anywhere. */
 export function sha256Hex(text: string): string {
   const bytes = utf8(text);
   const bitLength = bytes.length * 8;

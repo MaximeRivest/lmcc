@@ -11,7 +11,7 @@
 import { Refusal } from "../errors.ts";
 import { readValue, type Field, type Shape } from "../core.ts";
 import type { Format } from "../formats.ts";
-import { formatNumber, isPlainObject } from "../json.ts";
+import { formatNumber, hasToJSON, isPlainObject } from "../json.ts";
 import type { Registry } from "../registry.ts";
 import { strip, pyRepr } from "../text.ts";
 import { dumps, loads } from "./jsontext.ts";
@@ -23,16 +23,14 @@ export const SCALED_NUMBER_VERSION = "0.2.0";
 
 const FENCE = /^[ \t\n\r\f\v]*```[a-zA-Z0-9_-]*[ \t\n\r\f\v]*\n(.*?)\n?[ \t\n\r\f\v]*```[ \t\n\r\f\v]*$/s;
 
-/** Objects with `toJSON` (class instances) become their JSON; plain data passes through. */
+/** Objects with `toJSON` become their JSON (as `JSON.stringify` does); plain data passes through. */
 export function lower(value: unknown): unknown {
+  if (hasToJSON(value)) return lower(value.toJSON());
   if (Array.isArray(value)) return value.map(lower);
   if (isPlainObject(value)) {
     const out: Record<string, unknown> = {};
     for (const k of Object.keys(value)) out[k] = lower(value[k]);
     return out;
-  }
-  if (typeof value === "object" && value !== null && typeof (value as { toJSON?: unknown }).toJSON === "function") {
-    return lower((value as { toJSON: () => unknown }).toJSON());
   }
   return value;
 }

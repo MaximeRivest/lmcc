@@ -26,10 +26,10 @@ import { Registry } from "./registry.ts";
 import type { FormatSpec, Format } from "./formats.ts";
 import type { JsonObject } from "./json.ts";
 
-export { Refusal, refuse, type Fix, type RefusalData } from "./errors.ts";
+export { Refusal, isRefusal, refuse, type Fix, type RefusalData } from "./errors.ts";
 export { Adapter, adapter, assistant, developer, message, system, turns, use, user, type AdapterOptions } from "./adapter.ts";
-export { Capture, type Field, type Message, type Part, type Shape } from "./core.ts";
-export { Signature, field, signature, signatureFromDict, signatureToDict, t, type TypedShape, type FieldSpec } from "./signature.ts";
+export { Capture, nullableBase, structuralKeys, type Field, type Message, type Part, type Shape } from "./core.ts";
+export { Signature, field, signature, signatureFromDict, signatureToDict, t, type TypedShape, type FieldSpec, type FieldInput } from "./signature.ts";
 export { makeFormat, MEDIA_DEFAULT, SCALAR_DEFAULT, type Format, type FormatSpec } from "./formats.ts";
 export { Reader, DerivedReader, type ReaderStream } from "./reader.ts";
 export { Plan, Reading, RenderResult, bind } from "./plan.ts";
@@ -38,7 +38,8 @@ export { Registry, type RegistryOptions } from "./registry.ts";
 export { KERNEL_VERSION, dump, load } from "./serde.ts";
 export { Transport } from "./transport.ts";
 export { LegacyRE2, nativeExtensions, type ExtensionBinding, type PatternBinding } from "./extensions.ts";
-export { ModelStep, ToolStep, Turn, canonicalJson, signatureFingerprint, type TurnJSON, type ModelStepJSON, type ToolStepJSON } from "./turn.ts";
+export { ModelStep, ToolStep, Turn, canonicalJson, sha256, signatureFingerprint, toJson, type TurnJSON, type ModelStepJSON, type ToolStepJSON } from "./turn.ts";
+export { sha256Hex } from "./sha256.ts";
 export { find, put, when, choose } from "./helpers.ts";
 export { parseJson, jsonText, jsonEqual, formatNumber, JsonSyntaxError, type Json, type JsonObject } from "./json.ts";
 export { strip } from "./text.ts";
@@ -55,4 +56,4 @@ export function format(type: string, spec: (FormatSpec | { use: string; options?
   return defaultRegistry.format(type, spec);
 }
 
-export const VERSION = "0.8.4";
+export { KERNEL_VERSION as VERSION } from "./version.ts";

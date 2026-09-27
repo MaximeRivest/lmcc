@@ -12,6 +12,7 @@
 import { refuse, Refusal } from "./errors.ts";
 import { formatNumber, isPlainObject, jsonEqual, jsonText, type JsonObject } from "./json.ts";
 import { asciiLower, pyRepr, pyStr, readBoolean, readInteger, readNumber, strip, WHITESPACE } from "./text.ts";
+import { brand } from "./brand.ts";
 
 /** An lm15 part as canonical JSON: `{"type": ..., ...}`. */
 export type Part = { readonly type: string; readonly [key: string]: unknown };
@@ -404,3 +405,5 @@ export function responseTextAndParts(response: unknown): [string, Part[]] {
 }
 
 export { isPlainObject, WHITESPACE };
+
+brand(Capture, "Capture");

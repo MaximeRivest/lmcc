@@ -13,9 +13,10 @@
 
 import { refuse } from "./errors.ts";
 import { isObj, textPart, validateResponsePart, type Field, type Message, type Part } from "./core.ts";
-import { isPlainObject, jsonText } from "./json.ts";
+import { hasToJSON, isPlainObject, jsonText } from "./json.ts";
 import { sha256Hex } from "./sha256.ts";
 import { pyRepr } from "./text.ts";
+import { brand } from "./brand.ts";
 
 // ------------------------------------------------------------------ identity
 
@@ -24,6 +25,11 @@ export function canonicalJson(value: unknown): string {
   return jsonText(value, { sortKeys: true });
 }
 
+/**
+ * `"sha256:"` + the hex SHA-256 of `value`'s canonical JSON (§3a): how
+ * signature fingerprints and request hashes are made, byte-identical to
+ * every other lmcc. `sha256Hex(text)` hashes plain text instead.
+ */
 export function sha256(value: unknown): string {
   return "sha256:" + sha256Hex(canonicalJson(value));
 }
@@ -35,21 +41,24 @@ export function signatureFingerprint(sig: { readonly fields: readonly Field[] })
 
 // ------------------------------------------------------------------ values
 
-/** A value as the JSON its field's shape describes (objects with `toJSON` are lowered). */
+/**
+ * A value as the JSON its field's shape describes: plain data passes through,
+ * objects with `toJSON` are lowered, `undefined` members are dropped, and
+ * anything with no JSON form (a function, `NaN`, a symbol) refuses `turn-invalid`
+ * naming the path.
+ */
 export function toJson(value: unknown, where = "turn"): unknown {
   if (value === null || typeof value === "string" || typeof value === "boolean" || typeof value === "bigint") return value;
   if (typeof value === "number") {
     if (!Number.isFinite(value)) refuse("turn-invalid", `${where}: ${value} has no JSON form`);
     return value;
   }
+  if (hasToJSON(value)) return toJson(value.toJSON(), where);
   if (Array.isArray(value)) return value.map((v, i) => toJson(v, `${where}[${i}]`));
   if (isPlainObject(value)) {
     const out: Record<string, unknown> = {};
     for (const k of Object.keys(value)) if (value[k] !== undefined) out[k] = toJson(value[k], `${where}.${k}`);
     return out;
-  }
-  if (typeof value === "object" && typeof (value as { toJSON?: unknown }).toJSON === "function") {
-    return toJson((value as { toJSON: () => unknown }).toJSON(), where);
   }
   refuse("turn-invalid", `${where}: a ${value === undefined ? "missing value" : typeof value} has no JSON form; a turn holds JSON values in their fields' shapes`);
 }
@@ -183,8 +192,28 @@ export class Turn {
     this.meta = meta;
   }
 
-  private with(changes: Partial<{ steps: readonly Step[]; outputs: Record<string, unknown> | null }>): Turn {
-    return new Turn(this.signature, this.inputs, changes.steps ?? this.steps, "outputs" in changes ? changes.outputs! : this.outputs, this.score, this.meta);
+  private with(changes: Partial<{ steps: readonly Step[]; outputs: Record<string, unknown> | null; score: number | null; meta: Record<string, unknown> }>): Turn {
+    return new Turn(this.signature, this.inputs, changes.steps ?? this.steps, "outputs" in changes ? changes.outputs! : this.outputs,
+      "score" in changes ? changes.score! : this.score, changes.meta ?? this.meta);
+  }
+
+  /**
+   * This turn with `meta` replaced (§3a: carried, never read by render). Merge
+   * yourself to add a key: `turn.withMeta({ ...turn.meta, refusal })`. A value
+   * with no JSON form refuses `turn-invalid` here, not when the turn is saved.
+   */
+  withMeta(meta: Record<string, unknown>): Turn {
+    if (!isPlainObject(meta)) refuse("turn-invalid", "turn.meta: an object");
+    toJson(meta, "turn.meta");
+    return this.with({ meta: { ...meta } });
+  }
+
+  /** This turn with `score` replaced: a finite number, or `null` for none (§3a: carried, never read). */
+  withScore(score: number | null): Turn {
+    if (score !== null && (typeof score !== "number" || !Number.isFinite(score))) {
+      refuse("turn-invalid", `turn.score: a finite number or null, not ${pyRepr(score)}`);
+    }
+    return this.with({ score });
   }
 
   /** Calls of the last model step that no tool step has answered yet. */
@@ -277,3 +306,7 @@ export class Turn {
     return new Turn(sig, { ...inputs }, steps, outputs === null ? null : { ...outputs }, (data["score"] ?? null) as number | null, { ...meta });
   }
 }
+
+brand(ModelStep, "ModelStep");
+brand(ToolStep, "ToolStep");
+brand(Turn, "Turn");

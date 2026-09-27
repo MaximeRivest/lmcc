@@ -1,0 +1,50 @@
+{
+ "name": "refuse-signature-instructions-not-text",
+ "kind": "refuse",
+ "entry": {
+  "name": "scalars_v1",
+  "versions": {
+   "kernel": "0.8.4",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n{% endfor %}</done>"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": 5,
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "expect": {
+  "at": "signature",
+  "code": "signature-malformed",
+  "fix": {
+   "action": "edit-signature"
+  }
+ }
+}

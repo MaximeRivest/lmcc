@@ -1381,3 +1381,46 @@ change; a rule only one can follow will fail `./check` instead of shipping.
 The TypeScript package is build-ready (`npm run build`, `dist/` with
 declarations, verified by installing the packed tarball into a clean
 project) but not published.
+
+**D-55 · A signature's instructions are text; lmcc objects cross copies
+of one package (kernel 0.8.4, TypeScript API).** Ratified with the
+maintainer on 2026-09-26, preparing functai-js on the TypeScript kernel.
+
+- **Contract.** Neither kernel checked that `instructions` is text: Python
+  crashed at render with a host `TypeError`, TypeScript would have sent
+  `undefined` to the model. It now refuses `signature-malformed` with fix
+  `edit-signature` (kernel §1, errors.md, case 212, authored first and
+  failing on Python). Kernel 0.8.4 had not been released, so it is folded
+  in without a version change. Absent in the plain-data form it stays `""`.
+- **TypeScript surface for frontends.** `new Signature(instructions,
+  fields)` validates (an invalid signature cannot exist) and deep-freezes
+  its shapes, so a fingerprint cannot change after the fact; the Python
+  `SignatureCore` does not freeze, a stated host difference.
+  `turn.withMeta` and `turn.withScore` replace Python's
+  `dataclasses.replace` and check JSON form at once. `sha256`,
+  `sha256Hex`, `toJson`, `nullableBase`, `structuralKeys` and `isRefusal`
+  are exported. Every JSON writer honors an object's own `toJSON` first,
+  as `JSON.stringify` does (a plain object carrying `toJSON` was walked as
+  data by three writers; found by a test of these exports).
+- **Copies.** npm installs a package twice easily; `instanceof` then fails
+  between copies, which wrapped a pack's refusals as `reader-error` and
+  rejected its transports. Public classes carry a registered-symbol brand
+  that `instanceof` checks, for the branded class only (subclasses keep
+  JavaScript's rule). Brands carry the kernel's compatibility unit (0.8):
+  across versions, turns and transports cross through their JSON (the
+  versioned records), and a reader of another version is refused with a
+  hint that says so. `Refusal` alone is unversioned: its shape is the stable
+  one. Chosen over detecting duplicates and throwing (graphql-js), which
+  breaks the common case of a pack and an app pinning one version twice.
+- **Installing from a checkout.** `prepare` builds `dist/` for folder
+  installs; the `lmcc-source` export condition runs the source with no
+  build and cannot go stale.
+
+Costs, stated: an object that fakes a brand symbol is trusted as that
+class (brands are identity, not validation; transports are still
+validated as data). npm 11 warns on folder and tarball installs that a
+`prepare` script ran; registry installs do not (checked against `ky`,
+which has the same script). A linked `dist/` goes stale when lmcc's
+source changes unless the source condition is used. npm cannot install
+from a subdirectory of a git repository, so before publication a checkout
+is installed by path or as a packed tarball.

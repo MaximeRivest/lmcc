@@ -12,6 +12,7 @@
 import { refuse } from "./errors.ts";
 import { Capture, textPart, type Field, type Part } from "./core.ts";
 import { countOf, pyRepr, rstrip, strip, unique, WHITESPACE } from "./text.ts";
+import { brand } from "./brand.ts";
 
 /** A position edit: `[start, end, newLength]`, per stage (§4b). */
 export type Edit = [number, number, number];
@@ -400,3 +401,6 @@ export class DerivedReader extends Reader {
     return { prefill, stops: stop ? [stop] : [] };
   }
 }
+
+brand(Reader, "Reader");
+brand(DerivedReader, "DerivedReader");

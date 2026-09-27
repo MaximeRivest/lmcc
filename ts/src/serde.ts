@@ -18,7 +18,8 @@ import { pyRepr, pyStr } from "./text.ts";
 import { Transport, validateSpelling } from "./transport.ts";
 import { resolveExtensions } from "./extensions.ts";
 
-export const KERNEL_VERSION = "0.8.4";
+import { KERNEL_VERSION } from "./version.ts";
+export { KERNEL_VERSION };
 
 function parseVersion(version: unknown, what: string): [number, number, number] {
   if (typeof version !== "string") refuse("entry-malformed", `${what}: version must be a string`, { fix: { action: "edit-entry", path: "versions" } });

@@ -23,6 +23,7 @@ import { Capture, replyProbabilities, textPart, validateResponsePart, partText, 
 import { DerivedReader, EMPHASIS, fold, IGNORABLE, markerKey, Reader, repairMarkers, textCaptures, type FindRule, type PatternMatcher, type ReaderStream, type Repair } from "./reader.ts";
 import { lstrip, rstrip, strip, WHITESPACE } from "./text.ts";
 import type { Plan } from "./plan.ts";
+import { brand } from "./brand.ts";
 
 export type StreamEvent =
   | { kind: "field_started"; field: string }
@@ -887,3 +888,6 @@ export class Stream<O = Record<string, unknown>> {
     return events;
   }
 }
+
+brand(StreamResult, "StreamResult");
+brand(Stream, "Stream");

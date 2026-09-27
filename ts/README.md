@@ -169,6 +169,56 @@ assert.equal(lm15Request.model, "claude-haiku-4-5");
 // bridge.parse(plan, response); bridge.step(request, response); await bridge.stream(plan, router.stream(lm15Request));
 ```
 
+## Building on lmcc (a library such as functai)
+
+A frontend builds its own fields and signatures; `new Signature` validates
+them (an invalid signature cannot exist) and freezes them, so a
+fingerprint never changes after the fact. Turns are immutable records:
+`withMeta` and `withScore` return new ones. `sha256` and `canonicalJson`
+are the exact hashing both languages use.
+
+```ts
+const direct = new lmcc.Signature("Route the message.", [
+  { name: "message", direction: "input", shape: { type: "string" } },
+  { name: "team", direction: "output", shape: { type: "string", enum: ["billing", "shipping"] } },
+]);
+assert.equal(lmcc.signatureFingerprint(direct), lmcc.signatureFingerprint(lmcc.signatureFromDict(lmcc.signatureToDict(direct))));
+
+const routed = xml.bind(direct, { instruct: true });
+let answered = routed.turn({ message: "Where is my parcel?" });
+try {
+  answered = routed.render(answered).step("<team>\nlogistics\n</team>");
+} catch (err) {
+  if (!lmcc.isRefusal(err)) throw err;              // a Refusal from any copy of lmcc
+  answered = answered.withMeta({ ...answered.meta, refusal: err.describe() });
+}
+assert.equal((answered.meta.refusal as { code: string }).code, "parse-value");
+```
+
+**Two copies of lmcc in one program** (npm installs it twice easily) work:
+`instanceof` and `isRefusal` recognize objects from another copy of the same
+kernel version, and a pack (`lmcc/std`) installed from one copy plugs into
+another's registry. Across kernel versions, turns and transports cross
+through their JSON; a reader or format of another version is refused with a
+hint that says so. `isRefusal` recognizes a refusal from any version.
+
+**Developing against a local checkout.** `npm install ../lmcc/ts` links the
+folder and builds `dist/` once (the `prepare` script; npm 11 warns that it
+ran an install script, and a future npm may ask you to approve it with
+`npm approve-scripts lmcc`). A linked `dist/` does not rebuild when lmcc's
+source changes. To always run the current source, with no build, start
+Node with the source condition (Node 22.6–23.5 also needs
+`--experimental-strip-types`):
+
+```text
+node --conditions=lmcc-source app.js
+```
+
+Bundlers take the same condition (`conditions: ["lmcc-source"]` in esbuild
+and Vite). npm cannot install a package from a subdirectory of a git
+repository, so until lmcc is published, use a local path or a packed
+tarball (`npm pack` in `ts/`).
+
 ## Where TypeScript and Python differ, stated
 
 The contract names the places two hosts may legitimately differ; this kernel

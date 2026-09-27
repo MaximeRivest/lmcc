@@ -17,6 +17,8 @@ import { install } from "../src/std/index.ts";
 import { formatNumber, jsonEqual, jsonText, parseJson } from "../src/json.ts";
 import { sha256Hex } from "../src/sha256.ts";
 import { pyRepr } from "../src/text.ts";
+import { dumps } from "../src/std/jsontext.ts";
+import { lower } from "../src/std/formats.ts";
 
 const TS = dirname(dirname(fileURLToPath(import.meta.url)));
 const CASES = join(TS, "..", "contract", "corpus", "cases");
@@ -208,4 +210,48 @@ test("streaming cost is linear in the reply length", () => {
   const small = cost(40_000);
   const large = cost(160_000);
   assert.ok(large < 12 * small + 50, `4x the reply cost ${large.toFixed(1)}ms vs ${small.toFixed(1)}ms`);
+});
+
+test("new Signature validates, fills defaults, and cannot change after it is made", () => {
+  const sig = new lmcc.Signature("Answer.", [
+    { name: "q", direction: "input", shape: { type: "string" } },
+    { name: "a", direction: "output", shape: { type: "object", properties: { x: { type: "number" } } }, type: "Answer" },
+  ]);
+  assert.deepEqual(sig.fields[0], { name: "q", direction: "input", shape: { type: "string" }, type: null, purpose: "plain", desc: null });
+  const before = lmcc.signatureFingerprint(sig);
+  assert.equal(before, lmcc.signatureFingerprint(lmcc.signatureFromDict(lmcc.signatureToDict(sig))));
+  assert.throws(() => { (sig.fields[1].shape["properties"] as Record<string, unknown>)["y"] = {}; });
+  assert.equal(lmcc.signatureFingerprint(sig), before);
+  const refused = (fn: () => unknown, field?: string) => assert.throws(fn, (e) => lmcc.isRefusal(e) && e.code === "signature-malformed"
+    && JSON.stringify(e.fix) === JSON.stringify(field ? { action: "edit-signature", field } : { action: "edit-signature" }));
+  refused(() => new lmcc.Signature(5 as unknown as string, []));
+  refused(() => new lmcc.Signature("x", [{ name: "a b", direction: "input", shape: {} }]), "a b");
+  refused(() => new lmcc.Signature("x", [{ name: "a", direction: "sideways" as "input", shape: {} }]), "a");
+  refused(() => new lmcc.Signature("x", [{ name: "a", direction: "input", shape: {} }, { name: "a", direction: "output", shape: {} }]), "a");
+});
+
+test("withMeta and withScore return new turns and refuse what has no JSON form", () => {
+  const sig = lmcc.signature("A.", { inputs: { q: lmcc.t.string() }, outputs: { a: lmcc.t.string() } });
+  const plan = lmcc.adapter({ messages: [lmcc.system("<a>{a}</a>"), lmcc.user("{q}")] }).bind(sig);
+  const turn = plan.example({ q: "x" }, { a: "y" });
+  const noted = turn.withMeta({ ...turn.meta, source: "rating" }).withScore(0.5);
+  assert.deepEqual(turn.meta, {});
+  assert.equal(turn.score, null);
+  assert.deepEqual(noted.toJSON().meta, { source: "rating" });
+  assert.equal(noted.toJSON().score, 0.5);
+  assert.equal(noted.withScore(null).toJSON().score, undefined);
+  const invalid = (fn: () => unknown) => assert.throws(fn, (e) => lmcc.isRefusal(e) && e.code === "turn-invalid");
+  invalid(() => turn.withMeta({ when: () => 1 }));
+  invalid(() => turn.withMeta([] as unknown as Record<string, unknown>));
+  invalid(() => turn.withScore(Number.NaN));
+});
+
+test("the hashing and value helpers are the ones fingerprints use", () => {
+  assert.equal(lmcc.sha256({ b: 1.0, a: "é" }), "sha256:" + lmcc.sha256Hex('{"a":"é","b":1}'));
+  const own = { a: [1, { toJSON: () => "x" }], b: undefined };
+  assert.deepEqual(lmcc.toJson(own), { a: [1, "x"] });
+  assert.equal(jsonText(own), '{"a":[1,"x"]}');
+  assert.equal(dumps(own, null), '{"a": [1, "x"]}');
+  assert.deepEqual(lower(own), { a: [1, "x"], b: undefined });
+  assert.deepEqual(lmcc.nullableBase({ anyOf: [{ type: "integer" }, { type: "null" }] }), [{ type: "integer" }, true]);
 });

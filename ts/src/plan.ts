@@ -15,7 +15,7 @@ import {
 } from "./core.ts";
 import { Adapter, bindHook, isDescription, type Reference } from "./adapter.ts";
 import { accepts as formatAccepts, isFormat, kernelDefault, loadUdf, SCALAR_DEFAULT, type Format } from "./formats.ts";
-import { deepCopy, jsonEqual, jsonText } from "./json.ts";
+import { deepCopy, isPlainObject, jsonEqual, jsonText } from "./json.ts";
 import {
   applyFindRules, DerivedReader, Reader, refuseMissing, repairableMarkers, repairMarkers,
   type Anchor, type Edit, type FindRule, type PatternMatcher, type ReaderResult, type Repair,
@@ -29,6 +29,7 @@ import { settingLeaves, spellTurn, Transport, validateSettingPath } from "./tran
 import { asMessage, callId, ModelStep, sha256, signatureFingerprint, toJson, ToolStep, Turn, type Step } from "./turn.ts";
 import { describeResolved, type PatternBinding, type Resolved as ResolvedExtension } from "./extensions.ts";
 import { describeStreaming, Stream } from "./stream.ts";
+import { brand } from "./brand.ts";
 
 interface Resolved {
   readonly purpose: string;
@@ -317,7 +318,11 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
   }
 
   private checkTurn(t: unknown, where: string, past: boolean, pendingOk = false): Turn {
-    if (isObj(t) && !(t instanceof Turn)) t = Turn.fromJSON(t, where);
+    if (isObj(t) && !(t instanceof Turn)) {
+      // plain turn JSON, or a Turn of another lmcc version: its JSON is the versioned record (§3a)
+      const data = !isPlainObject(t) && typeof (t as { toJSON?: unknown }).toJSON === "function" ? (t as { toJSON: () => unknown }).toJSON() : t;
+      t = Turn.fromJSON(data, where);
+    }
     if (!(t instanceof Turn)) refuse("turn-invalid", `${where}: expected a turn, got ${typeof t}`);
     if (t.signature !== this.fingerprint) {
       refuse("turn-invalid", `${where}: recorded for signature ${t.signature}, but this plan's is ${this.fingerprint}`);
@@ -350,7 +355,8 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
    * slot `turns`.
    */
   render(inputs: Partial<I> | Turn = {}, opts: { turns?: TurnsArg } = {}): RenderResult {
-    const current = inputs instanceof Turn ? this.checkTurn(inputs, "turn", false) : this.turn(inputs as Partial<I>);
+    const isTurn = inputs instanceof Turn || (isObj(inputs) && !isPlainObject(inputs) && typeof (inputs as { toJSON?: unknown }).toJSON === "function");
+    const current = isTurn ? this.checkTurn(inputs, "turn", false) : this.turn(inputs as Partial<I>);
     return this.renderTurn(current, this.slotValues(opts.turns));
   }
 
@@ -1568,3 +1574,7 @@ function bindTurns(plan: Plan<any, any>): void {
 }
 
 bindHook.bind = (a, s, c, r) => bind(a, s, c, r);
+
+brand(RenderResult, "RenderResult");
+brand(Reading, "Reading");
+brand(Plan, "Plan");

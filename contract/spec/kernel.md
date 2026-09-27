@@ -132,7 +132,9 @@ Field = { name, direction: "input"|"output", shape: JSONSchema,
 ```
 
 Plain-data form: `schema/signature.schema.json`. Field names are ASCII
-identifiers, unique; `signature-malformed` names the offender. `shape`
+identifiers, unique; `instructions` is text (absent in the plain-data form
+it is `""`); `signature-malformed` names the offender (fix
+`edit-signature`, with `field` when a field is the offender). `shape`
 is JSON Schema; the kernel reads only these keywords and carries every
 other one untouched for formats to use:
 

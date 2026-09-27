@@ -6,7 +6,7 @@
  * so they cannot disagree — and neither can the two implementations.
  */
 
-import { formatNumber, isPlainObject, jsonString, parseJson, parseJsonAt, type Json } from "../json.ts";
+import { formatNumber, hasToJSON, isPlainObject, jsonString, parseJson, parseJsonAt, type Json } from "../json.ts";
 
 export function dumps(value: unknown, indent: number | null = 2): string {
   const out: string[] = [];
@@ -21,6 +21,7 @@ function write(value: unknown, out: string[], indent: number | null, depth: numb
   else if (typeof value === "bigint") out.push(value.toString());
   else if (typeof value === "number") out.push(formatNumber(value));
   else if (typeof value === "string") out.push(jsonString(value));
+  else if (hasToJSON(value)) write(value.toJSON(), out, indent, depth);
   else if (Array.isArray(value)) {
     if (!value.length) {
       out.push("[]");
@@ -38,8 +39,6 @@ function write(value: unknown, out: string[], indent: number | null, depth: numb
     out.push("{");
     members(keys.map((k) => [k, value[k]] as [string | null, unknown]), out, indent, depth, true);
     out.push("}");
-  } else if (typeof value === "object" && value !== null && typeof (value as { toJSON?: unknown }).toJSON === "function") {
-    write((value as { toJSON: () => unknown }).toJSON(), out, indent, depth);
   } else {
     throw new TypeError(`${value === undefined ? "undefined" : typeof value} is not JSON data`);
   }
