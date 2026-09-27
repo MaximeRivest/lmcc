@@ -1,4 +1,9 @@
-# Releasing lmcc to PyPI
+# Releasing lmcc
+
+One version number for every language: the kernel version. Python goes to
+PyPI, TypeScript to npm; Julia and R are not published yet.
+
+## PyPI (Python)
 
 The package version equals the kernel version (`python/pyproject.toml`,
 `lmcc.KERNEL_VERSION`; `tests/test_package_version.py` checks it).
@@ -22,3 +27,29 @@ git tag v$(python -c 'import sys; sys.path.insert(0, "."); import lmcc; print(lm
 a fresh `pip install "lmcc[lm15]==0.8.0"` from PyPI ran the package README's
 example. The PyPI trusted publisher is MaximeRivest/lmcc, `release.yml`,
 environment `pypi`.
+
+## npm (TypeScript)
+
+`ts/package.json`'s `version` equals the kernel version. There is no release
+workflow for npm yet: it is published by hand from a checkout, so the package
+carries no npm provenance statement (which a GitHub Actions publish would add).
+
+```bash
+./check                                        # all green (step 7 is the TypeScript kernel)
+cd ts && npm ci
+npm pack --dry-run                             # read the file list: dist/, src/, README.md, LICENSE, package.json
+# a clean-room install of the packed tarball:
+npm pack && T=$(mktemp -d) && (cd $T && npm init -y >/dev/null \
+  && npm i "$OLDPWD"/lmcc-*.tgz @lm15/lm15 && node -e 'import("lmcc").then(m => console.log(Object.keys(m).length))')
+rm lmcc-*.tgz
+npm whoami                                     # an expired token answers 401: run `npm login`
+npm publish --access public                    # prepublishOnly builds, type-checks and tests again
+```
+
+npm asks for a second factor on publish: either `--otp=<code>` from the
+authenticator app, or a confirmation link (the maintainer opens it). Then
+check the registry, not the local tree: `npm view lmcc version` and an
+`npm i lmcc@<version>` into an empty folder.
+
+0.8.4 was published this way on 2026-09-27 (https://www.npmjs.com/package/lmcc)
+from commit 8a504c3; a fresh `npm i lmcc@0.8.4` imported and built a signature.
