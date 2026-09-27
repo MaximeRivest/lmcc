@@ -1,4 +1,4 @@
-# Reader: `json_object` — version 0.2.0
+# Reader: `json_object` — version 0.2.1
 
 Provided by `lmcc_std`. The reply is **one JSON object**; each visible
 output field is a member keyed by field name (the JSON-adapter style).
@@ -48,6 +48,36 @@ the *question* of a judgment in lm15's convention (MAP-14 D4: "the
 property's description is the question"). 0.1.0 sent no description, so
 a JSON reader lost every field's desc unless the template also printed
 `{format}` (cases 22, 28 changed for this; 206 pins it on a judgment).
+
+**Every record is closed (0.2.1).** Each field's shape is sent *closed*:
+every record inside it (an object schema with `properties`, at any
+depth: under `properties`, `patternProperties`, `$defs`, `definitions`,
+`additionalProperties`, `items`, `prefixItems`, `anyOf`, `oneOf`,
+`allOf`, `not`, `if`, `then`, `else`, `contains`) that does not say
+`additionalProperties` gains `additionalProperties: false` after its
+other keys, and its `required` becomes every property, in property order
+(replacing a shorter or reordered list in place, or added after its
+other keys). OpenAI's strict mode and Anthropic's structured outputs
+reject a nested record without these (live, 2026-09-27, `gpt-4.1-mini`
+and `claude-haiku-4-5`: HTTP 400 for `{"name", "age"}` inside the
+object), and lm15 sends a schema verbatim by contract (MAP-8 4), so this
+reader must write one they accept. Stated, not hidden:
+
+- a property that was optional becomes required: the model always
+  writes it. Reading is unchanged (a value present where one was
+  optional reads as before);
+- a record that says `additionalProperties` (any value) is left as
+  written, and so is an object without `properties` (a map
+  `{"additionalProperties": S}`, or any object). Strict enforcement
+  cannot express those; the provider's refusal is the answer, as before;
+- the field shapes themselves are not changed: `plan.describe()`, the
+  signature and its fingerprint are as they were. Only the request's
+  `response_format` differs.
+
+A patch version: loading ignores the patch number (§9), so every
+artifact pinned at 0.2.0 loads and sends the closed schema. The request
+changes only for a field whose shape holds a record, which the two
+providers above refused before. Case 213 pins it.
 
 Without the capability, do not ask a model for JSON prose — use an
 invertible marker template and put JSON *inside* typed fields via

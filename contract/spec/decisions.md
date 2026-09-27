@@ -1485,3 +1485,48 @@ is); `./check` takes about six minutes longer and needs Nix or local
 Julia and R; the R package needs a C compiler to install (and a separate
 wasm build for webR, which lm15 for R supports); neither package is
 published (LMCC.jl is not in the General registry, lmcc is not on CRAN).
+
+**D-57 · `reader/json_object` 0.2.1: every record in the requested
+schema is closed.** Asked by the maintainer on 2026-09-27 ("go fix"),
+after functai found it live: an output whose type is a record (a name
+and an age), under a `json_object` reader, was refused with HTTP 400 by
+OpenAI (`gpt-4.1-mini`, strict mode: "'additionalProperties' is required
+to be supplied and to be false") and by Anthropic (`claude-haiku-4-5`:
+"For 'object' type, 'additionalProperties' must be explicitly set to
+false"), in Python and TypeScript alike. Gemini accepted it. The reader
+closed only the outer object it builds.
+
+- **Where the fix goes.** lm15 sends `schema` verbatim and never rewrites
+  a keyword to make a request pass (lm15 MAP-8 4, INV-050). The schema is
+  this reader's; so the reader writes one strict enforcement accepts.
+- **The rule** (`vocab/reader-json_object.md`, "Every record is
+  closed"): each record at any depth that does not say
+  `additionalProperties` gains `additionalProperties: false`, and its
+  `required` lists every property in property order. Records that say
+  `additionalProperties`, maps and free objects are left as written.
+  Field shapes, `describe()` and fingerprints are unchanged; only the
+  request's `response_format` is.
+- **Evidence.** Case 213 (a record in a record, a list of records, a
+  nullable record, a map, an explicitly open record) was typed by hand
+  from the rule and failed on the Python and TypeScript kernels first
+  (Julia and R built the schema the same way). All four kernels
+  (Python, TypeScript, Julia, R) implement it; case 26 moves only the
+  version it records. Live after the fix: records in records, lists of
+  records and a nullable record read through OpenAI, Anthropic and Gemini.
+- **Version.** 0.2.1, a patch: loading ignores the patch (§9), so
+  artifacts pinned at 0.2.0 (every functai `json` layout saved so far)
+  get the fix without a change. The requested schema differs only where
+  a field's shape holds a record.
+
+- **The live replay compares versions as loading does.** A recorded
+  exchange carries the artifact as its kernel dumped it, with the
+  versions running then; `harness/replay_live.py` now compares dumps with
+  vocabulary versions cut to MAJOR.MINOR (§9), so recordings made under
+  0.2.0 stay evidence under 0.2.1 without being edited.
+
+Costs, stated: an optional property of a record is now required, so a
+strict provider always writes it (reading is unchanged); a map or free
+object under this reader is still refused by strict providers, as
+before; with Gemini, which enforced the open schema, a record now also
+refuses keys it does not declare.
+

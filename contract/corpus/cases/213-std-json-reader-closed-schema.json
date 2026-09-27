@@ -1,0 +1,272 @@
+{
+ "name": "std-json-reader-closed-schema",
+ "kind": "render",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "json_people_v1",
+  "versions": {
+   "kernel": "0.8.0",
+   "vocab": {
+    "reader/json_object": "0.2.0",
+    "format/json": "0.1.0"
+   }
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}"
+   },
+   {
+    "directive": "turns"
+   },
+   {
+    "role": "user",
+    "text": "{text}"
+   }
+  ],
+  "reader": {
+   "kind": "json_object"
+  },
+  "formats": {
+   "*": {
+    "use": "json"
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Who is described?",
+  "fields": [
+   {
+    "name": "text",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "person",
+    "direction": "output",
+    "shape": {
+     "type": "object",
+     "properties": {
+      "name": {
+       "type": "string"
+      },
+      "age": {
+       "type": "integer"
+      },
+      "address": {
+       "type": "object",
+       "properties": {
+        "city": {
+         "type": "string"
+        },
+        "zip": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "city",
+        "zip"
+       ]
+      }
+     },
+     "required": [
+      "name",
+      "age",
+      "address"
+     ]
+    },
+    "desc": "the person"
+   },
+   {
+    "name": "tags",
+    "direction": "output",
+    "shape": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "label": {
+        "type": "string"
+       }
+      }
+     }
+    }
+   },
+   {
+    "name": "employer",
+    "direction": "output",
+    "shape": {
+     "anyOf": [
+      {
+       "type": "object",
+       "properties": {
+        "name": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "name"
+       ]
+      },
+      {
+       "type": "null"
+      }
+     ]
+    }
+   },
+   {
+    "name": "counts",
+    "direction": "output",
+    "shape": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "integer"
+     }
+    }
+   },
+   {
+    "name": "extra",
+    "direction": "output",
+    "shape": {
+     "type": "object",
+     "properties": {
+      "k": {
+       "type": "string"
+      }
+     },
+     "additionalProperties": true
+    }
+   }
+  ]
+ },
+ "capabilities": {
+  "native_structured_output": true
+ },
+ "inputs": {
+  "text": "Ana, 31, lives in Lyon (69001) and works at Acme."
+ },
+ "expect": {
+  "request": {
+   "system": "Who is described?",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "Ana, 31, lives in Lyon (69001) and works at Acme."
+      }
+     ]
+    }
+   ],
+   "config": {
+    "response_format": {
+     "type": "json_schema",
+     "schema": {
+      "type": "object",
+      "properties": {
+       "person": {
+        "type": "object",
+        "properties": {
+         "name": {
+          "type": "string"
+         },
+         "age": {
+          "type": "integer"
+         },
+         "address": {
+          "type": "object",
+          "properties": {
+           "city": {
+            "type": "string"
+           },
+           "zip": {
+            "type": "string"
+           }
+          },
+          "required": [
+           "city",
+           "zip"
+          ],
+          "additionalProperties": false
+         }
+        },
+        "required": [
+         "name",
+         "age",
+         "address"
+        ],
+        "additionalProperties": false,
+        "description": "the person"
+       },
+       "tags": {
+        "type": "array",
+        "items": {
+         "type": "object",
+         "properties": {
+          "label": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "label"
+         ],
+         "additionalProperties": false
+        }
+       },
+       "employer": {
+        "anyOf": [
+         {
+          "type": "object",
+          "properties": {
+           "name": {
+            "type": "string"
+           }
+          },
+          "required": [
+           "name"
+          ],
+          "additionalProperties": false
+         },
+         {
+          "type": "null"
+         }
+        ]
+       },
+       "counts": {
+        "type": "object",
+        "additionalProperties": {
+         "type": "integer"
+        }
+       },
+       "extra": {
+        "type": "object",
+        "properties": {
+         "k": {
+          "type": "string"
+         }
+        },
+        "additionalProperties": true,
+        "required": [
+         "k"
+        ]
+       }
+      },
+      "required": [
+       "person",
+       "tags",
+       "employer",
+       "counts",
+       "extra"
+      ],
+      "additionalProperties": false
+     }
+    }
+   }
+  }
+ }
+}

@@ -40,6 +40,17 @@ def main() -> int:
     return 0
 
 
+def same_but_patch(entry: dict) -> dict:
+    """The entry with each vocabulary version cut to MAJOR.MINOR: a dump records
+    the running version, and loading ignores the patch number (kernel §9), so a
+    recording made before a patch release still round-trips."""
+    out = json.loads(json.dumps(entry))
+    vocab = out.get("versions", {}).get("vocab", {})
+    for name, version in vocab.items():
+        vocab[name] = ".".join(str(version).split(".")[:2])
+    return out
+
+
 def replay(path: Path) -> int:
     record = json.loads(path.read_text(encoding="utf-8"))
     problems, checked = [], 0
@@ -47,7 +58,7 @@ def replay(path: Path) -> int:
         registry = lmcc.Registry()
         lmcc_std.install(registry)
         adapter = lmcc.load(item["entry"], registry=registry)
-        if lmcc.dump(adapter, registry) != item["entry"]:
+        if same_but_patch(lmcc.dump(adapter, registry)) != same_but_patch(item["entry"]):
             problems.append((item["name"], "dump", "the artifact TypeScript dumped does not round-trip in Python"))
         sig = lmcc.signature_from_dict(item["signature"])
         plan = adapter.bind(sig, item["capabilities"], registry=registry)

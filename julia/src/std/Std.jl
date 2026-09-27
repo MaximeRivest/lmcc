@@ -244,8 +244,34 @@ end
 
 LMCC.reader_requires(::JsonObjectReader) = ["native_structured_output"]
 LMCC.reader_spec(r::JsonObjectReader) = r.spec
+const _CLOSE_ONE = ("additionalProperties", "items", "not", "if", "then", "else", "contains")
+const _CLOSE_LIST = ("anyOf", "oneOf", "allOf", "prefixItems", "items")
+const _CLOSE_MAP = ("properties", "patternProperties", "\$defs", "definitions")
+
+# The shape as strict schema enforcement takes it (json_object 0.2.1): every
+# record (an object schema with `properties`) that does not say
+# `additionalProperties` gets `additionalProperties: false` and lists every
+# property in `required`, in property order. A record that says
+# `additionalProperties` stays open as written, and so does an object without
+# `properties` (a map, any object). Returns a new value.
+function closed(shape)
+    isarr(shape) && return Any[closed(v) for v in shape]
+    isobj(shape) || return shape
+    out = JObj()
+    for (k, v) in shape
+        key = String(k)
+        out[key] = key in _CLOSE_MAP && isobj(v) ? JObj(String(n) => closed(x) for (n, x) in v) :
+                   (key in _CLOSE_ONE || key in _CLOSE_LIST) ? closed(v) : v
+    end
+    if isobj(get(out, "properties", nothing))
+        out["required"] = Any[String(n) for n in keys(out["properties"])]
+        haskey(out, "additionalProperties") || (out["additionalProperties"] = false)
+    end
+    out
+end
+
 function LMCC.reader_request_settings(r::JsonObjectReader, fields)
-    props = JObj(f.name => (f.desc !== nothing && !isempty(f.desc) ? merge(copy(f.shape), jobj("description" => f.desc)) : copy(f.shape)) for f in fields)
+    props = JObj(f.name => (f.desc !== nothing && !isempty(f.desc) ? merge(closed(f.shape), jobj("description" => f.desc)) : closed(f.shape)) for f in fields)
     config = jobj("response_format" => jobj("type" => "json_schema",
         "schema" => jobj("type" => "object", "properties" => props, "required" => Any[f.name for f in fields], "additionalProperties" => false)))
     policy = get(r.spec, "probabilities", nothing)
@@ -529,7 +555,7 @@ function install!(reg::Registry=LMCC.default_registry(); exist_ok=true)
     register_transport!(reg, "prefix_cot", prefix_cot; version=VERSION, exist_ok=exist_ok)
     register_transport!(reg, "reasoning_tags", reasoning_tags; version="0.3.0", exist_ok=exist_ok)
     register_transport!(reg, "native_reasoning", native_reasoning; version=VERSION, exist_ok=exist_ok)
-    register_reader!(reg, "json_object", json_object_reader; version="0.2.0", exist_ok=exist_ok)
+    register_reader!(reg, "json_object", json_object_reader; version="0.2.1", exist_ok=exist_ok)
     for (n, fmt) in (("function_tool", function_tool_format), ("tool_catalog", tool_catalog_format), ("tool_calls", tool_calls_format),
                      ("citations", citations_format), ("source_list", source_list_format))
         register_format!(reg, n, fmt; version=VERSION, exist_ok=exist_ok)

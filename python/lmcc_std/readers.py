@@ -14,8 +14,41 @@ from lmcc.reader import Reader
 
 from . import jsontext
 
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 PROBABILITY_POLICIES = ("off", "if_available", "required")   # lm15 ProbabilityPolicy
+
+
+_ONE = ("additionalProperties", "items", "not", "if", "then", "else", "contains")
+_LIST = ("anyOf", "oneOf", "allOf", "prefixItems", "items")
+_MAP = ("properties", "patternProperties", "$defs", "definitions")
+
+
+def closed(shape):
+    """The shape as strict schema enforcement takes it (0.2.1): every record (an
+    object schema with ``properties``) that does not say ``additionalProperties``
+    gets ``additionalProperties: false`` and lists every property in
+    ``required``, in property order. OpenAI's strict mode and Anthropic refuse a
+    nested record without them; lm15 sends a schema verbatim, so this reader
+    writes one they accept. A record that says ``additionalProperties`` is left
+    open as written, and so is an object without ``properties`` (a map, any
+    object): strict enforcement cannot express those, and the provider says so.
+    A new dict: ``shape`` is not changed."""
+    if isinstance(shape, list):
+        return [closed(s) for s in shape]
+    if not isinstance(shape, dict):
+        return shape
+    out = {}
+    for key, value in shape.items():
+        if key in _MAP and isinstance(value, dict):
+            out[key] = {k: closed(v) for k, v in value.items()}
+        elif key in _ONE or key in _LIST:
+            out[key] = closed(value)
+        else:
+            out[key] = value
+    if isinstance(out.get("properties"), dict):
+        out["required"] = list(out["properties"])
+        out.setdefault("additionalProperties", False)
+    return out
 
 
 class JsonObjectReader(Reader):
@@ -72,12 +105,14 @@ class JsonObjectReader(Reader):
         return {"config": {**self._response_format(fields), **extra}}
 
     def _response_format(self, fields: list) -> dict:
+        def prop(f):
+            shape = closed(f.shape)
+            return {**shape, "description": f.desc} if f.desc else shape
         return {"response_format": {
             "type": "json_schema",
             "schema": {
                 "type": "object",
-                "properties": {f.name: {**f.shape, "description": f.desc} if f.desc else dict(f.shape)
-                               for f in fields},
+                "properties": {f.name: prop(f) for f in fields},
                 "required": [f.name for f in fields],
                 "additionalProperties": False,
             },

@@ -180,7 +180,7 @@ json_object_reader <- function(spec) {
     requires = function() "native_structured_output",
     request_settings = function(fields) {
       props <- jobj()
-      for (f in fields) props[[f$name]] <- if (!is.null(f$desc) && nzchar(f$desc)) c(f$shape, jobj(description = f$desc)) else f$shape
+      for (f in fields) props[[f$name]] <- if (!is.null(f$desc) && nzchar(f$desc)) c(closed_shape(f$shape), jobj(description = f$desc)) else closed_shape(f$shape)
       config <- jobj(response_format = jobj(type = "json_schema", schema = jobj(type = "object", properties = props,
         required = lapply(fields, function(f) f$name), additionalProperties = FALSE)))
       if (!is.null(policy)) config[["probabilities"]] <- policy
@@ -400,7 +400,7 @@ install_std <- function(reg = default_registry(), exist_ok = TRUE) {
   register_transport(reg, "prefix_cot", prefix_cot, STD_VERSION, exist_ok)
   register_transport(reg, "reasoning_tags", reasoning_tags, "0.3.0", exist_ok)
   register_transport(reg, "native_reasoning", native_reasoning, STD_VERSION, exist_ok)
-  register_reader(reg, "json_object", json_object_reader, "0.2.0", exist_ok)
+  register_reader(reg, "json_object", json_object_reader, "0.2.1", exist_ok)
   for (x in list(list("function_tool", function_tool_format), list("tool_catalog", tool_catalog_format), list("tool_calls", tool_calls_format),
                  list("citations", citations_format), list("source_list", source_list_format))) register_format(reg, x[[1]], x[[2]], STD_VERSION, exist_ok)
   for (x in list(list("native_tools", native_tools), list("fenced_tools", fenced_tools), list("native_citations", native_citations),
@@ -409,4 +409,33 @@ install_std <- function(reg = default_registry(), exist_ok = TRUE) {
   register_format(reg, "code_calls", code_calls_format, STD_VERSION, exist_ok)
   register_transport(reg, "heredoc_tools", heredoc_tools, STD_VERSION, exist_ok)
   invisible(reg)
+}
+
+# The shape as strict schema enforcement takes it (json_object 0.2.1): every
+# record (an object schema with `properties`) that does not say
+# `additionalProperties` gets `additionalProperties: false` and lists every
+# property in `required`, in property order. A record that says
+# `additionalProperties` stays open as written, and so does an object without
+# `properties` (a map, any object).
+closed_shape <- function(shape) {
+  one <- c("additionalProperties", "items", "not", "if", "then", "else", "contains", "anyOf", "oneOf", "allOf", "prefixItems")
+  maps <- c("properties", "patternProperties", "$defs", "definitions")
+  if (is_arr(shape)) return(lapply(shape, closed_shape))
+  if (!is_obj(shape)) return(shape)
+  out <- as_obj(shape)
+  for (key in names(out)) {
+    v <- out[[key]]
+    if (key %in% maps && is_obj(v)) {
+      v <- as_obj(v)
+      for (n in names(v)) v[n] <- list(closed_shape(v[[n]]))
+      out[[key]] <- v
+    } else if (key %in% one) {
+      out[key] <- list(closed_shape(v))
+    }
+  }
+  if (is_obj(out[["properties"]])) {
+    out[["required"]] <- as.list(unname(names(out[["properties"]])))
+    if (!("additionalProperties" %in% names(out))) out[["additionalProperties"]] <- FALSE
+  }
+  out
 }

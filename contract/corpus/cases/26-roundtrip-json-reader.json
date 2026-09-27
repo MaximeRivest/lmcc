@@ -39,7 +39,7 @@
     "kernel": "0.8.4",
     "vocab": {
      "format/json": "0.1.0",
-     "reader/json_object": "0.2.0"
+     "reader/json_object": "0.2.1"
     }
    },
    "template": [

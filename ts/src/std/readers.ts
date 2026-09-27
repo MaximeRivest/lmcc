@@ -4,7 +4,7 @@
  * The reply is one JSON object keyed by field name. A mode, not a template
  * style: bind refuses without `native_structured_output`, and the reader asks
  * for `response_format` with a schema of the visible outputs (a field's
- * `desc` is its property's `description`, 0.2.0). A string member is the
+ * `desc` is its property's `description`, 0.2.0; every record closed, 0.2.1). A string member is the
  * field's raw text verbatim; any other member hands its source text to the
  * field's format. A key twice refuses `parse-ambiguous`.
  */
@@ -17,8 +17,39 @@ import { pyRepr, strip } from "../text.ts";
 import { dumps, loads, members } from "./jsontext.ts";
 import type { Json } from "../json.ts";
 
-export const VERSION = "0.2.0";
+export const VERSION = "0.2.1";
 export const PROBABILITY_POLICIES = ["off", "if_available", "required"];
+
+const ONE = new Set(["additionalProperties", "items", "not", "if", "then", "else", "contains"]);
+const LIST = new Set(["anyOf", "oneOf", "allOf", "prefixItems", "items"]);
+const MAP = new Set(["properties", "patternProperties", "$defs", "definitions"]);
+const isPlain = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+
+/**
+ * The shape as strict schema enforcement takes it (0.2.1): every record (an
+ * object schema with `properties`) that does not say `additionalProperties`
+ * gets `additionalProperties: false` and lists every property in `required`,
+ * in property order. OpenAI's strict mode and Anthropic refuse a nested
+ * record without them; lm15 sends a schema verbatim, so this reader writes
+ * one they accept. A record that says `additionalProperties` is left open as
+ * written, and so is an object without `properties` (a map, any object).
+ * Returns a new value: `shape` is not changed.
+ */
+export function closed(shape: unknown): unknown {
+  if (Array.isArray(shape)) return shape.map(closed);
+  if (!isPlain(shape)) return shape;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(shape)) {
+    if (MAP.has(key) && isPlain(value)) out[key] = Object.fromEntries(Object.entries(value).map(([k, v]) => [k, closed(v)]));
+    else if (ONE.has(key) || LIST.has(key)) out[key] = closed(value);
+    else out[key] = value;
+  }
+  if (isPlain(out["properties"])) {
+    out["required"] = Object.keys(out["properties"]);
+    if (!("additionalProperties" in out)) out["additionalProperties"] = false;
+  }
+  return out;
+}
 
 export class JsonObjectReader extends Reader {
   override spec: Record<string, unknown>;
@@ -43,7 +74,10 @@ export class JsonObjectReader extends Reader {
     const policy = this.spec["probabilities"];
     const extra = policy !== undefined && policy !== null ? { probabilities: policy } : {};
     const properties: Record<string, unknown> = {};
-    for (const f of fields) properties[f.name] = f.desc ? { ...f.shape, description: f.desc } : { ...f.shape };
+    for (const f of fields) {
+      const shape = closed(f.shape) as Record<string, unknown>;
+      properties[f.name] = f.desc ? { ...shape, description: f.desc } : shape;
+    }
     return {
       config: {
         response_format: {
