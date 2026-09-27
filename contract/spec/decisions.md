@@ -1314,3 +1314,70 @@ JSON Schema's own channel and every enforcing provider reads it. Cost,
 stated: the request bytes of cases 22 and 28 changed (their fields have
 descs); a desc now costs its tokens twice when the template also prints
 `{format}`.
+
+**D-54 · TypeScript joins as a second kernel; every JSON the kernel writes
+spells numbers by §7a (kernel 0.8.4).** Ratified with the maintainer on
+2026-09-26 ("we are ready to bring lmcc to typescript … make sure they
+serialize to the same data"). Amends D-41: the language has settled enough
+that a second implementation is the test it lacked.
+
+- **The kernel.** `ts/` holds a TypeScript kernel (`ts/src`), the standard
+  pack (`lmcc/std`) and the lm15 bridge (`lmcc/lm15`, on `@lm15/lm15`
+  1.0.0-rc.2, whose contract pin fe5cdf9 descends from ours, 3763eec, with
+  no change to the wire vocabulary lmcc reads). It is a port of the Python
+  reference read against this spec, not a clean room: the reference is where
+  the corpus's behavior lives. It imports nothing (no `node:` module either),
+  so it runs in browsers and workers. `./check` step 7 holds it: types, unit
+  tests, the corpus through the driver protocol with every stream trace
+  compared to Python's (205 of 211 pass; the 6 that need `udf:python` are
+  unclaimed), a differential check of everything both kernels serialize
+  beyond the corpus (`plan.describe()`, `dump`, fingerprints, request
+  hashes, readings, recorded steps and turns, prefixes, stream results,
+  refusal data) on every case and 2,640 fuzzed replies, and the replay
+  through Python of 19 recorded live exchanges with five providers.
+- **The finding that changed the contract.** The canonical JSON behind the
+  `signature` and `request` hashes (§3a) and a call's `{input}` (§6) were
+  whatever Python's `json.dumps` wrote: `1.0`, `1e-07`. JavaScript cannot
+  reproduce that (it has one number type), so a signature whose shape held
+  such a number had a different fingerprint in each language, and a recorded
+  turn could not cross. Both now spell numbers by §7a, like a data part
+  already did (D-53): integers in decimal, other numbers by ECMAScript
+  `Number::toString`; strings escape exactly as a data part's. §6 also said
+  `{input}` was "canonical JSON" while the reference (and case 107) wrote
+  insertion order with `, `/`: `; the text now says what the bytes are.
+  Cases 209 (a shape with `0.0`, `1.0`, `1e-07`, fingerprint pinned by hand),
+  210 (a fenced call input `1.0`, `1e-07`) and 211 (keys U+0061, U+FFFF,
+  U+1F600: code-point order, not UTF-16 order, which a JavaScript `sort()`
+  gives and no earlier case caught) were authored by hand; 209 and 210
+  failed on the old Python, and 211 was written when a deliberately broken
+  TypeScript sort passed every other case. Every expected hash was computed
+  with `sha256sum` over hand-typed bytes. The harness computes fingerprints from the spec with its
+  own writer, independent of both kernels.
+- **Standard pack.** `format/citations` read a text marker with Python's
+  Unicode `strip()`/`isdigit()` (`[\u00a05]` and `[٣]` were citations);
+  the spec says a decimal integer, and model text is read by §7a: ASCII
+  whitespace, ASCII digits. Python now does that; no case changed.
+
+Host differences the TypeScript kernel takes, all inside what the contract
+already leaves to hosts (`ts/README.md` states them): it places no UDF
+language (a JavaScript format is a closure, not source with a checkable
+boundary; `dump` of a code-built format refuses `format-not-self-contained`
+rather than drop it); an integral `3.0` given to an integer field writes
+`3` (one number type; the reference refuses it); integers beyond ±(2^53−1)
+are read as `bigint` while `t.integer()`'s static type says `number`; the
+frontend names no type unless told (types are erased at run time), so a
+builder-made signature and a Python `@lmcc.fn` of the same function have
+different fingerprints (`signatureFromDict` never differs); `pattern/legacy-re2`
+binds ECMAScript `RegExp` (`s`, `u`), label `ecmascript:RegExp`; hints name
+TypeScript APIs.
+
+Costs, stated: kernel 0.8.4 changes the fingerprint of a signature whose
+shape holds a non-integer-spelled or exponent-spelled number, and the
+request hash of a request holding one (a temperature of `1.0`); turns
+recorded under 0.8.3 with such a signature refuse `turn-invalid` until
+re-recorded. No corpus byte before case 209 changed; ten cases moved only
+the kernel version they record. Two implementations now carry every future
+change; a rule only one can follow will fail `./check` instead of shipping.
+The TypeScript package is build-ready (`npm run build`, `dist/` with
+declarations, verified by installing the packed tarball into a clean
+project) but not published.

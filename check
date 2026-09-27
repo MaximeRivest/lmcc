@@ -5,8 +5,10 @@
 # 4) README quickstart runs verbatim (GUIDE and the howtos run in step 1)
 # 5) the DSPy frontend catalog against a real DSPy (venv built on first run)
 # 6) the lm15 bridge against a real lm15 at the pinned commit
-# Python is the one implementation. Another language joins by passing the
-# same corpus through the harness: runner.py --driver CMD (kernel §9).
+# 7) the TypeScript kernel: types, unit tests, the corpus through the driver
+#    protocol (stream traces compared with Python's), the differential check
+#    of everything both kernels serialize, and the recorded live traffic
+#    replayed through Python (kernel §9, D-54)
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -16,7 +18,7 @@ run_py() {  # run python with repo layout on the path
   (cd python && PYTHONPATH=. python "$@")
 }
 
-step "1/6 unit + corpus tests (python)"
+step "1/7 unit + corpus tests (python)"
 if pytest --version >/dev/null 2>&1; then
   (cd python && PYTHONPATH=. pytest -q tests/)
 elif python -c 'import pytest' 2>/dev/null; then
@@ -25,10 +27,10 @@ else
   (cd python && PYTHONPATH=. nix run nixpkgs#python3Packages.pytest -- -q tests/)
 fi
 
-step "2/6 conformance harness, python reference (corpus is the authority)"
+step "2/7 conformance harness, python reference (corpus is the authority)"
 run_py ../contract/harness/runner.py
 
-step "3/6 schema validation (entries, signatures, cases)"
+step "3/7 schema validation (entries, signatures, cases)"
 VALIDATE='
 import json, glob, jsonschema
 entry = json.load(open("contract/schema/entry.schema.json"))
@@ -68,7 +70,7 @@ else
     -c python3 -c "$VALIDATE"
 fi
 
-step "4/6 README quickstart, verbatim"
+step "4/7 README quickstart, verbatim"
 run_py - <<'EOF'
 import re, pathlib
 text = pathlib.Path('../README.md').read_text()
@@ -77,10 +79,32 @@ exec(compile(code, 'README-quickstart', 'exec'))
 print('README quickstart runs verbatim')
 EOF
 
-step "5/6 dspy frontend: feature catalog against a real DSPy"
+step "5/7 dspy frontend: feature catalog against a real DSPy"
 python/lmcc_dspy/check
 
-step "6/6 lm15 bridge: typed requests, responses and streams against a real lm15 (pinned release)"
+step "6/7 lm15 bridge: typed requests, responses and streams against a real lm15 (pinned release)"
 python/lmcc_lm15/check
+
+step "7/7 typescript kernel: types, tests, corpus via the driver protocol, differential, live replay"
+if ! command -v node >/dev/null 2>&1; then
+  echo "node is not on PATH; the TypeScript kernel needs Node 22.6 or newer" >&2; exit 1
+fi
+(cd ts && { [ -d node_modules ] || npm ci --no-audit --no-fund; } && npx tsc --noEmit -p . && npm test --silent)
+CONFORM=$(run_py ../contract/harness/runner.py --driver 'node ../ts/conform/driver.ts') || { echo "$CONFORM"; exit 1; }
+echo "$CONFORM"
+# The claim names what it passes (kernel §9): every case but those needing
+# udf:python, and a stream trace for every claimed parse case, equal to Python's.
+EXPECT=$(python -c '
+import glob, json
+cases = [json.load(open(f)) for f in glob.glob("contract/corpus/cases/*.json")]
+udf = [c for c in cases if any(r.startswith("udf:") for r in c.get("requires", []))]
+traced = [c for c in cases if c not in udf and "response" in c
+          and (c["kind"] == "parse" or c["expect"].get("at") == "parse")]
+print(len(cases) - len(udf), len(udf), len(traced))')
+read -r CLAIMED UDF TRACED <<<"$EXPECT"
+echo "$CONFORM" | grep -Fq "] $CLAIMED passed, 0 failed, $UDF unclaimed (udf:python), $TRACED stream traces match" \
+  || { echo "the TypeScript kernel's claim is not $CLAIMED passed / $UDF unclaimed / $TRACED traces" >&2; exit 1; }
+run_py ../ts/tools/differential.py
+run_py ../ts/integration/replay_in_python.py
 
 printf '\nALL GREEN\n'

@@ -7,7 +7,8 @@ for "done"). A plan without acceptance criteria is a wish.
 Protocol per plan: spec → corpus (hand-authored bytes) → code →
 `./check` green → decision-log entry if a rule changed.
 
-Python is the one implementation while the language is designed (D-41).
+Python is the reference implementation; since kernel 0.8.4 the TypeScript
+kernel in `ts/` passes the same corpus and `./check` holds both (D-54).
 Plans that mention the Go kernel describe work done at kernel ≤ 0.6; that
 code is at the git tag `kernel-0.6`.
 

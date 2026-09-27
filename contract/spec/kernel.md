@@ -1,12 +1,23 @@
 # The LMCC kernel — normative specification
 
-**Version 0.8.3** (kernel). Status: the v3 design (`plans/08`). One
-implementation, `python/lmcc`, passes the corpus; it is the reference while
-the language is being designed. Other languages are rebuilt from this
-document and the corpus, and join through the driver protocol (§9); the
-Go kernel that passed kernel 0.6 is kept at the git tag `kernel-0.6`
+**Version 0.8.4** (kernel). Status: the v3 design (`plans/08`). Two
+implementations pass the corpus: `python/lmcc`, the reference, and
+`ts/src`, the TypeScript kernel, which joins through the driver protocol
+(§9) with its stream traces compared to the reference's (D-54). The Go
+kernel that passed kernel 0.6 is kept at the git tag `kernel-0.6`
 (D-41). Where this document and the corpus disagree, fix the corpus first,
-then the implementation.
+then the implementations.
+
+**What 0.8.4 changes (D-54).** Every JSON text the kernel writes spells
+numbers by §7a, whatever the host's own JSON writer does: the canonical
+JSON behind a turn's `signature` and `request` hashes (§3a) and a call's
+`{input}` (§6). A reference kernel used its host's float spelling there
+(`1.0`, `1e-07`), which no other language reproduces, so a signature
+whose shape held such a number had a different fingerprint in each
+language. Canonical JSON orders keys by code point, which a JavaScript
+`sort()` does not (case 211). Integers, strings and every number §7a
+already spelled the same way are unchanged; so is every corpus byte
+before case 209 (cases 209–211).
 
 **What 0.8.3 adds (D-50–D-53).** The wire moves to lm15 1.0.1: a reply's
 data part (a judgment answer, lm15 MAP-14) is read as its value's JSON,
@@ -323,8 +334,12 @@ are its last model step's.
   reply answered without storing them, so a stored conversation grows
   with its replies, not with the square of its length.
 - **Canonical JSON**: object keys sorted by code point, separators `,`
-  and `:` with no whitespace, non-ASCII written as UTF-8, integers
-  without a fraction.
+  and `:` with no whitespace, non-ASCII written as UTF-8; strings escape
+  `"`, `\` and U+0000–U+001F as a data part's do (§3: `\b` `\f` `\n`
+  `\r` `\t`, the others `\u00xx` in lowercase hex); numbers by §7a —
+  integers in decimal, every other number by the ECMAScript spelling, so
+  `1.0` is `1` and `1e-07` is `1e-7` (D-54). These are the bytes every
+  implementation hashes, whatever its host's JSON writer spells.
 
 **A turn in progress.**
 
@@ -873,7 +888,9 @@ omitted field.
 **Spelling.** A transport may spell past protocol parts as text for a model
 that has no native part: `spelling.call` renders each call of a written
 model step, `spelling.result` each tool step (whose role becomes `user`,
-§3a); slots `{id}`, `{name}`, `{input}` (canonical JSON), `{output}`
+§3a); slots `{id}`, `{name}`, `{input}` (the input object as JSON: members
+in their order, separators `, ` and `: `, strings and numbers as in
+canonical JSON, §3a), `{output}`
 (the result's text parts joined by `\n`), `{{`/`}}` escape a brace. A
 transport without them writes native `tool_call` and `tool_result` parts.
 `spelling.value` and `spelling.position` govern how the transport's own `@purpose`

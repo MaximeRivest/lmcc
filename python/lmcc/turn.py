@@ -15,7 +15,6 @@ from __future__ import annotations
 import dataclasses
 import enum
 import hashlib
-import json
 import typing
 from dataclasses import dataclass, field as dc_field, replace
 
@@ -29,9 +28,9 @@ __all__ = ["Turn", "ModelStep", "ToolStep", "canonical_json", "sha256",
 # ------------------------------------------------------------------ identity
 
 def canonical_json(value: object) -> str:
-    """Kernel §3a: keys sorted by code point, no whitespace, UTF-8."""
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
-                      allow_nan=False)
+    """Kernel §3a: keys sorted by code point, no whitespace, UTF-8, numbers
+    by §7a (``1.0`` is ``1``; D-54)."""
+    return core.json_text(value, sort_keys=True)
 
 
 def sha256(value: object) -> str:

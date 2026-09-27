@@ -974,9 +974,10 @@ def _depends_on_inputs(nodes, input_names: set[str]) -> bool:
 
 
 def _canonical_json(value) -> str:
-    """Kernel §6 turns: insertion order, ``, `` and ``: `` separators,
-    non-ASCII verbatim — the spelling every implementation produces."""
-    return json.dumps(value, ensure_ascii=False, separators=(", ", ": "))
+    """Kernel §6 ``{input}``: insertion order, ``, `` and ``: `` separators,
+    non-ASCII verbatim, numbers by §7a — the spelling every implementation
+    produces (D-54)."""
+    return core.json_text(value, spaced=True, code="format-write-error")
 
 
 def _get_path(target: dict, path: str):

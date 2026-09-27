@@ -1,5 +1,18 @@
 # The corpus
 
+**Kernel 0.8.4 (D-54).** Cases 209–211 were authored by hand from the
+spec. 209 pins a fingerprint over a shape holding `0.0`, `1.0` and
+`1e-07`, 210 a fenced call input holding `1.0` and `1e-07`; both failed on
+the 0.8.3 Python kernel before its fix. 211 pins a fingerprint over keys
+whose code-point and UTF-16 orders differ; Python always sorted by code
+point, so it passed at once, and it was written after a JavaScript `sort()`
+in the TypeScript kernel passed every other case. Every expected hash was computed
+with `sha256sum` over hand-typed canonical bytes, not by either kernel.
+Breaking the rule on purpose in each kernel (Python's float spelling, a
+JavaScript `sort()`) fails them. Ten cases changed only the kernel version
+they record (nine roundtrips; case 13's provided version). The TypeScript
+kernel passes every case it claims through the driver protocol.
+
 **Kernel 0.8.3 (D-50–D-53).** Cases 194–208 were authored by hand from
 the spec text before the code; all passed once implemented, and every new
 rule was then broken on purpose. One break (uppercase hex in a data

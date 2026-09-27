@@ -27,6 +27,7 @@ needed to implement it: `between` and `line_prefixed` are plain scans.
 | signature validity, shape table, nullable and enum forms | §1 | 43, 48–52 |
 | template constructs: slots, loops, escapes, syntax refusal | §2 | 01, 05, 47, 79 |
 | turns: record, slots (messages and text), guards, writers, projections, replay, ids, media parts | §3, §3a, §7b | 02–04, 53, 54, 103, 107, 116, 122, 128–148 |
+| canonical JSON: §7a numbers, code-point key order (fingerprints, request hashes, `{input}`) | §3a, §6, §7a | 128, 203, 209–211 |
 | derived reader: anchors, closes, tails, bare slots, ambiguity, collisions | §4 | 20, 21, 27, 30–33, 38, 39, 69, 70, 80 |
 | scalar text rules: strip, integer and number grammars, spelling, overflow | §7a | 35–37, 44, 51, 52, 89, 90 |
 | format resolution order and bind-time format refusals | §5 | 14, 48–50, 55, 56, 67, 68 |

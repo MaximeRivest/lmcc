@@ -1,0 +1,101 @@
+{
+ "name": "render-turn-fingerprint-key-order",
+ "kind": "render",
+ "entry": {
+  "name": "sections_v1",
+  "versions": {
+   "kernel": "0.8.4",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n\nReply with EXACTLY these sections:\n{% for f in outputs %}<{f.name}>\n{f.value}\n{% endfor %}</done>"
+   },
+   {
+    "directive": "turns"
+   },
+   {
+    "role": "user",
+    "text": "{% for f in inputs %}== {f.name} ==\n{f.value}\n{% endfor %}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Name the mood.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "mood",
+    "direction": "output",
+    "shape": {
+     "type": "string",
+     "x-labels": {
+      "😀": "happy",
+      "a": "plain",
+      "￿": "last BMP"
+     }
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "q": "rain"
+ },
+ "turns": {
+  "turns": [
+   {
+    "signature": "sha256:5c251ba41d87b41904550cfaf5d901cc0dbd5f0733536c604bbffdfaa827b788",
+    "inputs": {
+     "q": "sun"
+    },
+    "outputs": {
+     "mood": "happy"
+    }
+   }
+  ]
+ },
+ "expect": {
+  "request": {
+   "system": "Name the mood.\n\nReply with EXACTLY these sections:\n<mood>\n...\n</done>",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "== q ==\nsun\n"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "<mood>\nhappy\n</done>"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "== q ==\nrain\n"
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

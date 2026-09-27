@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import dataclasses
 
+from lmcc import core
 from lmcc.errors import refuse
 from lmcc.formats import Format
 from lmcc.transport import Transport
@@ -174,8 +175,8 @@ class CitationsFormat(Format):
             if p.get("type") == "citation":
                 out.append({k: v for k, v in p.items() if k not in ("type", "continuation")})
             elif isinstance(p.get("text"), str):
-                t = p["text"].strip()
-                if t.isdigit() and t not in seen:
+                t = core.strip(p["text"])        # §7a: ASCII whitespace, ASCII digits (D-54)
+                if t and all("0" <= c <= "9" for c in t) and t not in seen:
                     seen.add(t)
                     out.append({"source": int(t)})
         return lift(field.annotation, out)

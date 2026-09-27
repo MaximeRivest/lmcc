@@ -37,13 +37,55 @@ from pathlib import Path
 CASES_DIR = Path(__file__).resolve().parent.parent / "corpus" / "cases"
 
 
+def _canonical(value) -> str:
+    """Kernel §3a canonical JSON, written here from the spec: keys sorted by
+    code point, no whitespace, strings escaped as a data part's (§3),
+    integers in decimal, other numbers by ECMAScript ``Number::toString``
+    (§7a; D-54). ``repr`` gives the shortest round-trip digits; the layout
+    around them is ECMAScript's."""
+    if value is None or isinstance(value, bool):
+        return {None: "null", True: "true", False: "false"}[value]
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        if value == 0:
+            return "0"
+        sign = "-" if value < 0 else ""
+        mantissa, _, exp = repr(abs(value)).partition("e")
+        whole, _, frac = mantissa.partition(".")
+        digits = (whole + frac).lstrip("0")
+        n = len(whole.lstrip("0")) + int(exp or 0) if whole.strip("0") else \
+            int(exp or 0) - (len(frac) - len(frac.lstrip("0")))
+        digits = digits.rstrip("0")
+        k = len(digits)
+        if k <= n <= 21:
+            body = digits + "0" * (n - k)
+        elif 0 < n <= 21:
+            body = digits[:n] + "." + digits[n:]
+        elif -6 < n <= 0:
+            body = "0." + "0" * -n + digits
+        else:
+            body = (digits[0] + ("." + digits[1:] if k > 1 else "")
+                    + "e" + ("+" if n - 1 >= 0 else "-") + str(abs(n - 1)))
+        return sign + body
+    if isinstance(value, str):
+        out = ['"']
+        for c in value:
+            short = {'"': '\\"', "\\": "\\\\", "\b": "\\b", "\f": "\\f", "\n": "\\n",
+                     "\r": "\\r", "\t": "\\t"}.get(c)
+            out.append(short if short else f"\\u{ord(c):04x}" if ord(c) < 0x20 else c)
+        return "".join(out) + '"'
+    if isinstance(value, list):
+        return "[" + ",".join(_canonical(v) for v in value) + "]"
+    return "{" + ",".join(_canonical(k) + ":" + _canonical(v) for k, v in sorted(value.items())) + "}"
+
+
 def signature_fingerprint(signature: dict) -> str:
     """Kernel §3a, written here from the spec, independently of any kernel:
     the harness fills it into case turns that omit ``signature``."""
     fields = [{"direction": f["direction"], "name": f["name"], "purpose": f.get("purpose", "plain"),
                "shape": f["shape"], "type": f.get("type", "")} for f in signature["fields"]]
-    blob = json.dumps(fields, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-    return "sha256:" + hashlib.sha256(blob.encode("utf-8")).hexdigest()
+    return "sha256:" + hashlib.sha256(_canonical(fields).encode("utf-8")).hexdigest()
 
 
 def case_turns(case: dict) -> tuple[dict, dict]:

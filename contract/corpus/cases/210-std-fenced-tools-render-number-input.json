@@ -1,0 +1,170 @@
+{
+ "name": "std-fenced-tools-render-number-input",
+ "kind": "render",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "tools_v1",
+  "versions": {
+   "kernel": "0.8.4",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "directive": "turns"
+   },
+   {
+    "role": "user",
+    "text": "{question}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  },
+  "transports": {
+   "tools": {
+    "use": "fenced_tools"
+   }
+  },
+  "formats": {
+   "list[Tool]": {
+    "use": "function_tool"
+   },
+   "list[ToolCall]": {
+    "use": "tool_calls"
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Answer, using tools when needed.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "tools",
+    "direction": "input",
+    "type": "list[Tool]",
+    "shape": {
+     "type": "array",
+     "items": {
+      "type": "object"
+     }
+    },
+    "purpose": "tools"
+   },
+   {
+    "name": "calls",
+    "direction": "output",
+    "type": "list[ToolCall]",
+    "shape": {
+     "type": "array",
+     "items": {
+      "type": "object"
+     }
+    },
+    "purpose": "tools.calls"
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "capabilities": {
+  "instruct": true
+ },
+ "inputs": {
+  "question": "Scale the picture.",
+  "tools": [
+   {
+    "name": "scale",
+    "description": "Scale an image.",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "ratio": {
+       "type": "number"
+      }
+     }
+    }
+   }
+  ]
+ },
+ "steps": [
+  {
+   "kind": "model",
+   "outputs": {
+    "calls": [
+     {
+      "id": "call_a1",
+      "name": "scale",
+      "input": {
+       "ratio": 1.0,
+       "step": 1e-07,
+       "count": 3
+      }
+     }
+    ]
+   },
+   "calls_field": "calls"
+  },
+  {
+   "kind": "tool",
+   "id": "call_a1",
+   "name": "scale",
+   "output": [
+    {
+     "type": "text",
+     "text": "done"
+    }
+   ]
+  }
+ ],
+ "expect": {
+  "request": {
+   "system": "Answer, using tools when needed.\n<answer>\n...\n</answer>\n\n\nYou may call a tool by replying with exactly one fenced block:\n```tool\n{\"name\": \"<tool>\", \"input\": {...}}\n```\nand nothing else; you will be given the result and asked again.\n\n- scale({\"type\": \"object\", \"properties\": {\"ratio\": {\"type\": \"number\"}}}): Scale an image.",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "Scale the picture."
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "```tool\n{\"name\": \"scale\", \"input\": {\"ratio\": 1, \"step\": 1e-7, \"count\": 3}}\n```"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "Result of scale (call_a1):\ndone"
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

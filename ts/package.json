@@ -1,0 +1,60 @@
+{
+  "name": "lmcc",
+  "version": "0.8.4",
+  "description": "The language model calling convention: where each argument goes, how the result comes back, how each type crosses. TypeScript kernel of the lmcc contract.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MaximeRivest/lmcc.git",
+    "directory": "ts"
+  },
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "lmcc-source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./std": {
+      "lmcc-source": "./src/std/index.ts",
+      "types": "./dist/std/index.d.ts",
+      "default": "./dist/std/index.js"
+    },
+    "./lm15": {
+      "lmcc-source": "./src/lm15.ts",
+      "types": "./dist/lm15.d.ts",
+      "default": "./dist/lm15.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "check": "tsc --noEmit",
+    "test": "node --conditions=lmcc-source --test tests/*.test.ts",
+    "conform": "cd ../python && python ../contract/harness/runner.py --driver 'node ../ts/conform/driver.ts'",
+    "prepublishOnly": "npm run build && npm run check && npm test"
+  },
+  "peerDependencies": {
+    "@lm15/lm15": "^1.0.0-rc.2"
+  },
+  "peerDependenciesMeta": {
+    "@lm15/lm15": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@lm15/lm15": "1.0.0-rc.2",
+    "@types/node": "^22",
+    "typescript": "^5.9"
+  }
+}

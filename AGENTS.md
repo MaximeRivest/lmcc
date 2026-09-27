@@ -26,8 +26,8 @@ normative form.
                           lm15 message/response (contract/LM15_CONTRACT_PIN);
                           a shipped format is the one place it carries code,
                           declared (language, deps, sha256, author)
-  L1  kernel mechanics    python/lmcc/ (the one implementation, while the
-                          language is designed; others are rebuilt from L0)
+  L1  kernel mechanics    python/lmcc/ (the reference) and ts/src/ (the
+                          TypeScript kernel, held to the same corpus, D-54)
                           — core (signature, shapes, text rules, parts, captures),
                           template (4 constructs), reader (derived), formats
                           (defaults, resolution, UDF admission), transport,
@@ -83,7 +83,8 @@ a decision, derive from these before inventing anything:
 | formatted turns use the same argument writer for past calls and the representative bind probe; raw-code whitespace is preserved and marker collisions refuse | corpus 116–127; `tests/test_heredoc_turns.py`; notebook `docs/howto/12-conversational-heredoc-tools.md` |
 | tools and citations are live purposes: the same program runs native (lm15 `tool_call`/`citation` parts, `Request.tools`) and as text (`fenced_tools`, `inline_citations`); a call turn is a reply (`complete_reply`); a text spelling of a past call must read back through its own find rule (`turns` probe, `spelling-drift`) | corpus 100–112; `tests/test_tools_citations.py`; `python/integration/lm15_tools_citations.py` (live, by hand) |
 | the wire is lm15: parts `type`, messages `parts`, `system` a request field, request settings a partial lm15 request validated at `config.<field>`/`tools`; `render().request(model)` feeds lm15's `request_from_dict` unchanged | every render case's `expect.request`; cases 96–98; `tests/lm15/test_bridge.py` through a real lm15 at the pinned commit (`./check` step 6) |
-| the contract is portable and one implementation holds it: the Python kernel passes every claimable case byte-exactly in process *and* through the language-neutral driver protocol, stream traces included; every documented code is raised and every raised code documented. Other languages are rebuilt from the contract later; the Go kernel that passed 0.6 is at the tag `kernel-0.6` (D-41) | `./check` steps 1–2, `tests/test_driver_protocol.py`, `tests/test_coherence.py` |
+| the contract is portable and two implementations hold it: the Python kernel passes every claimable case byte-exactly in process *and* through the language-neutral driver protocol, stream traces included; every documented code is raised and every raised code documented. The TypeScript kernel (`ts/`) passes every case it claims through the driver protocol with every stream trace equal to Python's (all but the 6 `udf:python` cases), and serializes the same data beyond the corpus (describe, dump, fingerprints, request hashes, readings, turns, refusals) on every case, 2,640 fuzzed replies and recorded live traffic; the Go kernel that passed 0.6 is at the tag `kernel-0.6` (D-41, D-54) | `./check` steps 1–2 and 7, `tests/test_driver_protocol.py`, `tests/test_coherence.py`, `ts/tools/differential.py`, `ts/integration/replay_in_python.py` |
+| JSON the kernel writes (canonical JSON for hashes, a call's `{input}`, a data part's text) spells numbers by §7a and orders canonical keys by code point, never by a host's own writer | corpus 107, 128, 203, 209–211 |
 | the derived reader repairs misspelled markers by one rule (ASCII case, spaces, `*`/`_`/`#`, never across a line), opted-in find rule delimiters and value slips too (`strict` turns all off), the exact spelling wins, overlapping repairs refuse, every repair and tolerance is reported in a fixed order, and a reply cut at its length limit never reads as finished (kernel §4a) | corpus 149–169; `tests/test_repairs.py` (including a streaming fuzz of misspelled replies against batch) |
 | text primitives are portable: ASCII strip, explicit integer/number grammars, ECMAScript number spelling (kernel §7a) | corpus 35–37, 44, 45; `tests/test_text_rules.py` |
 | the core needs no regex: a `pattern` find rule requires a declared `pattern/*` extension; a core-only host refuses before model I/O; every native binding has an indexed spec | corpus 40, 42, 91–95; `tests/test_extensions.py`; `tests/test_coherence.py` |
@@ -156,8 +157,11 @@ Checklists:
   branch in `schema/fix.schema.json` → a corpus case pinning it → the kernel
   writes it. Renaming an action or a parameter is breaking.
 - **kernel change**: touches `spec/kernel.md` first; expect corpus
-  changes to be reviewed as contract changes; implement in `python/` —
-  the corpus decides; code never rewrites a case to match itself.
+  changes to be reviewed as contract changes; implement in `python/`
+  *and* `ts/src/` — the corpus decides; code never rewrites a case to
+  match itself. `ts/tools/differential.py` shows where the two kernels
+  serialize differently beyond the corpus; a difference is a bug in one
+  of them or a contract gap (author a case).
 - **anything that touches streaming**: preserve the §8 refinement law;
   add every-split tests (the harness replays every split); never write a prefix a
   later delta can revise; make every forced buffer visible in
@@ -188,12 +192,27 @@ so every `docs/howto/*.md` runs as an mrmd notebook. `lmcc` is on PyPI since
 0.8.0 (2026-09-23; released by `.github/workflows/release.yml`, see
 RELEASING.md); for development, install it editable from `python/`. The package version equals the kernel version.
 
+## TypeScript (`ts/`)
+
+The second kernel (D-54): `ts/src` (kernel, zero imports, browser-safe),
+`ts/src/std` (`lmcc/std`), `ts/src/lm15.ts` (`lmcc/lm15`, on `@lm15/lm15`),
+`ts/conform/driver.ts` (the driver protocol), `ts/tools/differential.py`
+(everything both kernels serialize, on every case and fuzzed replies),
+`ts/integration/live.ts` (real models, by hand, costs money; it rewrites
+`live-record.json`, which `./check` replays through Python for free).
+Each module mirrors its Python namesake; port a change in both. Commands:
+`cd ts && npm ci && npm run check && npm test && npm run conform`;
+`npm run build` makes the publishable `dist/`. The host differences it
+takes are listed in `ts/README.md`; do not add one without a decision entry.
+
 ## Verify — one command
 
 ```
 ./check     # python tests + harness (in process and via the driver
             # protocol) + schemas + README-verbatim + the DSPy catalog
-            # against a real DSPy + the lm15 bridge; green = holds
+            # against a real DSPy + the lm15 bridge + the TypeScript
+            # kernel (types, tests, corpus via the driver, differential
+            # against Python, recorded live traffic); green = holds
 ```
 
 Run it before you start (baseline), after every meaningful change, and

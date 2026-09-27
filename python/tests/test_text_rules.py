@@ -245,3 +245,20 @@ def test_null_spelling_and_reading():
     with pytest.raises(lmcc.Refusal):
         core.spell_value({"type": "integer"}, None, where="t")
     assert core.read_value({"type": ["string", "null"]}, "NULL", where="t") == "NULL"
+
+
+def test_kernel_json_spells_numbers_by_ecmascript_and_sorts_by_code_point():
+    """D-54: canonical JSON (hashes) and a call's {input} never use the host's
+    float spelling, so every implementation writes the same bytes."""
+    from lmcc.core import json_text
+    from lmcc.turn import canonical_json
+    assert canonical_json({"b": 1.0, "a": [1e-07, 1e21, 0.5, -0.0, 3]}) == '{"a":[1e-7,1e+21,0.5,0,3],"b":1}'
+    assert canonical_json({"\U0001F600": 2, "\uffff": 1, "a": 0}) == '{"a":0,"\uffff":1,"\U0001F600":2}'
+    assert json_text({"ratio": 1.0, "é": "x\n"}, spaced=True) == '{"ratio": 1, "é": "x\\n"}'
+    import math
+    try:
+        json_text(math.inf)
+    except lmcc.Refusal as err:
+        assert err.code == "value-invalid"
+    else:
+        raise AssertionError("a non-finite number has no JSON spelling")

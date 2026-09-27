@@ -1,0 +1,3426 @@
+[
+ {
+  "name": "sections/gpt-4.1-mini",
+  "entry": {
+   "name": "sections",
+   "versions": {
+    "kernel": "0.8.4",
+    "vocab": {}
+   },
+   "template": [
+    {
+     "role": "system",
+     "text": "{instruction}\n\nReply with exactly this pattern and nothing else:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+    },
+    {
+     "directive": "turns"
+    },
+    {
+     "role": "user",
+     "text": "{question}"
+    }
+   ],
+   "reader": {
+    "kind": "derived"
+   }
+  },
+  "signature": {
+   "instructions": "Answer the question. The score is how sure you are, from 1 to 10.",
+   "fields": [
+    {
+     "name": "question",
+     "direction": "input",
+     "shape": {
+      "type": "string"
+     }
+    },
+    {
+     "name": "answer",
+     "direction": "output",
+     "shape": {
+      "type": "string"
+     }
+    },
+    {
+     "name": "score",
+     "direction": "output",
+     "shape": {
+      "type": "integer"
+     }
+    }
+   ]
+  },
+  "capabilities": {
+   "instruct": true,
+   "stop_sequences": true
+  },
+  "vocab": [
+   "std"
+  ],
+  "exchanges": [
+   {
+    "current": {
+     "signature": "sha256:d917ac5cc446b70442b1140b77299d0806388cd48562b9b41832ec23a40dcb23",
+     "inputs": {
+      "question": "What is the capital of Australia?"
+     },
+     "steps": []
+    },
+    "request": {
+     "model": "gpt-4.1-mini",
+     "system": "Answer the question. The score is how sure you are, from 1 to 10.\n\nReply with exactly this pattern and nothing else:\n<answer>\n...\n</answer>\n<score>\n(integer)\n</score>\n",
+     "messages": [
+      {
+       "role": "user",
+       "parts": [
+        {
+         "type": "text",
+         "text": "What is the capital of Australia?"
+        }
+       ]
+      }
+     ],
+     "config": {
+      "stop": [
+       "</score>"
+      ]
+     }
+    },
+    "response": {
+     "id": "resp_0a406d20a79d8503006ab85df61ab087d2b886243a171d2baf",
+     "model": "gpt-4.1-mini-2025-04-14",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "text",
+        "text": "<answer>\nCanberra is the capital of Australia.\n</answer>\n<score>\n10\n"
+       }
+      ]
+     },
+     "finish_reason": "stop",
+     "adaptations": [
+      {
+       "field": "config.stop",
+       "action": "client_side",
+       "reason": "the Responses wire has no stop field; the reply is streamed and the connection closed at the first stop sequence (whether the provider then stops generating, and billing, is its own behaviour); the usage report rides only the final frame, so it is not reported when the cut happens (never estimated)",
+       "asked": [
+        "</score>"
+       ],
+       "applied": [
+        "</score>"
+       ]
+      }
+     ]
+    },
+    "turn": {
+     "signature": "sha256:d917ac5cc446b70442b1140b77299d0806388cd48562b9b41832ec23a40dcb23",
+     "inputs": {
+      "question": "What is the capital of Australia?"
+     },
+     "steps": [
+      {
+       "kind": "model",
+       "outputs": {
+        "answer": "Canberra is the capital of Australia.",
+        "score": 10
+       },
+       "message": {
+        "role": "assistant",
+        "parts": [
+         {
+          "type": "text",
+          "text": "<answer>\nCanberra is the capital of Australia.\n</answer>\n<score>\n10\n"
+         }
+        ]
+       },
+       "request": "sha256:4e5baaa3bf4964e77a87b203179973c087cb199e9e7ffa33ea723f56b233a6de"
+      }
+     ]
+    }
+   }
+  ]
+ },
+ {
+  "name": "sections/claude-haiku-4-5",
+  "entry": {
+   "name": "sections",
+   "versions": {
+    "kernel": "0.8.4",
+    "vocab": {}
+   },
+   "template": [
+    {
+     "role": "system",
+     "text": "{instruction}\n\nReply with exactly this pattern and nothing else:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+    },
+    {
+     "directive": "turns"
+    },
+    {
+     "role": "user",
+     "text": "{question}"
+    }
+   ],
+   "reader": {
+    "kind": "derived"
+   }
+  },
+  "signature": {
+   "instructions": "Answer the question. The score is how sure you are, from 1 to 10.",
+   "fields": [
+    {
+     "name": "question",
+     "direction": "input",
+     "shape": {
+      "type": "string"
+     }
+    },
+    {
+     "name": "answer",
+     "direction": "output",
+     "shape": {
+      "type": "string"
+     }
+    },
+    {
+     "name": "score",
+     "direction": "output",
+     "shape": {
+      "type": "integer"
+     }
+    }
+   ]
+  },
+  "capabilities": {
+   "instruct": true,
+   "stop_sequences": true
+  },
+  "vocab": [
+   "std"
+  ],
+  "exchanges": [
+   {
+    "current": {
+     "signature": "sha256:d917ac5cc446b70442b1140b77299d0806388cd48562b9b41832ec23a40dcb23",
+     "inputs": {
+      "question": "What is the capital of Australia?"
+     },
+     "steps": []
+    },
+    "request": {
+     "model": "claude-haiku-4-5",
+     "system": "Answer the question. The score is how sure you are, from 1 to 10.\n\nReply with exactly this pattern and nothing else:\n<answer>\n...\n</answer>\n<score>\n(integer)\n</score>\n",
+     "messages": [
+      {
+       "role": "user",
+       "parts": [
+        {
+         "type": "text",
+         "text": "What is the capital of Australia?"
+        }
+       ]
+      }
+     ],
+     "config": {
+      "stop": [
+       "</score>"
+      ]
+     }
+    },
+    "response": {
+     "id": "msg_011CfSy88EWT6L6qVBknF6Bc",
+     "model": "claude-haiku-4-5-20251001",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "text",
+        "text": "<answer>\nCanberra\n</answer>\n<score>\n10\n"
+       }
+      ]
+     },
+     "finish_reason": "stop",
+     "usage": {
+      "input_tokens": 66,
+      "output_tokens": 22,
+      "total_tokens": 88,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0
+     }
+    },
+    "turn": {
+     "signature": "sha256:d917ac5cc446b70442b1140b77299d0806388cd48562b9b41832ec23a40dcb23",
+     "inputs": {
+      "question": "What is the capital of Australia?"
+     },
+     "steps": [
+      {
+       "kind": "model",
+       "outputs": {
+        "answer": "Canberra",
+        "score": 10
+       },
+       "message": {
+        "role": "assistant",
+        "parts": [
+         {
+          "type": "text",
+          "text": "<answer>\nCanberra\n</answer>\n<score>\n10\n"
+         }
+        ]
+       },
+       "request": "sha256:4e5baaa3bf4964e77a87b203179973c087cb199e9e7ffa33ea723f56b233a6de"
+      }
+     ]
+    }
+   }
+  ]
+ },
+ {
+  "name": "sections/gemini:gemini-2.5-flash",
+  "entry": {
+   "name": "sections",
+   "versions": {
+    "kernel": "0.8.4",
+    "vocab": {}
+   },
+   "template": [
+    {
+     "role": "system",
+     "text": "{instruction}\n\nReply with exactly this pattern and nothing else:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+    },
+    {
+     "directive": "turns"
+    },
+    {
+     "role": "user",
+     "text": "{question}"
+    }
+   ],
+   "reader": {
+    "kind": "derived"
+   }
+  },
+  "signature": {
+   "instructions": "Answer the question. The score is how sure you are, from 1 to 10.",
+   "fields": [
+    {
+     "name": "question",
+     "direction": "input",
+     "shape": {
+      "type": "string"
+     }
+    },
+    {
+     "name": "answer",
+     "direction": "output",
+     "shape": {
+      "type": "string"
+     }
+    },
+    {
+     "name": "score",
+     "direction": "output",
+     "shape": {
+      "type": "integer"
+     }
+    }
+   ]
+  },
+  "capabilities": {
+   "instruct": true
+  },
+  "vocab": [
+   "std"
+  ],
+  "exchanges": [
+   {
+    "current": {
+     "signature": "sha256:d917ac5cc446b70442b1140b77299d0806388cd48562b9b41832ec23a40dcb23",
+     "inputs": {
+      "question": "What is the capital of Australia?"
+     },
+     "steps": []
+    },
+    "request": {
+     "model": "gemini:gemini-2.5-flash",
+     "system": "Answer the question. The score is how sure you are, from 1 to 10.\n\nReply with exactly this pattern and nothing else:\n<answer>\n...\n</answer>\n<score>\n(integer)\n</score>\n",
+     "messages": [
+      {
+       "role": "user",
+       "parts": [
+        {
+         "type": "text",
+         "text": "What is the capital of Australia?"
+        }
+       ]
+      }
+     ]
+    },
+    "response": {
+     "id": "-F24asb9IMvTjMcPx-LF4AY",
+     "model": "gemini-2.5-flash",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "text",
+        "text": "<answer>\nThe capital of Australia is Canberra.\n</answer>\n<score>\n10\n</score>"
+       }
+      ]
+     },
+     "finish_reason": "stop",
+     "usage": {
+      "input_tokens": 61,
+      "output_tokens": 26,
+      "total_tokens": 126,
+      "reasoning_tokens": 39
+     }
+    },
+    "turn": {
+     "signature": "sha256:d917ac5cc446b70442b1140b77299d0806388cd48562b9b41832ec23a40dcb23",
+     "inputs": {
+      "question": "What is the capital of Australia?"
+     },
+     "steps": [
+      {
+       "kind": "model",
+       "outputs": {
+        "answer": "The capital of Australia is Canberra.",
+        "score": 10
+       },
+       "message": {
+        "role": "assistant",
+        "parts": [
+         {
+          "type": "text",
+          "text": "<answer>\nThe capital of Australia is Canberra.\n</answer>\n<score>\n10\n</score>"
+         }
+        ]
+       },
+       "request": "sha256:eb649dfb4810560cffb54a4e5493e2628b33b33960df58b924c2a46d7b678402"
+      }
+     ]
+    }
+   }
+  ]
+ },
+ {
+  "name": "sections/groq:openai/gpt-oss-20b",
+  "entry": {
+   "name": "sections",
+   "versions": {
+    "kernel": "0.8.4",
+    "vocab": {}
+   },
+   "template": [
+    {
+     "role": "system",
+     "text": "{instruction}\n\nReply with exactly this pattern and nothing else:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+    },
+    {
+     "directive": "turns"
+    },
+    {
+     "role": "user",
+     "text": "{question}"
+    }
+   ],
+   "reader": {
+    "kind": "derived"
+   }
+  },
+  "signature": {
+   "instructions": "Answer the question. The score is how sure you are, from 1 to 10.",
+   "fields": [
+    {
+     "name": "question",
+     "direction": "input",
+     "shape": {
+      "type": "string"
+     }
+    },
+    {
+     "name": "answer",
+     "direction": "output",
+     "shape": {
+      "type": "string"
+     }
+    },
+    {
+     "name": "score",
+     "direction": "output",
+     "shape": {
+      "type": "integer"
+     }
+    }
+   ]
+  },
+  "capabilities": {
+   "instruct": true
+  },
+  "vocab": [
+   "std"
+  ],
+  "exchanges": [
+   {
+    "current": {
+     "signature": "sha256:d917ac5cc446b70442b1140b77299d0806388cd48562b9b41832ec23a40dcb23",
+     "inputs": {
+      "question": "What is the capital of Australia?"
+     },
+     "steps": []
+    },
+    "request": {
+     "model": "groq:openai/gpt-oss-20b",
+     "system": "Answer the question. The score is how sure you are, from 1 to 10.\n\nReply with exactly this pattern and nothing else:\n<answer>\n...\n</answer>\n<score>\n(integer)\n</score>\n",
+     "messages": [
+      {
+       "role": "user",
+       "parts": [
+        {
+         "type": "text",
+         "text": "What is the capital of Australia?"
+        }
+       ]
+      }
+     ]
+    },
+    "response": {
+     "id": "chatcmpl-f7fad223-c3d3-4981-b877-a59a031f24fa",
+     "model": "openai/gpt-oss-20b",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "thinking",
+        "text": "The user: \"What is the capital of Australia?\" They want an answer. The developer instruction says: reply with exactly this pattern and nothing else:\n<answer>\n...\n</answer>\n<score>\n(integer)\n</score>\n\nSo we need to produce the answer inside <answer> tags, and then a <score> tag with an integer. The answer: Canberra. Score: since it's certain, score 10. We must not add any other text. Must adhere exactly to pattern. Use newline after tags? The pattern shows <answer> newline content newline </answer> newline <score> integer </score>. We can do that. Ensure no extra spaces or lines before or after. Provide answer."
+       },
+       {
+        "type": "text",
+        "text": "<answer>\nCanberra\n</answer>\n<score>\n10\n</score>"
+       }
+      ]
+     },
+     "finish_reason": "stop",
+     "usage": {
+      "input_tokens": 124,
+      "output_tokens": 168,
+      "total_tokens": 292,
+      "reasoning_tokens": 142
+     }
+    },
+    "turn": {
+     "signature": "sha256:d917ac5cc446b70442b1140b77299d0806388cd48562b9b41832ec23a40dcb23",
+     "inputs": {
+      "question": "What is the capital of Australia?"
+     },
+     "steps": [
+      {
+       "kind": "model",
+       "outputs": {
+        "answer": "Canberra",
+        "score": 10
+       },
+       "message": {
+        "role": "assistant",
+        "parts": [
+         {
+          "type": "thinking",
+          "text": "The user: \"What is the capital of Australia?\" They want an answer. The developer instruction says: reply with exactly this pattern and nothing else:\n<answer>\n...\n</answer>\n<score>\n(integer)\n</score>\n\nSo we need to produce the answer inside <answer> tags, and then a <score> tag with an integer. The answer: Canberra. Score: since it's certain, score 10. We must not add any other text. Must adhere exactly to pattern. Use newline after tags? The pattern shows <answer> newline content newline </answer> newline <score> integer </score>. We can do that. Ensure no extra spaces or lines before or after. Provide answer."
+         },
+         {
+          "type": "text",
+          "text": "<answer>\nCanberra\n</answer>\n<score>\n10\n</score>"
+         }
+        ]
+       },
+       "request": "sha256:eb649dfb4810560cffb54a4e5493e2628b33b33960df58b924c2a46d7b678402"
+      }
+     ]
+    }
+   }
+  ]
+ },
+ {
+  "name": "sections/deepseek:deepseek-chat",
+  "entry": {
+   "name": "sections",
+   "versions": {
+    "kernel": "0.8.4",
+    "vocab": {}
+   },
+   "template": [
+    {
+     "role": "system",
+     "text": "{instruction}\n\nReply with exactly this pattern and nothing else:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+    },
+    {
+     "directive": "turns"
+    },
+    {
+     "role": "user",
+     "text": "{question}"
+    }
+   ],
+   "reader": {
+    "kind": "derived"
+   }
+  },
+  "signature": {
+   "instructions": "Answer the question. The score is how sure you are, from 1 to 10.",
+   "fields": [
+    {
+     "name": "question",
+     "direction": "input",
+     "shape": {
+      "type": "string"
+     }
+    },
+    {
+     "name": "answer",
+     "direction": "output",
+     "shape": {
+      "type": "string"
+     }
+    },
+    {
+     "name": "score",
+     "direction": "output",
+     "shape": {
+      "type": "integer"
+     }
+    }
+   ]
+  },
+  "capabilities": {
+   "instruct": true
+  },
+  "vocab": [
+   "std"
+  ],
+  "exchanges": [
+   {
+    "current": {
+     "signature": "sha256:d917ac5cc446b70442b1140b77299d0806388cd48562b9b41832ec23a40dcb23",
+     "inputs": {
+      "question": "What is the capital of Australia?"
+     },
+     "steps": []
+    },
+    "request": {
+     "model": "deepseek:deepseek-chat",
+     "system": "Answer the question. The score is how sure you are, from 1 to 10.\n\nReply with exactly this pattern and nothing else:\n<answer>\n...\n</answer>\n<score>\n(integer)\n</score>\n",
+     "messages": [
+      {
+       "role": "user",
+       "parts": [
+        {
+         "type": "text",
+         "text": "What is the capital of Australia?"
+        }
+       ]
+      }
+     ]
+    },
+    "response": {
+     "id": "7af6e179-8090-413a-a8c7-64a5a441d2f1",
+     "model": "deepseek-flash",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "text",
+        "text": "<answer>\nCanberra\n</answer>\n<score>\n10\n</score>"
+       }
+      ]
+     },
+     "finish_reason": "stop",
+     "usage": {
+      "input_tokens": 56,
+      "output_tokens": 17,
+      "total_tokens": 73,
+      "cache_read_tokens": 0
+     }
+    },
+    "turn": {
+     "signature": "sha256:d917ac5cc446b70442b1140b77299d0806388cd48562b9b41832ec23a40dcb23",
+     "inputs": {
+      "question": "What is the capital of Australia?"
+     },
+     "steps": [
+      {
+       "kind": "model",
+       "outputs": {
+        "answer": "Canberra",
+        "score": 10
+       },
+       "message": {
+        "role": "assistant",
+        "parts": [
+         {
+          "type": "text",
+          "text": "<answer>\nCanberra\n</answer>\n<score>\n10\n</score>"
+         }
+        ]
+       },
+       "request": "sha256:eb649dfb4810560cffb54a4e5493e2628b33b33960df58b924c2a46d7b678402"
+      }
+     ]
+    }
+   }
+  ]
+ },
+ {
+  "name": "tools/native_tools/gpt-4.1-mini",
+  "entry": {
+   "name": "tools_native_tools",
+   "versions": {
+    "kernel": "0.8.4",
+    "vocab": {
+     "transport/native_tools": "0.1.0",
+     "format/function_tool": "0.1.0",
+     "format/tool_calls": "0.1.0"
+    }
+   },
+   "template": [
+    {
+     "role": "system",
+     "text": "{instruction}\n\nReply with exactly this pattern and nothing else, also after a tool result:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+    },
+    {
+     "directive": "turns"
+    },
+    {
+     "role": "user",
+     "text": "{question}"
+    }
+   ],
+   "reader": {
+    "kind": "derived"
+   },
+   "transports": {
+    "tools": {
+     "use": "native_tools"
+    }
+   },
+   "formats": {
+    "list[Tool]": {
+     "use": "function_tool"
+    },
+    "list[ToolCall]": {
+     "use": "tool_calls"
+    }
+   }
+  },
+  "signature": {
+   "instructions": "Answer the question. Use a tool when you need facts you do not have.",
+   "fields": [
+    {
+     "name": "question",
+     "direction": "input",
+     "shape": {
+      "type": "string"
+     }
+    },
+    {
+     "name": "tools",
+     "direction": "input",
+     "shape": {
+      "type": "array",
+      "items": {
+       "type": "object"
+      }
+     },
+     "type": "list[Tool]",
+     "purpose": "tools"
+    },
+    {
+     "name": "calls",
+     "direction": "output",
+     "shape": {
+      "type": "array",
+      "items": {
+       "type": "object"
+      }
+     },
+     "type": "list[ToolCall]",
+     "purpose": "tools.calls"
+    },
+    {
+     "name": "answer",
+     "direction": "output",
+     "shape": {
+      "type": "string"
+     }
+    }
+   ]
+  },
+  "capabilities": {
+   "instruct": true,
+   "native_function_calling": true
+  },
+  "vocab": [
+   "std"
+  ],
+  "exchanges": [
+   {
+    "current": {
+     "signature": "sha256:b000640adef6d8e574227fd103ca917faedb5197151241837c03ac7abb816f4c",
+     "inputs": {
+      "question": "What is the weather in Montreal right now?",
+      "tools": [
+       {
+        "name": "get_weather",
+        "description": "Current weather for a city.",
+        "parameters": {
+         "type": "object",
+         "properties": {
+          "city": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "city"
+         ]
+        }
+       }
+      ]
+     },
+     "steps": []
+    },
+    "request": {
+     "model": "gpt-4.1-mini",
+     "system": "Answer the question. Use a tool when you need facts you do not have.\n\nReply with exactly this pattern and nothing else, also after a tool result:\n<answer>\n...\n</answer>\n",
+     "messages": [
+      {
+       "role": "user",
+       "parts": [
+        {
+         "type": "text",
+         "text": "What is the weather in Montreal right now?"
+        }
+       ]
+      }
+     ],
+     "tools": [
+      {
+       "type": "function",
+       "name": "get_weather",
+       "description": "Current weather for a city.",
+       "parameters": {
+        "type": "object",
+        "properties": {
+         "city": {
+          "type": "string"
+         }
+        },
+        "required": [
+         "city"
+        ]
+       }
+      }
+     ]
+    },
+    "response": {
+     "id": "resp_09b5f23644008e1e006ab85dfbe20c87d295f467f9b94e7f59",
+     "model": "gpt-4.1-mini-2025-04-14",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "tool_call",
+        "id": "call_iVG23mwvHJ4UVHwz4z2UTpQr",
+        "name": "get_weather",
+        "input": {
+         "city": "Montreal"
+        }
+       }
+      ]
+     },
+     "finish_reason": "tool_call",
+     "usage": {
+      "input_tokens": 88,
+      "output_tokens": 16,
+      "total_tokens": 104,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 0
+     }
+    },
+    "turn": {
+     "signature": "sha256:b000640adef6d8e574227fd103ca917faedb5197151241837c03ac7abb816f4c",
+     "inputs": {
+      "question": "What is the weather in Montreal right now?",
+      "tools": [
+       {
+        "name": "get_weather",
+        "description": "Current weather for a city.",
+        "parameters": {
+         "type": "object",
+         "properties": {
+          "city": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "city"
+         ]
+        }
+       }
+      ]
+     },
+     "steps": [
+      {
+       "kind": "model",
+       "outputs": {
+        "calls": [
+         {
+          "id": "call_iVG23mwvHJ4UVHwz4z2UTpQr",
+          "name": "get_weather",
+          "input": {
+           "city": "Montreal"
+          }
+         }
+        ]
+       },
+       "message": {
+        "role": "assistant",
+        "parts": [
+         {
+          "type": "tool_call",
+          "id": "call_iVG23mwvHJ4UVHwz4z2UTpQr",
+          "name": "get_weather",
+          "input": {
+           "city": "Montreal"
+          }
+         }
+        ]
+       },
+       "request": "sha256:fbaaa47610b7d06e42946fe4e920bc3f1c083e8a2c29733b143f876ea89ab21c",
+       "calls_field": "calls"
+      }
+     ]
+    }
+   },
+   {
+    "current": {
+     "signature": "sha256:b000640adef6d8e574227fd103ca917faedb5197151241837c03ac7abb816f4c",
+     "inputs": {
+      "question": "What is the weather in Montreal right now?",
+      "tools": [
+       {
+        "name": "get_weather",
+        "description": "Current weather for a city.",
+        "parameters": {
+         "type": "object",
+         "properties": {
+          "city": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "city"
+         ]
+        }
+       }
+      ]
+     },
+     "steps": [
+      {
+       "kind": "model",
+       "outputs": {
+        "calls": [
+         {
+          "id": "call_iVG23mwvHJ4UVHwz4z2UTpQr",
+          "name": "get_weather",
+          "input": {
+           "city": "Montreal"
+          }
+         }
+        ]
+       },
+       "message": {
+        "role": "assistant",
+        "parts": [
+         {
+          "type": "tool_call",
+          "id": "call_iVG23mwvHJ4UVHwz4z2UTpQr",
+          "name": "get_weather",
+          "input": {
+           "city": "Montreal"
+          }
+         }
+        ]
+       },
+       "request": "sha256:fbaaa47610b7d06e42946fe4e920bc3f1c083e8a2c29733b143f876ea89ab21c",
+       "calls_field": "calls"
+      },
+      {
+       "kind": "tool",
+       "id": "call_iVG23mwvHJ4UVHwz4z2UTpQr",
+       "name": "get_weather",
+       "output": [
+        {
+         "type": "text",
+         "text": "Sunny and 22°C in Montreal."
+        }
+       ]
+      }
+     ]
+    },
+    "request": {
+     "model": "gpt-4.1-mini",
+     "system": "Answer the question. Use a tool when you need facts you do not have.\n\nReply with exactly this pattern and nothing else, also after a tool result:\n<answer>\n...\n</answer>\n",
+     "messages": [
+      {
+       "role": "user",
+       "parts": [
+        {
+         "type": "text",
+         "text": "What is the weather in Montreal right now?"
+        }
+       ]
+      },
+      {
+       "role": "assistant",
+       "parts": [
+        {
+         "type": "tool_call",
+         "id": "call_iVG23mwvHJ4UVHwz4z2UTpQr",
+         "name": "get_weather",
+         "input": {
+          "city": "Montreal"
+         }
+        }
+       ]
+      },
+      {
+       "role": "tool",
+       "parts": [
+        {
+         "type": "tool_result",
+         "id": "call_iVG23mwvHJ4UVHwz4z2UTpQr",
+         "name": "get_weather",
+         "content": [
+          {
+           "type": "text",
+           "text": "Sunny and 22°C in Montreal."
+          }
+         ]
+        }
+       ]
+      }
+     ],
+     "tools": [
+      {
+       "type": "function",
+       "name": "get_weather",
+       "description": "Current weather for a city.",
+       "parameters": {
+        "type": "object",
+        "properties": {
+         "city": {
+          "type": "string"
+         }
+        },
+        "required": [
+         "city"
+        ]
+       }
+      }
+     ]
+    },
+    "response": {
+     "id": "resp_045bfba467c86a01006ab85dfc878087d2bd24462c60c90312",
+     "model": "gpt-4.1-mini-2025-04-14",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "text",
+        "text": "<answer>\nThe weather in Montreal right now is sunny with a temperature of 22°C.\n</answer>"
+       }
+      ]
+     },
+     "finish_reason": "stop",
+     "usage": {
+      "input_tokens": 117,
+      "output_tokens": 24,
+      "total_tokens": 141,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 0
+     }
+    },
+    "turn": {
+     "signature": "sha256:b000640adef6d8e574227fd103ca917faedb5197151241837c03ac7abb816f4c",
+     "inputs": {
+      "question": "What is the weather in Montreal right now?",
+      "tools": [
+       {
+        "name": "get_weather",
+        "description": "Current weather for a city.",
+        "parameters": {
+         "type": "object",
+         "properties": {
+          "city": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "city"
+         ]
+        }
+       }
+      ]
+     },
+     "steps": [
+      {
+       "kind": "model",
+       "outputs": {
+        "calls": [
+         {
+          "id": "call_iVG23mwvHJ4UVHwz4z2UTpQr",
+          "name": "get_weather",
+          "input": {
+           "city": "Montreal"
+          }
+         }
+        ]
+       },
+       "message": {
+        "role": "assistant",
+        "parts": [
+         {
+          "type": "tool_call",
+          "id": "call_iVG23mwvHJ4UVHwz4z2UTpQr",
+          "name": "get_weather",
+          "input": {
+           "city": "Montreal"
+          }
+         }
+        ]
+       },
+       "request": "sha256:fbaaa47610b7d06e42946fe4e920bc3f1c083e8a2c29733b143f876ea89ab21c",
+       "calls_field": "calls"
+      },
+      {
+       "kind": "tool",
+       "id": "call_iVG23mwvHJ4UVHwz4z2UTpQr",
+       "name": "get_weather",
+       "output": [
+        {
+         "type": "text",
+         "text": "Sunny and 22°C in Montreal."
+        }
+       ]
+      },
+      {
+       "kind": "model",
+       "outputs": {
+        "answer": "The weather in Montreal right now is sunny with a temperature of 22°C.",
+        "calls": []
+       },
+       "message": {
+        "role": "assistant",
+        "parts": [
+         {
+          "type": "text",
+          "text": "<answer>\nThe weather in Montreal right now is sunny with a temperature of 22°C.\n</answer>"
+         }
+        ]
+       },
+       "request": "sha256:3689653c5adf22ecf1129553143edd208170bb9bad6a31879911fcae74f40ea6",
+       "calls_field": "calls"
+      }
+     ]
+    }
+   }
+  ]
+ },
+ {
+  "name": "tools/native_tools/claude-haiku-4-5",
+  "entry": {
+   "name": "tools_native_tools",
+   "versions": {
+    "kernel": "0.8.4",
+    "vocab": {
+     "transport/native_tools": "0.1.0",
+     "format/function_tool": "0.1.0",
+     "format/tool_calls": "0.1.0"
+    }
+   },
+   "template": [
+    {
+     "role": "system",
+     "text": "{instruction}\n\nReply with exactly this pattern and nothing else, also after a tool result:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+    },
+    {
+     "directive": "turns"
+    },
+    {
+     "role": "user",
+     "text": "{question}"
+    }
+   ],
+   "reader": {
+    "kind": "derived"
+   },
+   "transports": {
+    "tools": {
+     "use": "native_tools"
+    }
+   },
+   "formats": {
+    "list[Tool]": {
+     "use": "function_tool"
+    },
+    "list[ToolCall]": {
+     "use": "tool_calls"
+    }
+   }
+  },
+  "signature": {
+   "instructions": "Answer the question. Use a tool when you need facts you do not have.",
+   "fields": [
+    {
+     "name": "question",
+     "direction": "input",
+     "shape": {
+      "type": "string"
+     }
+    },
+    {
+     "name": "tools",
+     "direction": "input",
+     "shape": {
+      "type": "array",
+      "items": {
+       "type": "object"
+      }
+     },
+     "type": "list[Tool]",
+     "purpose": "tools"
+    },
+    {
+     "name": "calls",
+     "direction": "output",
+     "shape": {
+      "type": "array",
+      "items": {
+       "type": "object"
+      }
+     },
+     "type": "list[ToolCall]",
+     "purpose": "tools.calls"
+    },
+    {
+     "name": "answer",
+     "direction": "output",
+     "shape": {
+      "type": "string"
+     }
+    }
+   ]
+  },
+  "capabilities": {
+   "instruct": true,
+   "native_function_calling": true
+  },
+  "vocab": [
+   "std"
+  ],
+  "exchanges": [
+   {
+    "current": {
+     "signature": "sha256:b000640adef6d8e574227fd103ca917faedb5197151241837c03ac7abb816f4c",
+     "inputs": {
+      "question": "What is the weather in Montreal right now?",
+      "tools": [
+       {
+        "name": "get_weather",
+        "description": "Current weather for a city.",
+        "parameters": {
+         "type": "object",
+         "properties": {
+          "city": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "city"
+         ]
+        }
+       }
+      ]
+     },
+     "steps": []
+    },
+    "request": {
+     "model": "claude-haiku-4-5",
+     "system": "Answer the question. Use a tool when you need facts you do not have.\n\nReply with exactly this pattern and nothing else, also after a tool result:\n<answer>\n...\n</answer>\n",
+     "messages": [
+      {
+       "role": "user",
+       "parts": [
+        {
+         "type": "text",
+         "text": "What is the weather in Montreal right now?"
+        }
+       ]
+      }
+     ],
+     "tools": [
+      {
+       "type": "function",
+       "name": "get_weather",
+       "description": "Current weather for a city.",
+       "parameters": {
+        "type": "object",
+        "properties": {
+         "city": {
+          "type": "string"
+         }
+        },
+        "required": [
+         "city"
+        ]
+       }
+      }
+     ]
+    },
+    "response": {
+     "id": "msg_011CfSy8b2ZkTntMnqwe4bdh",
+     "model": "claude-haiku-4-5-20251001",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "tool_call",
+        "id": "toolu_01EDyUfXXgYkBJwpYPhbSb7f",
+        "name": "get_weather",
+        "input": {
+         "city": "Montreal"
+        }
+       }
+      ]
+     },
+     "finish_reason": "tool_call",
+     "usage": {
+      "input_tokens": 608,
+      "output_tokens": 54,
+      "total_tokens": 662,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0
+     }
+    },
+    "turn": {
+     "signature": "sha256:b000640adef6d8e574227fd103ca917faedb5197151241837c03ac7abb816f4c",
+     "inputs": {
+      "question": "What is the weather in Montreal right now?",
+      "tools": [
+       {
+        "name": "get_weather",
+        "description": "Current weather for a city.",
+        "parameters": {
+         "type": "object",
+         "properties": {
+          "city": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "city"
+         ]
+        }
+       }
+      ]
+     },
+     "steps": [
+      {
+       "kind": "model",
+       "outputs": {
+        "calls": [
+         {
+          "id": "toolu_01EDyUfXXgYkBJwpYPhbSb7f",
+          "name": "get_weather",
+          "input": {
+           "city": "Montreal"
+          }
+         }
+        ]
+       },
+       "message": {
+        "role": "assistant",
+        "parts": [
+         {
+          "type": "tool_call",
+          "id": "toolu_01EDyUfXXgYkBJwpYPhbSb7f",
+          "name": "get_weather",
+          "input": {
+           "city": "Montreal"
+          }
+         }
+        ]
+       },
+       "request": "sha256:fbaaa47610b7d06e42946fe4e920bc3f1c083e8a2c29733b143f876ea89ab21c",
+       "calls_field": "calls"
+      }
+     ]
+    }
+   },
+   {
+    "current": {
+     "signature": "sha256:b000640adef6d8e574227fd103ca917faedb5197151241837c03ac7abb816f4c",
+     "inputs": {
+      "question": "What is the weather in Montreal right now?",
+      "tools": [
+       {
+        "name": "get_weather",
+        "description": "Current weather for a city.",
+        "parameters": {
+         "type": "object",
+         "properties": {
+          "city": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "city"
+         ]
+        }
+       }
+      ]
+     },
+     "steps": [
+      {
+       "kind": "model",
+       "outputs": {
+        "calls": [
+         {
+          "id": "toolu_01EDyUfXXgYkBJwpYPhbSb7f",
+          "name": "get_weather",
+          "input": {
+           "city": "Montreal"
+          }
+         }
+        ]
+       },
+       "message": {
+        "role": "assistant",
+        "parts": [
+         {
+          "type": "tool_call",
+          "id": "toolu_01EDyUfXXgYkBJwpYPhbSb7f",
+          "name": "get_weather",
+          "input": {
+           "city": "Montreal"
+          }
+         }
+        ]
+       },
+       "request": "sha256:fbaaa47610b7d06e42946fe4e920bc3f1c083e8a2c29733b143f876ea89ab21c",
+       "calls_field": "calls"
+      },
+      {
+       "kind": "tool",
+       "id": "toolu_01EDyUfXXgYkBJwpYPhbSb7f",
+       "name": "get_weather",
+       "output": [
+        {
+         "type": "text",
+         "text": "Sunny and 22°C in Montreal."
+        }
+       ]
+      }
+     ]
+    },
+    "request": {
+     "model": "claude-haiku-4-5",
+     "system": "Answer the question. Use a tool when you need facts you do not have.\n\nReply with exactly this pattern and nothing else, also after a tool result:\n<answer>\n...\n</answer>\n",
+     "messages": [
+      {
+       "role": "user",
+       "parts": [
+        {
+         "type": "text",
+         "text": "What is the weather in Montreal right now?"
+        }
+       ]
+      },
+      {
+       "role": "assistant",
+       "parts": [
+        {
+         "type": "tool_call",
+         "id": "toolu_01EDyUfXXgYkBJwpYPhbSb7f",
+         "name": "get_weather",
+         "input": {
+          "city": "Montreal"
+         }
+        }
+       ]
+      },
+      {
+       "role": "tool",
+       "parts": [
+        {
+         "type": "tool_result",
+         "id": "toolu_01EDyUfXXgYkBJwpYPhbSb7f",
+         "name": "get_weather",
+         "content": [
+          {
+           "type": "text",
+           "text": "Sunny and 22°C in Montreal."
+          }
+         ]
+        }
+       ]
+      }
+     ],
+     "tools": [
+      {
+       "type": "function",
+       "name": "get_weather",
+       "description": "Current weather for a city.",
+       "parameters": {
+        "type": "object",
+        "properties": {
+         "city": {
+          "type": "string"
+         }
+        },
+        "required": [
+         "city"
+        ]
+       }
+      }
+     ]
+    },
+    "response": {
+     "id": "msg_011CfSy8dthvCYZ4DP9Ezfu4",
+     "model": "claude-haiku-4-5-20251001",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "text",
+        "text": "<answer>\nThe weather in Montreal right now is sunny with a temperature of 22°C (approximately 72°F).\n</answer>"
+       }
+      ]
+     },
+     "finish_reason": "stop",
+     "usage": {
+      "input_tokens": 683,
+      "output_tokens": 34,
+      "total_tokens": 717,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0
+     }
+    },
+    "turn": {
+     "signature": "sha256:b000640adef6d8e574227fd103ca917faedb5197151241837c03ac7abb816f4c",
+     "inputs": {
+      "question": "What is the weather in Montreal right now?",
+      "tools": [
+       {
+        "name": "get_weather",
+        "description": "Current weather for a city.",
+        "parameters": {
+         "type": "object",
+         "properties": {
+          "city": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "city"
+         ]
+        }
+       }
+      ]
+     },
+     "steps": [
+      {
+       "kind": "model",
+       "outputs": {
+        "calls": [
+         {
+          "id": "toolu_01EDyUfXXgYkBJwpYPhbSb7f",
+          "name": "get_weather",
+          "input": {
+           "city": "Montreal"
+          }
+         }
+        ]
+       },
+       "message": {
+        "role": "assistant",
+        "parts": [
+         {
+          "type": "tool_call",
+          "id": "toolu_01EDyUfXXgYkBJwpYPhbSb7f",
+          "name": "get_weather",
+          "input": {
+           "city": "Montreal"
+          }
+         }
+        ]
+       },
+       "request": "sha256:fbaaa47610b7d06e42946fe4e920bc3f1c083e8a2c29733b143f876ea89ab21c",
+       "calls_field": "calls"
+      },
+      {
+       "kind": "tool",
+       "id": "toolu_01EDyUfXXgYkBJwpYPhbSb7f",
+       "name": "get_weather",
+       "output": [
+        {
+         "type": "text",
+         "text": "Sunny and 22°C in Montreal."
+        }
+       ]
+      },
+      {
+       "kind": "model",
+       "outputs": {
+        "answer": "The weather in Montreal right now is sunny with a temperature of 22°C (approximately 72°F).",
+        "calls": []
+       },
+       "message": {
+        "role": "assistant",
+        "parts": [
+         {
+          "type": "text",
+          "text": "<answer>\nThe weather in Montreal right now is sunny with a temperature of 22°C (approximately 72°F).\n</answer>"
+         }
+        ]
+       },
+       "request": "sha256:cbceb3834058644b5805179e26b92b413f3e674b3d1358038b210e1bb0de5123",
+       "calls_field": "calls"
+      }
+     ]
+    }
+   }
+  ]
+ },
+ {
+  "name": "tools/fenced_tools/deepseek:deepseek-chat",
+  "entry": {
+   "name": "tools_fenced_tools",
+   "versions": {
+    "kernel": "0.8.4",
+    "vocab": {
+     "transport/fenced_tools": "0.1.0",
+     "format/function_tool": "0.1.0",
+     "format/tool_calls": "0.1.0"
+    }
+   },
+   "template": [
+    {
+     "role": "system",
+     "text": "{instruction}\n\nReply with exactly this pattern and nothing else, also after a tool result:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+    },
+    {
+     "directive": "turns"
+    },
+    {
+     "role": "user",
+     "text": "{question}"
+    }
+   ],
+   "reader": {
+    "kind": "derived"
+   },
+   "transports": {
+    "tools": {
+     "use": "fenced_tools"
+    }
+   },
+   "formats": {
+    "list[Tool]": {
+     "use": "function_tool"
+    },
+    "list[ToolCall]": {
+     "use": "tool_calls"
+    }
+   }
+  },
+  "signature": {
+   "instructions": "Answer the question. Use a tool when you need facts you do not have.",
+   "fields": [
+    {
+     "name": "question",
+     "direction": "input",
+     "shape": {
+      "type": "string"
+     }
+    },
+    {
+     "name": "tools",
+     "direction": "input",
+     "shape": {
+      "type": "array",
+      "items": {
+       "type": "object"
+      }
+     },
+     "type": "list[Tool]",
+     "purpose": "tools"
+    },
+    {
+     "name": "calls",
+     "direction": "output",
+     "shape": {
+      "type": "array",
+      "items": {
+       "type": "object"
+      }
+     },
+     "type": "list[ToolCall]",
+     "purpose": "tools.calls"
+    },
+    {
+     "name": "answer",
+     "direction": "output",
+     "shape": {
+      "type": "string"
+     }
+    }
+   ]
+  },
+  "capabilities": {
+   "instruct": true
+  },
+  "vocab": [
+   "std"
+  ],
+  "exchanges": [
+   {
+    "current": {
+     "signature": "sha256:b000640adef6d8e574227fd103ca917faedb5197151241837c03ac7abb816f4c",
+     "inputs": {
+      "question": "What is the weather in Montreal right now?",
+      "tools": [
+       {
+        "name": "get_weather",
+        "description": "Current weather for a city.",
+        "parameters": {
+         "type": "object",
+         "properties": {
+          "city": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "city"
+         ]
+        }
+       }
+      ]
+     },
+     "steps": []
+    },
+    "request": {
+     "model": "deepseek:deepseek-chat",
+     "system": "Answer the question. Use a tool when you need facts you do not have.\n\nReply with exactly this pattern and nothing else, also after a tool result:\n<answer>\n...\n</answer>\n\n\nYou may call a tool by replying with exactly one fenced block:\n```tool\n{\"name\": \"<tool>\", \"input\": {...}}\n```\nand nothing else; you will be given the result and asked again.\n\n- get_weather({\"type\": \"object\", \"properties\": {\"city\": {\"type\": \"string\"}}, \"required\": [\"city\"]}): Current weather for a city.",
+     "messages": [
+      {
+       "role": "user",
+       "parts": [
+        {
+         "type": "text",
+         "text": "What is the weather in Montreal right now?"
+        }
+       ]
+      }
+     ]
+    },
+    "response": {
+     "id": "16a5c0f6-9532-476e-8060-130ef8acd50f",
+     "model": "deepseek-flash",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "text",
+        "text": "```tool\n{\"name\": \"get_weather\", \"input\": {\"city\": \"Montreal\"}}\n```"
+       }
+      ]
+     },
+     "finish_reason": "stop",
+     "usage": {
+      "input_tokens": 134,
+      "output_tokens": 23,
+      "total_tokens": 157,
+      "cache_read_tokens": 0
+     }
+    },
+    "turn": {
+     "signature": "sha256:b000640adef6d8e574227fd103ca917faedb5197151241837c03ac7abb816f4c",
+     "inputs": {
+      "question": "What is the weather in Montreal right now?",
+      "tools": [
+       {
+        "name": "get_weather",
+        "description": "Current weather for a city.",
+        "parameters": {
+         "type": "object",
+         "properties": {
+          "city": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "city"
+         ]
+        }
+       }
+      ]
+     },
+     "steps": [
+      {
+       "kind": "model",
+       "outputs": {
+        "calls": [
+         {
+          "id": "call_1",
+          "name": "get_weather",
+          "input": {
+           "city": "Montreal"
+          }
+         }
+        ]
+       },
+       "message": {
+        "role": "assistant",
+        "parts": [
+         {
+          "type": "text",
+          "text": "```tool\n{\"name\": \"get_weather\", \"input\": {\"city\": \"Montreal\"}}\n```"
+         }
+        ]
+       },
+       "request": "sha256:77fcb474a4a5e780b1ed81ecb9fe10fdc7be1f720cf2af6dead8f992b3d3e82d",
+       "calls_field": "calls"
+      }
+     ]
+    }
+   },
+   {
+    "current": {
+     "signature": "sha256:b000640adef6d8e574227fd103ca917faedb5197151241837c03ac7abb816f4c",
+     "inputs": {
+      "question": "What is the weather in Montreal right now?",
+      "tools": [
+       {
+        "name": "get_weather",
+        "description": "Current weather for a city.",
+        "parameters": {
+         "type": "object",
+         "properties": {
+          "city": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "city"
+         ]
+        }
+       }
+      ]
+     },
+     "steps": [
+      {
+       "kind": "model",
+       "outputs": {
+        "calls": [
+         {
+          "id": "call_1",
+          "name": "get_weather",
+          "input": {
+           "city": "Montreal"
+          }
+         }
+        ]
+       },
+       "message": {
+        "role": "assistant",
+        "parts": [
+         {
+          "type": "text",
+          "text": "```tool\n{\"name\": \"get_weather\", \"input\": {\"city\": \"Montreal\"}}\n```"
+         }
+        ]
+       },
+       "request": "sha256:77fcb474a4a5e780b1ed81ecb9fe10fdc7be1f720cf2af6dead8f992b3d3e82d",
+       "calls_field": "calls"
+      },
+      {
+       "kind": "tool",
+       "id": "call_1",
+       "name": "get_weather",
+       "output": [
+        {
+         "type": "text",
+         "text": "Sunny and 22°C in Montreal."
+        }
+       ]
+      }
+     ]
+    },
+    "request": {
+     "model": "deepseek:deepseek-chat",
+     "system": "Answer the question. Use a tool when you need facts you do not have.\n\nReply with exactly this pattern and nothing else, also after a tool result:\n<answer>\n...\n</answer>\n\n\nYou may call a tool by replying with exactly one fenced block:\n```tool\n{\"name\": \"<tool>\", \"input\": {...}}\n```\nand nothing else; you will be given the result and asked again.\n\n- get_weather({\"type\": \"object\", \"properties\": {\"city\": {\"type\": \"string\"}}, \"required\": [\"city\"]}): Current weather for a city.",
+     "messages": [
+      {
+       "role": "user",
+       "parts": [
+        {
+         "type": "text",
+         "text": "What is the weather in Montreal right now?"
+        }
+       ]
+      },
+      {
+       "role": "assistant",
+       "parts": [
+        {
+         "type": "text",
+         "text": "```tool\n{\"name\": \"get_weather\", \"input\": {\"city\": \"Montreal\"}}\n```"
+        }
+       ]
+      },
+      {
+       "role": "user",
+       "parts": [
+        {
+         "type": "text",
+         "text": "Result of get_weather (call_1):\nSunny and 22°C in Montreal."
+        }
+       ]
+      }
+     ]
+    },
+    "response": {
+     "id": "92d876a0-d5bf-41a3-9851-e53c042efe8b",
+     "model": "deepseek-flash",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "text",
+        "text": "<answer>\nThe weather in Montreal right now is sunny with a temperature of 22°C.\n</answer>"
+       }
+      ]
+     },
+     "finish_reason": "stop",
+     "usage": {
+      "input_tokens": 181,
+      "output_tokens": 23,
+      "total_tokens": 204,
+      "cache_read_tokens": 0
+     }
+    },
+    "turn": {
+     "signature": "sha256:b000640adef6d8e574227fd103ca917faedb5197151241837c03ac7abb816f4c",
+     "inputs": {
+      "question": "What is the weather in Montreal right now?",
+      "tools": [
+       {
+        "name": "get_weather",
+        "description": "Current weather for a city.",
+        "parameters": {
+         "type": "object",
+         "properties": {
+          "city": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "city"
+         ]
+        }
+       }
+      ]
+     },
+     "steps": [
+      {
+       "kind": "model",
+       "outputs": {
+        "calls": [
+         {
+          "id": "call_1",
+          "name": "get_weather",
+          "input": {
+           "city": "Montreal"
+          }
+         }
+        ]
+       },
+       "message": {
+        "role": "assistant",
+        "parts": [
+         {
+          "type": "text",
+          "text": "```tool\n{\"name\": \"get_weather\", \"input\": {\"city\": \"Montreal\"}}\n```"
+         }
+        ]
+       },
+       "request": "sha256:77fcb474a4a5e780b1ed81ecb9fe10fdc7be1f720cf2af6dead8f992b3d3e82d",
+       "calls_field": "calls"
+      },
+      {
+       "kind": "tool",
+       "id": "call_1",
+       "name": "get_weather",
+       "output": [
+        {
+         "type": "text",
+         "text": "Sunny and 22°C in Montreal."
+        }
+       ]
+      },
+      {
+       "kind": "model",
+       "outputs": {
+        "answer": "The weather in Montreal right now is sunny with a temperature of 22°C.",
+        "calls": []
+       },
+       "message": {
+        "role": "assistant",
+        "parts": [
+         {
+          "type": "text",
+          "text": "<answer>\nThe weather in Montreal right now is sunny with a temperature of 22°C.\n</answer>"
+         }
+        ]
+       },
+       "request": "sha256:4bfd0dc685ce43664b825ff24a1aa96ac304371f5420fa02e850657114271ea8",
+       "calls_field": "calls"
+      }
+     ]
+    }
+   }
+  ]
+ },
+ {
+  "name": "tools/fenced_tools/claude-haiku-4-5",
+  "entry": {
+   "name": "tools_fenced_tools",
+   "versions": {
+    "kernel": "0.8.4",
+    "vocab": {
+     "transport/fenced_tools": "0.1.0",
+     "format/function_tool": "0.1.0",
+     "format/tool_calls": "0.1.0"
+    }
+   },
+   "template": [
+    {
+     "role": "system",
+     "text": "{instruction}\n\nReply with exactly this pattern and nothing else, also after a tool result:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+    },
+    {
+     "directive": "turns"
+    },
+    {
+     "role": "user",
+     "text": "{question}"
+    }
+   ],
+   "reader": {
+    "kind": "derived"
+   },
+   "transports": {
+    "tools": {
+     "use": "fenced_tools"
+    }
+   },
+   "formats": {
+    "list[Tool]": {
+     "use": "function_tool"
+    },
+    "list[ToolCall]": {
+     "use": "tool_calls"
+    }
+   }
+  },
+  "signature": {
+   "instructions": "Answer the question. Use a tool when you need facts you do not have.",
+   "fields": [
+    {
+     "name": "question",
+     "direction": "input",
+     "shape": {
+      "type": "string"
+     }
+    },
+    {
+     "name": "tools",
+     "direction": "input",
+     "shape": {
+      "type": "array",
+      "items": {
+       "type": "object"
+      }
+     },
+     "type": "list[Tool]",
+     "purpose": "tools"
+    },
+    {
+     "name": "calls",
+     "direction": "output",
+     "shape": {
+      "type": "array",
+      "items": {
+       "type": "object"
+      }
+     },
+     "type": "list[ToolCall]",
+     "purpose": "tools.calls"
+    },
+    {
+     "name": "answer",
+     "direction": "output",
+     "shape": {
+      "type": "string"
+     }
+    }
+   ]
+  },
+  "capabilities": {
+   "instruct": true
+  },
+  "vocab": [
+   "std"
+  ],
+  "exchanges": [
+   {
+    "current": {
+     "signature": "sha256:b000640adef6d8e574227fd103ca917faedb5197151241837c03ac7abb816f4c",
+     "inputs": {
+      "question": "What is the weather in Montreal right now?",
+      "tools": [
+       {
+        "name": "get_weather",
+        "description": "Current weather for a city.",
+        "parameters": {
+         "type": "object",
+         "properties": {
+          "city": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "city"
+         ]
+        }
+       }
+      ]
+     },
+     "steps": []
+    },
+    "request": {
+     "model": "claude-haiku-4-5",
+     "system": "Answer the question. Use a tool when you need facts you do not have.\n\nReply with exactly this pattern and nothing else, also after a tool result:\n<answer>\n...\n</answer>\n\n\nYou may call a tool by replying with exactly one fenced block:\n```tool\n{\"name\": \"<tool>\", \"input\": {...}}\n```\nand nothing else; you will be given the result and asked again.\n\n- get_weather({\"type\": \"object\", \"properties\": {\"city\": {\"type\": \"string\"}}, \"required\": [\"city\"]}): Current weather for a city.",
+     "messages": [
+      {
+       "role": "user",
+       "parts": [
+        {
+         "type": "text",
+         "text": "What is the weather in Montreal right now?"
+        }
+       ]
+      }
+     ]
+    },
+    "response": {
+     "id": "msg_011CfSy8oEnjhCaGhE5njYGh",
+     "model": "claude-haiku-4-5-20251001",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "text",
+        "text": "I'll get the current weather in Montreal for you.\n```tool\n{\"name\": \"get_weather\", \"input\": {\"city\": \"Montreal\"}}\n```\n\nI'll wait for the weather information to come back."
+       }
+      ]
+     },
+     "finish_reason": "stop",
+     "usage": {
+      "input_tokens": 146,
+      "output_tokens": 50,
+      "total_tokens": 196,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0
+     }
+    },
+    "turn": {
+     "signature": "sha256:b000640adef6d8e574227fd103ca917faedb5197151241837c03ac7abb816f4c",
+     "inputs": {
+      "question": "What is the weather in Montreal right now?",
+      "tools": [
+       {
+        "name": "get_weather",
+        "description": "Current weather for a city.",
+        "parameters": {
+         "type": "object",
+         "properties": {
+          "city": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "city"
+         ]
+        }
+       }
+      ]
+     },
+     "steps": [
+      {
+       "kind": "model",
+       "outputs": {
+        "calls": [
+         {
+          "id": "call_1",
+          "name": "get_weather",
+          "input": {
+           "city": "Montreal"
+          }
+         }
+        ]
+       },
+       "message": {
+        "role": "assistant",
+        "parts": [
+         {
+          "type": "text",
+          "text": "I'll get the current weather in Montreal for you.\n```tool\n{\"name\": \"get_weather\", \"input\": {\"city\": \"Montreal\"}}\n```\n\nI'll wait for the weather information to come back."
+         }
+        ]
+       },
+       "request": "sha256:77fcb474a4a5e780b1ed81ecb9fe10fdc7be1f720cf2af6dead8f992b3d3e82d",
+       "calls_field": "calls"
+      }
+     ]
+    }
+   },
+   {
+    "current": {
+     "signature": "sha256:b000640adef6d8e574227fd103ca917faedb5197151241837c03ac7abb816f4c",
+     "inputs": {
+      "question": "What is the weather in Montreal right now?",
+      "tools": [
+       {
+        "name": "get_weather",
+        "description": "Current weather for a city.",
+        "parameters": {
+         "type": "object",
+         "properties": {
+          "city": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "city"
+         ]
+        }
+       }
+      ]
+     },
+     "steps": [
+      {
+       "kind": "model",
+       "outputs": {
+        "calls": [
+         {
+          "id": "call_1",
+          "name": "get_weather",
+          "input": {
+           "city": "Montreal"
+          }
+         }
+        ]
+       },
+       "message": {
+        "role": "assistant",
+        "parts": [
+         {
+          "type": "text",
+          "text": "I'll get the current weather in Montreal for you.\n```tool\n{\"name\": \"get_weather\", \"input\": {\"city\": \"Montreal\"}}\n```\n\nI'll wait for the weather information to come back."
+         }
+        ]
+       },
+       "request": "sha256:77fcb474a4a5e780b1ed81ecb9fe10fdc7be1f720cf2af6dead8f992b3d3e82d",
+       "calls_field": "calls"
+      },
+      {
+       "kind": "tool",
+       "id": "call_1",
+       "name": "get_weather",
+       "output": [
+        {
+         "type": "text",
+         "text": "Sunny and 22°C in Montreal."
+        }
+       ]
+      }
+     ]
+    },
+    "request": {
+     "model": "claude-haiku-4-5",
+     "system": "Answer the question. Use a tool when you need facts you do not have.\n\nReply with exactly this pattern and nothing else, also after a tool result:\n<answer>\n...\n</answer>\n\n\nYou may call a tool by replying with exactly one fenced block:\n```tool\n{\"name\": \"<tool>\", \"input\": {...}}\n```\nand nothing else; you will be given the result and asked again.\n\n- get_weather({\"type\": \"object\", \"properties\": {\"city\": {\"type\": \"string\"}}, \"required\": [\"city\"]}): Current weather for a city.",
+     "messages": [
+      {
+       "role": "user",
+       "parts": [
+        {
+         "type": "text",
+         "text": "What is the weather in Montreal right now?"
+        }
+       ]
+      },
+      {
+       "role": "assistant",
+       "parts": [
+        {
+         "type": "text",
+         "text": "I'll get the current weather in Montreal for you.\n```tool\n{\"name\": \"get_weather\", \"input\": {\"city\": \"Montreal\"}}\n```\n\nI'll wait for the weather information to come back."
+        }
+       ]
+      },
+      {
+       "role": "user",
+       "parts": [
+        {
+         "type": "text",
+         "text": "Result of get_weather (call_1):\nSunny and 22°C in Montreal."
+        }
+       ]
+      }
+     ]
+    },
+    "response": {
+     "id": "msg_011CfSy8rgeabwnyPTDLGcV3",
+     "model": "claude-haiku-4-5-20251001",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "text",
+        "text": "<answer>\nThe current weather in Montreal is sunny with a temperature of 22°C (about 72°F).\n</answer>"
+       }
+      ]
+     },
+     "finish_reason": "stop",
+     "usage": {
+      "input_tokens": 220,
+      "output_tokens": 33,
+      "total_tokens": 253,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0
+     }
+    },
+    "turn": {
+     "signature": "sha256:b000640adef6d8e574227fd103ca917faedb5197151241837c03ac7abb816f4c",
+     "inputs": {
+      "question": "What is the weather in Montreal right now?",
+      "tools": [
+       {
+        "name": "get_weather",
+        "description": "Current weather for a city.",
+        "parameters": {
+         "type": "object",
+         "properties": {
+          "city": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "city"
+         ]
+        }
+       }
+      ]
+     },
+     "steps": [
+      {
+       "kind": "model",
+       "outputs": {
+        "calls": [
+         {
+          "id": "call_1",
+          "name": "get_weather",
+          "input": {
+           "city": "Montreal"
+          }
+         }
+        ]
+       },
+       "message": {
+        "role": "assistant",
+        "parts": [
+         {
+          "type": "text",
+          "text": "I'll get the current weather in Montreal for you.\n```tool\n{\"name\": \"get_weather\", \"input\": {\"city\": \"Montreal\"}}\n```\n\nI'll wait for the weather information to come back."
+         }
+        ]
+       },
+       "request": "sha256:77fcb474a4a5e780b1ed81ecb9fe10fdc7be1f720cf2af6dead8f992b3d3e82d",
+       "calls_field": "calls"
+      },
+      {
+       "kind": "tool",
+       "id": "call_1",
+       "name": "get_weather",
+       "output": [
+        {
+         "type": "text",
+         "text": "Sunny and 22°C in Montreal."
+        }
+       ]
+      },
+      {
+       "kind": "model",
+       "outputs": {
+        "answer": "The current weather in Montreal is sunny with a temperature of 22°C (about 72°F).",
+        "calls": []
+       },
+       "message": {
+        "role": "assistant",
+        "parts": [
+         {
+          "type": "text",
+          "text": "<answer>\nThe current weather in Montreal is sunny with a temperature of 22°C (about 72°F).\n</answer>"
+         }
+        ]
+       },
+       "request": "sha256:caa78069a45dd2e44bb558fd60867a7f81f0c011d5249b33a97da2fc9bb04b5d",
+       "calls_field": "calls"
+      }
+     ]
+    }
+   }
+  ]
+ },
+ {
+  "name": "reasoning/claude-haiku-4-5",
+  "entry": {
+   "name": "thinking",
+   "versions": {
+    "kernel": "0.8.4",
+    "vocab": {}
+   },
+   "template": [
+    {
+     "role": "system",
+     "text": "{instruction}\n\nReply with exactly this pattern and nothing else:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+    },
+    {
+     "role": "user",
+     "text": "{problem}"
+    }
+   ],
+   "reader": {
+    "kind": "derived"
+   },
+   "transports": {
+    "reasoning": {
+     "choose": [
+      {
+       "when": {
+        "capability": "native_reasoning"
+       },
+       "use": {
+        "requires": [
+         "native_reasoning"
+        ],
+        "in_template": false,
+        "request_settings": {
+         "config": {
+          "reasoning": {
+           "effort": "low"
+          }
+         }
+        },
+        "find": [
+         {
+          "from": "part:thinking",
+          "to": "@purpose"
+         }
+        ]
+       }
+      },
+      {
+       "else": {
+        "requires": [
+         "instruct"
+        ],
+        "in_template": false,
+        "tell": {
+         "system": "After every sentence of output, add your thinking inside <think>...</think> tags."
+        },
+        "find": [
+         {
+          "from": "text",
+          "between": [
+           "<think>",
+           "</think>"
+          ],
+          "to": "@purpose",
+          "remove": true,
+          "repair": true
+         }
+        ],
+        "spelling": {
+         "position": "before"
+        }
+       }
+      }
+     ]
+    }
+   }
+  },
+  "signature": {
+   "instructions": "Solve the problem.",
+   "fields": [
+    {
+     "name": "problem",
+     "direction": "input",
+     "shape": {
+      "type": "string"
+     }
+    },
+    {
+     "name": "reasoning",
+     "direction": "output",
+     "shape": {
+      "type": "string"
+     },
+     "purpose": "reasoning"
+    },
+    {
+     "name": "answer",
+     "direction": "output",
+     "shape": {
+      "type": "integer"
+     }
+    }
+   ]
+  },
+  "capabilities": {
+   "instruct": true,
+   "native_reasoning": true
+  },
+  "vocab": [
+   "std"
+  ],
+  "exchanges": [
+   {
+    "current": {
+     "signature": "sha256:8ece06685f88e30c5e0b4bf08d2d43901e3b5f513e1ccad60dd8d106b12689dc",
+     "inputs": {
+      "problem": "A train leaves at 9:40 and arrives at 13:05. How many minutes is the trip?"
+     },
+     "steps": []
+    },
+    "request": {
+     "model": "claude-haiku-4-5",
+     "system": "Solve the problem.\n\nReply with exactly this pattern and nothing else:\n<answer>\n(integer)\n</answer>\n",
+     "messages": [
+      {
+       "role": "user",
+       "parts": [
+        {
+         "type": "text",
+         "text": "A train leaves at 9:40 and arrives at 13:05. How many minutes is the trip?"
+        }
+       ]
+      }
+     ],
+     "config": {
+      "reasoning": {
+       "effort": "low"
+      }
+     }
+    },
+    "response": {
+     "id": "msg_011CfSy8u7koXdwG651iomZh",
+     "model": "claude-haiku-4-5-20251001",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "thinking",
+        "text": "The train leaves at 9:40 and arrives at 13:05.\n\nFrom 9:40 to 13:05, I need to calculate the duration.\n\nFirst, let me convert to 24-hour format if needed. 13:05 is already in 24-hour format (1:05 PM).\n\nFrom 9:40 to 13:05:\n- From 9:40 to 10:00 is 20 minutes\n- From 10:00 to 13:00 is 3 hours = 180 minutes\n- From 13:00 to 13:05 is 5 minutes\n\nTotal: 20 + 180 + 5 = 205 minutes\n\nAlternatively:\n13:05 - 9:40\n= 13 hours 5 minutes - 9 hours 40 minutes\n= (13 - 9) hours + (5 - 40) minutes\n= 4 hours + (-35) minutes\n= 3 hours + 60 minutes - 35 minutes\n= 3 hours 25 minutes\n= 180 + 25 = 205 minutes",
+        "continuation": [
+         {
+          "provider": "anthropic",
+          "kind": "thinking_signature",
+          "data": {
+           "signature": "EskGCpoBCBIYAipAm+eQynbrJ0DlxUJBeudB7Z4EppCYHTfUOREh6E75Bjl/Yy3S18AtWyzfqG1WHf1PJ2u8eqqDGjFSLH5q3q7AvTIZY2xhdWRlLWhhaWt1LTQtNS0yMDI1MTAwMTgAQgh0aGlua2luZ1okNzA1MjAyYjEtNzljYS00ZWYwLTk2MDQtMDhmMjFjZGQ2MDJmqAGEvOHVBhIMNIM1KpxVi2Ih0ihvGgwksGncE4IKB+GO0d0iMNxxTT4ZVfcgy5ZDPKt2X0ceLtxWvqaGBa/nyR9jzubsY1msvPKtKliO1K0IQdI8birbBKrHe4xELDzvcwYJEJiKREq2WbCMQYRKPrAGN9raJxsFVlVlYH9YnM0T+bAfLoCOTic61cmIjqS7CZQ2F2U2nu85QU/mzXsHJZR2JZuQhwpqd7CzZzGo4ffvbdY2aMeIlZMKjyAQcDZ4Z1+54ZTqjUCtBjuYO48JPv3otpUYLQr8eHw0K/aohLxTSR5TI2NUM3dFmPKiorpN8zlW+PKRfGWVoJVkaWJA74OCgZlF+zaKC9f68blLK+RWr86wkvFm01p8d1e3xzCR38onAd7gskpy+tbolMNVrkayPdRj53Xo6gEERgsbCcco2PhtGslB4K0PW0im3DToxDR0dj0WDqhUqQuED52y7og2pbSFGrY2GdxdgQhsRROiWxxnLMxK+ewtOPc/M15LgjTo/uCVDe90+DvyPYbpCnKfAQk9nMnekHK5GjiSWeoX9GicuYmw7Bhuseqjwb0F0Z0bZQB1BFHhX3rezd7ogB5SCvrFfi2iYL6X/4lqx5SZc2KtBvZJkam+vvKNvGgffkS6IDUTeeD2tzqVRN77ttF6NfXhfVuk/gCo/amOPoDcyKtzGMWNKM83MmxXwLE82Tnl18/GGFoWniUlGLBd+v3jsPssQwVNYKY1juc/vQbUuXecVaUItjsEiD0NmoZ/ICqwJ2lJySfwzG+F1T4IhEkRynSGwCKEMq75Hye+vzXxEA76hsIt5TSmOCnPlomyvBdAQ8/4Nc11Q40blGuD6KmHFau1VDVqwDPsHCEQ0C4jpWXCwwuS3THVCkjos0meYgz3Z6pUkWSZWpoVIYsqPb87LBgB"
+          }
+         }
+        ]
+       },
+       {
+        "type": "text",
+        "text": "<answer>\n205\n</answer>"
+       }
+      ]
+     },
+     "finish_reason": "stop",
+     "usage": {
+      "input_tokens": 88,
+      "output_tokens": 289,
+      "total_tokens": 377,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 275
+     }
+    },
+    "turn": {
+     "signature": "sha256:8ece06685f88e30c5e0b4bf08d2d43901e3b5f513e1ccad60dd8d106b12689dc",
+     "inputs": {
+      "problem": "A train leaves at 9:40 and arrives at 13:05. How many minutes is the trip?"
+     },
+     "steps": [
+      {
+       "kind": "model",
+       "outputs": {
+        "answer": 205,
+        "reasoning": "The train leaves at 9:40 and arrives at 13:05.\n\nFrom 9:40 to 13:05, I need to calculate the duration.\n\nFirst, let me convert to 24-hour format if needed. 13:05 is already in 24-hour format (1:05 PM).\n\nFrom 9:40 to 13:05:\n- From 9:40 to 10:00 is 20 minutes\n- From 10:00 to 13:00 is 3 hours = 180 minutes\n- From 13:00 to 13:05 is 5 minutes\n\nTotal: 20 + 180 + 5 = 205 minutes\n\nAlternatively:\n13:05 - 9:40\n= 13 hours 5 minutes - 9 hours 40 minutes\n= (13 - 9) hours + (5 - 40) minutes\n= 4 hours + (-35) minutes\n= 3 hours + 60 minutes - 35 minutes\n= 3 hours 25 minutes\n= 180 + 25 = 205 minutes"
+       },
+       "message": {
+        "role": "assistant",
+        "parts": [
+         {
+          "type": "thinking",
+          "text": "The train leaves at 9:40 and arrives at 13:05.\n\nFrom 9:40 to 13:05, I need to calculate the duration.\n\nFirst, let me convert to 24-hour format if needed. 13:05 is already in 24-hour format (1:05 PM).\n\nFrom 9:40 to 13:05:\n- From 9:40 to 10:00 is 20 minutes\n- From 10:00 to 13:00 is 3 hours = 180 minutes\n- From 13:00 to 13:05 is 5 minutes\n\nTotal: 20 + 180 + 5 = 205 minutes\n\nAlternatively:\n13:05 - 9:40\n= 13 hours 5 minutes - 9 hours 40 minutes\n= (13 - 9) hours + (5 - 40) minutes\n= 4 hours + (-35) minutes\n= 3 hours + 60 minutes - 35 minutes\n= 3 hours 25 minutes\n= 180 + 25 = 205 minutes",
+          "continuation": [
+           {
+            "provider": "anthropic",
+            "kind": "thinking_signature",
+            "data": {
+             "signature": "EskGCpoBCBIYAipAm+eQynbrJ0DlxUJBeudB7Z4EppCYHTfUOREh6E75Bjl/Yy3S18AtWyzfqG1WHf1PJ2u8eqqDGjFSLH5q3q7AvTIZY2xhdWRlLWhhaWt1LTQtNS0yMDI1MTAwMTgAQgh0aGlua2luZ1okNzA1MjAyYjEtNzljYS00ZWYwLTk2MDQtMDhmMjFjZGQ2MDJmqAGEvOHVBhIMNIM1KpxVi2Ih0ihvGgwksGncE4IKB+GO0d0iMNxxTT4ZVfcgy5ZDPKt2X0ceLtxWvqaGBa/nyR9jzubsY1msvPKtKliO1K0IQdI8birbBKrHe4xELDzvcwYJEJiKREq2WbCMQYRKPrAGN9raJxsFVlVlYH9YnM0T+bAfLoCOTic61cmIjqS7CZQ2F2U2nu85QU/mzXsHJZR2JZuQhwpqd7CzZzGo4ffvbdY2aMeIlZMKjyAQcDZ4Z1+54ZTqjUCtBjuYO48JPv3otpUYLQr8eHw0K/aohLxTSR5TI2NUM3dFmPKiorpN8zlW+PKRfGWVoJVkaWJA74OCgZlF+zaKC9f68blLK+RWr86wkvFm01p8d1e3xzCR38onAd7gskpy+tbolMNVrkayPdRj53Xo6gEERgsbCcco2PhtGslB4K0PW0im3DToxDR0dj0WDqhUqQuED52y7og2pbSFGrY2GdxdgQhsRROiWxxnLMxK+ewtOPc/M15LgjTo/uCVDe90+DvyPYbpCnKfAQk9nMnekHK5GjiSWeoX9GicuYmw7Bhuseqjwb0F0Z0bZQB1BFHhX3rezd7ogB5SCvrFfi2iYL6X/4lqx5SZc2KtBvZJkam+vvKNvGgffkS6IDUTeeD2tzqVRN77ttF6NfXhfVuk/gCo/amOPoDcyKtzGMWNKM83MmxXwLE82Tnl18/GGFoWniUlGLBd+v3jsPssQwVNYKY1juc/vQbUuXecVaUItjsEiD0NmoZ/ICqwJ2lJySfwzG+F1T4IhEkRynSGwCKEMq75Hye+vzXxEA76hsIt5TSmOCnPlomyvBdAQ8/4Nc11Q40blGuD6KmHFau1VDVqwDPsHCEQ0C4jpWXCwwuS3THVCkjos0meYgz3Z6pUkWSZWpoVIYsqPb87LBgB"
+            }
+           }
+          ]
+         },
+         {
+          "type": "text",
+          "text": "<answer>\n205\n</answer>"
+         }
+        ]
+       },
+       "request": "sha256:1a7a87c5f9289dfe088bb1e330e426f14fe9b94cbd65e5e94e12cbd659bc0e8a"
+      }
+     ]
+    }
+   }
+  ]
+ },
+ {
+  "name": "reasoning/gemini:gemini-2.5-flash",
+  "entry": {
+   "name": "thinking",
+   "versions": {
+    "kernel": "0.8.4",
+    "vocab": {}
+   },
+   "template": [
+    {
+     "role": "system",
+     "text": "{instruction}\n\nReply with exactly this pattern and nothing else:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+    },
+    {
+     "role": "user",
+     "text": "{problem}"
+    }
+   ],
+   "reader": {
+    "kind": "derived"
+   },
+   "transports": {
+    "reasoning": {
+     "choose": [
+      {
+       "when": {
+        "capability": "native_reasoning"
+       },
+       "use": {
+        "requires": [
+         "native_reasoning"
+        ],
+        "in_template": false,
+        "request_settings": {
+         "config": {
+          "reasoning": {
+           "effort": "low"
+          }
+         }
+        },
+        "find": [
+         {
+          "from": "part:thinking",
+          "to": "@purpose"
+         }
+        ]
+       }
+      },
+      {
+       "else": {
+        "requires": [
+         "instruct"
+        ],
+        "in_template": false,
+        "tell": {
+         "system": "After every sentence of output, add your thinking inside <think>...</think> tags."
+        },
+        "find": [
+         {
+          "from": "text",
+          "between": [
+           "<think>",
+           "</think>"
+          ],
+          "to": "@purpose",
+          "remove": true,
+          "repair": true
+         }
+        ],
+        "spelling": {
+         "position": "before"
+        }
+       }
+      }
+     ]
+    }
+   }
+  },
+  "signature": {
+   "instructions": "Solve the problem.",
+   "fields": [
+    {
+     "name": "problem",
+     "direction": "input",
+     "shape": {
+      "type": "string"
+     }
+    },
+    {
+     "name": "reasoning",
+     "direction": "output",
+     "shape": {
+      "type": "string"
+     },
+     "purpose": "reasoning"
+    },
+    {
+     "name": "answer",
+     "direction": "output",
+     "shape": {
+      "type": "integer"
+     }
+    }
+   ]
+  },
+  "capabilities": {
+   "instruct": true,
+   "native_reasoning": true
+  },
+  "vocab": [
+   "std"
+  ],
+  "exchanges": [
+   {
+    "current": {
+     "signature": "sha256:8ece06685f88e30c5e0b4bf08d2d43901e3b5f513e1ccad60dd8d106b12689dc",
+     "inputs": {
+      "problem": "A train leaves at 9:40 and arrives at 13:05. How many minutes is the trip?"
+     },
+     "steps": []
+    },
+    "request": {
+     "model": "gemini:gemini-2.5-flash",
+     "system": "Solve the problem.\n\nReply with exactly this pattern and nothing else:\n<answer>\n(integer)\n</answer>\n",
+     "messages": [
+      {
+       "role": "user",
+       "parts": [
+        {
+         "type": "text",
+         "text": "A train leaves at 9:40 and arrives at 13:05. How many minutes is the trip?"
+        }
+       ]
+      }
+     ],
+     "config": {
+      "reasoning": {
+       "effort": "low"
+      }
+     }
+    },
+    "response": {
+     "id": "BF64asLBHcmVjMcPpam84AE",
+     "model": "gemini-2.5-flash",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "text",
+        "text": "<answer>\n205\n</answer>"
+       }
+      ]
+     },
+     "finish_reason": "stop",
+     "usage": {
+      "input_tokens": 54,
+      "output_tokens": 11,
+      "total_tokens": 503,
+      "reasoning_tokens": 438
+     }
+    },
+    "turn": {
+     "signature": "sha256:8ece06685f88e30c5e0b4bf08d2d43901e3b5f513e1ccad60dd8d106b12689dc",
+     "inputs": {
+      "problem": "A train leaves at 9:40 and arrives at 13:05. How many minutes is the trip?"
+     },
+     "steps": [
+      {
+       "kind": "model",
+       "outputs": {
+        "answer": 205,
+        "reasoning": ""
+       },
+       "message": {
+        "role": "assistant",
+        "parts": [
+         {
+          "type": "text",
+          "text": "<answer>\n205\n</answer>"
+         }
+        ]
+       },
+       "request": "sha256:1a7a87c5f9289dfe088bb1e330e426f14fe9b94cbd65e5e94e12cbd659bc0e8a"
+      }
+     ]
+    }
+   }
+  ]
+ },
+ {
+  "name": "reasoning/gpt-4.1-mini",
+  "entry": {
+   "name": "thinking",
+   "versions": {
+    "kernel": "0.8.4",
+    "vocab": {}
+   },
+   "template": [
+    {
+     "role": "system",
+     "text": "{instruction}\n\nReply with exactly this pattern and nothing else:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+    },
+    {
+     "role": "user",
+     "text": "{problem}"
+    }
+   ],
+   "reader": {
+    "kind": "derived"
+   },
+   "transports": {
+    "reasoning": {
+     "choose": [
+      {
+       "when": {
+        "capability": "native_reasoning"
+       },
+       "use": {
+        "requires": [
+         "native_reasoning"
+        ],
+        "in_template": false,
+        "request_settings": {
+         "config": {
+          "reasoning": {
+           "effort": "low"
+          }
+         }
+        },
+        "find": [
+         {
+          "from": "part:thinking",
+          "to": "@purpose"
+         }
+        ]
+       }
+      },
+      {
+       "else": {
+        "requires": [
+         "instruct"
+        ],
+        "in_template": false,
+        "tell": {
+         "system": "After every sentence of output, add your thinking inside <think>...</think> tags."
+        },
+        "find": [
+         {
+          "from": "text",
+          "between": [
+           "<think>",
+           "</think>"
+          ],
+          "to": "@purpose",
+          "remove": true,
+          "repair": true
+         }
+        ],
+        "spelling": {
+         "position": "before"
+        }
+       }
+      }
+     ]
+    }
+   }
+  },
+  "signature": {
+   "instructions": "Solve the problem.",
+   "fields": [
+    {
+     "name": "problem",
+     "direction": "input",
+     "shape": {
+      "type": "string"
+     }
+    },
+    {
+     "name": "reasoning",
+     "direction": "output",
+     "shape": {
+      "type": "string"
+     },
+     "purpose": "reasoning"
+    },
+    {
+     "name": "answer",
+     "direction": "output",
+     "shape": {
+      "type": "integer"
+     }
+    }
+   ]
+  },
+  "capabilities": {
+   "instruct": true
+  },
+  "vocab": [
+   "std"
+  ],
+  "exchanges": [
+   {
+    "current": {
+     "signature": "sha256:8ece06685f88e30c5e0b4bf08d2d43901e3b5f513e1ccad60dd8d106b12689dc",
+     "inputs": {
+      "problem": "A train leaves at 9:40 and arrives at 13:05. How many minutes is the trip?"
+     },
+     "steps": []
+    },
+    "request": {
+     "model": "gpt-4.1-mini",
+     "system": "Solve the problem.\n\nReply with exactly this pattern and nothing else:\n<answer>\n(integer)\n</answer>\n\n\nAfter every sentence of output, add your thinking inside <think>...</think> tags.",
+     "messages": [
+      {
+       "role": "user",
+       "parts": [
+        {
+         "type": "text",
+         "text": "A train leaves at 9:40 and arrives at 13:05. How many minutes is the trip?"
+        }
+       ]
+      }
+     ]
+    },
+    "response": {
+     "id": "resp_01e4f6aa382bed58006ab85e06be4087d291d6f241cf703688",
+     "model": "gpt-4.1-mini-2025-04-14",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "text",
+        "text": "The train leaves at 9:40 and arrives at 13:05. <think>Start time: 9 hours and 40 minutes</think>  \nFirst, calculate the hours difference: from 9:40 to 13:40 would be 4 hours. <think>From 9:40 to 13:40 is 4 hours, or 240 minutes</think>  \nSince the arrival time is 13:05, which is 35 minutes earlier than 13:40, subtract 35 minutes from 240 minutes. <think>240 minutes - 35 minutes = 205 minutes</think>  \nSo, the trip duration is 205 minutes. <think>Final answer: 205</think>\n\n<answer>\n205\n</answer>"
+       }
+      ]
+     },
+     "finish_reason": "stop",
+     "usage": {
+      "input_tokens": 73,
+      "output_tokens": 160,
+      "total_tokens": 233,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 0
+     }
+    },
+    "turn": {
+     "signature": "sha256:8ece06685f88e30c5e0b4bf08d2d43901e3b5f513e1ccad60dd8d106b12689dc",
+     "inputs": {
+      "problem": "A train leaves at 9:40 and arrives at 13:05. How many minutes is the trip?"
+     },
+     "steps": [
+      {
+       "kind": "model",
+       "outputs": {
+        "answer": 205,
+        "reasoning": "Start time: 9 hours and 40 minutes\nFrom 9:40 to 13:40 is 4 hours, or 240 minutes\n240 minutes - 35 minutes = 205 minutes\nFinal answer: 205"
+       },
+       "message": {
+        "role": "assistant",
+        "parts": [
+         {
+          "type": "text",
+          "text": "The train leaves at 9:40 and arrives at 13:05. <think>Start time: 9 hours and 40 minutes</think>  \nFirst, calculate the hours difference: from 9:40 to 13:40 would be 4 hours. <think>From 9:40 to 13:40 is 4 hours, or 240 minutes</think>  \nSince the arrival time is 13:05, which is 35 minutes earlier than 13:40, subtract 35 minutes from 240 minutes. <think>240 minutes - 35 minutes = 205 minutes</think>  \nSo, the trip duration is 205 minutes. <think>Final answer: 205</think>\n\n<answer>\n205\n</answer>"
+         }
+        ]
+       },
+       "request": "sha256:e3f85bbd9dcc068ca8d009d3560371c0b9ffdd4cff4c7574958248a7989cd575"
+      }
+     ]
+    }
+   }
+  ]
+ },
+ {
+  "name": "json_object/gpt-4.1-mini",
+  "entry": {
+   "name": "json",
+   "versions": {
+    "kernel": "0.8.4",
+    "vocab": {
+     "reader/json_object": "0.2.0"
+    }
+   },
+   "template": [
+    {
+     "role": "system",
+     "text": "{instruction}"
+    },
+    {
+     "role": "user",
+     "text": "{review}"
+    }
+   ],
+   "reader": {
+    "kind": "json_object"
+   }
+  },
+  "signature": {
+   "instructions": "Classify the review.",
+   "fields": [
+    {
+     "name": "review",
+     "direction": "input",
+     "shape": {
+      "type": "string"
+     }
+    },
+    {
+     "name": "label",
+     "direction": "output",
+     "shape": {
+      "enum": [
+       "positive",
+       "negative",
+       "mixed"
+      ],
+      "type": "string"
+     },
+     "desc": "the review's overall sentiment"
+    },
+    {
+     "name": "stars",
+     "direction": "output",
+     "shape": {
+      "type": "integer"
+     }
+    }
+   ]
+  },
+  "capabilities": {
+   "instruct": true,
+   "native_structured_output": true
+  },
+  "vocab": [
+   "std"
+  ],
+  "exchanges": [
+   {
+    "current": {
+     "signature": "sha256:5eb622ddeac155438a1b9a02d533ff34476f73f2e720d306781c47cc230d54e0",
+     "inputs": {
+      "review": "Great battery, awful screen. Three stars."
+     },
+     "steps": []
+    },
+    "request": {
+     "model": "gpt-4.1-mini",
+     "system": "Classify the review.",
+     "messages": [
+      {
+       "role": "user",
+       "parts": [
+        {
+         "type": "text",
+         "text": "Great battery, awful screen. Three stars."
+        }
+       ]
+      }
+     ],
+     "config": {
+      "response_format": {
+       "type": "json_schema",
+       "schema": {
+        "type": "object",
+        "properties": {
+         "label": {
+          "enum": [
+           "positive",
+           "negative",
+           "mixed"
+          ],
+          "type": "string",
+          "description": "the review's overall sentiment"
+         },
+         "stars": {
+          "type": "integer"
+         }
+        },
+        "required": [
+         "label",
+         "stars"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    },
+    "response": {
+     "id": "resp_0b29e8cbe3467cb0006ab85e08533087d287316b548aa250e2",
+     "model": "gpt-4.1-mini-2025-04-14",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "data",
+        "value": {
+         "label": "mixed",
+         "stars": 3
+        }
+       }
+      ]
+     },
+     "finish_reason": "stop",
+     "usage": {
+      "input_tokens": 71,
+      "output_tokens": 10,
+      "total_tokens": 81,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 0
+     }
+    },
+    "turn": {
+     "signature": "sha256:5eb622ddeac155438a1b9a02d533ff34476f73f2e720d306781c47cc230d54e0",
+     "inputs": {
+      "review": "Great battery, awful screen. Three stars."
+     },
+     "steps": [
+      {
+       "kind": "model",
+       "outputs": {
+        "label": "mixed",
+        "stars": 3
+       },
+       "message": {
+        "role": "assistant",
+        "parts": [
+         {
+          "type": "data",
+          "value": {
+           "label": "mixed",
+           "stars": 3
+          }
+         }
+        ]
+       },
+       "request": "sha256:4ebd1904963d1552cd37a809c63f6ce58596ec11133e42ed44b51cf04c416df8"
+      }
+     ]
+    }
+   }
+  ]
+ },
+ {
+  "name": "prefill/claude-haiku-4-5",
+  "entry": {
+   "name": "prefilled",
+   "versions": {
+    "kernel": "0.8.4",
+    "vocab": {}
+   },
+   "template": [
+    {
+     "role": "system",
+     "text": "{instruction}\n\nReply with exactly this pattern and nothing else:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+    },
+    {
+     "role": "user",
+     "text": "{question}"
+    },
+    {
+     "role": "assistant",
+     "text": "<answer>\n"
+    }
+   ],
+   "reader": {
+    "kind": "derived"
+   }
+  },
+  "signature": {
+   "instructions": "Answer the question. The score is how sure you are, from 1 to 10.",
+   "fields": [
+    {
+     "name": "question",
+     "direction": "input",
+     "shape": {
+      "type": "string"
+     }
+    },
+    {
+     "name": "answer",
+     "direction": "output",
+     "shape": {
+      "type": "string"
+     }
+    },
+    {
+     "name": "score",
+     "direction": "output",
+     "shape": {
+      "type": "integer"
+     }
+    }
+   ]
+  },
+  "capabilities": {
+   "instruct": true,
+   "assistant_prefill": true,
+   "stop_sequences": true
+  },
+  "vocab": [
+   "std"
+  ],
+  "exchanges": [
+   {
+    "current": {
+     "signature": "sha256:d917ac5cc446b70442b1140b77299d0806388cd48562b9b41832ec23a40dcb23",
+     "inputs": {
+      "question": "What is 17 times 3?"
+     },
+     "steps": []
+    },
+    "request": {
+     "model": "claude-haiku-4-5",
+     "system": "Answer the question. The score is how sure you are, from 1 to 10.\n\nReply with exactly this pattern and nothing else:\n<answer>\n...\n</answer>\n<score>\n(integer)\n</score>\n",
+     "messages": [
+      {
+       "role": "user",
+       "parts": [
+        {
+         "type": "text",
+         "text": "What is 17 times 3?"
+        }
+       ]
+      },
+      {
+       "role": "assistant",
+       "parts": [
+        {
+         "type": "text",
+         "text": "<answer>"
+        }
+       ]
+      }
+     ],
+     "config": {
+      "stop": [
+       "</score>"
+      ]
+     }
+    },
+    "response": {
+     "id": "msg_011CfSy9S5acX1RYY9gm23SD",
+     "model": "claude-haiku-4-5-20251001",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "text",
+        "text": "\n51\n</answer>\n<score>\n10\n"
+       }
+      ]
+     },
+     "finish_reason": "stop",
+     "usage": {
+      "input_tokens": 71,
+      "output_tokens": 16,
+      "total_tokens": 87,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0
+     }
+    },
+    "turn": {
+     "signature": "sha256:d917ac5cc446b70442b1140b77299d0806388cd48562b9b41832ec23a40dcb23",
+     "inputs": {
+      "question": "What is 17 times 3?"
+     },
+     "steps": [
+      {
+       "kind": "model",
+       "outputs": {
+        "answer": "51",
+        "score": 10
+       },
+       "message": {
+        "role": "assistant",
+        "parts": [
+         {
+          "type": "text",
+          "text": "<answer>\n51\n</answer>\n<score>\n10\n"
+         }
+        ]
+       },
+       "request": "sha256:1b25ad6be7be41b1945eef68515a9b99d4d6e98744876c6a61570a28de309451"
+      }
+     ]
+    }
+   }
+  ]
+ },
+ {
+  "name": "truncated/gpt-4.1-mini",
+  "entry": {
+   "name": "sections",
+   "versions": {
+    "kernel": "0.8.4",
+    "vocab": {}
+   },
+   "template": [
+    {
+     "role": "system",
+     "text": "{instruction}\n\nReply with exactly this pattern and nothing else:\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+    },
+    {
+     "directive": "turns"
+    },
+    {
+     "role": "user",
+     "text": "{question}"
+    }
+   ],
+   "reader": {
+    "kind": "derived"
+   }
+  },
+  "signature": {
+   "instructions": "Answer the question. The score is how sure you are, from 1 to 10.",
+   "fields": [
+    {
+     "name": "question",
+     "direction": "input",
+     "shape": {
+      "type": "string"
+     }
+    },
+    {
+     "name": "answer",
+     "direction": "output",
+     "shape": {
+      "type": "string"
+     }
+    },
+    {
+     "name": "score",
+     "direction": "output",
+     "shape": {
+      "type": "integer"
+     }
+    }
+   ]
+  },
+  "capabilities": {
+   "instruct": true
+  },
+  "vocab": [
+   "std"
+  ],
+  "exchanges": [
+   {
+    "current": {
+     "signature": "sha256:d917ac5cc446b70442b1140b77299d0806388cd48562b9b41832ec23a40dcb23",
+     "inputs": {
+      "question": "Explain photosynthesis in detail."
+     },
+     "steps": []
+    },
+    "request": {
+     "model": "gpt-4.1-mini",
+     "system": "Answer the question. The score is how sure you are, from 1 to 10.\n\nReply with exactly this pattern and nothing else:\n<answer>\n...\n</answer>\n<score>\n(integer)\n</score>\n",
+     "messages": [
+      {
+       "role": "user",
+       "parts": [
+        {
+         "type": "text",
+         "text": "Explain photosynthesis in detail."
+        }
+       ]
+      }
+     ]
+    },
+    "response": {
+     "id": "resp_0f9503227ae7fb2b006ab85e09757c87d2b8fd1971c54f4484",
+     "model": "gpt-4.1-mini-2025-04-14",
+     "message": {
+      "role": "assistant",
+      "parts": [
+       {
+        "type": "text",
+        "text": "<answer>\nPhotosynthesis is the biochemical process by which green plants, algae,"
+       }
+      ]
+     },
+     "finish_reason": "length",
+     "usage": {
+      "input_tokens": 60,
+      "output_tokens": 16,
+      "total_tokens": 76,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 0
+     }
+    },
+    "turn": null
+   }
+  ]
+ }
+]

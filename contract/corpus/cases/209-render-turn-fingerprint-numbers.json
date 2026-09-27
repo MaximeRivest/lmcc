@@ -1,0 +1,99 @@
+{
+ "name": "render-turn-fingerprint-numbers",
+ "kind": "render",
+ "entry": {
+  "name": "sections_v1",
+  "versions": {
+   "kernel": "0.8.4",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n\nReply with EXACTLY these sections:\n{% for f in outputs %}<{f.name}>\n{f.value}\n{% endfor %}</done>"
+   },
+   {
+    "directive": "turns"
+   },
+   {
+    "role": "user",
+    "text": "{% for f in inputs %}== {f.name} ==\n{f.value}\n{% endfor %}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Score the answer.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "score",
+    "direction": "output",
+    "shape": {
+     "type": "number",
+     "minimum": 0.0,
+     "maximum": 1.0,
+     "multipleOf": 1e-07
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "question": "3+3?"
+ },
+ "turns": {
+  "turns": [
+   {
+    "signature": "sha256:c07ffe7495f58cc6319a7f0ae5b29c8d2402a70c5a9c7add988e9e6264065e15",
+    "inputs": {
+     "question": "2+2?"
+    },
+    "outputs": {
+     "score": 0.5
+    }
+   }
+  ]
+ },
+ "expect": {
+  "request": {
+   "system": "Score the answer.\n\nReply with EXACTLY these sections:\n<score>\n(number)\n</done>",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "== question ==\n2+2?\n"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "<score>\n0.5\n</done>"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "== question ==\n3+3?\n"
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

@@ -683,28 +683,50 @@ def _json_string(text: str) -> str:
     return "".join(out)
 
 
+def json_text(value: object, *, sort_keys: bool = False, spaced: bool = False,
+              code: str = "value-invalid") -> str:
+    """JSON as the kernel writes it (§3, §3a, §6): strings minimally escaped
+    (non-ASCII verbatim), integers in decimal, every other number by §7a —
+    the same bytes in every implementation, never the host's float spelling.
+    ``sort_keys`` orders members by code point (canonical JSON); ``spaced``
+    separates with ``, `` and ``: `` (a call's ``{input}``). A value that is
+    not JSON refuses ``code``."""
+    item, key = (", ", ": ") if spaced else (",", ":")
+
+    def write(v: object) -> str:
+        if v is None:
+            return "null"
+        if v is True:
+            return "true"
+        if v is False:
+            return "false"
+        if isinstance(v, int):
+            return str(v)
+        if isinstance(v, float):
+            if not math.isfinite(v):
+                refuse(code, f"{v!r} has no JSON spelling")
+            return format_number(v)
+        if isinstance(v, str):
+            return _json_string(v)
+        if isinstance(v, (list, tuple)):
+            return "[" + item.join(write(x) for x in v) + "]"
+        if isinstance(v, dict):
+            members = sorted(v.items()) if sort_keys else v.items()
+            for k, _ in members:
+                if not isinstance(k, str):
+                    refuse(code, f"a JSON object key must be text, got {k!r}")
+            return "{" + item.join(_json_string(k) + key + write(x) for k, x in members) + "}"
+        refuse(code, f"a {type(v).__name__} is not JSON data")
+
+    return write(value)
+
+
 def data_text(value: object) -> str:
     """Kernel §3: a data part's value as the reply text in its place. Compact
     JSON, members in order, strings minimally escaped (non-ASCII verbatim),
     integers in decimal, other numbers by §7a — the same bytes in every
     implementation."""
-    if value is None:
-        return "null"
-    if value is True:
-        return "true"
-    if value is False:
-        return "false"
-    if isinstance(value, int):
-        return str(value)
-    if isinstance(value, float):
-        return format_number(value)
-    if isinstance(value, str):
-        return _json_string(value)
-    if isinstance(value, list):
-        return "[" + ",".join(data_text(v) for v in value) + "]"
-    if isinstance(value, dict):
-        return "{" + ",".join(_json_string(k) + ":" + data_text(v) for k, v in value.items()) + "}"
-    refuse("response-malformed", f"a data part's value holds {type(value).__name__}, which is not JSON")
+    return json_text(value, code="response-malformed")
 
 
 def part_text(part: dict) -> str:
