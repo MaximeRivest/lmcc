@@ -18,10 +18,10 @@ your typed return value
 lmcc never touches the network. It lays out the call and reads the
 return. You send. Every code block below runs in the test suite; every
 claim is a corpus case the Python implementation passes byte for byte.
-The TypeScript kernel ([`ts/`](ts/README.md), `npm` package `lmcc`)
-passes the same cases and serializes the same data: an artifact, a
-signature or a recorded conversation written by one is read identically
-by the other.
+The TypeScript ([`ts/`](ts/README.md)), Julia
+([`julia/`](julia/README.md)) and R ([`r/`](r/README.md)) kernels pass the
+same cases and serialize the same data: an artifact, a signature or a
+recorded conversation written by one is read identically by the others.
 
 ## 1. A signature
 

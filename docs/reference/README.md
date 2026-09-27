@@ -1,7 +1,8 @@
 # Reference index
 
 **Version scope.** Kernel 0.7. Python is the reference implementation;
-the TypeScript kernel (`ts/`, D-54) passes the same corpus. The Go kernel
+the TypeScript (`ts/`, D-54), Julia (`julia/`) and R (`r/`, D-56) kernels
+pass the same corpus. The Go kernel
 that passed 0.6 is at the git tag `kernel-0.6` (D-41). Words: [the glossary](../glossary.md). The core needs no regex; a `pattern`
 find rule declares its dialect as an extension (kernel §10,
 [portability](../../contract/spec/portability.md)) and the host binds or refuses.

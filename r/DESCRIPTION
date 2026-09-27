@@ -1,0 +1,19 @@
+Package: lmcc
+Title: The Language Model Calling Convention
+Version: 0.8.4
+Authors@R: person("Maxime", "Rivest", email = "mrive052@gmail.com", role = c("aut", "cre", "cph"))
+Description: Lays out a call to a language model and reads the reply back:
+    where each argument goes, how the result comes back, how each type
+    crosses. A typed signature and an adapter (a template, a reader,
+    transports by purpose, formats by type) bind into a plan that renders
+    requests in the 'lm15' canonical form and parses replies, refusing by
+    name before any request is sent. Implements the same contract as the
+    'Python', 'TypeScript' and 'Julia' kernels, byte for byte.
+License: Apache License (>= 2)
+URL: https://github.com/MaximeRivest/lmcc
+Encoding: UTF-8
+Depends: R (>= 4.1.0)
+Suggests: lm15, testthat (>= 3.0.0)
+Config/testthat/edition: 3
+NeedsCompilation: yes
+Config/roxygen2/version: 8.0.0

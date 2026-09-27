@@ -1,13 +1,19 @@
-"""Differential check: the TypeScript kernel against the Python reference.
+"""Differential check: another kernel against the Python reference.
 
 The corpus pins rendered requests, parsed values and refusal codes/fixes
 (kernel §9). Two implementations also serialize much more: `plan.describe()`,
 `dump()`, signature fingerprints, request hashes, readings with repairs and
 probabilities, recorded model steps and turns, prefixes, stream results, and
-the data of every refusal. This runs every corpus case through both kernels
-and compares all of it as JSON.
+the data of every refusal. This runs every corpus case, and fuzzed replies,
+through a kernel's probe and through Python, and compares all of it as JSON.
 
-    python ts/tools/differential.py            # from the repository root
+    python contract/harness/differential.py --probe 'node ts/tools/probe.ts'
+    python contract/harness/differential.py --probe 'julia --project=julia julia/tools/probe.jl'
+    python contract/harness/differential.py --probe 'Rscript r/tools/probe.R'
+
+A probe reads one case per line and writes one observation per line (the
+shape `observe` below builds); integers beyond 2^53 may be written as
+numbers or as the text "<n>n".
 
 Differences that are the contract's stated host differences are listed in
 EXPECTED and reported separately, never silently skipped. Refusal hints are
@@ -36,6 +42,21 @@ from lmcc.turn import ModelStep, Turn, as_message, sha256  # noqa: E402
 EXPECTED = {
     ("describe", "extensions", "*", "binding"): "the pattern/legacy-re2 binding label names its engine",
 }
+
+BIG = 2**53 - 1
+
+
+def normalize(value):
+    """Both sides in one spelling: integers beyond 2^53 as "<n>n"."""
+    if isinstance(value, bool) or value is None or isinstance(value, (str, float)):
+        return value
+    if isinstance(value, int):
+        return value if abs(value) <= BIG else f"{value}n"
+    if isinstance(value, dict):
+        return {k: normalize(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [normalize(v) for v in value]
+    return value
 
 
 def refusal(err: lmcc.Refusal) -> dict:
@@ -214,19 +235,25 @@ def fuzz_cases(cases: list, per_case: int, seed: int = 20260926) -> list:
 
 
 def main() -> int:
+    import argparse
+    import shlex
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("--probe", required=True, metavar="CMD", help="the kernel's probe command")
+    ap.add_argument("--name", default=None, help="a label for the report")
+    args = ap.parse_args()
     files = sorted(glob.glob(str(ROOT / "contract/corpus/cases/*.json")))
     cases = [json.load(open(f, encoding="utf-8")) for f in files]
     per_case = int(os.environ.get("LMCC_FUZZ", "40"))
     mutants = fuzz_cases(cases, per_case)
     files = files + [f"fuzz:{m['name']}#{n}" for n, m in enumerate(mutants)]
     cases = cases + mutants
-    proc = subprocess.run(["node", str(ROOT / "ts/tools/probe.ts")], input="\n".join(
+    proc = subprocess.run(shlex.split(args.probe), cwd=ROOT, input="\n".join(
         json.dumps(c, ensure_ascii=False) for c in cases) + "\n", capture_output=True, text=True, check=True)
-    ts_obs = [json.loads(line) for line in proc.stdout.splitlines()]
+    ts_obs = [normalize(json.loads(line)) for line in proc.stdout.splitlines()]
     assert len(ts_obs) == len(cases), (len(ts_obs), len(cases), proc.stderr[-2000:])
     failures, stated, hints, compared = [], {}, 0, 0
     for f, case, ts in zip(files, cases, ts_obs):
-        py = json.loads(json.dumps(jsonable(observe(case)), ensure_ascii=False))
+        py = normalize(json.loads(json.dumps(jsonable(observe(case)), ensure_ascii=False)))
         if "crash" in ts:
             failures.append((os.path.basename(f), ("crash",), None, ts["crash"]))
             continue
@@ -241,11 +268,11 @@ def main() -> int:
                 continue
             failures.append((os.path.basename(f), path, a, b))
     for name, path, a, b in failures[:40]:
-        print(f"DIFF {name} {'/'.join(map(str, path))}\n  python:     {json.dumps(a, ensure_ascii=False)[:400]}\n"
-              f"  typescript: {json.dumps(b, ensure_ascii=False)[:400]}")
+        print(f"DIFF {name} {'/'.join(map(str, path))}\n  python: {json.dumps(a, ensure_ascii=False)[:400]}\n"
+              f"  probe:  {json.dumps(b, ensure_ascii=False)[:400]}")
     for why, n in stated.items():
         print(f"stated host difference ({n}×): {why}")
-    print(f"[differential] {compared} cases observed ({len(mutants)} of them fuzzed replies), {len(failures)} differences, "
+    print(f"[differential {args.name or args.probe}] {compared} cases observed ({len(mutants)} of them fuzzed replies), {len(failures)} differences, "
           f"{hints} refusal hints worded differently (prose, not contract)")
     return 1 if failures else 0
 

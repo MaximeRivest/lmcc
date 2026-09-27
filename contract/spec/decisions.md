@@ -1424,3 +1424,64 @@ which has the same script). A linked `dist/` goes stale when lmcc's
 source changes unless the source condition is used. npm cannot install
 from a subdirectory of a git repository, so before publication a checkout
 is installed by path or as a packed tarball.
+
+**D-56 · Julia and R kernels (kernel 0.8.4).** Asked by the maintainer on
+2026-09-27 ("now do lmcc in both R and Julia, implement it all"). No
+contract byte changed: the corpus, the spec and the Python kernel were
+enough for two more languages, which is the evidence D-41 said only a port
+could give.
+
+- **What each is.** `julia/` (package `LMCC`) and `r/` (package `lmcc`):
+  the kernel, the standard pack, the conformance driver, a differential
+  probe, the lm15 bridge (LM15.jl as a package extension; lm15 for R as a
+  suggested package) and a live script. Each passes 206 of 212 cases
+  through the driver protocol with every one of the 72 stream traces equal
+  to Python's; the six `udf:python` cases are unclaimed. The differential
+  check, now in `contract/harness/differential.py --probe CMD` for every
+  kernel, finds 0 differences on every case and 2,640 fuzzed replies
+  (breaking a number spelling or an escape on purpose shows 20 and 190).
+  Each ran 15 live scenarios on five providers through its own lm15, and
+  Python replays the 19 recorded exchanges of each with 0 differences
+  (`contract/harness/replay_live.py`). `./check` steps 8 and 9 hold them.
+- **One string model for both.** Positions are UTF-8 byte offsets, not
+  characters: R's character offsets are quadratic on non-ASCII text (lm15-r
+  measured 83 s on a 445 KB reply) and Julia strings are byte-indexed.
+  Every marker is a whole UTF-8 sequence, so a byte search never matches
+  inside a character; holds are counted in characters and returned in
+  bytes, so every cut lands on a boundary. The stream traces are the proof.
+- **Dependencies.** Julia: stdlib plus OrderedCollections (key order is
+  contract data; LM15.jl uses the same package, so the bridge passes lm15's
+  dicts straight in). R: base R plus 150 lines of C, because base R cannot
+  honor §7a: `as.numeric("1.00000000000000011102230246251565404236316680908203125")`
+  is the next double up, not 1 (checked, R 4.6.1). The C calls the C
+  library's `strtod` (correctly rounded on glibc, macOS and UCRT), finds
+  shortest digits with `%.*e` checked by `strtod`, and computes SHA-256.
+- **R's JSON.** Objects are named lists (an empty one keeps `names =
+  character(0)`), arrays unnamed lists, null `NULL`; integers are 32-bit
+  `integer`, whole doubles up to 2^53, and `lmcc_int` decimal text beyond.
+  lm15 for R's classed values are read as the same data (`lm15_plain`).
+
+Host differences, stated (both READMEs list them): neither places a UDF
+language; Julia's frontend writes Julia type names and R's builders none,
+so a signature from host types has a different fingerprint than Python's
+(`signature_from_dict`/`signature_from_list` never differs); R accepts a
+whole double for an integer field (`3` is R's usual literal) where Python
+and Julia refuse a float; R strings cannot hold U+0000; R's `repr` of rare
+non-ASCII characters in hints approximates Python's (hints are prose);
+names Julia's `Base` or R's base use for something else are qualified
+(`LMCC.parse`) or renamed (`parse_reply`, `record_step`, `describe_plan`);
+the `pattern/legacy-re2` bindings are PCRE2 (`julia:PCRE2`, `r:PCRE2`).
+
+Findings for other projects, not fixed here: lm15 for R 1.0.0's
+`new_router()` rejects every API key from its default environment lookup,
+because `Sys.getenv()` values keep the `Dlist` class its key check refuses
+(the live script passes `env = unclass(Sys.getenv())`). Julia's
+`parse(Float64, "1e400")` throws where C's `strtod` gives infinity; the
+Julia kernel reads overflow and underflow as the reference does.
+
+Costs, stated: four kernels carry every future change (`AGENTS.md`: a
+kernel change is implemented in all four, and `./check` fails until it
+is); `./check` takes about six minutes longer and needs Nix or local
+Julia and R; the R package needs a C compiler to install (and a separate
+wasm build for webR, which lm15 for R supports); neither package is
+published (LMCC.jl is not in the General registry, lmcc is not on CRAN).

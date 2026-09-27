@@ -4,7 +4,7 @@
  *
  *     set -a; source ~/Projects/lm15-dev/.env; set +a
  *     node ts/integration/live.ts            # writes ts/integration/live-record.json
- *     python ts/integration/replay_in_python.py
+ *     python contract/harness/replay_live.py
  *
  * Every exchange is recorded (the adapter's artifact, the signature, the
  * capabilities, the turns, the requests TypeScript rendered and the replies

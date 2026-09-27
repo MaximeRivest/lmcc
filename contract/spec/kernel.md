@@ -1,9 +1,10 @@
 # The LMCC kernel — normative specification
 
-**Version 0.8.4** (kernel). Status: the v3 design (`plans/08`). Two
-implementations pass the corpus: `python/lmcc`, the reference, and
-`ts/src`, the TypeScript kernel, which joins through the driver protocol
-(§9) with its stream traces compared to the reference's (D-54). The Go
+**Version 0.8.4** (kernel). Status: the v3 design (`plans/08`). Four
+implementations pass the corpus: `python/lmcc`, the reference, and the
+TypeScript (`ts/`, D-54), Julia (`julia/`) and R (`r/`, D-56) kernels,
+which join through the driver protocol (§9) with their stream traces
+compared to the reference's. The Go
 kernel that passed kernel 0.6 is kept at the git tag `kernel-0.6`
 (D-41). Where this document and the corpus disagree, fix the corpus first,
 then the implementations.

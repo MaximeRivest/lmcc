@@ -1,11 +1,11 @@
-"""Replay the TypeScript kernel's live exchanges through the Python kernel.
+"""Replay another kernel's live exchanges through the Python kernel.
 
-    node ts/integration/live.ts                 # real models, writes live-record.json
-    python ts/integration/replay_in_python.py   # offline, free
+    node ts/integration/live.ts                 # real models, writes ts/integration/live-record.json
+    python contract/harness/replay_live.py ts/integration/live-record.json   # offline, free
 
-For every exchange the TypeScript kernel had with a real model, Python loads
-the same artifact (as TypeScript dumped it), binds the same signature, and
-checks, as JSON:
+For every exchange a kernel had with a real model, Python loads the same
+artifact (as that kernel dumped it), binds the same signature, and checks,
+as JSON:
 
 - the request it renders for the same turn equals the one TypeScript sent;
 - the turn TypeScript recorded (values, message, request hash) loads, and
@@ -32,7 +32,16 @@ from lmcc.turn import Turn  # noqa: E402
 
 
 def main() -> int:
-    record = json.loads((Path(__file__).parent / "live-record.json").read_text(encoding="utf-8"))
+    paths = sys.argv[1:] or [str(ROOT / "ts/integration/live-record.json")]
+    for path in paths:
+        code = replay(Path(path))
+        if code:
+            return code
+    return 0
+
+
+def replay(path: Path) -> int:
+    record = json.loads(path.read_text(encoding="utf-8"))
     problems, checked = [], 0
     for item in record:
         registry = lmcc.Registry()
@@ -66,7 +75,7 @@ def main() -> int:
             checked += 1
     for where, what, detail in problems:
         print(f"DIFF {where} {what}: {detail}")
-    print(f"[live replay] {checked} live exchanges from {len(record)} scenarios re-rendered and re-read "
+    print(f"[live replay {path.parent.parent.name}] {checked} live exchanges from {len(record)} scenarios re-rendered and re-read "
           f"in Python: {len(problems)} differences")
     return 1 if problems else 0
 

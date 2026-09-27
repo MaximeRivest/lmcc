@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# The R kernel: installed from source, its unit tests, the
+# corpus through the driver protocol (every stream trace compared with
+# Python's), the differential check against Python, and the recorded live
+# traffic replayed through Python. R, testthat and a C toolchain come from
+# PATH, else from nixpkgs. R CMD check (the CRAN audit) is run by hand:
+#   R CMD build r && R CMD check --no-manual lmcc_*.tar.gz   (Status: OK on 2026-09-27)
+set -euo pipefail
+cd "$(dirname "$0")/.."
+if command -v Rscript >/dev/null 2>&1 && Rscript -e 'library(testthat)' >/dev/null 2>&1 && command -v cc >/dev/null 2>&1; then
+  RUN=""
+else
+  RUN="nix shell --impure --expr 'let pkgs = (builtins.getFlake \"nixpkgs\").legacyPackages.\${builtins.currentSystem}; in pkgs.buildEnv { name = \"lmcc-r\"; paths = [ (pkgs.rWrapper.override { packages = [ pkgs.rPackages.testthat ]; }) pkgs.gcc pkgs.gnumake ]; }' -c"
+fi
+r() { eval "$RUN" "$@"; }
+PY=${PYTHON:-python}
+mkdir -p r/.lib
+r R CMD INSTALL --no-test-load --library=r/.lib r >/tmp/lmcc-r-install.log 2>&1 || { tail -30 /tmp/lmcc-r-install.log; exit 1; }
+( cd r/tests && LMCC_ROOT="$PWD/../.." R_LIBS=../.lib eval "$RUN" Rscript -e "'library(testthat); library(lmcc); r <- as.data.frame(test_dir(\"testthat\", reporter = \"silent\", stop_on_failure = TRUE)); cat(sprintf(\"R unit tests: %d expectations, %d failed\\n\", sum(r\$nb), sum(r\$failed)))'" )
+CLAIM=$($PY contract/harness/claim.py)
+REPORT=$(cd python && PYTHONPATH=. $PY ../contract/harness/runner.py --driver "$RUN Rscript ../r/conform/driver.R") || { echo "$REPORT"; exit 1; }
+echo "$REPORT"
+echo "$REPORT" | grep -Fq "] $CLAIM" || { echo "the R kernel's claim is not: $CLAIM" >&2; exit 1; }
+PYTHONPATH=python $PY contract/harness/differential.py --name r --probe "$RUN Rscript r/tools/probe.R"
+PYTHONPATH=python $PY contract/harness/replay_live.py r/integration/live-record.json

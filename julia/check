@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# The Julia kernel: unit tests, the corpus through the driver protocol (every
+# stream trace compared with Python's), the differential check against
+# Python, and the recorded live traffic replayed through Python.
+# Julia comes from PATH, else from nixpkgs (julia-bin).
+set -euo pipefail
+cd "$(dirname "$0")/.."
+if command -v julia >/dev/null 2>&1; then JULIA=julia; else JULIA="nix shell nixpkgs#julia-bin -c julia"; fi
+PY=${PYTHON:-python}
+$JULIA --project=julia -e 'using Pkg; Pkg.instantiate(; io=devnull); Pkg.test()' >/tmp/lmcc-julia-test.log 2>&1 \
+  || { tail -40 /tmp/lmcc-julia-test.log; echo "julia unit tests failed" >&2; exit 1; }
+grep -E "^[a-zA-Z][^|]*\| +[0-9]" /tmp/lmcc-julia-test.log | sed 's/^/julia unit tests: /' || true
+CLAIM=$($PY contract/harness/claim.py)
+REPORT=$(cd python && PYTHONPATH=. $PY ../contract/harness/runner.py --driver "$JULIA --project=../julia ../julia/conform/driver.jl") || { echo "$REPORT"; exit 1; }
+echo "$REPORT"
+echo "$REPORT" | grep -Fq "] $CLAIM" || { echo "the Julia kernel's claim is not: $CLAIM" >&2; exit 1; }
+PYTHONPATH=python $PY contract/harness/differential.py --name julia --probe "$JULIA --project=julia julia/tools/probe.jl"
+PYTHONPATH=python $PY contract/harness/replay_live.py julia/integration/live-record.json
