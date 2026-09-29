@@ -53,3 +53,10 @@ check the registry, not the local tree: `npm view lmcc version` and an
 
 0.8.4 was published this way on 2026-09-27 (https://www.npmjs.com/package/lmcc)
 from commit 8a504c3; a fresh `npm i lmcc@0.8.4` imported and built a signature.
+0.8.5 on 2026-09-29 from commit 82c5cd4 (PyPI through the release workflow,
+npm by hand); a fresh `npm i lmcc@0.8.5 @lm15/lm15@1.0.0-rc.3` kept member
+order through `lmcc/lm15`. npm's second factor needs a terminal: without one
+(`< /dev/null`, a background job) `npm publish` stops with `EOTP` and hides
+the link; run it in a terminal, or under `script -qfc "npm publish --access
+public" LOG`, and open the `https://www.npmjs.com/auth/cli/...` link it
+prints in a browser signed in to npm (a security key is asked there).
