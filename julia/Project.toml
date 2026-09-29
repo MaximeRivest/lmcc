@@ -1,6 +1,6 @@
 name = "LMCC"
 uuid = "1f0b48a1-bcdc-478a-822a-9743feb77dca"
-version = "0.8.4"
+version = "0.8.5"
 authors = ["Maxime Rivest"]
 
 [deps]

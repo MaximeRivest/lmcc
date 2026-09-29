@@ -41,11 +41,16 @@ def main() -> int:
 
 
 def same_but_patch(entry: dict) -> dict:
-    """The entry with each vocabulary version cut to MAJOR.MINOR: a dump records
-    the running version, and loading ignores the patch number (kernel §9), so a
-    recording made before a patch release still round-trips."""
+    """The entry with the kernel's and each vocabulary version cut to
+    MAJOR.MINOR: a dump records the running version, and loading ignores the
+    patch number (kernel §9, `check_compatible`), so a recording made before a
+    patch release (a 0.8.4 recording replayed by kernel 0.8.5) still
+    round-trips. The recordings are evidence and are never rewritten."""
     out = json.loads(json.dumps(entry))
-    vocab = out.get("versions", {}).get("vocab", {})
+    versions = out.get("versions", {})
+    if "kernel" in versions:
+        versions["kernel"] = ".".join(str(versions["kernel"]).split(".")[:2])
+    vocab = versions.get("vocab", {})
     for name, version in vocab.items():
         vocab[name] = ".".join(str(version).split(".")[:2])
     return out

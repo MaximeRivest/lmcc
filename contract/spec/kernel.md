@@ -1,6 +1,6 @@
 # The LMCC kernel — normative specification
 
-**Version 0.8.4** (kernel). Status: the v3 design (`plans/08`). Four
+**Version 0.8.5** (kernel). Status: the v3 design (`plans/08`). Four
 implementations pass the corpus: `python/lmcc`, the reference, and the
 TypeScript (`ts/`, D-54), Julia (`julia/`) and R (`r/`, D-56) kernels,
 which join through the driver protocol (§9) with their stream traces
@@ -8,6 +8,20 @@ compared to the reference's. The Go
 kernel that passed kernel 0.6 is kept at the git tag `kernel-0.6`
 (D-41). Where this document and the corpus disagree, fix the corpus first,
 then the implementations.
+
+**What 0.8.5 changes (D-58).** Names are data and members keep their
+order, in every kernel (§1): a field, slot, purpose, artifact key or JSON
+member named like a host's built-in member (`__proto__`, `toString`) or
+`""` is an ordinary name, and every JSON the kernel or a standard format
+writes spells members in the value's order, integer-like names (`"10"`)
+included. Some inputs that loaded or rendered in 0.8.4 now refuse, each
+outside a grammar already published or accepted by only some kernels: a
+transport keyed by something other than a purpose, a turn slot `""`, a
+call id `""`, a name or version that matches its grammar only before a
+final newline or with another script's digits (§2, §3a, §7a; cases
+214–251). A patch: every 0.8 artifact that worked the same in all four
+kernels loads and renders unchanged. The TypeScript lm15 bridge hands its
+member order to lm15 (D-59), which keeps it from lm15 1.0.0-rc.3.
 
 **What 0.8.4 changes (D-54).** Every JSON text the kernel writes spells
 numbers by §7a, whatever the host's own JSON writer does: the canonical

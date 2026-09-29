@@ -1836,8 +1836,15 @@ plain copies, sent a schema's integer-like properties first.
   installed one.
 
 Costs, stated. The order reaches the provider only with an lm15 that
-exports `MEMBER_ORDER`, not yet on npm; `package.json` keeps
-`@lm15/lm15` `1.0.0-rc.2` (devDependency) and `^1.0.0-rc.2` (peer), so
-`./check` exercises the fallback until that release, when both should
-move to it. The symbol is unversioned, shared by every copy of lm15 and
+exports `MEMBER_ORDER`: 1.0.0-rc.3 (published 2026-09-29), which
+`package.json` now requires (`1.0.0-rc.3` for development, `^1.0.0-rc.3`
+as the peer), so `./check` exercises the order. The fallback stays for an
+install that holds an older lm15 anyway (the peer is optional): order
+lost there as before, never a crash; the tests' fallback branch now runs
+only by hand, with rc.2 installed. The symbol is unversioned, shared by every copy of lm15 and
 lmcc in a process: its meaning is a public protocol of both from now on.
+
+Ratified-by: Maxime Rivest, 2026-09-29 (in session): the record as a
+permanent protocol of lm15 and lmcc, and the release of D-58 and D-59 as
+kernel 0.8.5, the patch D-58 proposed. lm15 1.0.0-rc.3 was published the
+same day; lmcc requires it.

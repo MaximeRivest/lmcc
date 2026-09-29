@@ -1,5 +1,13 @@
 # The corpus
 
+**Kernel 0.8.5 (the release of D-58 and D-59).** Twelve cases move only
+the kernel version the implementation reports (a dumped entry's
+`versions.kernel`, case 13's `fix.provides`): 08, 13, 26, 62, 95, 121,
+125, 144, 191, 198, 221, 230. An artifact's own pin stays (case 230 still
+loads a `0.8.4` entry: a patch is compatible, §9). The live replays keep
+their 0.8.4 recordings; `contract/harness/replay_live.py` compares the
+kernel's version up to its patch, as it already did each vocabulary's.
+
 **Whole grammars, call ids, one description (kernel 0.8.4, D-58, fourth
 pass).** Cases 237–251 were typed by hand from kernel §3a (a call's id is
 non-empty), §7a (every grammar matches the whole text, in ASCII) and
