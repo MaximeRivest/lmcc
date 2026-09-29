@@ -16,7 +16,7 @@
 import { createInterface } from "node:readline";
 import * as lmcc from "../src/index.ts";
 import { install as installStd } from "../src/std/index.ts";
-import { jsonEqual, parseJson, pretty } from "../src/json.ts";
+import { jsonEqual, ownValue, parseJson, pretty, setMember } from "../src/json.ts";
 import { nativeExtensions } from "../src/extensions.ts";
 import { sha256Hex } from "../src/sha256.ts";
 import { jsonText } from "../src/json.ts";
@@ -35,8 +35,9 @@ function signatureFingerprint(signature: Case): string {
 function caseTurns(c: Case): [Case, Record<string, Case[]>] {
   const fp = signatureFingerprint(c["signature"]);
   const current = { signature: fp, inputs: c["inputs"] ?? {}, steps: c["steps"] ?? [] };
-  const slots: Record<string, Case[]> = {};
-  for (const [name, ts] of Object.entries((c["turns"] ?? {}) as Record<string, Case[]>)) slots[name] = ts.map((t) => ({ signature: fp, ...t }));
+  // Slot names are data: Object.fromEntries keeps a slot named __proto__ an own member.
+  const slots: Record<string, Case[]> = Object.fromEntries(
+    Object.entries((c["turns"] ?? {}) as Record<string, Case[]>).map(([name, ts]) => [name, ts.map((t) => ({ signature: fp, ...t }))]));
   return [current, slots];
 }
 
@@ -105,7 +106,7 @@ function feedChunk(plan: lmcc.Plan, stream: lmcc.Stream, response: unknown, chun
 
 function deltaText(events: lmcc.StreamEvent[]): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const e of events) if (e.kind === "field_delta") out[e.field] = (out[e.field] ?? "") + e.text;
+  for (const e of events) if (e.kind === "field_delta") setMember(out, e.field, ((ownValue(out, e.field) as string | undefined) ?? "") + e.text);
   return out;
 }
 
@@ -229,7 +230,7 @@ export function runCase(c: Case): Result {
       }
       const [, captures] = plan.parseWithCaptures(c["response"]);
       const raw: Record<string, string> = {};
-      for (const [name, capture] of captures) if (capture.text) raw[name] = capture.text;
+      for (const [name, capture] of captures) if (capture.text) setMember(raw, name, capture.text);
       const result = checkStreamSuccess(plan, c["response"], reading, raw);
       if (result.ok) result.stream_trace = streamTrace(plan, c["response"]);
       return result;

@@ -15,7 +15,7 @@ import {
 } from "./core.ts";
 import { isDescription, type Adapter, type Reference } from "./adapter.ts";
 import { accepts as formatAccepts, isFormat, kernelDefault, loadUdf, SCALAR_DEFAULT, type Format } from "./formats.ts";
-import { deepCopy, isPlainObject, jsonEqual, jsonText } from "./json.ts";
+import { deepCopy, hasOwn, isPlainObject, jsonEqual, jsonText, ownValue, setMember } from "./json.ts";
 import {
   applyFindRules, DerivedReader, Reader, refuseMissing, repairableMarkers, repairMarkers,
   type Anchor, type Edit, type FindRule, type PatternMatcher, type ReaderResult, type Repair,
@@ -70,7 +70,8 @@ export class RenderResult {
     if (model !== undefined) out["model"] = model;
     if (this.system !== null) out["system"] = this.system;
     out["messages"] = this.messages;
-    Object.assign(out, deepCopy(this.requestSettings));
+    const settings = deepCopy(this.requestSettings);
+    for (const k of Object.keys(settings)) setMember(out, k, settings[k]);
     return out;
   }
 
@@ -141,7 +142,7 @@ class Env implements RenderEnv {
   guard(name: string): boolean | null {
     const field = this.plan.signature.fields.find((f) => f.name === name);
     if (field && field.direction === "input") {
-      const value = this.values[name];
+      const value = ownValue(this.values, name);
       return !(value === undefined || value === null || value === false || value === "" || (Array.isArray(value) && value.length === 0));
     }
     if (this.partial) return null;
@@ -158,7 +159,7 @@ class Env implements RenderEnv {
 
   loopFields(source: string): Field[] {
     if (source !== "inputs") return this.plan.visibleOutputs;
-    if (this.partial) return this.plan.visibleInputs.filter((f) => f.name in this.values);
+    if (this.partial) return this.plan.visibleInputs.filter((f) => hasOwn(this.values, f.name));
     return this.plan.visibleInputs;
   }
 
@@ -172,7 +173,7 @@ class Env implements RenderEnv {
 
   valueOf(f: Field): ["text", string] | ["parts", Part[]] {
     if (f.direction === "output") return ["text", this.plan.placeholder(f)];
-    if (!(f.name in this.values)) refuse("missing-input", `no value supplied for field ${pyRepr(f.name)}`);
+    if (!hasOwn(this.values, f.name)) refuse("missing-input", `no value supplied for field ${pyRepr(f.name)}`);
     const parts = this.plan.write(f, this.values[f.name]);
     if (parts.length === 1 && parts[0].type === "text") return ["text", parts[0]["text"] as string];
     return ["parts", parts];
@@ -393,7 +394,7 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
 
     const messages: Message[] = [];
     const own: Message[] = [];
-    const sysTell = this.tell["system"];
+    const sysTell = ownValue(this.tell, "system") as string | undefined;
     let tellDone = sysTell === undefined;
     let compiled = this.adapter.compiledMessages();
     if (this.adapter.prefill !== null) compiled = compiled.slice(0, -1);
@@ -436,7 +437,7 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
     const requestSettings = deepCopy(this.requestSettings);
     for (const [fname, place] of this.puts) {
       const f = this.signature.fieldNamed(fname)!;
-      if (f.direction !== "input" || !(fname in current.inputs)) continue;
+      if (f.direction !== "input" || !hasOwn(current.inputs, fname)) continue;
       const parts = this.write(f, current.inputs[fname], this.writtenAs.get(fname));
       if (place.startsWith("request.")) {
         setPath(requestSettings, place.slice("request.".length), parts);
@@ -542,7 +543,7 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
     const before: string[] = [];
     const after: string[] = [];
     for (const [fname, w] of this.turnWriters) {
-      const value = outputs[fname];
+      const value = ownValue(outputs, fname);
       if (["dropped", "projection", "replayed", "spelling.call", "format:parts"].includes(w.by)
         || value === undefined || value === null || value === "" || (Array.isArray(value) && value.length === 0)) continue;
       const f = this.signature.fieldNamed(fname)!;
@@ -562,7 +563,7 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
     const spelled: [string, string][] = [];
     const placedParts: Part[][] = [];
     for (const f of this.visibleOutputs) {
-      if (!(f.name in outputs)) continue;
+      if (!hasOwn(outputs, f.name)) continue;
       const fmt = this.formatFor(f);
       if (fmt.writes === "parts" && this.reader instanceof DerivedReader) {
         if (!fmt.roundTrip) refuse("turn-not-renderable", `field ${pyRepr(f.name)}: format ${fmt.name ?? "(inline)"} does not round-trip`);
@@ -577,7 +578,7 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
     const body = spelled.length ? this.reader.join(spelled) : "";
     let text = [...before, body, ...after].filter((p) => p).join("\n");
     const ids = new Map<string, string>();
-    const calls = this.callsField ? outputs[this.callsField] : undefined;
+    const calls = this.callsField ? ownValue(outputs, this.callsField) : undefined;
     const callParts: Part[] = [];
     if (pyTruthy(calls)) {
       const f = this.signature.fieldNamed(this.callsField!)!;
@@ -737,10 +738,10 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
         refuse("reader-error", `reader ${pyRepr(this.adapter.reader["kind"])} failed to read the reply: ${(err as Error).message}`);
       }
     }
-    const missing = names.filter((n) => !(n in raw));
+    const missing = names.filter((n) => !hasOwn(raw, n));
     if (cut) {
       const ended: Record<string, string> = {};
-      for (const k of Object.keys(raw)) if (!toEnd.has(k)) ended[k] = raw[k];
+      for (const k of Object.keys(raw)) if (!toEnd.has(k)) setMember(ended, k, raw[k]);
       if (missing.length) this.refuseCut(`before field ${pyRepr(missing[0])}`, ended);
       if (toEnd.size) this.refuseCut(`inside field ${pyRepr(names.find((n) => toEnd.has(n)))}`, ended);
       if (!derived) this.refuseCut("", ended);
@@ -750,7 +751,7 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
       refuseMissing(raw, names);
     }
     const captures = new Map<string, Capture>();
-    for (const f of this.visibleOutputs) if (f.name in raw) captures.set(f.name, Capture.ofText(raw[f.name]));
+    for (const f of this.visibleOutputs) if (hasOwn(raw, f.name)) captures.set(f.name, Capture.ofText(raw[f.name]));
     if (atoms.length && derived && result !== null) {
       const [placed, ignored] = placeAtoms(atoms, edits, result);
       for (const [name, inside] of placed) {
@@ -761,9 +762,9 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
     for (const [name, capture] of found) captures.set(name, capture);
     const values: Record<string, unknown> = {};
     for (const f of this.visibleOutputs) {
-      if (captures.has(f.name)) values[f.name] = this.readForgiving(f, captures.get(f.name)!, repairs);
+      if (captures.has(f.name)) setMember(values, f.name, this.readForgiving(f, captures.get(f.name)!, repairs));
     }
-    for (const [name, capture] of found) values[name] = this.readForgiving(this.signature.fieldNamed(name)!, capture, repairs);
+    for (const [name, capture] of found) setMember(values, name, this.readForgiving(this.signature.fieldNamed(name)!, capture, repairs));
     return [values, captures, repairs];
   }
 
@@ -838,33 +839,33 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
       if (this.reader.unrepaired.length) reader["unrepaired"] = [...this.reader.unrepaired];
       if (this.reader.tail) reader["tail"] = this.reader.tail;
     } else if (this.reader.spec) {
-      for (const k of Object.keys(this.reader.spec)) if (k !== "kind") reader[k] = this.reader.spec[k];
+      for (const k of Object.keys(this.reader.spec)) if (k !== "kind") setMember(reader, k, this.reader.spec[k]);
     }
     const vocab: Record<string, string> = {};
     for (const c of this.formats.values()) {
       const named = c.format.name ? this.registry.formats.get(c.format.name) : undefined;
-      if (named) vocab[`format/${c.format.name}`] = named.version;
+      if (named) setMember(vocab, `format/${c.format.name}`, named.version);
     }
     for (const r of this.resolved) {
       const named = this.registry.transports.get(r.name);
-      if (named) vocab[`transport/${r.name}`] = named.version;
+      if (named) setMember(vocab, `transport/${r.name}`, named.version);
     }
     const readerNamed = this.registry.readers.get(this.adapter.reader["kind"] as string);
-    if (readerNamed) vocab[`reader/${this.adapter.reader["kind"]}`] = readerNamed.version;
+    if (readerNamed) setMember(vocab, `reader/${this.adapter.reader["kind"]}`, readerNamed.version);
     const turnInfo: Record<string, unknown> = {};
     for (const r of this.resolved) {
       if (!this.turnInputFormats.has(r.purpose)) continue;
       const ref = r.transport.spelling["input_format"] as Reference;
       const version = this.registry.formats.get(ref.use)!.version;
-      vocab[`format/${ref.use}`] = version;
-      turnInfo[r.purpose] = { input_format: deepCopy(ref), version };
+      setMember(vocab, `format/${ref.use}`, version);
+      setMember(turnInfo, r.purpose, { input_format: deepCopy(ref), version });
     }
     const writers: Record<string, unknown> = {};
     const projections: Record<string, unknown> = {};
     const replayed: string[] = [];
     for (const [k, v] of this.turnWriters) {
-      if (v.by !== "projection" && v.by !== "replayed") writers[k] = deepCopy(v);
-      if (v.by === "projection") projections[k] = v["of"];
+      if (v.by !== "projection" && v.by !== "replayed") setMember(writers, k, deepCopy(v));
+      if (v.by === "projection") setMember(projections, k, v["of"]);
       if (v.by === "replayed") replayed.push(k);
     }
     out["turns"] = {
@@ -896,7 +897,7 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
 function dropUndefined(values: Record<string, unknown>): Record<string, unknown> {
   if (!isObj(values)) return values;
   const out: Record<string, unknown> = {};
-  for (const k of Object.keys(values)) if (values[k] !== undefined) out[k] = values[k];
+  for (const k of Object.keys(values)) if (values[k] !== undefined) setMember(out, k, values[k]);
   return out;
 }
 
@@ -995,7 +996,7 @@ const MISSING = Symbol("missing");
 
 function getPath(target: unknown, path: string): unknown {
   for (const k of path.split(".")) {
-    if (!isObj(target) || !(k in target)) return MISSING;
+    if (!isObj(target) || !hasOwn(target, k)) return MISSING;
     target = target[k];
   }
   return target;
@@ -1004,10 +1005,10 @@ function getPath(target: unknown, path: string): unknown {
 function setPath(target: Record<string, unknown>, path: string, value: unknown): void {
   const keys = path.split(".");
   for (const k of keys.slice(0, -1)) {
-    if (!(k in target)) target[k] = {};
+    if (!hasOwn(target, k)) setMember(target, k, {});
     target = target[k] as Record<string, unknown>;
   }
-  target[keys[keys.length - 1]] = value;
+  setMember(target, keys[keys.length - 1], value);
 }
 
 function mergeSetting(plan: Plan<any, any>, path: string, value: unknown, owner: string, settingOwner: Map<string, string>, conflictPath: string): void {
@@ -1208,7 +1209,7 @@ function resolveFormat(plan: Plan<any, any>, f: Field): FormatChoice {
   const keys = [...(f.type ? [f.type] : []), ...structuralKeys(f.shape)];
   if (choice.resolvedBy === "artifact:*") keys.push("*");
   for (const key of keys) {
-    const entry = adp.formats[key];
+    const entry = ownValue(adp.formats, key);
     if (isObj(entry) && !isFormat(entry) && !("language" in entry) && "describe" in entry) {
       choice.described = entry["describe"] as string;
       choice.describedBy = `artifact:${key}`;
@@ -1255,7 +1256,7 @@ export function bind<I, O>(adapter: Adapter, sig: Signature<I, O>, capabilities:
   const settingOwner = new Map<string, string>();
   for (const f of sig.fields) {
     if (f.purpose === "plain") continue;
-    const binding = adapter.transports[f.purpose];
+    const binding = ownValue(adapter.transports, f.purpose) as Transport | Reference | undefined;
     if (binding === undefined) continue;
     let transport: Transport;
     let name: string;
@@ -1297,13 +1298,13 @@ export function bind<I, O>(adapter: Adapter, sig: Signature<I, O>, capabilities:
       const t = target(ref, "put");
       plan.puts.push([t.name, place]);
       hidden.add(t.name);
-      if (ref in transport.written_as) {
+      if (hasOwn(transport.written_as, ref)) {
         plan.writtenAs.set(t.name, registry.namedFormat(transport.written_as[ref], {}, `transports[${pyRepr(f.purpose)}].written_as`));
       }
     }
     for (const role of Object.keys(transport.tell)) {
-      const existing = plan.tell[role];
-      plan.tell[role] = existing ? existing + "\n" + transport.tell[role] : transport.tell[role];
+      const existing = ownValue(plan.tell, role) as string | undefined;
+      setMember(plan.tell, role, existing ? existing + "\n" + transport.tell[role] : transport.tell[role]);
     }
     for (const [path, value] of settingLeaves(transport.request_settings)) {
       mergeSetting(plan, path, value, f.purpose, settingOwner, `transports[${pyRepr(f.purpose)}].request_settings[${pyRepr(path)}]`);
@@ -1344,7 +1345,7 @@ export function bind<I, O>(adapter: Adapter, sig: Signature<I, O>, capabilities:
   const delimiters = plan.findRules.filter(([, r]) => r["repair"]).flatMap(([, r]) => r["between"] as string[]);
   [plan.findRepairable, plan.findUnrepaired] = adapter.strict ? [[], []] : repairableMarkers(delimiters);
   for (const fact of plan.reader.requires()) {
-    if (!pyTruthy(capabilities[fact])) {
+    if (!pyTruthy(ownValue(capabilities, fact))) {
       refuse("capability-missing", `reader ${pyRepr(adapter.reader["kind"])} requires capability ${pyRepr(fact)}, which the model does not declare — use an invertible pattern instead`,
         { fix: { action: "declare-capability", fact } });
     }
@@ -1354,7 +1355,7 @@ export function bind<I, O>(adapter: Adapter, sig: Signature<I, O>, capabilities:
     mergeSetting(plan, path, value, "(reader)", settingOwner, `transports[${pyRepr(settingOwner.get(path) ?? null)}].request_settings[${pyRepr(path)}]`);
   }
   const stops = plan.reader.skeleton().stops ?? [];
-  if (pyTruthy(capabilities["stop_sequences"]) && stops.length) {
+  if (pyTruthy(ownValue(capabilities, "stop_sequences")) && stops.length) {
     mergeSetting(plan, "config.stop", [...stops], "(skeleton)", settingOwner,
       `transports[${pyRepr(settingOwner.get("config.stop") ?? null)}].request_settings['config.stop']`);
   }
@@ -1463,7 +1464,7 @@ export function bind<I, O>(adapter: Adapter, sig: Signature<I, O>, capabilities:
 
   // 8. turn slots (§3a): layout, then a writer for every hidden output.
   plan.slots = adapter.turnSlots();
-  plan.prefill = pyTruthy(capabilities["assistant_prefill"]) ? rstrip(adapter.prefill ?? "") : "";
+  plan.prefill = pyTruthy(ownValue(capabilities, "assistant_prefill")) ? rstrip(adapter.prefill ?? "") : "";
   bindTurns(plan);
   return plan;
 }

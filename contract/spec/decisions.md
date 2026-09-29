@@ -1530,3 +1530,62 @@ object under this reader is still refused by strict providers, as
 before; with Gemini, which enforced the open schema, a record now also
 refuses keys it does not declare.
 
+**D-58 · Names are data: a name `Object.prototype` has is an ordinary
+name (kernel 0.8.4, no version change).** Asked by the maintainer on
+2026-09-29 ("fix … so every kernel is held to it"), after functai's
+TypeScript stage 1 found it: the TypeScript kernel kept records keyed by
+field names and JSON members in ordinary objects and read them with
+`name in obj` / `obj[name]` and wrote them with `obj[name] = v`. A name
+`Object.prototype` has was read from the prototype when absent, and
+`__proto__` was written into the prototype. Silent cases: an input named
+`__proto__` was sent as `{}`, a JSON input's `__proto__` member was
+dropped from the request, an output named `__proto__` was read as
+nothing, and a reply missing an output named `toString` read it as `""`
+instead of refusing `parse-missing-fields`. Loud but wrong: a valid
+partial example refused `value-invalid`, and the json_object reader
+refused a correct reply `parse-ambiguous`. Python, Julia and R were
+right.
+
+- **Contract.** Kernel §1 says it ("Names are data"): the grammar already
+  allowed these names (ASCII identifiers; any string for a JSON member),
+  so nothing is newly allowed and no version moves here. Kernel 0.8.4 is
+  already on npm with the bug; shipping the fix there needs a new package
+  version, and the package version is the kernel version, so that release
+  is the maintainer's decision, not taken here. Cases 214–222 pin it
+  for inputs and a partial example (214), a guard, bare slots and a turn
+  slot named `__proto__` (215), outputs read by the derived reader (216)
+  and missing (217), outputs read by the json_object reader (218) and
+  missing (219), JSON members through the json format, the reader's
+  schema, its written reply and a turn fingerprint (220), artifact keys
+  through load and dump (221), and a transport bound under the purpose
+  `__proto__` (222). They were typed from the spec; all nine failed on
+  the TypeScript kernel and passed at once on Python, Julia and R.
+- **TypeScript.** Records stay ordinary objects with ordinary
+  prototypes, so no type or behaviour a caller sees changes except the
+  bug: every read of a name-keyed record is an own-member read
+  (`hasOwn`, `ownValue` in `json.ts`) and every write goes through
+  `setMember`. Null-prototype records were rejected: a caller's
+  `values.hasOwnProperty(...)`, `String(values)` and Node's
+  `assert.deepStrictEqual` against a literal would all break, and
+  records callers build would still need own reads. The conformance
+  driver, the differential probe and the streaming fuzz test had the
+  same bug (slots, stream deltas, raw captures) and are fixed. `ts/tests/names.test.ts` holds
+  the paths the corpus does not reach (values given as objects to
+  `render`, `turn`, `example`; `toJson`; a refusal's `partial`;
+  `describe()`; the table format; the lm15 bridge's config merge); each
+  of its seven tests fails on the old kernel.
+- **R and Julia.** Both pass the nine cases unchanged. R's own hazard of
+  this kind is `$`'s partial matching on lists: the corpus and the
+  differential check (3,062 observations) were also run with
+  `warnPartialMatchDollar`, `warnPartialMatchArgs` and
+  `warnPartialMatchAttr` turned into errors, with no difference.
+
+Costs, stated: a JavaScript caller who writes `{ __proto__: "x" }` as an
+object literal sets the literal's prototype, not a member (the language
+does that before lmcc sees it); such a value must be built with a
+computed key (`{ ["__proto__"]: "x" }`), `JSON.parse` or
+`Object.fromEntries`. A pack's reader or format that writes its own
+records with `obj[name] = v` can still lose a `__proto__` member; the
+kernel reads what it returns as own members, and `setMember` is not
+exported, so a pack outside this repository writes
+`Object.defineProperty` itself.

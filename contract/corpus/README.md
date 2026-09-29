@@ -1,5 +1,16 @@
 # The corpus
 
+**Names are data (kernel 0.8.4, D-58).** Cases 214–222 were typed by hand
+from kernel §1 ("Names are data"), §2–§4 and §3a: field names, a turn
+slot, a purpose, artifact keys and JSON members named like JavaScript's
+`Object.prototype` members (`__proto__`, `toString`, `valueOf`,
+`constructor`, `hasOwnProperty`, `isPrototypeOf`). Honestly stated, the
+Python kernel existed when they were written, and none of their
+expectations was produced by running it. All nine failed on the
+TypeScript kernel (a missing output read as `""`, a `__proto__` member
+dropped, a correct JSON reply refused) and passed at once on Python,
+Julia and R. No earlier case changed.
+
 **Kernel 0.8.4 (D-54).** Cases 209–211 were authored by hand from the
 spec. 209 pins a fingerprint over a shape holding `0.0`, `1.0` and
 `1e-07`, 210 a fenced call input holding `1.0` and `1e-07`; both failed on

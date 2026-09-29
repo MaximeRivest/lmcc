@@ -64,8 +64,8 @@ export function observe(c: Case): Record<string, unknown> {
     return out;
   }
   out["describe"] = plan.describe();
-  const slots: Record<string, Case[]> = {};
-  for (const [name, ts] of Object.entries((c["turns"] ?? {}) as Record<string, Case[]>)) slots[name] = ts.map((t) => fill(sig, t));
+  const slots: Record<string, Case[]> = Object.fromEntries(
+    Object.entries((c["turns"] ?? {}) as Record<string, Case[]>).map(([name, ts]) => [name, ts.map((t) => fill(sig, t))]));
   out["prefix"] = attempt(() => plan.prefix({ turns: slots }));
   out["skeleton"] = plan.skeleton();
   if ("inputs" in c) {

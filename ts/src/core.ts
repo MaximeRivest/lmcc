@@ -10,7 +10,7 @@
  */
 
 import { refuse, Refusal } from "./errors.ts";
-import { formatNumber, isPlainObject, jsonEqual, jsonText, type JsonObject } from "./json.ts";
+import { formatNumber, isPlainObject, jsonEqual, jsonText, setMember, type JsonObject } from "./json.ts";
 import { asciiLower, pyRepr, pyStr, readBoolean, readInteger, readNumber, strip, WHITESPACE } from "./text.ts";
 import { brand } from "./brand.ts";
 
@@ -58,7 +58,7 @@ export function nullableBase(shape: Shape): [Shape, boolean] {
     const others = t.filter((x) => x !== "null");
     if (t.includes("null") && others.length === 1 && t.length === 2) {
       const base: Record<string, unknown> = {};
-      for (const k of Object.keys(shape)) if (k !== "type") base[k] = shape[k];
+      for (const k of Object.keys(shape)) if (k !== "type") setMember(base, k, shape[k]);
       base["type"] = others[0];
       return [base as Shape, true];
     }
@@ -356,8 +356,8 @@ export function replyProbabilities(response: unknown): [Record<string, Record<st
       if (Object.prototype.hasOwnProperty.call(probabilities, field)) {
         refuse("parse-ambiguous", `two data parts carry probabilities for ${pyRepr(field)} — refusing to guess which measured the answer`);
       }
-      probabilities[field] = { ...(keys as Record<string, number>) };
-      measuredBy[field] = method;
+      setMember(probabilities, field, { ...(keys as Record<string, number>) });
+      setMember(measuredBy, field, method);
     }
   }
   return [probabilities, measuredBy];
@@ -373,7 +373,7 @@ export function normalizeResponseParts(parts: unknown[]): Part[] {
     const last = out[out.length - 1];
     if (hasText && texts.length && last["type"] === part.type) {
       texts.push(part["text"] as string);
-      for (const k of Object.keys(part)) if (k !== "type" && k !== "text") last[k] = part[k];
+      for (const k of Object.keys(part)) if (k !== "type" && k !== "text") setMember(last, k, part[k]);
       continue;
     }
     if (texts.length) last["text"] = texts.join("");

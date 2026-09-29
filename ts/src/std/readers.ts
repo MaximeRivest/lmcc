@@ -15,7 +15,7 @@ import { Reader } from "../reader.ts";
 import type { Registry } from "../registry.ts";
 import { pyRepr, strip } from "../text.ts";
 import { dumps, loads, members } from "./jsontext.ts";
-import type { Json } from "../json.ts";
+import { hasOwn, setMember, type Json } from "../json.ts";
 
 export const VERSION = "0.2.1";
 export const PROBABILITY_POLICIES = ["off", "if_available", "required"];
@@ -40,13 +40,13 @@ export function closed(shape: unknown): unknown {
   if (!isPlain(shape)) return shape;
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(shape)) {
-    if (MAP.has(key) && isPlain(value)) out[key] = Object.fromEntries(Object.entries(value).map(([k, v]) => [k, closed(v)]));
-    else if (ONE.has(key) || LIST.has(key)) out[key] = closed(value);
-    else out[key] = value;
+    if (MAP.has(key) && isPlain(value)) setMember(out, key, Object.fromEntries(Object.entries(value).map(([k, v]) => [k, closed(v)])));
+    else if (ONE.has(key) || LIST.has(key)) setMember(out, key, closed(value));
+    else setMember(out, key, value);
   }
-  if (isPlain(out["properties"])) {
+  if (hasOwn(out, "properties") && isPlain(out["properties"])) {
     out["required"] = Object.keys(out["properties"]);
-    if (!("additionalProperties" in out)) out["additionalProperties"] = false;
+    if (!hasOwn(out, "additionalProperties")) out["additionalProperties"] = false;
   }
   return out;
 }
@@ -76,7 +76,7 @@ export class JsonObjectReader extends Reader {
     const properties: Record<string, unknown> = {};
     for (const f of fields) {
       const shape = closed(f.shape) as Record<string, unknown>;
-      properties[f.name] = f.desc ? { ...shape, description: f.desc } : shape;
+      setMember(properties, f.name, f.desc ? { ...shape, description: f.desc } : shape);
     }
     return {
       config: {
@@ -95,10 +95,10 @@ export class JsonObjectReader extends Reader {
     const raw: Record<string, string> = {};
     for (const [key, value, source] of found) {
       if (!wanted.has(key)) continue;
-      if (key in raw) refuse("parse-ambiguous", `json_object: member ${pyRepr(key)} appears more than once in the reply — refusing to guess which one is real`);
-      raw[key] = typeof value === "string" ? value : strip(source);
+      if (hasOwn(raw, key)) refuse("parse-ambiguous", `json_object: member ${pyRepr(key)} appears more than once in the reply — refusing to guess which one is real`);
+      setMember(raw, key, typeof value === "string" ? value : strip(source));
     }
-    const missing = fieldNames.filter((n) => !(n in raw));
+    const missing = fieldNames.filter((n) => !hasOwn(raw, n));
     if (missing.length) refuse("parse-missing-fields", "reply object is missing key(s): " + missing.map(pyRepr).join(", "), { partial: raw });
     return raw;
   }
@@ -134,7 +134,7 @@ export class JsonObjectReader extends Reader {
       } catch {
         // not JSON: embeds as a string
       }
-      obj[name] = value;
+      setMember(obj, name, value);
     }
     return dumps(obj, 2);
   }

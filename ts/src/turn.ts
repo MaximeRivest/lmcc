@@ -13,7 +13,7 @@
 
 import { refuse } from "./errors.ts";
 import { isObj, textPart, validateResponsePart, type Field, type Message, type Part } from "./core.ts";
-import { hasToJSON, isPlainObject, jsonText } from "./json.ts";
+import { hasToJSON, isPlainObject, jsonText, ownValue, setMember } from "./json.ts";
 import { sha256Hex } from "./sha256.ts";
 import { pyRepr } from "./text.ts";
 import { brand } from "./brand.ts";
@@ -57,7 +57,7 @@ export function toJson(value: unknown, where = "turn"): unknown {
   if (Array.isArray(value)) return value.map((v, i) => toJson(v, `${where}[${i}]`));
   if (isPlainObject(value)) {
     const out: Record<string, unknown> = {};
-    for (const k of Object.keys(value)) if (value[k] !== undefined) out[k] = toJson(value[k], `${where}.${k}`);
+    for (const k of Object.keys(value)) if (value[k] !== undefined) setMember(out, k, toJson(value[k], `${where}.${k}`));
     return out;
   }
   refuse("turn-invalid", `${where}: a ${value === undefined ? "missing value" : typeof value} has no JSON form; a turn holds JSON values in their fields' shapes`);
@@ -127,7 +127,7 @@ export class ModelStep {
   }
 
   get calls(): unknown[] {
-    const value = this.callsField ? this.outputs[this.callsField] : undefined;
+    const value = this.callsField ? ownValue(this.outputs, this.callsField) : undefined;
     return Array.isArray(value) ? [...value] : [];
   }
 

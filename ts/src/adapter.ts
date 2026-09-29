@@ -9,6 +9,7 @@
 import { refuse } from "./errors.ts";
 import { isObj } from "./core.ts";
 import { isFormat, type Format } from "./formats.ts";
+import { setMember } from "./json.ts";
 import { compileTemplate, RESERVED_SLOTS, turnSlots as nodeTurnSlots, type Node } from "./template.ts";
 import { pyRepr } from "./text.ts";
 import { Transport } from "./transport.ts";
@@ -250,17 +251,17 @@ export function adapter(opts: AdapterOptions = {}): Adapter {
   for (const purpose of Object.keys(opts.transports ?? {})) {
     const value = opts.transports![purpose];
     const where = `transports[${pyRepr(purpose)}]`;
-    if (typeof value === "string") sBindings[purpose] = { use: value, options: {} };
+    if (typeof value === "string") setMember(sBindings, purpose, { use: value, options: {} });
     else if (value instanceof Transport) {
       value.validate(where);
-      sBindings[purpose] = value;
+      setMember(sBindings, purpose, value);
     } else if (isObj(value) && "use" in value) {
-      sBindings[purpose] = { use: value["use"] as string, options: { ...((value["options"] as Record<string, unknown>) ?? {}) } };
-    } else if (isObj(value)) sBindings[purpose] = Transport.fromDict(value, where);
+      setMember(sBindings, purpose, { use: value["use"] as string, options: { ...((value["options"] as Record<string, unknown>) ?? {}) } });
+    } else if (isObj(value)) setMember(sBindings, purpose, Transport.fromDict(value, where));
     else refuse("entry-malformed", `${where}: expected a name, Transport, use(...), or object`, { fix: { action: "edit-entry", path: where } });
   }
   const fBindings: Record<string, FormatBinding> = {};
-  for (const key of Object.keys(opts.formats ?? {})) fBindings[key] = formatEntry(key, opts.formats![key]);
+  for (const key of Object.keys(opts.formats ?? {})) setMember(fBindings, key, formatEntry(key, opts.formats![key]));
   let declared = validateDeclaration(opts.extensions);
   if (opts.declareDefaults ?? true) declared = defaultDeclaration(sBindings, declared, isTransport);
   const adp = new Adapter({

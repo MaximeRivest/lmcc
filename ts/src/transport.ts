@@ -9,7 +9,7 @@
 
 import { refuse } from "./errors.ts";
 import { CAPABILITY_FACTS, isObj } from "./core.ts";
-import { deepCopy } from "./json.ts";
+import { deepCopy, hasOwn, ownValue } from "./json.ts";
 import type { FindRule } from "./reader.ts";
 import { pyRepr, pyTruthy } from "./text.ts";
 import { brand } from "./brand.ts";
@@ -190,7 +190,7 @@ export class Transport {
     }
     for (const target of Object.keys(this.written_as)) {
       const name = this.written_as[target];
-      if (!(target in this.put) || typeof name !== "string" || !name) {
+      if (!hasOwn(this.put, target) || typeof name !== "string" || !name) {
         malformed(`${where}.written_as`, `${where}.written_as: ${pyRepr(target)} must name a placed field and a format name`);
       }
     }
@@ -229,7 +229,7 @@ export class Transport {
         { fix: { action: "satisfy-predicate", purpose, predicate: { ...s.when } } });
     }
     for (const fact of s.requires) {
-      if (!pyTruthy(capabilities[fact])) {
+      if (!pyTruthy(ownValue(capabilities, fact))) {
         refuse("capability-missing", `purpose ${pyRepr(purpose)}: transport ${pyRepr(name)} requires capability ${pyRepr(fact)}, which the model does not declare`,
           { fix: { action: "declare-capability", fact } });
       }
@@ -383,7 +383,7 @@ export function validatePredicate(p: unknown, where: string): void {
 export function evalPredicate(p: Predicate, capabilities: Record<string, unknown>): boolean {
   const key = Object.keys(p)[0];
   const value = p[key];
-  if (key === "capability") return pyTruthy(capabilities[value as string]);
+  if (key === "capability") return pyTruthy(ownValue(capabilities, value as string));
   if (key === "not") return !evalPredicate(value as Predicate, capabilities);
   if (key === "all") return (value as Predicate[]).every((q) => evalPredicate(q, capabilities));
   return (value as Predicate[]).some((q) => evalPredicate(q, capabilities));

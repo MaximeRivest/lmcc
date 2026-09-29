@@ -12,6 +12,7 @@
 import { refuse } from "./errors.ts";
 import { Capture, textPart, type Field, type Part } from "./core.ts";
 import { countOf, pyRepr, rstrip, strip, unique, WHITESPACE } from "./text.ts";
+import { hasOwn, setMember } from "./json.ts";
 import { brand } from "./brand.ts";
 
 /** A position edit: `[start, end, newLength]`, per stage (§4b). */
@@ -280,7 +281,7 @@ export function repairMarkers(text: string, markers: string[], edits: Edit[][] |
 }
 
 export function refuseMissing(raw: Record<string, string>, fieldNames: string[]): void {
-  const missing = fieldNames.filter((n) => !(n in raw));
+  const missing = fieldNames.filter((n) => !hasOwn(raw, n));
   if (missing.length) {
     let hint = "reply is missing pattern section(s): " + missing.map(pyRepr).join(", ");
     if (!Object.keys(raw).length && fieldNames.length > 1) {
@@ -375,7 +376,7 @@ export class DerivedReader extends Reader {
       const chunk = text.slice(after, last ? text.length : boundaries[i + 1][0]);
       const close = strip(suffix);
       const cut = cutAtClose(chunk, close, name);
-      raw[name] = strip(cut);
+      setMember(raw, name, strip(cut));
       spans.set(name, [after, after + cut.length]);
       const idx = close ? chunk.indexOf(close) : -1;
       if (idx >= 0) ignored(chunk.slice(idx + close.length));

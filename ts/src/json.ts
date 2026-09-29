@@ -34,6 +34,15 @@ export interface ParseOptions {
 
 const MAX_SAFE = BigInt(Number.MAX_SAFE_INTEGER);
 
+/*
+ * Records keyed by names (field names, JSON members, artifact keys) are
+ * ordinary objects, read and written as data: any name is an own member or
+ * absent, never one `Object.prototype` has (`toString`, `constructor`,
+ * `__proto__`, ...). Every such read goes through `hasOwn`/`ownValue` and
+ * every write through `setMember`; a literal key the kernel chose itself
+ * (`"type"`, `"config"`) needs neither.
+ */
+
 /** Set a member without letting `__proto__` reach the prototype. */
 export function setMember(obj: Record<string, unknown>, key: string, value: unknown): void {
   if (key === "__proto__") {
@@ -41,6 +50,16 @@ export function setMember(obj: Record<string, unknown>, key: string, value: unkn
   } else {
     obj[key] = value;
   }
+}
+
+/** Whether `key` is `obj`'s own member (an inherited `toString` is not). */
+export function hasOwn(obj: object, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(obj, key);
+}
+
+/** `obj[key]` when `key` is `obj`'s own member, else `undefined`. */
+export function ownValue(obj: object, key: string): unknown {
+  return Object.prototype.hasOwnProperty.call(obj, key) ? (obj as Record<string, unknown>)[key] : undefined;
 }
 
 class Parser {

@@ -135,7 +135,15 @@ Field = { name, direction: "input"|"output", shape: JSONSchema,
 Plain-data form: `schema/signature.schema.json`. Field names are ASCII
 identifiers, unique; `instructions` is text (absent in the plain-data form
 it is `""`); `signature-malformed` names the offender (fix
-`edit-signature`, with `field` when a field is the offender). `shape`
+`edit-signature`, with `field` when a field is the offender).
+
+**Names are data.** Every name the kernel keys a record by is an ordinary
+name: field names, turn slot names, purposes, format keys, and the member
+names of JSON values (which are any strings). A name the host language
+gives meaning to (`__proto__`, `toString`, `constructor` in JavaScript) is
+present in a record exactly when the record holds it, is written as a
+member like any other, and is missing when it is absent: never read from,
+or written into, what the host's records inherit (cases 214–222, D-58). `shape`
 is JSON Schema; the kernel reads only these keywords and carries every
 other one untouched for formats to use:
 
