@@ -6,7 +6,7 @@
  * so they cannot disagree — and neither can the two implementations.
  */
 
-import { formatNumber, hasToJSON, isPlainObject, jsonString, parseJson, parseJsonAt, type Json } from "../json.ts";
+import { formatNumber, hasToJSON, isPlainObject, jsonString, memberNames, parseJson, parseJsonAt, type Json } from "../json.ts";
 
 export function dumps(value: unknown, indent: number | null = 2): string {
   const out: string[] = [];
@@ -31,7 +31,7 @@ function write(value: unknown, out: string[], indent: number | null, depth: numb
     members(value.map((v) => [null, v] as [string | null, unknown]), out, indent, depth, false);
     out.push("]");
   } else if (isPlainObject(value)) {
-    const keys = Object.keys(value).filter((k) => value[k] !== undefined);
+    const keys = memberNames(value).filter((k) => value[k] !== undefined);
     if (!keys.length) {
       out.push("{}");
       return;

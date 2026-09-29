@@ -114,6 +114,12 @@ every corpus case and 2,640 fuzzed replies against Python.
   differs.
 - **Values** are JSON: ordered `Dict`s, `Vector{Any}`, `nothing`; integers
   `Int64`, or `BigInt` beyond it. Nothing is lifted into structs.
+- **A `Dict` has no order**: Julia's `Dict` iterates in hash order, and lmcc
+  writes an object's members in the order the value holds them (kernel §1),
+  so a `Dict` given as a value or a shape is written in hash order (a
+  shape's `required` too). Where order shows, give an `OrderedDict` (`jobj`),
+  a `NamedTuple`, or JSON read with `parse_json`; every object lmcc builds
+  is ordered. Python's `dict` keeps the order written.
 - **Names** Julia's `Base` uses for something else (`bind`, `parse`, `read`,
   `step`, `dump`) are `LMCC.`-qualified.
 - **Regex (`pattern/legacy-re2`)**: bound to Julia's PCRE2 with DOTALL (label

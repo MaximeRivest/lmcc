@@ -93,11 +93,33 @@ is_int_value <- function(x) {
   is.integer(x) && length(x) == 1L && !is.na(x) || (is.double(x) && length(x) == 1L && is.finite(x) && x == trunc(x) && !is.object(x))
 }
 
-has_key <- function(x, k) !is.null(names(x)) && k %in% names(x)
-get_key <- function(x, k, default = NULL) if (has_key(x, k)) x[[k]] else default
+# Members are found and written by position, never by R's lookup by name:
+# `x[[""]]` is NULL and `x[[""]] <- v` appends, so a member named "" (any
+# string is a JSON member name, kernel section 1) would read as null and be
+# written twice. `match` finds "" like any other name.
+key_index <- function(x, k) {
+  n <- names(x)
+  if (is.null(n)) return(0L)
+  i <- match(k, n)
+  if (is.na(i)) 0L else i
+}
+has_key <- function(x, k) key_index(x, k) > 0L
+get_key <- function(x, k, default = NULL) { i <- key_index(x, k); if (i) x[[i]] else default }
 set_key <- function(x, k, v) {
-  if (is.null(v)) x[k] <- list(NULL) else x[[k]] <- v
+  i <- key_index(x, k)
+  if (i) {
+    x[i] <- list(v)
+  } else {
+    i <- length(x) + 1L
+    x[i] <- list(v)
+    names(x)[i] <- k
+  }
   x
+}
+# The members of an object as (name, value) pairs, in order, by position.
+members_of <- function(x) {
+  n <- names(x)
+  lapply(seq_along(x), function(i) list(n[[i]], x[[i]]))
 }
 drop_key <- function(x, k) {
   if (has_key(x, k)) x <- x[names(x) != k]
@@ -158,7 +180,8 @@ json_equal <- function(a, b) {
   if (is.null(a) || is.null(b)) return(is.null(a) && is.null(b))
   if (is_obj(a) && is_obj(b)) {
     if (length(a) != length(b)) return(FALSE)
-    for (k in names(a)) if (!has_key(b, k) || !json_equal(a[[k]], b[[k]])) return(FALSE)
+    ka <- names(a)
+    for (i in seq_along(a)) { j <- key_index(b, ka[[i]]); if (!j || !json_equal(a[[i]], b[[j]])) return(FALSE) }
     return(TRUE)
   }
   if (is_arr(a) && is_arr(b)) {
@@ -579,7 +602,7 @@ pyrepr <- function(x) {
     if (is_bigint(v) || is.integer(v)) return(num_text(v))
     return(repr_float(v))
   }
-  if (is_obj(x)) return(paste0("{", paste(vapply(names(x), function(k) paste0(repr_str(k), ": ", pyrepr(x[[k]])), ""), collapse = ", "), "}"))
+  if (is_obj(x)) return(paste0("{", paste(vapply(seq_along(x), function(i) paste0(repr_str(names(x)[[i]]), ": ", pyrepr(x[[i]])), ""), collapse = ", "), "}"))
   if (is.list(x)) return(paste0("[", paste(vapply(x, pyrepr, ""), collapse = ", "), "]"))
   if (is.character(x)) return(paste0("[", paste(vapply(x, repr_str, ""), collapse = ", "), "]"))
   paste(format(x), collapse = " ")

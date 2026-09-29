@@ -138,14 +138,29 @@ it is `""`); `signature-malformed` names the offender (fix
 `edit-signature`, with `field` when a field is the offender).
 
 **Names are data.** Every name the kernel keys a record by is an ordinary
-name: field names, turn slot names, purposes, format keys, and the member
-names of JSON values (which are any strings). A name the host language
-gives meaning to (`__proto__`, `toString`, `constructor` in JavaScript) is
-present in a record exactly when the record holds it, is written as a
-member like any other, and is missing when it is absent: never read from,
-or written into, what the host's records inherit (cases 214–222, D-58). `shape`
-is JSON Schema; the kernel reads only these keywords and carries every
-other one untouched for formats to use:
+name: field names, turn slot names and purposes (identifiers), and format
+keys and the member names of JSON values and of a shape's `properties`
+(any string, the empty string `""` included). A name the host language
+gives meaning to (`__proto__`, `toString`, `constructor` in JavaScript;
+`""`, which R's lookup by name never finds) is present in a record
+exactly when the record holds it, is written as a member like any other,
+once, and is missing when it is absent: never read from, or written
+into, what the host's records inherit (cases 214–225, 230, D-58).
+
+**Members keep their order.** An object's members are in the order the
+value holds them (a case file: the order written; a reply: the order
+read), and every JSON the kernel or a standard format writes spells them
+in that order: a value through `format/json`, a written reply, a call's
+`{input}` (§6), a data part's text, a shape in a description or a tool
+list. A shape's `properties` keep theirs wherever they are copied or
+listed (`reader/json_object`'s `required`, in property order). Only
+canonical JSON (§3a) reorders, by code point. A host whose records
+enumerate names in an order of their own (a JavaScript object puts
+integer-like names such as `"10"` first) carries the order itself
+(cases 226–229, D-58).
+
+`shape` is JSON Schema; the kernel reads only these keywords and carries
+every other one untouched for formats to use:
 
 | shape | kernel meaning |
 |---|---|

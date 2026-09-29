@@ -195,6 +195,43 @@ try {
 assert.equal((answered.meta.refusal as { code: string }).code, "parse-value");
 ```
 
+**Names are data; records are ordinary objects.** A field, a JSON member
+or an artifact key may be named `toString`, `__proto__`, `"10"` or `""`.
+Inputs, values, turns and partials are ordinary objects, so JavaScript's
+own lookups can answer from the prototype: test a name with `Object.hasOwn`
+(never `name in record` or `record.hasOwnProperty`), read it with
+`lmcc.ownValue`, list names with `lmcc.memberNames` or `Object.keys`, and
+write an arbitrary name with `lmcc.setMember` (`record["__proto__"] = v`
+sets the prototype; an object literal's `__proto__:` does too). A value
+named like a method shadows it: `String(values)` throws when an output is
+named `toString`.
+
+```ts
+const record = lmcc.parseJson('{"toString": "a", "b": 1, "10": 2}') as Record<string, unknown>;
+assert.equal("valueOf" in record, true);            // inherited, not held
+assert.equal(Object.hasOwn(record, "valueOf"), false);
+assert.equal(lmcc.ownValue(record, "toString"), "a");
+const built: Record<string, unknown> = {};
+lmcc.setMember(built, "__proto__", 1);
+assert.deepEqual(Object.keys(built), ["__proto__"]);
+```
+
+**Members keep their order.** JavaScript enumerates integer-like names
+(`"10"`) first. lmcc keeps the order a value holds, as every other kernel
+does: an object lmcc builds (a parse, a copy, a reading, a turn) records its
+order where JavaScript's differs, and every JSON lmcc writes follows it.
+The record is invisible to JavaScript (`Object.keys`, spread,
+`JSON.stringify` and `structuredClone` neither see nor copy it). An object
+literal or a `JSON.parse` result has lost the order before lmcc sees it:
+build one with `lmcc.orderedObject`, read JSON with `lmcc.parseJson`.
+
+```ts
+assert.deepEqual(Object.keys(record), ["10", "toString", "b"]);
+assert.deepEqual(lmcc.memberNames(record), ["toString", "b", "10"]);
+assert.equal(lmcc.jsonText(record), '{"toString":"a","b":1,"10":2}');
+assert.equal(lmcc.jsonText(lmcc.orderedObject([["b", 1], ["10", 2]])), '{"b":1,"10":2}');
+```
+
 **Two copies of lmcc in one program** (npm installs it twice easily) work:
 `instanceof` and `isRefusal` recognize objects from another copy of the same
 kernel version, and a pack (`lmcc/std`) installed from one copy plugs into
@@ -242,6 +279,14 @@ case and 2,600 fuzzed replies):
   `s` and `u` flags (label `ecmascript:RegExp`); identity escapes of
   non-syntax characters (`\:`) refuse and `\d`/`\w` are ASCII. The contract
   leaves these unspecified.
+- **Member order at JavaScript's own boundaries**: lmcc writes every JSON in
+  a value's order (above), but what JavaScript serializes itself follows
+  JavaScript's order: `JSON.stringify` of a reading, and the request lm15
+  sends, so a `response_format` schema whose property names are
+  integer-like reaches the provider with those properties first (its
+  `required` list keeps the property order). A tool call's `input` or a
+  data part that lm15 parsed arrives in JavaScript's order. Python has no
+  such boundary.
 - **Hints** (the prose of a refusal) name TypeScript APIs; codes, fixes and
   partials are identical.
 

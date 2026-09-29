@@ -1,5 +1,21 @@
 # The corpus
 
+**The empty name and member order (kernel 0.8.4, D-58).** Cases 223–230
+were typed by hand from kernel §1 as amended ("Names are data": any
+string, `""` included; "Members keep their order") before any kernel ran
+them. Every expectation matched the Python kernel on the first run; one
+case (225) first lacked the `native_structured_output` capability its
+reader needs, an authoring slip that changed no expected value. Case 220
+gained its turn's `signature`, computed with `sha256sum` over hand-typed
+canonical bytes, so the turn fingerprint it was said to pin is pinned.
+Before the fixes, TypeScript failed 226–229 (integer-like names such as
+`"10"` written first) and R failed 223, 224, 227, 228 (a member `""` read
+as null and written twice) and 230 (a format key `""` refused at load);
+Python and Julia passed all eight. 225 (reading `""` members) failed on no
+kernel: it pins the read direction. A member's order is pinned only
+through bytes the kernel writes (rendered text, `required`); the harness
+compares objects without order, as JSON does.
+
 **Names are data (kernel 0.8.4, D-58).** Cases 214–222 were typed by hand
 from kernel §1 ("Names are data"), §2–§4 and §3a: field names, a turn
 slot, a purpose, artifact keys and JSON members named like JavaScript's

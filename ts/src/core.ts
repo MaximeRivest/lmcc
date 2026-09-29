@@ -10,7 +10,7 @@
  */
 
 import { refuse, Refusal } from "./errors.ts";
-import { formatNumber, isPlainObject, jsonEqual, jsonText, setMember, type JsonObject } from "./json.ts";
+import { formatNumber, isPlainObject, jsonEqual, jsonText, keepOrder, memberNames, setMember, type JsonObject } from "./json.ts";
 import { asciiLower, pyRepr, pyStr, readBoolean, readInteger, readNumber, strip, WHITESPACE } from "./text.ts";
 import { brand } from "./brand.ts";
 
@@ -58,9 +58,9 @@ export function nullableBase(shape: Shape): [Shape, boolean] {
     const others = t.filter((x) => x !== "null");
     if (t.includes("null") && others.length === 1 && t.length === 2) {
       const base: Record<string, unknown> = {};
-      for (const k of Object.keys(shape)) if (k !== "type") setMember(base, k, shape[k]);
-      base["type"] = others[0];
-      return [base as Shape, true];
+      const names = memberNames(shape);
+      for (const k of names) setMember(base, k, k === "type" ? others[0] : shape[k]);
+      return [keepOrder(base, names) as Shape, true];
     }
     return [shape, false];
   }

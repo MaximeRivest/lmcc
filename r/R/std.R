@@ -423,19 +423,22 @@ closed_shape <- function(shape) {
   if (is_arr(shape)) return(lapply(shape, closed_shape))
   if (!is_obj(shape)) return(shape)
   out <- as_obj(shape)
-  for (key in names(out)) {
-    v <- out[[key]]
+  # By position: a property may be named "" (kernel section 1).
+  for (i in seq_along(out)) {
+    key <- names(out)[[i]]
+    v <- out[[i]]
     if (key %in% maps && is_obj(v)) {
       v <- as_obj(v)
-      for (n in names(v)) v[n] <- list(closed_shape(v[[n]]))
-      out[[key]] <- v
+      for (j in seq_along(v)) v[j] <- list(closed_shape(v[[j]]))
+      out[[i]] <- v
     } else if (key %in% one) {
-      out[key] <- list(closed_shape(v))
+      out[i] <- list(closed_shape(v))
     }
   }
-  if (is_obj(out[["properties"]])) {
-    out[["required"]] <- as.list(unname(names(out[["properties"]])))
-    if (!("additionalProperties" %in% names(out))) out[["additionalProperties"]] <- FALSE
+  properties <- get_key(out, "properties")
+  if (is_obj(properties)) {
+    out <- set_key(out, "required", as.list(unname(names(properties))))
+    if (!has_key(out, "additionalProperties")) out <- set_key(out, "additionalProperties", FALSE)
   }
   out
 }

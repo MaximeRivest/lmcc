@@ -123,7 +123,7 @@ adapter <- function(messages, reader = NULL, transports = NULL, formats = NULL, 
       else malformed(where, sprintf("%s: expected a name, a transport, use_vocab(...), or transport data", where))
   }
   fb <- list()
-  for (key in names(formats)) fb[[key]] <- format_entry(key, formats[[key]])
+  for (m in members_of(formats)) fb <- set_key(fb, m[[1]], format_entry(m[[1]], m[[2]]))
   declared <- validate_declaration(extensions)
   if (declare_defaults) declared <- default_declaration(sb, declared)
   a <- list(template = lapply(messages, as_obj), reader = as_obj(rd), transports = sb, formats = fb, name = name,
@@ -251,8 +251,8 @@ load_adapter <- function(entry, registry = default_registry()) {
   }
   formats <- list()
   efs <- get_key(entry, "formats")
-  for (key in names(if (pytruthy(efs)) efs else list())) {
-    f <- efs[[key]]; where <- sprintf("formats[%s]", pyrepr(key))
+  for (m in members_of(if (pytruthy(efs)) efs else list())) {
+    key <- m[[1]]; f <- m[[2]]; where <- sprintf("formats[%s]", pyrepr(key))
     if (!is_obj(f)) malformed(where, sprintf("%s: must be an object", where))
     if (has_key(f, "use")) {
       name <- f[["use"]]
@@ -263,13 +263,13 @@ load_adapter <- function(entry, registry = default_registry()) {
       options <- as_obj(get_key(f, "options"))
       named_format(reg, name, options, where)
       f[["options"]] <- options
-      formats[[key]] <- f
+      formats <- set_key(formats, key, f)
     } else if (has_key(f, "language")) {
       for (req in c("write", "sha256")) if (!has_key(f, req)) malformed(paste0(where, ".", req), sprintf("%s: a shipped format needs %s", where, pyrepr(req)))
       if (!reg$allow_udf) refuse("format-untrusted", sprintf("%s: the artifact ships a %s UDF and this runtime will not place code (an R runtime places no UDF language; bind a runtime format for the type with bind_type())", where, pystr(f[["language"]])),
                                  fix = jobj(action = "place-udf", language = pystr(f[["language"]]), path = where))
       load_udf(f, where)
-    } else if (has_key(f, "describe")) formats[[key]] <- f
+    } else if (has_key(f, "describe")) formats <- set_key(formats, key, f)
     else malformed(where, sprintf("%s: a format entry is {use}, a shipped UDF, or a description {describe}", where))
   }
   a <- adapter(template, reader = rs, transports = transports, formats = formats, name = get_key(entry, "name", "adapter"),
@@ -316,10 +316,10 @@ dump_adapter <- function(a, registry = default_registry()) {
     vocab[[paste0("format/", ref[[2]][["use"]])]] <- reg$formats[[ref[[2]][["use"]]]]$version
   }
   formats <- jobj()
-  for (key in names(a$formats)) {
-    b <- a$formats[[key]]
+  for (m in members_of(a$formats)) {
+    key <- m[[1]]; b <- m[[2]]
     if (is_format(b)) {
-      if (!is.null(b$shipped)) { formats[[key]] <- b$shipped; next }
+      if (!is.null(b$shipped)) { formats <- set_key(formats, key, b$shipped); next }
       refuse("format-not-self-contained", sprintf("cannot dump formats[%s]: an R format is a closure, not shippable source; bind it at runtime with bind_type() (never serialized) or reference a registered format by name", pyrepr(key)),
              fix = jobj(action = "reship-udf", path = sprintf("formats[%s]", pyrepr(key))))
     } else if (is_reference(b)) {
@@ -327,8 +327,8 @@ dump_adapter <- function(a, registry = default_registry()) {
       if (is.null(named)) refuse("unknown-format", sprintf("cannot dump: format %s is not registered", pyrepr(b[["use"]])),
                                  fix = jobj(action = "install-vocabulary", kind = "format", name = b[["use"]]))
       vocab[[paste0("format/", b[["use"]])]] <- named$version
-      formats[[key]] <- ref_of(b)
-    } else formats[[key]] <- b
+      formats <- set_key(formats, key, ref_of(b))
+    } else formats <- set_key(formats, key, b)
   }
   kind <- a$reader[["kind"]]
   if (kind != "derived") {

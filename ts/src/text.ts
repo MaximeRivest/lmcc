@@ -15,7 +15,7 @@
  */
 
 import { refuse } from "./errors.ts";
-import { formatNumber, integerValue, isPlainObject } from "./json.ts";
+import { formatNumber, integerValue, isPlainObject, memberNames } from "./json.ts";
 
 export const WHITESPACE = " \t\n\r\f\v";
 const WS = new Set(WHITESPACE);
@@ -159,7 +159,7 @@ export function pyRepr(value: unknown): string {
   }
   if (Array.isArray(value)) return "[" + value.map(pyRepr).join(", ") + "]";
   if (isPlainObject(value)) {
-    return "{" + Object.keys(value).map((k) => `${reprString(k)}: ${pyRepr(value[k])}`).join(", ") + "}";
+    return "{" + memberNames(value).map((k) => `${reprString(k)}: ${pyRepr(value[k])}`).join(", ") + "}";
   }
   return String(value);
 }

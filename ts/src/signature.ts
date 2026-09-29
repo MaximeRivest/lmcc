@@ -18,7 +18,7 @@
  */
 
 import { refuse } from "./errors.ts";
-import { deepCopy, type Json, type JsonObject } from "./json.ts";
+import { deepCopy, memberNames, type Json, type JsonObject } from "./json.ts";
 import { isObj, type Field, type Shape } from "./core.ts";
 import { isIdentifier, pyRepr, PURPOSE_RE } from "./text.ts";
 import { brand } from "./brand.ts";
@@ -242,7 +242,7 @@ export const t = {
   object: <P extends Record<string, TypedShape<unknown>>>(properties: P): TypedShape<{ [K in keyof P]: SpecValue<P[K]> }> => ({
     type: "object",
     properties: properties as unknown as JsonObject,
-    required: Object.keys(properties),
+    required: memberNames(properties),
   }),
   /** An lm15 part of this type (`image`, `document`, …); its value is the part's data. */
   media: (type: string): TypedShape<Record<string, unknown>> => ({ media: type }),

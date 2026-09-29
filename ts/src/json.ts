@@ -62,6 +62,66 @@ export function ownValue(obj: object, key: string): unknown {
   return Object.prototype.hasOwnProperty.call(obj, key) ? (obj as Record<string, unknown>)[key] : undefined;
 }
 
+/*
+ * Member order (kernel §1, "Members keep their order"). A JavaScript object
+ * enumerates integer-like names ("0", "10") first, in numeric order, however
+ * it was built; every other host keeps the order a value holds. So an object
+ * lmcc builds from ordered data (a parse, a copy, `orderedObject`) whose order
+ * JavaScript would change carries it: a frozen list of its names under a
+ * registered symbol, not enumerable, so `Object.keys`, spread, `JSON.stringify`,
+ * `structuredClone` and deep equality neither see nor copy it. Every writer in
+ * lmcc reads an object's names through `memberNames`; nothing is recorded
+ * when JavaScript's order is already the value's.
+ */
+const ORDER = Symbol.for("lmcc.memberOrder");
+
+/** An array index name ("0", "10", not "01" or "4294967295"): JavaScript enumerates these first. */
+function isIndexName(key: string): boolean {
+  return /^(0|[1-9][0-9]{0,9})$/.test(key) && Number(key) < 4294967295;
+}
+
+/**
+ * An object's own member names in the value's order: the order lmcc read or
+ * built it in, when JavaScript's differs; else `Object.keys`. A member added
+ * after lmcc built the object comes after the ones it recorded.
+ */
+export function memberNames(obj: object): string[] {
+  const own = Object.keys(obj);
+  if (!Object.prototype.hasOwnProperty.call(obj, ORDER)) return own;
+  const recorded = (obj as { [ORDER]: readonly string[] })[ORDER];
+  const present = new Set(own);
+  const out = recorded.filter((k) => present.has(k));
+  if (out.length === own.length) return out;
+  const listed = new Set(out);
+  for (const k of own) if (!listed.has(k)) out.push(k);
+  return out;
+}
+
+/** Record that `obj`'s members are in the order `names` (its own names, each once), if JavaScript's differs. */
+export function keepOrder<T extends object>(obj: T, names: readonly string[]): T {
+  if (!names.some(isIndexName)) return obj;
+  const own = Object.keys(obj);
+  if (own.length === names.length && own.every((k, i) => k === names[i])) return obj;
+  Object.defineProperty(obj, ORDER, { value: Object.freeze([...names]), configurable: true });
+  return obj;
+}
+
+/**
+ * A plain object whose members are in the order given, even integer-like
+ * names JavaScript would move first: `orderedObject([["b", 1], ["10", 2]])`
+ * is written `{"b": 1, "10": 2}` by every lmcc writer. A name given twice
+ * keeps its first place and its last value (as a JSON parse does).
+ */
+export function orderedObject<V = unknown>(entries: Iterable<readonly [string, V]>): Record<string, V> {
+  const out: Record<string, V> = {};
+  const names: string[] = [];
+  for (const [k, v] of entries) {
+    if (!Object.prototype.hasOwnProperty.call(out, k)) names.push(k);
+    setMember(out, k, v);
+  }
+  return keepOrder(out, names);
+}
+
 class Parser {
   readonly s: string;
   readonly duplicates: "reject" | "last";
@@ -208,6 +268,7 @@ class Parser {
   object(): JsonObject {
     this.i++;
     const out: JsonObject = {};
+    const names: string[] = [];
     this.ws();
     if (this.s[this.i] === "}") {
       this.i++;
@@ -222,8 +283,10 @@ class Parser {
       this.i++;
       this.ws();
       const value = this.value();
-      if (Object.prototype.hasOwnProperty.call(out, key) && this.duplicates === "reject") {
-        throw new JsonSyntaxError(`duplicate member ${JSON.stringify(key)}`, this.i);
+      if (Object.prototype.hasOwnProperty.call(out, key)) {
+        if (this.duplicates === "reject") throw new JsonSyntaxError(`duplicate member ${JSON.stringify(key)}`, this.i);
+      } else {
+        names.push(key);
       }
       setMember(out, key, value);
       this.ws();
@@ -233,7 +296,7 @@ class Parser {
       }
       if (this.s[this.i] === "}") {
         this.i++;
-        return out;
+        return keepOrder(out, names);
       }
       this.fail("expected ',' or '}'");
     }
@@ -353,7 +416,7 @@ export function jsonText(value: unknown, options: JsonTextOptions = {}): string 
     if (hasToJSON(v)) return write(v.toJSON());
     if (Array.isArray(v)) return "[" + v.map(write).join(item) + "]";
     if (isPlainObject(v)) {
-      let keys = Object.keys(v).filter((k) => v[k] !== undefined);
+      let keys = memberNames(v).filter((k) => v[k] !== undefined);
       if (options.sortKeys) keys = [...keys].sort(compareCodePoints);
       return "{" + keys.map((k) => jsonString(k) + key + write(v[k])).join(item) + "}";
     }
@@ -401,13 +464,14 @@ export function pretty(value: unknown): string {
   return JSON.stringify(value, (_k, v) => (typeof v === "bigint" ? v.toString() : v), 1) ?? "undefined";
 }
 
-/** A deep copy of JSON-like data (plain objects and arrays; other values shared). */
+/** A deep copy of JSON-like data (plain objects and arrays; other values shared), members in order. */
 export function deepCopy<T>(value: T): T {
   if (Array.isArray(value)) return value.map(deepCopy) as T;
   if (isPlainObject(value)) {
     const out: Record<string, unknown> = {};
-    for (const k of Object.keys(value)) setMember(out, k, deepCopy(value[k]));
-    return out as T;
+    const names = memberNames(value);
+    for (const k of names) setMember(out, k, deepCopy(value[k]));
+    return keepOrder(out, names) as T;
   }
   return value;
 }

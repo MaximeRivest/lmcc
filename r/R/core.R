@@ -255,7 +255,7 @@ normalize_response_parts <- function(parts) {
     n <- length(out)
     if (has_text && length(texts) && identical(out[[n]][["type"]], part[["type"]])) {
       texts <- c(texts, part[["text"]])
-      for (k in setdiff(names(part), c("type", "text"))) out[[n]] <- set_key(out[[n]], k, part[[k]])
+      for (m in members_of(part)) if (!(m[[1]] %in% c("type", "text"))) out[[n]] <- set_key(out[[n]], m[[1]], m[[2]])
       next
     }
     if (length(texts)) out[[n]][["text"]] <- paste(texts, collapse = "")

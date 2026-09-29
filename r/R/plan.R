@@ -605,17 +605,16 @@ depends_on_inputs <- function(nodes, names_in) {
 MISSING <- structure(list(), class = "lmcc_missing")
 get_path <- function(target, path) {
   for (k in strsplit(path, ".", fixed = TRUE)[[1]]) {
-    if (!is_obj(target) || !has_key(target, k)) return(MISSING)
-    target <- target[[k]]
+    i <- if (is_obj(target)) key_index(target, k) else 0L
+    if (!i) return(MISSING)
+    target <- target[[i]]
   }
   target
 }
 set_path <- function(target, path, value) {
   keys <- strsplit(path, ".", fixed = TRUE)[[1]]
   if (length(keys) == 1L) return(set_key(target, keys, value))
-  inner <- if (has_key(target, keys[[1]])) target[[keys[[1]]]] else jobj()
-  target[[keys[[1]]]] <- set_path(inner, paste(keys[-1L], collapse = "."), value)
-  target
+  set_key(target, keys[[1]], set_path(get_key(target, keys[[1]], jobj()), paste(keys[-1L], collapse = "."), value))
 }
 
 merge_setting <- function(p, path, value, owner, setting_owner, conflict_path) {

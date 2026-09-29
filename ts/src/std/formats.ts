@@ -11,7 +11,7 @@
 import { Refusal } from "../errors.ts";
 import { readValue, type Field, type Shape } from "../core.ts";
 import type { Format } from "../formats.ts";
-import { formatNumber, hasToJSON, isPlainObject, ownValue, setMember } from "../json.ts";
+import { formatNumber, hasToJSON, isPlainObject, keepOrder, memberNames, ownValue, setMember } from "../json.ts";
 import type { Registry } from "../registry.ts";
 import { strip, pyRepr } from "../text.ts";
 import { dumps, loads } from "./jsontext.ts";
@@ -29,8 +29,9 @@ export function lower(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(lower);
   if (isPlainObject(value)) {
     const out: Record<string, unknown> = {};
-    for (const k of Object.keys(value)) setMember(out, k, lower(value[k]));
-    return out;
+    const names = memberNames(value);
+    for (const k of names) setMember(out, k, lower(value[k]));
+    return keepOrder(out, names);
   }
   return value;
 }

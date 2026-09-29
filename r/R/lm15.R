@@ -25,12 +25,13 @@ lm15_plain <- function(x) {
 
 merge_settings <- function(base, extra, path = "", override = FALSE) {
   out <- as_obj(base)
-  for (k in names(extra)) {
-    v <- extra[[k]]; here <- if (nzchar(path)) paste0(path, ".", k) else k
-    if (has_key(out, k) && is_obj(out[[k]]) && is_obj(v)) out[[k]] <- merge_settings(out[[k]], v, here, override)
-    else if (has_key(out, k) && !json_equal(out[[k]], v) && !override)
+  for (m in members_of(extra)) {
+    k <- m[[1]]; v <- m[[2]]; here <- if (nzchar(path)) paste0(path, ".", k) else k
+    i <- key_index(out, k)
+    if (i && is_obj(out[[i]]) && is_obj(v)) out[i] <- list(merge_settings(out[[i]], v, here, override))
+    else if (i && !json_equal(out[[i]], v) && !override)
       stop(structure(class = c("lmcc_config_conflict", "error", "condition"), list(call = NULL,
-        message = sprintf("%s: the plan's request settings require %s (a transport or reader asked for it) but the caller's config says %s; pass override = TRUE to insist", here, json_text(out[[k]]), json_text(v)))))
+        message = sprintf("%s: the plan's request settings require %s (a transport or reader asked for it) but the caller's config says %s; pass override = TRUE to insist", here, json_text(out[[i]]), json_text(v)))))
     else out <- set_key(out, k, v)
   }
   out

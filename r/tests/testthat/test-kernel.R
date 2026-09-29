@@ -107,3 +107,17 @@ test_that("streaming cost is linear in the reply length", {
   small <- cost(10000); large <- cost(40000)
   expect_lt(large, 12 * small + 0.5)
 })
+
+test_that("a member named \"\" is found, written once, and compared (kernel section 1, D-58)", {
+  # R's x[[""]] is NULL and x[[""]] <- v appends: every lookup is by position.
+  x <- parse_json("{\"\": 1, \"a\": {\"\": null}, \"\": 2}")
+  expect_equal(names(x), c("", "a"))
+  expect_equal(x[[1]], 2)
+  expect_equal(json_text(x), "{\"\":2,\"a\":{\"\":null}}")
+  expect_equal(json_text(lmcc:::to_json(x)), "{\"\":2,\"a\":{\"\":null}}")
+  expect_false(lmcc:::json_equal(parse_json("{\"\": 1}"), parse_json("{\"\": 2}")))
+  expect_true(lmcc:::json_equal(parse_json("{\"\": 1, \"b\": 2}"), parse_json("{\"b\": 2, \"\": 1}")))
+  shape <- parse_json("{\"type\": \"object\", \"properties\": {\"b\": {\"type\": \"string\"}, \"\": {\"type\": \"object\", \"properties\": {\"\": {}}}}}")
+  expect_equal(json_text(lmcc:::closed_shape(shape)),
+    "{\"type\":\"object\",\"properties\":{\"b\":{\"type\":\"string\"},\"\":{\"type\":\"object\",\"properties\":{\"\":{}},\"required\":[\"\"],\"additionalProperties\":false}},\"required\":[\"b\",\"\"],\"additionalProperties\":false}")
+})

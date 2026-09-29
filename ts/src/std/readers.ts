@@ -15,7 +15,7 @@ import { Reader } from "../reader.ts";
 import type { Registry } from "../registry.ts";
 import { pyRepr, strip } from "../text.ts";
 import { dumps, loads, members } from "./jsontext.ts";
-import { hasOwn, setMember, type Json } from "../json.ts";
+import { hasOwn, keepOrder, memberNames, setMember, type Json } from "../json.ts";
 
 export const VERSION = "0.2.1";
 export const PROBABILITY_POLICIES = ["off", "if_available", "required"];
@@ -39,16 +39,24 @@ export function closed(shape: unknown): unknown {
   if (Array.isArray(shape)) return shape.map(closed);
   if (!isPlain(shape)) return shape;
   const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(shape)) {
-    if (MAP.has(key) && isPlain(value)) setMember(out, key, Object.fromEntries(Object.entries(value).map(([k, v]) => [k, closed(v)])));
-    else if (ONE.has(key) || LIST.has(key)) setMember(out, key, closed(value));
+  const names = memberNames(shape);
+  for (const key of names) {
+    const value = shape[key];
+    if (MAP.has(key) && isPlain(value)) {
+      const map: Record<string, unknown> = {};
+      const inner = memberNames(value);
+      for (const k of inner) setMember(map, k, closed(value[k]));
+      setMember(out, key, keepOrder(map, inner));
+    } else if (ONE.has(key) || LIST.has(key)) setMember(out, key, closed(value));
     else setMember(out, key, value);
   }
   if (hasOwn(out, "properties") && isPlain(out["properties"])) {
-    out["required"] = Object.keys(out["properties"]);
+    // Every property, in property order (kernel §1: members keep their order).
+    out["required"] = memberNames(out["properties"]);
     if (!hasOwn(out, "additionalProperties")) out["additionalProperties"] = false;
   }
-  return out;
+  const added = ["required", "additionalProperties"].filter((k) => hasOwn(out, k) && !names.includes(k));
+  return keepOrder(out, [...names, ...added]);
 }
 
 export class JsonObjectReader extends Reader {

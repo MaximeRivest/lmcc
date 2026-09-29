@@ -1,0 +1,94 @@
+{
+ "name": "std-parse-json-empty-member-name",
+ "kind": "parse",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "json_reader_empty_name_v1",
+  "versions": {
+   "kernel": "0.8.4",
+   "vocab": {
+    "reader/json_object": "0.2.0",
+    "format/json": "0.1.0"
+   }
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "reader": {
+   "kind": "json_object"
+  },
+  "formats": {
+   "*": {
+    "use": "json"
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Answer.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "o",
+    "direction": "output",
+    "shape": {
+     "type": "object",
+     "properties": {
+      "": {
+       "type": "string"
+      },
+      "inner": {
+       "type": "object",
+       "properties": {
+        "": {
+         "type": "integer"
+        }
+       }
+      }
+     }
+    }
+   },
+   {
+    "name": "m",
+    "direction": "output",
+    "shape": {
+     "type": "object"
+    }
+   }
+  ]
+ },
+ "capabilities": {
+  "native_structured_output": true
+ },
+ "response": "{\"o\": {\"\": \"a\", \"inner\": {\"\": 1}}, \"m\": {\"\": null, \"z\": {\"\": []}}}",
+ "expect": {
+  "values": {
+   "o": {
+    "": "a",
+    "inner": {
+     "": 1
+    }
+   },
+   "m": {
+    "": null,
+    "z": {
+     "": []
+    }
+   }
+  }
+ }
+}

@@ -1,0 +1,128 @@
+{
+ "name": "std-render-json-empty-member-name",
+ "kind": "render",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "json_empty_name_v1",
+  "versions": {
+   "kernel": "0.8.4",
+   "vocab": {
+    "format/json": "0.1.0"
+   }
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>{% endfor %}"
+   },
+   {
+    "directive": "turns"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  },
+  "formats": {
+   "*": {
+    "use": "json"
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Answer.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "object"
+    }
+   },
+   {
+    "name": "o",
+    "direction": "output",
+    "shape": {
+     "type": "object",
+     "properties": {
+      "": {
+       "type": "string"
+      },
+      "n": {
+       "type": "integer"
+      }
+     }
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "q": {
+   "": "top",
+   "k": {
+    "": null,
+    "m": [
+     {
+      "": 1
+     }
+    ]
+   }
+  }
+ },
+ "turns": {
+  "turns": [
+   {
+    "inputs": {
+     "q": {
+      "": ""
+     }
+    },
+    "outputs": {
+     "o": {
+      "": "a",
+      "n": 2
+     }
+    }
+   }
+  ]
+ },
+ "expect": {
+  "request": {
+   "system": "Answer.\n<o>\nJSON matching this schema: {\"type\": \"object\", \"properties\": {\"\": {\"type\": \"string\"}, \"n\": {\"type\": \"integer\"}}}\n</o>",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "{\n  \"\": \"\"\n}"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "<o>\n{\n  \"\": \"a\",\n  \"n\": 2\n}\n</o>"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "{\n  \"\": \"top\",\n  \"k\": {\n    \"\": null,\n    \"m\": [\n      {\n        \"\": 1\n      }\n    ]\n  }\n}"
+      }
+     ]
+    }
+   ]
+  }
+ }
+}
