@@ -446,10 +446,10 @@ wlstrip(s::AbstractString) = String(Base.lstrip(isws, s))
 wrstrip(s::AbstractString) = String(Base.rstrip(isws, s))
 cstrip(s::AbstractString, chars) = String(Base.strip(c -> c in chars, s))
 
-const _IDENT = r"^[A-Za-z_][A-Za-z0-9_]*$"
-const _PURPOSE = r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$"
-const _INTEGER = r"^-?[0-9]+$"
-const _NUMBER = r"^-?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?$"
+const _IDENT = r"\A[A-Za-z_][A-Za-z0-9_]*\z"
+const _PURPOSE = r"\A[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*\z"
+const _INTEGER = r"\A-?[0-9]+\z"
+const _NUMBER = r"\A-?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?\z"
 
 isidentifier(x) = x isa AbstractString && occursin(_IDENT, x)
 

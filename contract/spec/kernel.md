@@ -536,7 +536,10 @@ otherwise (`call_1`, … per reply). A step written from values as native
 0-based index of that step among the model steps written as messages in
 this request, in request order, and its tool steps answer with the same
 id; ids stay unique in the request. Provider ids and text spellings are
-never changed.
+never changed. A call's id is non-empty text, as lm15's `ToolCallPart.id`
+is and as a tool step's is: a call written from values whose id is `""`
+refuses `turn-invalid` naming the field, native or spelled as text alike
+(nothing could answer it; cases 237, 238).
 
 `describe()["turns"]` is the whole plan of it: `slots` (`name`, `form`),
 `steps` (`"placed"`, `"after the template"`, or `null`), `replay`,
@@ -1003,6 +1006,14 @@ from a tool's name or from the model.
   never get here. `N/A` and `42.0` stay refusals: one could be content,
   the other is a different spelling, not a slip.
 - **Rounding** — half-to-even in binary64: `roundeven(x·10ⁿ)/10ⁿ`.
+- **Grammars** — every grammar this spec gives a name or a text
+  (identifiers, purposes, turn slots, versions, extension names, a find
+  rule's `from` and `to`, a put's target and place, integer and number
+  text) matches the whole text, nothing after it: `a\n` is not the
+  identifier `a` (a regex `$` that also matches before a final newline,
+  as Python's and PCRE's do, is not this rule; match whole, `\A…\z`).
+  Its digits and letters are ASCII: `[0-9]`, never a host's Unicode
+  `\d` or `isdigit` (`0.٨.4` is not a version). Cases 239–249, 251.
 - **Regex** — none in the core. A `pattern` find rule's syntax and matching
   are the declared `pattern/*` extension's (§10); the kernel never
   interprets the string itself.

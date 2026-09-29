@@ -98,7 +98,7 @@ _errmsg(err) = err isa Refusal ? err.hint : sprint(showerror, err)
 
 # ------------------------------------------------------------------ formats
 
-const _FENCE = r"^[ \t\n\r\f\v]*```[a-zA-Z0-9_-]*[ \t\n\r\f\v]*\n(.*?)\n?[ \t\n\r\f\v]*```[ \t\n\r\f\v]*$"s
+const _FENCE = r"\A[ \t\n\r\f\v]*```[a-zA-Z0-9_-]*[ \t\n\r\f\v]*\n(.*?)\n?[ \t\n\r\f\v]*```[ \t\n\r\f\v]*\z"s
 
 "Values spelled as JSON (spec/vocab/format-json.md). Option `indent` (default 2)."
 function json_format(options)
@@ -468,7 +468,7 @@ inline_citations(_) = Transport(requires=["instruct"], in_template=false, put=jo
 
 # ------------------------------------------------------------------ code
 
-const _IDENT_RE = r"^[A-Za-z_][A-Za-z0-9_]*$"
+const _IDENT_RE = r"\A[A-Za-z_][A-Za-z0-9_]*\z"
 function _code_options(opts; calls=false)
     allowed = calls ? ("marker", "tool") : ("marker",)
     unknown = sort([String(k) for k in keys(opts) if !(k in allowed)])

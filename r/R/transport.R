@@ -2,9 +2,9 @@
 
 TKEYS <- c("when", "requires", "in_template", "tell", "request_settings", "put", "written_as", "find", "spelling")
 PRED_KEYS <- c("capability", "not", "all", "any")
-TO_RE <- "^@purpose(\\.[A-Za-z_][A-Za-z0-9_]*)?$"
-PUT_RE <- "^(request\\.[a-z_][a-z0-9_.]*|message:(system|developer|user|assistant))$"
-FROM_RE <- "^(text|part:[a-z_]+)$"
+TO_RE <- "\\A@purpose(\\.[A-Za-z_][A-Za-z0-9_]*)?\\z"
+PUT_RE <- "\\A(request\\.[a-z_][a-z0-9_.]*|message:(system|developer|user|assistant))\\z"
+FROM_RE <- "\\A(text|part:[a-z_]+)\\z"
 LM15_CONFIG_FIELDS <- c("max_tokens", "temperature", "top_p", "top_k", "stop", "response_format", "tool_choice", "reasoning", "cache",
                         "seed", "frequency_penalty", "presence_penalty", "service_tier", "user_id", "store", "logprobs", "probabilities", "extensions")
 

@@ -1,6 +1,6 @@
 # Extensions (kernel section 10) and the registry: the sockets.
 
-EXT_NAME_RE <- "^[a-z][a-z0-9_]*/[a-z][a-z0-9_-]*$"
+EXT_NAME_RE <- "\\A[a-z][a-z0-9_]*/[a-z][a-z0-9_-]*\\z"
 family_of <- function(name) strsplit(name, "/", fixed = TRUE)[[1]][[1]]
 NON_RE2 <- "\\(\\?[=!>]|\\(\\?P?<|\\\\[1-9]|\\\\k<|[*+?}]\\+"
 
@@ -71,7 +71,7 @@ validate_declaration <- function(ext) {
   for (m in members_of(ext)) {
     name <- m[[1]]; version <- m[[2]]
     if (!grepl(EXT_NAME_RE, name, perl = TRUE)) malformed("extensions", sprintf("extensions: %s is not an extension name ('<family>/<name>', lowercase)", pyrepr(name)))
-    if (!is_str(version) || !grepl("^[0-9]+\\.[0-9]+\\.[0-9]+$", version, perl = TRUE)) malformed("extensions", sprintf("extensions: %s: version %s is not MAJOR.MINOR.PATCH", pyrepr(name), pyrepr(version)))
+    if (!is_str(version) || !grepl("\\A[0-9]+\\.[0-9]+\\.[0-9]+\\z", version, perl = TRUE)) malformed("extensions", sprintf("extensions: %s: version %s is not MAJOR.MINOR.PATCH", pyrepr(name), pyrepr(version)))
     fam <- family_of(name)
     if (has_key(seen, fam)) malformed("extensions", sprintf("extensions: %s and %s both govern family %s; declare one contract per family", pyrepr(get_key(seen, fam)), pyrepr(name), pyrepr(fam)))
     seen <- set_key(seen, fam, name)
@@ -204,6 +204,6 @@ versions_of <- function(m) { n <- ssort(names(m)); as_obj(structure(lapply(n, fu
 describe_registry <- function(x) {
   jobj(formats = versions_of(x$formats),
        type_bindings = lapply(members_of(x$type_bindings), function(m) { t <- m[[1]]; b <- m[[2]]; jobj(type = t, format = if (is_format(b)) b$name %||% "(inline)" else b$use) }),
-       transports = versions_of(x$transports), readers = c(jobj(derived = "kernel"), versions_of(x$readers)), allow_udf = x$allow_udf,
+       transports = versions_of(x$transports), readers = merge_obj(jobj(derived = "kernel"), versions_of(x$readers)), allow_udf = x$allow_udf,
        extensions = as_obj(lapply(x$extensions[ssort(names(x$extensions))], function(b) jobj(version = b$version, binding = b$binding))))
 }

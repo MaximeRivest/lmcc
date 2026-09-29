@@ -1,7 +1,7 @@
 # Extensions (kernel §10) and the registry: the sockets vocabulary plugs into.
 
-const _EXT_NAME = r"^[a-z][a-z0-9_]*/[a-z][a-z0-9_-]*$"
-const _SEMVER = r"^\d+\.\d+\.\d+$"
+const _EXT_NAME = r"\A[a-z][a-z0-9_]*/[a-z][a-z0-9_-]*\z"
+const _SEMVER = r"\A[0-9]+\.[0-9]+\.[0-9]+\z"
 family_of(name) = split(name, '/')[1]
 
 "What a host binds under an extension name: the contract, its version, a label saying how."

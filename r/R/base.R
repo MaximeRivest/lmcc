@@ -116,6 +116,13 @@ set_key <- function(x, k, v) {
   }
   x
 }
+# One object updated by another, as Python's {**a, **b}: a's members in
+# order, each one b also has replaced in place, then b's other members in
+# b's order. Never c(a, b), which holds a name twice when both have it.
+merge_obj <- function(a, b) {
+  for (m in members_of(b)) a <- set_key(a, m[[1]], m[[2]])
+  a
+}
 # The members of an object as (name, value) pairs, in order, by position.
 members_of <- function(x) {
   n <- names(x)
@@ -428,18 +435,18 @@ wrstrip <- function(s) sub("[ \t\n\r\f\v]+$", "", s, perl = TRUE)
 nlstrip <- function(s) sub("^\n+", "", sub("\n+$", "", s, perl = TRUE), perl = TRUE)
 is_ws_char <- function(ch) ch %in% c(" ", "\t", "\n", "\r", "\f", "\v")
 
-is_identifier <- function(x) is_str(x) && grepl("^[A-Za-z_][A-Za-z0-9_]*$", x, perl = TRUE)
-PURPOSE_RE <- "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*$"
+is_identifier <- function(x) is_str(x) && grepl("\\A[A-Za-z_][A-Za-z0-9_]*\\z", x, perl = TRUE)
+PURPOSE_RE <- "\\A[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*\\z"
 
 read_integer <- function(text, where) {
   t <- wstrip(text)
-  if (!grepl("^-?[0-9]+$", t, perl = TRUE)) refuse("parse-value", sprintf("%s: %s is not an integer", where, pyrepr(t)))
+  if (!grepl("\\A-?[0-9]+\\z", t, perl = TRUE)) refuse("parse-value", sprintf("%s: %s is not an integer", where, pyrepr(t)))
   integer_value(t)
 }
 
 read_number <- function(text, where) {
   t <- wstrip(text)
-  if (!grepl("^-?[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?$", t, perl = TRUE)) refuse("parse-value", sprintf("%s: %s is not a number", where, pyrepr(t)))
+  if (!grepl("\\A-?[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?\\z", t, perl = TRUE)) refuse("parse-value", sprintf("%s: %s is not a number", where, pyrepr(t)))
   v <- parse_f64(t)
   if (!is.finite(v)) refuse("parse-value", sprintf("%s: %s is not a finite number", where, pyrepr(t)))
   v

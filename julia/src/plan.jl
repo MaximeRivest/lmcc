@@ -478,6 +478,7 @@ function _write_model_step(p::Plan, s::ModelStep, ctx)
         for x in written
             (get(x, "type", nothing) == "tool_call" && get(x, "id", nothing) isa AbstractString && get(x, "name", nothing) isa AbstractString && isobj(get(x, "input", nothing))) ||
                 refuse("turn-not-renderable", "field $(pyrepr(p.calls_field)): its format must write lm15 tool_call parts {type, id, name, input}; got $(pyrepr(x))")
+            isempty(x["id"]) && refuse("turn-invalid", "field $(pyrepr(p.calls_field)): call $(pyrepr(x["name"])) has the id '', and a call's id is non-empty text (lm15 ToolCallPart.id; a tool step answers the call by it)")
         end
         owner = p.calls_owner
         if owner !== nothing && haskey(owner.transport.spelling, "call")

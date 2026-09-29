@@ -8,7 +8,7 @@
  *     node tools/probe.ts < cases.jsonl > observations.jsonl
  */
 
-import { createInterface } from "node:readline";
+import { onLines } from "../conform/lines.ts";
 import * as lmcc from "../src/index.ts";
 import { install as installStd } from "../src/std/index.ts";
 import { isPlainObject, jsonText, memberNames, orderedObject, parseJson } from "../src/json.ts";
@@ -113,8 +113,7 @@ function observed(value: unknown): unknown {
   return value;
 }
 
-const rl = createInterface({ input: process.stdin, crlfDelay: Infinity });
-rl.on("line", (line) => {
+onLines((line) => {
   if (!line.trim()) return;
   let answer: unknown;
   try {

@@ -1530,15 +1530,16 @@ object under this reader is still refused by strict providers, as
 before; with Gemini, which enforced the open schema, a record now also
 refuses keys it does not declare.
 
-**D-58 · Names are data, and members keep their order (kernel 0.8.4,
-no version change).** Asked by the maintainer on 2026-09-29 ("fix … so
-every kernel is held to it"), after functai's TypeScript stage 1 found
-the first half, then again after two reviews of that fix found the other
-two, and a third time after two more reviews found the same hazards in
-places the fixes had not reached (the third pass closes the class rather
-than the instances; its account is the last item below). Four host
-hazards of one kind: a record keyed by names that the host's own record
-type does not hold as data.
+**D-58 · Names are data, and members keep their order (kernel 0.8.4;
+the version is the maintainer's, see Contract).** Asked by the maintainer
+on 2026-09-29 ("fix … so every kernel is held to it"), after functai's
+TypeScript stage 1 found the first half, then again after two reviews of
+that fix found the other two, a third time after two more reviews found
+the same hazards in places the fixes had not reached, and a fourth time
+after two reviews of the third pass found one more keyed lookup in R and
+a grammar the kernels matched differently (the third and fourth passes
+are the last items below). Four host hazards of one kind: a record keyed
+by names that the host's own record type does not hold as data.
 
 1. **TypeScript, `Object.prototype`.** The kernel kept records keyed by
    field names and JSON members in ordinary objects and read them with
@@ -1575,10 +1576,19 @@ type does not hold as data.
   and member names are any string, `""` included) and "Members keep
   their order" (every JSON the kernel or a standard format writes, except
   canonical JSON, spells members in the value's order; `required` in
-  property order). Nothing is newly allowed and no version moves. Kernel
-  0.8.4 is already on npm with hazards 1 and 3; shipping the fix needs a
-  new package version, and the package version is the kernel version, so
-  that release is the maintainer's decision, not taken here. Cases
+  property order). Nothing is newly allowed. Some inputs that loaded or
+  rendered in 0.8.4 now refuse (the third and fourth passes list them):
+  that is a change to when a code fires, breaking by the rule. It is
+  classed here as a patch, for the maintainer to ratify with the release:
+  every newly refused input was outside a grammar already published (the
+  entry and signature schemas, §2's purposes, lm15's `ToolCallPart`),
+  was accepted by only some of the four kernels, or keyed a transport no
+  field could reach, so no artifact that worked the same everywhere
+  changes. A minor version would make every artifact pinned to 0.8 be
+  re-pinned for inputs none of them holds. Kernel 0.8.4 is already on
+  npm with hazards 1 and 3; shipping the fix needs a new package version,
+  and the package version is the kernel version, so that release is the
+  maintainer's decision, not taken here; this branch moves no version. Cases
   214–222 pin hazard 1: inputs and a partial example (214), a guard,
   bare slots and a turn slot named `__proto__` (215), outputs read by
   the derived reader (216) and missing (217), outputs read by the
@@ -1637,10 +1647,16 @@ type does not hold as data.
   (a JSON member, a format key, a slot, a probabilities field, a
   registry or type-binding name, a request setting, a put or tell key)
   is found and written by position (`key_index`, `get_key`, `set_key`,
-  `members_of` in `base.R`), never by `[[name]]`. `[[name]]` remains for
+  `members_of` in `base.R`), never by `[[name]]`, and one object is
+  updated by another with `merge_obj` (Python's `{**a, **b}`), never
+  `c(a, b)`, which holds a name both have twice. `[[name]]` remains for
   names the kernel chose or validated first (field names, template
-  slots, purposes after load's check); the first two passes had claimed
-  "never by `[[name]]`" for all of them, which was not true. R's other
+  slots, turn slots after the placed-slot check, purposes after load's
+  check, loop variables, tell roles, request-setting paths checked
+  against the pinned list) and for keys it builds itself with a prefix
+  (`"k"`, `"channel\u0001"`); the first two passes had claimed "never by
+  `[[name]]`" for all of them, which was not true, and the third pass
+  missed the call-id map (fourth pass, below). R's other
   hazard of this kind, `$`'s partial matching on lists, is now checked on
   every run: the conformance driver and the differential probe set
   `warnPartialMatchDollar`, `warnPartialMatchArgs` and
@@ -1691,6 +1707,42 @@ type does not hold as data.
   now ordered). TypeScript's
   `nullableBase` puts `type` last again, as the other kernels do (the
   second pass had moved it; no bytes differed).
+- **Fourth pass.** Two reviews of the third pass found:
+  - *R keyed the call-id map by a call id* (`ids[[id]]`), a value, not
+    a member name, so no name fuzz reached it: a call whose id is `""`
+    was written with no `id`, where the other kernels wrote `s0_`. The
+    map is now two character vectors found with `match`. What a call id
+    `""` means was open; it now refuses `turn-invalid` in all four
+    kernels, native or spelled alike (kernel §3a, cases 237, 238),
+    rather than being written `s<k>_`: lm15's `ToolCallPart` refuses an
+    empty id, a tool step with id `""` already refused, so the call could
+    never be answered, the heredoc calls format already required a
+    non-empty id, and writing `s0_` would invent an id from nothing.
+    Rejected: refusing a call's `name` `""` the same way, since
+    `format/tool_calls` reads a fenced call's name verbatim and would
+    then read values it cannot write back; a call named `""` written as
+    a native part still reaches lm15, which refuses it when the request
+    is built. Stated, not fixed here.
+  - *A grammar matched differently.* Python and PCRE (Julia, R) let `$`
+    match before a final `\n`, so `a\n` passed as a purpose, a field
+    name or purpose, a turn slot, an extension name or version, a find
+    rule's `from`/`to` or a put place in three kernels and refused in
+    TypeScript; and Python's `\d`/`isdigit` and Julia's `\d` took other
+    scripts' digits, so Python loaded an entry for kernel `0.٨.4` as
+    0.8.4 (and raised `ValueError` on `0.8.²`). §7a now says every
+    grammar matches the whole text, in ASCII; Python uses `fullmatch`,
+    Julia and R `\A…\z`, digits are `[0-9]` (cases 239–249, 251).
+  - *R wrote a member twice*: `reader/json_object` concatenated a
+    field's description onto a shape that had one (case 250, ordered);
+    every such `c(a, b)` is now `merge_obj` or `set_key`.
+  - *The judges could not see it.* The differential decoded probe lines
+    with plain `json.loads`, which keeps the last of two members, so a
+    member written twice compared equal: it now fails the probe on any
+    duplicate at any depth; it split lines with `str.splitlines`, which
+    also splits at U+2028, and the TypeScript driver and probe read with
+    `node:readline`, which does too (a case holding U+2028 crashed the
+    TypeScript driver; case 251): all now split at `\n` only. A failed
+    `ordered` comparison in the TypeScript driver names the path.
 - **Pinned elsewhere.** A refusal's `partial` has no field in the case
   schema, so cases 217 and 219 do not pin it; the differential check
   compares every refusal's `partial` across the four kernels on every

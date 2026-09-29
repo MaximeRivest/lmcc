@@ -25,7 +25,7 @@ def _parse_version(version: object, *, what: str) -> tuple[int, int, int]:
         refuse("entry-malformed", f"{what}: version must be a string",
                fix={"action": "edit-entry", "path": "versions"})
     parts = version.split(".")
-    if len(parts) != 3 or not all(p.isdigit() for p in parts):
+    if len(parts) != 3 or not all(p and all("0" <= c <= "9" for c in p) for p in parts):
         refuse("entry-malformed", f"{what}: version {version!r} is not MAJOR.MINOR.PATCH",
                fix={"action": "edit-entry", "path": "versions"})
     return tuple(int(p) for p in parts)  # type: ignore[return-value]

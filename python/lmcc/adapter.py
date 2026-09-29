@@ -15,7 +15,7 @@ from .errors import refuse
 from .transport import Transport
 from .template import RESERVED_SLOTS, compile_template, turn_slots
 
-_SLOT_NAME = __import__("re").compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_SLOT_NAME = __import__("re").compile(r"[A-Za-z_][A-Za-z0-9_]*")   # matched whole
 REPLAY = ("recorded", "values", "verbatim")
 
 
@@ -216,7 +216,7 @@ def adapter(*, messages: list[dict] | None = None, template: list[dict] | dict |
         if "directive" in m:
             slot = m.get("slot", "turns")
             if (m["directive"] != "turns" or set(m) - {"directive", "slot"}
-                    or not isinstance(slot, str) or not _SLOT_NAME.match(slot)):
+                    or not isinstance(slot, str) or not _SLOT_NAME.fullmatch(slot)):
                 refuse("entry-malformed",
                        f"template[{i}]: a directive is {{\"directive\": \"turns\", \"slot\"?: "
                        f"name}} (demos and history are turn slots since kernel 0.7)",

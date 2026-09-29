@@ -13,11 +13,12 @@
  * exact (case 35 writes 9007199254740993).
  */
 
-import { createInterface } from "node:readline";
+import { onLines } from "./lines.ts";
 import * as lmcc from "../src/index.ts";
 import { install as installStd } from "../src/std/index.ts";
 import { isPlainObject, jsonEqual, memberNames, orderedObject, ownValue, parseJson, pretty, setMember } from "../src/json.ts";
 import { nativeExtensions } from "../src/extensions.ts";
+import { pyRepr } from "../src/text.ts";
 import { sha256Hex } from "../src/sha256.ts";
 import { jsonText } from "../src/json.ts";
 
@@ -57,23 +58,35 @@ function unclaimedOf(c: Case): string | null {
   return null;
 }
 
-/** Whether every object lists its members in the same order (kernel §1), recursively. */
-function sameOrder(expected: unknown, got: unknown): boolean {
-  if (Array.isArray(expected) && Array.isArray(got)) return expected.every((x, i) => sameOrder(x, got[i]));
+/**
+ * Where two equal values first list an object's members in different
+ * orders (kernel §1), recursively: the path and both name lists, or null.
+ */
+function orderDifference(expected: unknown, got: unknown, path = "$"): string | null {
+  if (Array.isArray(expected) && Array.isArray(got)) {
+    for (let i = 0; i < expected.length; i++) {
+      const d = orderDifference(expected[i], got[i], `${path}[${i}]`);
+      if (d !== null) return d;
+    }
+    return null;
+  }
   if (isPlainObject(expected) && isPlainObject(got)) {
     const a = memberNames(expected);
     const b = memberNames(got);
-    return a.length === b.length && a.every((k, i) => k === b[i]) && a.every((k) => sameOrder(expected[k], got[k]));
+    if (a.length !== b.length || a.some((k, i) => k !== b[i])) return `${path}\n--- expected\n${pretty(a)}\n--- got\n${pretty(b)}`;
+    for (const k of a) {
+      const d = orderDifference(ownValue(expected, k), ownValue(got, k), `${path}[${pyRepr(k)}]`);
+      if (d !== null) return d;
+    }
   }
-  return true;
+  return null;
 }
 
 function compare(expected: unknown, got: unknown, what: string, ordered = false): Result {
-  if (jsonEqual(expected, got) && ordered && !sameOrder(expected, got)) {
-    return { ok: false, detail: `${what}: member order differs (the case is ordered, kernel §9)\n--- expected\n${memberNames(expected as object)}\n--- got\n${memberNames(got as object)}` };
-  }
-  if (jsonEqual(expected, got)) return { ok: true, detail: "" };
-  return { ok: false, detail: `${what} mismatch\n--- expected\n${pretty(expected)}\n--- got\n${pretty(got)}` };
+  if (!jsonEqual(expected, got)) return { ok: false, detail: `${what} mismatch\n--- expected\n${pretty(expected)}\n--- got\n${pretty(got)}` };
+  const order = ordered ? orderDifference(expected, got) : null;
+  if (order !== null) return { ok: false, detail: `${what}: member order differs (the case is ordered, kernel §9) at ${order}` };
+  return { ok: true, detail: "" };
 }
 
 function messageParts(response: unknown): Case[] {
@@ -287,8 +300,7 @@ export function runCase(c: Case): Result {
 }
 
 function main(): void {
-  const rl = createInterface({ input: process.stdin, crlfDelay: Infinity });
-  rl.on("line", (line) => {
+  onLines((line) => {
     if (!line.trim()) return;
     let answer: Result;
     try {

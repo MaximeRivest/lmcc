@@ -1,0 +1,55 @@
+{
+ "name": "refuse-load-turns-slot-trailing-newline",
+ "kind": "refuse",
+ "entry": {
+  "name": "style_v1",
+  "versions": {
+   "kernel": "0.8.4",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n\nReply with EXACTLY these sections:\n{% for f in outputs %}<{f.name}>\n{f.value}\n{% endfor %}</done>"
+   },
+   {
+    "directive": "turns",
+    "slot": "demos\n"
+   },
+   {
+    "role": "user",
+    "text": "{% for f in inputs %}== {f.name} ==\n{f.value}\n{% endfor %}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  }
+ },
+ "expect": {
+  "code": "entry-malformed",
+  "at": "load",
+  "fix": {
+   "action": "edit-entry",
+   "path": "template[1]"
+  }
+ },
+ "signature": {
+  "instructions": "Answer.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ }
+}

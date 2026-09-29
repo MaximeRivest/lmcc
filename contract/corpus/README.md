@@ -1,5 +1,25 @@
 # The corpus
 
+**Whole grammars, call ids, one description (kernel 0.8.4, D-58, fourth
+pass).** Cases 237–251 were typed by hand from kernel §3a (a call's id is
+non-empty), §7a (every grammar matches the whole text, in ASCII) and
+`reader-json_object.md` (the field's description replaces the shape's),
+each expectation written before any kernel ran it. Before the fixes:
+Python failed 237–249 (it loaded names ending in `\n`, took `0.٨.4` for
+0.8.4 and wrote a call id `""` as `s0_`); Julia failed 237–245 and
+247–249 (PCRE's `$` and Unicode `\d`); R failed 237–244 and 247–250 (250
+by writing `description` twice); TypeScript failed 237, 238 and 251, the
+last because its driver read cases with `node:readline`, which also ends a
+line at U+2028. Case 248 was first written with a `between` rule, which a
+later check refused at the same path in every kernel, so it passed
+everywhere for the wrong reason; it now uses a channel rule (`from:
+"part:thinking\n"`), which the fixed kernels refuse and the parents loaded.
+Three other changes followed the first run and moved no expectation: the
+load cases built on 232 gained a signature (the Python driver raised
+`KeyError` on a load case with none that the kernel loaded, ending the run;
+it now reports "the entry loaded"), and 243–245 dropped their `pattern` rule, whose extension was
+refused before the malformed one could be.
+
 **Order you can see, the empty purpose and slot (kernel 0.8.4, D-58, third
 pass).** Cases 231–236 were typed by hand from kernel §1, §2, §3 and §9 as
 amended and from `format-table.md`. Every expectation matched the Python

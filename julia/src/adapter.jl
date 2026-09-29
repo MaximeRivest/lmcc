@@ -1,7 +1,7 @@
 # The adapter (kernel §2) and the artifact (serde, §5, §6, §9, §10).
 
 const KERNEL_VERSION = "0.8.4"
-const _SLOT_NAME = r"^[A-Za-z_][A-Za-z0-9_]*$"
+const _SLOT_NAME = r"\A[A-Za-z_][A-Za-z0-9_]*\z"
 const REPLAY = ("recorded", "values", "verbatim")
 
 system(text) = jobj("role" => "system", "text" => text)

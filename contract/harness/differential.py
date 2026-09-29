@@ -152,6 +152,36 @@ def observe(case: dict) -> dict:
     return out
 
 
+class DuplicateMember(ValueError):
+    """An object in a probe's output names one member twice."""
+
+
+def _once(pairs):
+    out = {}
+    for name, value in pairs:
+        if name in out:
+            raise DuplicateMember(name)
+        out[name] = value
+    return out
+
+
+def read_observation(line: str) -> dict:
+    """One probe line. Every object must name each member once (kernel §1:
+    a member is "written once"); plain ``json.loads`` keeps the last of two
+    and would hide the fault before any comparison, order included. A line
+    that names a member twice is the probe's failure, reported as a crash."""
+    try:
+        return json.loads(line, object_pairs_hook=_once)
+    except DuplicateMember as err:
+        return {"crash": f"the probe wrote the member {err.args[0]!r} twice in one object"}
+
+
+def probe_lines(stdout: str) -> list[str]:
+    """The probe's lines, split at "\n" only: ``str.splitlines`` also splits
+    at U+2028, U+2029 and U+0085, which JSON carries unescaped."""
+    return [line for line in stdout.split("\n") if line.strip()]
+
+
 def diff(a, b, path=()):
     """Yield (path, python, probe) for every leaf that differs, and for every
     object whose members the two list in different orders (kernel §1,
@@ -420,7 +450,7 @@ def main() -> int:
     cases = cases + mutants + renamed
     proc = subprocess.run(shlex.split(args.probe), cwd=ROOT, input="\n".join(
         json.dumps(c, ensure_ascii=False) for c in cases) + "\n", capture_output=True, text=True, check=True)
-    ts_obs = [normalize(json.loads(line)) for line in proc.stdout.splitlines()]
+    ts_obs = [normalize(read_observation(line)) for line in probe_lines(proc.stdout)]
     assert len(ts_obs) == len(cases), (len(ts_obs), len(cases), proc.stderr[-2000:])
     failures, stated, hints, compared = [], {}, 0, 0
     for f, case, ts in zip(files, cases, ts_obs):

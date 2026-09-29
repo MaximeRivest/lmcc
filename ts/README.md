@@ -270,7 +270,7 @@ tarball (`npm pack` in `ts/`).
 The contract names the places two hosts may legitimately differ; this kernel
 takes these, and nothing else (the differential check,
 `python contract/harness/differential.py --probe 'node ts/tools/probe.ts'`, compares everything else on every corpus
-case, 3,000 fuzzed replies and 84 variants with hostile member names, member
+case, 3,000 fuzzed replies and 88 variants with hostile member names, member
 order included):
 
 - **Shipped code (UDF formats)**: this runtime places no UDF language, so an

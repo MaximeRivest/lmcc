@@ -593,6 +593,9 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
         if (p.type !== "tool_call" || typeof p["id"] !== "string" || typeof p["name"] !== "string" || !isObj(p["input"])) {
           refuse("turn-not-renderable", `field ${pyRepr(this.callsField)}: its format must write lm15 tool_call parts {type, id, name, input}; got ${pyRepr(p)}`);
         }
+        if (p["id"] === "") {
+          refuse("turn-invalid", `field ${pyRepr(this.callsField)}: call ${pyRepr(p["name"])} has the id '', and a call's id is non-empty text (lm15 ToolCallPart.id; a tool step answers the call by it)`);
+        }
       }
       const owner = this.callsOwner;
       if (owner !== null && "call" in owner.transport.spelling) {

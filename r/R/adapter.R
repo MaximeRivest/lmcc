@@ -76,7 +76,7 @@ format_entry <- function(key, value) {
     extra <- ssort(setdiff(names(value), c("use", "options", "describe")))
     if (length(extra) || !is_obj(get_key(value, "options", jobj())))
       malformed(where, paste0(where, ": a reference is {use, options?, describe?}", if (length(extra)) paste0(", not ", pyrepr(as.list(extra))) else ""))
-    return(c(jobj(use = value[["use"]], options = as_obj(get_key(value, "options", jobj()))), description_of(value, where)))
+    return(merge_obj(jobj(use = value[["use"]], options = as_obj(get_key(value, "options", jobj()))), description_of(value, where)))
   }
   if (is_obj(value) && has_key(value, "language")) return(as_obj(value))
   if (is_obj(value) && has_key(value, "describe")) {
@@ -107,7 +107,7 @@ adapter <- function(messages, reader = NULL, transports = NULL, formats = NULL, 
     if (!is_obj(m) || !((has_key(m, "role") && has_key(m, "text")) || has_key(m, "directive"))) malformed(at, sprintf("%s: a message is {role, text} or {directive}", at))
     if (has_key(m, "directive")) {
       slot <- get_key(m, "slot", "turns")
-      if (!identical(m[["directive"]], "turns") || length(setdiff(names(m), c("directive", "slot"))) || !is_str(slot) || !grepl("^[A-Za-z_][A-Za-z0-9_]*$", slot, perl = TRUE))
+      if (!identical(m[["directive"]], "turns") || length(setdiff(names(m), c("directive", "slot"))) || !is_str(slot) || !grepl("\\A[A-Za-z_][A-Za-z0-9_]*\\z", slot, perl = TRUE))
         malformed(at, sprintf("%s: a directive is {\"directive\": \"turns\", \"slot\"?: name} (demos and history are turn slots since kernel 0.7)", at))
       if (slot %in% RESERVED_SLOTS) refuse("template-syntax", sprintf("%s: %s is reserved, not a turn slot", at, pyrepr(slot)), fix = jobj(action = "edit-template", path = at))
     }
@@ -159,7 +159,7 @@ adapter <- function(messages, reader = NULL, transports = NULL, formats = NULL, 
 parse_version <- function(v, what) {
   if (!is_str(v)) malformed("versions", sprintf("%s: version must be a string", what))
   parts <- strsplit(v, ".", fixed = TRUE)[[1]]
-  if (length(parts) != 3L || !all(grepl("^[0-9]+$", parts)) || endsWith(v, ".")) malformed("versions", sprintf("%s: version %s is not MAJOR.MINOR.PATCH", what, pyrepr(v)))
+  if (length(parts) != 3L || !all(grepl("\\A[0-9]+\\z", parts, perl = TRUE)) || endsWith(v, ".")) malformed("versions", sprintf("%s: version %s is not MAJOR.MINOR.PATCH", what, pyrepr(v)))
   as.numeric(parts)
 }
 

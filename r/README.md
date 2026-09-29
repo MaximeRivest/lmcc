@@ -104,8 +104,8 @@ refuses); pass `env = unclass(Sys.getenv())` until lm15 fixes it.
 ## Where R differs, stated
 
 The differential check (`python contract/harness/differential.py --probe
-'Rscript r/tools/probe.R'`) compares everything else on every corpus case
-3,000 fuzzed replies and 84 variants with hostile member names against
+'Rscript r/tools/probe.R'`) compares everything else on every corpus case,
+3,000 fuzzed replies and 88 variants with hostile member names against
 Python, member order included.
 
 - **Shipped code (UDF formats)**: this runtime places no UDF language; the six

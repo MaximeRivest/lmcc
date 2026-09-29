@@ -180,7 +180,7 @@ json_object_reader <- function(spec) {
     requires = function() "native_structured_output",
     request_settings = function(fields) {
       props <- jobj()
-      for (f in fields) props[[f$name]] <- if (!is.null(f$desc) && nzchar(f$desc)) c(closed_shape(f$shape), jobj(description = f$desc)) else closed_shape(f$shape)
+      for (f in fields) props[[f$name]] <- if (!is.null(f$desc) && nzchar(f$desc)) set_key(closed_shape(f$shape), "description", f$desc) else closed_shape(f$shape)
       config <- jobj(response_format = jobj(type = "json_schema", schema = jobj(type = "object", properties = props,
         required = lapply(fields, function(f) f$name), additionalProperties = FALSE)))
       if (!is.null(policy)) config[["probabilities"]] <- policy
@@ -287,7 +287,7 @@ citations_format <- function(options) make_format(
       if (identical(get_key(p, "type"), "citation")) out[[length(out) + 1L]] <- drop_key(drop_key(p, "type"), "continuation")
       else if (is_str(get_key(p, "text"))) {
         t <- wstrip(p[["text"]])
-        if (grepl("^[0-9]+$", t, perl = TRUE) && !(t %in% seen)) { seen <- c(seen, t); out[[length(out) + 1L]] <- jobj(source = integer_value(t)) }
+        if (grepl("\\A[0-9]+\\z", t, perl = TRUE) && !(t %in% seen)) { seen <- c(seen, t); out[[length(out) + 1L]] <- jobj(source = integer_value(t)) }
       }
     }
     out

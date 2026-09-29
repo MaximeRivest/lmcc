@@ -56,14 +56,14 @@ derive_reader <- function(p) {
     if (!nzchar(wrstrip(a[[2]])) && !whole) {
       hint <- sprintf("field %s: no literal text before its hole \u2014 nothing anchors the parser; put the field's marker before the hole", pyrepr(a[[1]]))
       if (!length(loops)) hint <- paste0(hint, sprintf(", on the same line: a bare slot's marker is the text on its own line (write 'Answer: {%s}' or '<%s>{%s}</%s>', not a marker on the line above), or use an outputs loop", a[[1]], a[[1]], a[[1]], a[[1]]))
-      refuse("not-readable", hint, fix = c(here, jobj(field = a[[1]])))
+      refuse("not-readable", hint, fix = merge_obj(here, jobj(field = a[[1]])))
     }
   }
   seen <- list()
   for (a in anchors) {
     key <- wrstrip(a[[2]])
     if (!is.null(seen[[paste0("k", key)]])) refuse("not-readable", sprintf("fields %s and %s share the anchor %s; anchors must tell fields apart", pyrepr(seen[[paste0("k", key)]]), pyrepr(a[[1]]), pyrepr(key)),
-                                                   fix = c(here, jobj(field = a[[1]])))
+                                                   fix = merge_obj(here, jobj(field = a[[1]])))
     seen[[paste0("k", key)]] <- a[[1]]
   }
   derived_reader(anchors, tail, !isTRUE(p$adapter$strict))
@@ -76,7 +76,7 @@ instantiate <- function(loop, f, p, fix) {
     if (node$kind == "text") add(node$text)
     else if (node$kind == "slot") {
       pd <- partition_dot(node$path)
-      if (!nzchar(pd[[2]])) refuse("not-readable", sprintf("slot {%s} inside the output pattern is not invertible", node$path), fix = c(fix, jobj(slot = node$path)))
+      if (!nzchar(pd[[2]])) refuse("not-readable", sprintf("slot {%s} inside the output pattern is not invertible", node$path), fix = merge_obj(fix, jobj(slot = node$path)))
       attr <- pd[[3]]
       if (attr == "value") {
         if (in_post) refuse("not-readable", "the output-pattern block has two {f.value} holes per field; one value, one hole", fix = fix)
@@ -86,7 +86,7 @@ instantiate <- function(loop, f, p, fix) {
       else if (attr == "type") add(f$type %||% "")
       else if (attr == "schema") add(schema_hint(p, f))
       else if (attr == "purpose") add(f$purpose)
-      else refuse("not-readable", sprintf("slot {%s} inside the output pattern is not invertible", node$path), fix = c(fix, jobj(slot = node$path)))
+      else refuse("not-readable", sprintf("slot {%s} inside the output pattern is not invertible", node$path), fix = merge_obj(fix, jobj(slot = node$path)))
     } else refuse("not-readable", "nested loops inside the output-pattern block are not invertible", fix = fix)
   }
   list(paste(pre, collapse = ""), paste(post, collapse = ""))
@@ -323,8 +323,7 @@ lmcc_bind <- function(adapter, signature, capabilities = list(), registry = defa
         refuse("spelling-drift", sprintf("purpose %s: formatted turns need an @purpose.calls target", pyrepr(r$purpose)), fix = jobj(action = "edit-entry", path = sprintf("transports[%s].spelling", pyrepr(r$purpose))))
       next
     }
-    probe <- c(jobj(id = "probe"), get_key(r$transport$spelling, "probe") %||% jobj(name = "probe", input = jobj(probe = TRUE)))
-    probe <- probe[!duplicated(names(probe), fromLast = TRUE)]
+    probe <- merge_obj(jobj(id = "probe"), get_key(r$transport$spelling, "probe") %||% jobj(name = "probe", input = jobj(probe = TRUE)))
     own <- Filter(function(fr) fr[[1]] == calls_field && fr[[2]][["from"]] == "text", p$find_rules)
     read_back <- NULL; spelled <- "(writer refused)"
     tryCatch({
@@ -435,11 +434,11 @@ describe_plan <- function(x) {
   }
   vi <- vapply(p$visible_inputs, function(f) f$name, ""); vo <- vapply(p$visible_outputs, function(f) f$name, "")
   out <- jobj(adapter = p$adapter$name, reader = jobj(kind = p$adapter$reader[["kind"]]), capabilities = p$capabilities,
-    inputs = lapply(p$visible_inputs, info), outputs = lapply(p$visible_outputs, function(f) c(info(f), jobj(found = f$name %in% found))),
+    inputs = lapply(p$visible_inputs, info), outputs = lapply(p$visible_outputs, function(f) merge_obj(info(f), jobj(found = f$name %in% found))),
     hidden = as.list(Filter(function(n) !(n %in% c(vi, vo)), vapply(p$signature$fields, function(f) f$name, ""))),
     transports = as_obj(structure(lapply(p$resolved, function(r) r$name), names = vapply(p$resolved, function(r) r$purpose, ""))),
     extensions = as_obj(lapply(p$extensions[ssort(names(p$extensions))], function(r) jobj(needs = r$needs, provides = r$binding$version, binding = r$binding$binding))),
-    find = lapply(p$find_rules, function(fr) c(jobj(field = fr[[1]]), fr[[2]])), puts = lapply(p$puts, function(pp) jobj(field = pp[[1]], at = pp[[2]])),
+    find = lapply(p$find_rules, function(fr) merge_obj(jobj(field = fr[[1]]), fr[[2]])), puts = lapply(p$puts, function(pp) jobj(field = pp[[1]], at = pp[[2]])),
     tell = p$tell, request_settings = p$request_settings, strict = isTRUE(p$adapter$strict))
   pf <- adapter_prefill(p$adapter)
   if (!is.null(pf)) out[["prefill"]] <- jobj(text = wrstrip(pf), sent = nzchar(p$prefill))

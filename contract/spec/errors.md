@@ -44,7 +44,7 @@ parameters, is breaking.
 | `udf-tampered` | load | `reship-udf` | a shipped UDF's `sha256` does not match its source |
 | `udf-unplaceable` | load | `place-udf` | a UDF's language has no placement in this host |
 | `turn-not-renderable` | render | — | a turn value goes through a format whose `round_trip` is false or whose writer yields non-text parts where text is needed, the calls format yields no `tool_call` parts, or a text-form slot meets a message with a part that is not text |
-| `turn-invalid` | turn/render | — | a turn that is not one of this plan's: another signature's fingerprint, a field the signature does not have, a tool step answering no pending call, a past turn with an unanswered call, a current turn rendered with pending calls, `finish` with pending calls or no model step, a malformed turn object |
+| `turn-invalid` | turn/render | — | a turn that is not one of this plan's: another signature's fingerprint, a field the signature does not have, a tool step answering no pending call, a past turn with an unanswered call, a call written from values whose id is `""`, a current turn rendered with pending calls, `finish` with pending calls or no model step, a malformed turn object |
 | `turns-unplaced` | render | — | turns supplied for a slot the template does not place (or for the reserved `steps`), or a current turn with steps rendered by a template that places no slot |
 | `unmapped-type` | signature | `edit-signature` | an annotation resolves to no shape |
 | `missing-input` | render | — | no value supplied for a rendered field |

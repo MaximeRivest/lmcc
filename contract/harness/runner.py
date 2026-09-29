@@ -146,6 +146,9 @@ class PythonDriver:
             if kind == "roundtrip":
                 dumped = lmcc.dump(adapter, registry)
                 return _compare(expect["entry"], dumped, "entry", ordered)
+            if kind == "refuse" and expect.get("at") == "load" and "signature" not in case:
+                return {"ok": False, "detail": f"expected refusal {expect['code']!r} at load, "
+                                               f"but the entry loaded"}
             stage = "signature"
             sig = lmcc.signature_from_dict(case["signature"])
             stage = "bind"

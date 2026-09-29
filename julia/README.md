@@ -103,7 +103,7 @@ t = tool(t, "call_1", "Sunny, 22C")
 
 The differential check (`python contract/harness/differential.py --probe
 'julia --project=julia julia/tools/probe.jl'`) compares everything else on
-every corpus case, 3,000 fuzzed replies and 84 variants with hostile member
+every corpus case, 3,000 fuzzed replies and 88 variants with hostile member
 names against Python, member order included.
 
 - **Shipped code (UDF formats)**: this runtime places no UDF language; the six

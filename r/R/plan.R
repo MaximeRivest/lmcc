@@ -289,14 +289,22 @@ user_side <- function(p, inputs) {
   out
 }
 
+# A model step's assigned call ids: `from` (the value's id) and `to` (the id
+# written, s<k>_<id>), two character vectors found with `match`, never a list
+# keyed by the id (a call id is data; kernel section 3a).
+no_ids <- function() list(from = character(0), to = character(0))
+
 write_steps <- function(p, t, ctx) {
-  out <- list(); ids <- list()
+  out <- list(); ids <- no_ids()
   for (s in t$steps) {
     if (s$kind == "model") {
       r <- model_message(p, s, ctx)
       ids <- r[[2]]
       if (!is.null(r[[1]])) out[[length(out) + 1L]] <- list(r[[1]], "model")
-    } else out[[length(out) + 1L]] <- list(tool_message(p, s, ids[[s$id]] %||% s$id), "tool")
+    } else {
+      i <- match(s$id, ids$from)
+      out[[length(out) + 1L]] <- list(tool_message(p, s, if (is.na(i)) s$id else ids$to[[i]]), "tool")
+    }
   }
   out
 }
@@ -304,7 +312,7 @@ write_steps <- function(p, t, ctx) {
 model_message <- function(p, s, ctx) {
   if (p$adapter$replay == "verbatim" && !is.null(s$message)) {
     ctx$model_steps <- ctx$model_steps + 1L
-    return(list(make_message("assistant", s$message[["parts"]]), list()))
+    return(list(make_message("assistant", s$message[["parts"]]), no_ids()))
   }
   if (p$adapter$replay == "recorded" && !is.null(s$message)) {
     same <- tryCatch({
@@ -313,7 +321,7 @@ model_message <- function(p, s, ctx) {
     }, lmcc_refusal = function(e) FALSE)
     if (same) {
       ctx$model_steps <- ctx$model_steps + 1L
-      return(list(make_message("assistant", s$message[["parts"]]), list()))
+      return(list(make_message("assistant", s$message[["parts"]]), no_ids()))
     }
   }
   write_model_step(p, s, ctx)
@@ -354,7 +362,7 @@ write_model_step <- function(p, s, ctx) {
   body <- if (length(spelled)) p$reader$join(spelled) else ""
   pieces <- c(before, body, after)
   text <- paste(pieces[nzchar(pieces)], collapse = "\n")
-  ids <- list()
+  ids <- no_ids()
   calls <- if (is.null(p$calls_field)) NULL else get_key(outs, p$calls_field)
   call_parts <- list()
   if (pytruthy(calls)) {
@@ -365,6 +373,8 @@ write_model_step <- function(p, s, ctx) {
     })
     for (x in written) if (!identical(get_key(x, "type"), "tool_call") || !is_str(get_key(x, "id")) || !is_str(get_key(x, "name")) || !is_obj(get_key(x, "input")))
       refuse("turn-not-renderable", sprintf("field %s: its format must write lm15 tool_call parts {type, id, name, input}; got %s", pyrepr(p$calls_field), pyrepr(x)))
+    for (x in written) if (!nzchar(get_key(x, "id")))
+      refuse("turn-invalid", sprintf("field %s: call %s has the id '', and a call's id is non-empty text (lm15 ToolCallPart.id; a tool step answers the call by it)", pyrepr(p$calls_field), pyrepr(get_key(x, "name"))))
     owner <- p$calls_owner
     if (!is.null(owner) && has_key(owner$transport$spelling, "call")) {
       ct <- paste(vapply(written, function(x) call_text(p, owner, x), ""), collapse = "\n")
@@ -373,7 +383,11 @@ write_model_step <- function(p, s, ctx) {
       assigned <- !any(vapply(recorded, function(x) identical(get_key(x, "type"), "tool_call"), TRUE))
       k <- ctx$model_steps
       for (x in written) {
-        if (assigned) { ids[[x[["id"]]]] <- sprintf("s%d_%s", k, x[["id"]]); x[["id"]] <- ids[[x[["id"]]]] }
+        if (assigned) {
+          id <- sprintf("s%d_%s", k, get_key(x, "id"))
+          ids$from <- c(ids$from, get_key(x, "id")); ids$to <- c(ids$to, id)
+          x <- set_key(x, "id", id)
+        }
         call_parts[[length(call_parts) + 1L]] <- x
       }
     }

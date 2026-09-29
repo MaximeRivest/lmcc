@@ -1,0 +1,104 @@
+{
+ "name": "std-json-object-render-field-description",
+ "kind": "render",
+ "ordered": true,
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "json_described_v1",
+  "versions": {
+   "kernel": "0.8.4",
+   "vocab": {
+    "reader/json_object": "0.2.0"
+   }
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "reader": {
+   "kind": "json_object"
+  }
+ },
+ "signature": {
+  "instructions": "Answer.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "o",
+    "direction": "output",
+    "shape": {
+     "description": "shape description",
+     "type": "string"
+    },
+    "desc": "field description"
+   },
+   {
+    "name": "p",
+    "direction": "output",
+    "shape": {
+     "type": "integer"
+    },
+    "desc": "a count"
+   }
+  ]
+ },
+ "capabilities": {
+  "native_structured_output": true
+ },
+ "inputs": {
+  "q": "x"
+ },
+ "expect": {
+  "request": {
+   "system": "Answer.",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "x"
+      }
+     ]
+    }
+   ],
+   "config": {
+    "response_format": {
+     "type": "json_schema",
+     "schema": {
+      "type": "object",
+      "properties": {
+       "o": {
+        "description": "field description",
+        "type": "string"
+       },
+       "p": {
+        "type": "integer",
+        "description": "a count"
+       }
+      },
+      "required": [
+       "o",
+       "p"
+      ],
+      "additionalProperties": false
+     }
+    }
+   }
+  }
+ }
+}
