@@ -58,11 +58,36 @@ const MAX_SAFE = BigInt(Number.MAX_SAFE_INTEGER);
  * `structuredClone` and deep equality neither see nor copy it. `setMember`
  * keeps the list as it adds names; nothing is recorded while JavaScript's
  * order is the value's (no integer-like name yet).
+ *
+ * The record is lm15's (D-59): the symbol `lm15.memberOrder` and the
+ * protocol lm15-ts defines with it (`MEMBER_ORDER` in its `src/json.ts`):
+ * an own data property holding an array of strings; the object's order is
+ * each listed name it holds, at its last place in the list, then its other
+ * own members in JavaScript's order; a writer appends the name it adds. So
+ * an object lmcc builds reaches the wire through lm15 in its order, and one
+ * lm15 read (a reply's tool call input) reaches lmcc in the order it was
+ * read. lmcc never imports lm15 for it: the symbol is registered.
  */
 
-const ORDER = Symbol.for("lmcc.memberOrder");
+export const MEMBER_ORDER: unique symbol = Symbol.for("lm15.memberOrder");
+const ORDER = MEMBER_ORDER;
 
 type Recorded = { [ORDER]?: string[] };
+
+/** An object's order record, or null; a record that breaks the protocol is refused loudly. */
+function recordOf(obj: object): string[] | null {
+  if (!Object.prototype.hasOwnProperty.call(obj, ORDER)) return null;
+  const d = Object.getOwnPropertyDescriptor(obj, ORDER)!;
+  if (!("value" in d) || !Array.isArray(d.value) || d.value.some((n: unknown) => typeof n !== "string")) {
+    throw new TypeError("a member order record (Symbol.for('lm15.memberOrder')) must be an array of strings held as a value");
+  }
+  return (obj as Recorded)[ORDER]!;
+}
+
+/** Drop an object's order record: its members are then in JavaScript's order. */
+export function forgetOrder(obj: object): void {
+  if (Object.prototype.hasOwnProperty.call(obj, ORDER)) delete (obj as Recorded)[ORDER];
+}
 
 /** An array index name ("0", "10", not "01" or "4294967295"): JavaScript enumerates these first. */
 function isIndexName(key: string): boolean {
@@ -83,7 +108,7 @@ function record(obj: object, names: string[]): void {
  */
 export function setMember(obj: Record<string, unknown>, key: string, value: unknown): void {
   const added = !Object.prototype.hasOwnProperty.call(obj, key);
-  const recorded = Object.prototype.hasOwnProperty.call(obj, ORDER) ? (obj as Recorded)[ORDER]! : null;
+  const recorded = recordOf(obj);
   const before = added && !recorded && isIndexName(key) ? Object.keys(obj) : null;
   if (key === "__proto__") {
     Object.defineProperty(obj, key, { value, writable: true, enumerable: true, configurable: true });
@@ -113,8 +138,8 @@ export function ownValue(obj: object, key: string): unknown {
  */
 export function memberNames(obj: object): string[] {
   const own = Object.keys(obj);
-  if (!Object.prototype.hasOwnProperty.call(obj, ORDER)) return own;
-  const recorded = (obj as Recorded)[ORDER]!;
+  const recorded = recordOf(obj);
+  if (recorded === null) return own;
   const present = new Set(own);
   const seen = new Set<string>();
   const out: string[] = [];

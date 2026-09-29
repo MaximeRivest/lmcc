@@ -1780,3 +1780,59 @@ not held are skipped) is a small public protocol from now on. A Julia
 caller's `Dict` and a JavaScript caller's literal keep their host's
 order; an R caller reading a reading with `values[[""]]` gets `NULL`
 and `values$na` may complete to another member (`r/README.md`).
+
+**D-59 · lmcc's member order record is lm15's; the lm15 bridge sends it,
+and big integers exactly (kernel 0.8.4; no version moves).** Asked by the
+maintainer on 2026-09-29 ("the absolute best fix"), after a functai review
+of TypeScript stage 1 found that D-58's record crashed every call through
+lm15 (lm15's strict JSON check refused the symbol) and the workaround,
+plain copies, sent a schema's integer-like properties first.
+
+- **The record.** lm15-ts now keeps the order itself (lm15-contract
+  `changes/2026-09-29-index-member-names.md`, lm15-ts `8358d49`): its
+  `parseJson` records a member order JavaScript would change under the
+  registered symbol `lm15.memberOrder`, its `stringifyJson` writes it, and
+  its strict check accepts a well-formed record. The protocol is D-58's,
+  unchanged (a list of names, the last listing of a name wins, names not
+  held are skipped, a writer appends); only the symbol's name moves from
+  `lmcc.memberOrder` to lm15's. So one record crosses both libraries in
+  both directions: a schema, a tool's parameters or a call's input lmcc
+  builds goes out in its order, and a tool call's input or a data part
+  lm15 read arrives in lmcc in the provider's order. Two of D-58's stated
+  costs are gone with an lm15 that keeps order ("the request lm15
+  serializes put integer-like names first", "a tool call's `input` or a
+  data part lm15 parsed arrives in JavaScript's order"). lmcc does not
+  import lm15 for it: the symbol is registered. A record that breaks the
+  protocol (not an array of strings) now throws `TypeError` where lmcc
+  read it blindly.
+  Rejected: stripping the record at the bridge (functai's workaround),
+  which fixes the crash by sending JavaScript's order; a symbol owned by
+  neither library (a third name in the global registry to agree on, for
+  the same meaning); lmcc's name kept and lm15 taught two (two names for
+  one protocol).
+- **The bridge (`ts/src/lm15.ts`).** `request()` hands lm15 a copy in
+  lm15's forms: a `bigint` becomes lm15's `RawNumber` (its digits; lm15
+  refuses a `bigint`, so an int64 in a schema's `enum` or an input value
+  used to throw), objects keep their record. It detects the lm15 it runs
+  with: `lm15KeepsOrder` is true when lm15 exports `MEMBER_ORDER` as the
+  same symbol. With lm15 1.0.0-rc.2, the published one, which refuses any
+  record, the copies are plain and the wire order is JavaScript's, as
+  before; nothing throws. The merge with a caller's `Config` compares
+  values as lmcc does: the plan's `bigint` and the same number as lm15's
+  `RawNumber` are one value, where it used to raise `ConfigConflict` and
+  then crash writing the message (`JSON.stringify` of a `bigint`); the
+  message now prints both numbers. What is sent keeps each value's own
+  form.
+- **Checks.** `ts/tests/order.test.ts` holds the paths: the symbol, the
+  schema's order and a big integer on the wire, a merged `Config`, a
+  conflict between two big integers, a malformed record. They were run
+  against lm15 1.0.0-rc.2 (the fallback) and against lm15-ts `8358d49`
+  (the order, all 42 TypeScript tests); `./check` runs them against the
+  installed one.
+
+Costs, stated. The order reaches the provider only with an lm15 that
+exports `MEMBER_ORDER`, not yet on npm; `package.json` keeps
+`@lm15/lm15` `1.0.0-rc.2` (devDependency) and `^1.0.0-rc.2` (peer), so
+`./check` exercises the fallback until that release, when both should
+move to it. The symbol is unversioned, shared by every copy of lm15 and
+lmcc in a process: its meaning is a public protocol of both from now on.

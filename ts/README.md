@@ -290,13 +290,15 @@ order included):
   non-syntax characters (`\:`) refuse and `\d`/`\w` are ASCII. The contract
   leaves these unspecified.
 - **Member order at JavaScript's own boundaries**: lmcc writes every JSON in
-  a value's order (above), but what JavaScript serializes itself follows
-  JavaScript's order: `JSON.stringify` of a reading, and the request lm15
-  sends, so a `response_format` schema whose property names are
-  integer-like reaches the provider with those properties first (its
-  `required` list keeps the property order). A tool call's `input` or a
-  data part that lm15 parsed arrives in JavaScript's order. Python has no
-  such boundary.
+  a value's order (above), and so does lm15 from the release that exports
+  `MEMBER_ORDER`: lmcc's record is lm15's (`Symbol.for("lm15.memberOrder")`,
+  D-59), so the request lm15 sends keeps a schema's order, and a tool
+  call's `input` or a data part lm15 parsed arrives in the order the
+  provider wrote it. With lm15 1.0.0-rc.2, which refuses the record,
+  `lmcc/lm15` sends plain copies instead (`bridge.lm15KeepsOrder` says
+  which): integer-like property names then reach the provider first, as
+  before. What JavaScript serializes itself (`JSON.stringify` of a reading)
+  always follows JavaScript's order. Python has no such boundary.
 - **Hints** (the prose of a refusal) name TypeScript APIs; codes, fixes and
   partials are identical.
 
