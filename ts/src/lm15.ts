@@ -7,6 +7,7 @@
  * nothing here can drift from what lm15 says a request or a response is. It
  * mirrors the Python bridge, `lmcc_lm15`.
  *
+ * - `toLm15(value)` → lmcc data as lm15 takes it (below).
  * - `request(rendered, {model, config})` → an lm15 `Request`: the plan's
  *   request settings (what the adapter needs: `config.reasoning` for native
  *   thinking, `config.response_format` for a JSON reader, `tools` for a put)
@@ -17,13 +18,43 @@
  * - `step(rendered, response)` → the turn with this reply recorded (§3a).
  */
 
+import * as lm15 from "@lm15/lm15";
 import { Config, Delta, Message, Request, Response, type StreamEvent } from "@lm15/lm15";
 import type { JsonObject } from "@lm15/lm15";
 import type { Plan, Reading, RenderResult } from "./plan.ts";
 import type { StreamEvent as LmccEvent, StreamResult } from "./stream.ts";
 import type { Turn } from "./turn.ts";
 import { isObj } from "./core.ts";
-import { copyObject, hasOwn, jsonEqual, memberNames, setMember } from "./json.ts";
+import { MEMBER_ORDER, copyObject, forgetOrder, hasOwn, isPlainObject, jsonEqual, jsonText, memberNames, setMember } from "./json.ts";
+
+/**
+ * Whether this lm15 keeps a member order JavaScript would change: it
+ * exports the record lmcc's objects carry (D-59). An lm15 before it
+ * (1.0.0-rc.2) refuses any object holding the record ("must contain only
+ * JSON-compatible values"), so for it the bridge sends plain copies, in
+ * JavaScript's order: what that lm15 does with every object it is given.
+ */
+export const lm15KeepsOrder: boolean = (lm15 as { MEMBER_ORDER?: unknown }).MEMBER_ORDER === MEMBER_ORDER;
+
+/**
+ * lmcc data as lm15 takes it: a `bigint` becomes lm15's `RawNumber` (its
+ * digits, exactly; lm15 refuses a `bigint`), objects are copied in their
+ * order, which lm15 keeps when it can (above), and `__proto__` stays a
+ * member. lm15's own values (a `RawNumber`) pass as they are. `request()`
+ * applies it to the plan's request and the caller's `Config`; use it for
+ * anything else lmcc parsed that lm15 reads (a saved `Config` for
+ * `Config.fromJSON`, a stored reply for `Response.fromJSON`).
+ */
+export function toLm15<T>(value: T): T;
+export function toLm15(value: unknown): unknown {
+  if (typeof value === "bigint") return new lm15.RawNumber(value.toString());
+  if (Array.isArray(value)) return value.map(toLm15);
+  if (!isPlainObject(value)) return value;
+  const out: Record<string, unknown> = {};
+  for (const name of memberNames(value)) setMember(out, name, toLm15(value[name]));
+  if (!lm15KeepsOrder) forgetOrder(out);
+  return out;
+}
 
 /** The caller's Config contradicts what the plan's request settings require. */
 export class ConfigConflict extends Error {
@@ -33,6 +64,28 @@ export class ConfigConflict extends Error {
   }
 }
 
+/**
+ * A value as lmcc compares it: lm15 writes a number JavaScript cannot hold
+ * as a `RawNumber` (its lexeme) where lmcc holds a `bigint`, so the plan's
+ * `12345678901234567890` and the same number in a caller's `Config` are one
+ * value. Only for comparing and for messages: what is sent keeps each
+ * value's own form (a caller's `1.0` stays `1.0`).
+ */
+function comparable(value: unknown): unknown {
+  if (isRawNumber(value)) return /[.eE]/.test(value.raw) ? Number(value.raw) : BigInt(value.raw);
+  if (Array.isArray(value)) return value.map(comparable);
+  if (!isPlainObject(value)) return value;
+  const out: Record<string, unknown> = {};
+  for (const name of memberNames(value)) setMember(out, name, comparable(value[name]));
+  return out;
+}
+
+/** By shape, not instanceof: a `RawNumber` from another copy of lm15 is still one. */
+function isRawNumber(value: unknown): value is { raw: string } {
+  return typeof value === "object" && value !== null && !isPlainObject(value) && !Array.isArray(value)
+    && typeof (value as { raw?: unknown }).raw === "string" && /^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?$/.test((value as { raw: string }).raw);
+}
+
 function merge(base: Record<string, unknown>, extra: Record<string, unknown>, path: string, override: boolean): Record<string, unknown> {
   const out = copyObject(base);
   for (const key of memberNames(extra)) {
@@ -40,8 +93,8 @@ function merge(base: Record<string, unknown>, extra: Record<string, unknown>, pa
     const here = path ? `${path}.${key}` : key;
     if (hasOwn(out, key) && isObj(out[key]) && isObj(value)) {
       setMember(out, key, merge(out[key] as Record<string, unknown>, value, here, override));
-    } else if (hasOwn(out, key) && !jsonEqual(out[key], value) && !override) {
-      throw new ConfigConflict(`${here}: the plan's request settings require ${JSON.stringify(out[key])} (a transport or reader asked for it) but the caller's Config says ${JSON.stringify(value)}; pass override: true to insist`);
+    } else if (hasOwn(out, key) && !jsonEqual(comparable(out[key]), comparable(value)) && !override) {
+      throw new ConfigConflict(`${here}: the plan's request settings require ${jsonText(comparable(out[key]))} (a transport or reader asked for it) but the caller's Config says ${jsonText(comparable(value))}; pass override: true to insist`);
     } else {
       setMember(out, key, value);
     }
@@ -53,9 +106,10 @@ function merge(base: Record<string, unknown>, extra: Record<string, unknown>, pa
 export function request(rendered: RenderResult, opts: { model: string; config?: Config; override?: boolean }): Request {
   const d = rendered.request(opts.model);
   if (opts.config !== undefined) {
-    d["config"] = merge((d["config"] as Record<string, unknown>) ?? {}, Config.toJSON(opts.config) as Record<string, unknown>, "config", opts.override ?? false);
+    const config = Config.toJSON(toLm15(opts.config)) as Record<string, unknown>;
+    d["config"] = merge((d["config"] as Record<string, unknown>) ?? {}, config, "config", opts.override ?? false);
   }
-  return Request.fromJSON(d as JsonObject);
+  return Request.fromJSON(toLm15(d) as JsonObject);
 }
 
 function canonical(response: Response | Message): Record<string, unknown> {

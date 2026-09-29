@@ -84,10 +84,10 @@ Plans expose required contracts, resolved versions and binding labels
 
 | kernel | core | extensions | not claimed | beyond the corpus |
 |---|---|---|---|---|
-| Python (`python/`, reference) | 0.8.4, every case | `pattern/legacy-re2` (`python:re`), `udf:python` | — | — |
-| TypeScript (`ts/`) | 0.8.4, every case | `pattern/legacy-re2` (`ecmascript:RegExp`) | `udf:python` (6 cases) | differential and live replay: 0 differences |
-| Julia (`julia/`) | 0.8.4, every case | `pattern/legacy-re2` (`julia:PCRE2`) | `udf:python` (6 cases) | differential and live replay: 0 differences |
-| R (`r/`) | 0.8.4, every case | `pattern/legacy-re2` (`r:PCRE2`) | `udf:python` (6 cases) | differential and live replay: 0 differences |
+| Python (`python/`, reference) | 0.8.5, every case | `pattern/legacy-re2` (`python:re`), `udf:python` | — | — |
+| TypeScript (`ts/`) | 0.8.5, every case | `pattern/legacy-re2` (`ecmascript:RegExp`) | `udf:python` (6 cases) | differential and live replay: 0 differences |
+| Julia (`julia/`) | 0.8.5, every case | `pattern/legacy-re2` (`julia:PCRE2`) | `udf:python` (6 cases) | differential and live replay: 0 differences |
+| R (`r/`) | 0.8.5, every case | `pattern/legacy-re2` (`r:PCRE2`) | `udf:python` (6 cases) | differential and live replay: 0 differences |
 
 Every stream trace of every claimed parse case equals Python's. The
 standard vocabulary is claimed in full by all four.

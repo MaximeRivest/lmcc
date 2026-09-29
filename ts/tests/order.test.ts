@@ -167,3 +167,93 @@ test("a nullable shape's base puts its type last, as every kernel does", () => {
   assert.equal(nullable, true);
   assert.equal(lmcc.jsonText(base), '{"description":"d","type":"string"}');
 });
+
+/*
+ * D-59: the record is lm15's, so what lmcc builds reaches the wire in its
+ * order through an lm15 that keeps it (lm15-ts with MEMBER_ORDER), and a
+ * value lm15 read reaches lmcc in the order it was read. An lm15 before it
+ * refuses the record, so the bridge sends plain copies there. Each test
+ * holds for the lm15 installed; ./check runs them against the published
+ * one, and they were run against both (the fallback and the order).
+ */
+
+import * as lm15 from "@lm15/lm15";
+import { ConfigConflict, lm15KeepsOrder, request as lm15Request, toLm15 } from "../src/lm15.ts";
+
+function structured(): lmcc.RenderResult {
+  const reg = registry();
+  const adapter = lmcc.load({ name: "order-json", versions: { kernel: "0.8.4", vocab: {} },
+    template: [{ role: "system", text: "{instruction}" }, { role: "user", text: "{q}" }],
+    reader: { kind: "json_object" }, formats: { object: { use: "json", options: { indent: null } } } }, { registry: reg });
+  // Parsed, so the shape's properties hold "b" before "10"; the enum holds an int64 JavaScript cannot.
+  const sig = lmcc.signatureFromDict(lmcc.parseJson(`{"instructions": "Do.", "fields": [
+    {"name": "q", "direction": "input", "shape": {"type": "string"}},
+    {"name": "o", "direction": "output", "shape": {"type": "object", "properties": {
+      "b": {"type": "string"}, "10": {"type": "integer", "enum": [12345678901234567890]}}, "required": ["b", "10"]}}]}`) as Record<string, unknown>);
+  return adapter.bind(sig, { native_structured_output: true }, { registry: reg }).render({ q: "hi" });
+}
+
+test("lmcc's member order record is lm15's, the registered symbol lm15.memberOrder", () => {
+  const obj = lmcc.orderedObject([["b", 1], ["10", 2]]);
+  assert.deepEqual(Object.getOwnPropertySymbols(obj), [Symbol.for("lm15.memberOrder")]);
+  assert.equal(lm15KeepsOrder, (lm15 as { MEMBER_ORDER?: unknown }).MEMBER_ORDER === Symbol.for("lm15.memberOrder"));
+  if (!lm15KeepsOrder) return;
+  assert.equal(lm15.stringifyJson(obj as lm15.JsonObject), '{"b":1,"10":2}');
+  assert.deepEqual(lmcc.memberNames(lm15.parseJson('{"b":1,"10":2}') as object), ["b", "10"]);
+  assert.equal(lmcc.jsonText(lm15.parseJson('{"b":1,"10":2}')), '{"b":1,"10":2}');
+});
+
+test("the lm15 bridge sends the plan's schema in its order where lm15 keeps it, and big integers exactly", () => {
+  const sent = lm15.stringifyJson(lm15.Request.toJSON(lm15Request(structured(), { model: "m" })));
+  assert.match(sent, /"enum":\[12345678901234567890\]/);
+  if (lm15KeepsOrder) {
+    assert.match(sent, /"properties":\{"b":\{"type":"string"\},"10":\{/);
+    assert.match(sent, /"required":\["b","10"\]/);
+  } else {
+    // An lm15 without the record: sent, in JavaScript's order, never refused.
+    assert.match(sent, /"properties":\{"10":\{/);
+  }
+});
+
+test("a caller's Config merged by the bridge keeps the plan's order", () => {
+  const rendered = structured();
+  const settings = rendered.request()["config"] as Record<string, unknown>;
+  const config = lm15.Config.fromJSON(lm15.parseJson(lmcc.jsonText({ temperature: 0.5, response_format: settings["response_format"] })) as lm15.JsonObject);
+  const sent = lm15.stringifyJson(lm15.Request.toJSON(lm15Request(rendered, { model: "m", config })));
+  assert.match(sent, lm15KeepsOrder ? /"properties":\{"b":/ : /"properties":\{"10":/);
+});
+
+test("a caller's Config holding the plan's big integer agrees with it; a different one conflicts, and the message prints it", () => {
+  const rendered = structured();
+  const format = lmcc.jsonText((rendered.request()["config"] as Record<string, unknown>)["response_format"]);
+  const same = lm15.Config.fromJSON(lm15.parseJson(`{"response_format": ${format}}`) as lm15.JsonObject);
+  assert.doesNotThrow(() => lm15Request(rendered, { model: "m", config: same }));
+  const other = lm15.Config.fromJSON(lm15.parseJson(`{"response_format": ${format.replace("12345678901234567890", "12345678901234567891")}}`) as lm15.JsonObject);
+  assert.throws(() => lm15Request(rendered, { model: "m", config: other }), (e: unknown) =>
+    e instanceof ConfigConflict && /12345678901234567890/.test(e.message) && /12345678901234567891/.test(e.message));
+});
+
+test("a caller's Config built from lmcc data (a plain object, an ordered extension, a big integer) goes to lm15 as it takes it", () => {
+  const extensions = lmcc.parseJson('{"metadata": {"b": "x", "10": "y"}, "seed_space": 12345678901234567890}') as Record<string, unknown>;
+  const config = { temperature: 0.5, extensions } as unknown as lm15.Config;
+  const sent = lm15.stringifyJson(lm15.Request.toJSON(lm15Request(structured(), { model: "m", config })));
+  assert.match(sent, /"seed_space":12345678901234567890/);
+  assert.match(sent, lm15KeepsOrder ? /"metadata":\{"b":"x","10":"y"\}/ : /"metadata":\{"10":"y","b":"x"\}/);
+});
+
+test("toLm15 hands lm15 what lmcc parsed: a saved Config and a stored reply", () => {
+  const saved = lmcc.parseJson('{"temperature": 0.5, "extensions": {"logit_bias": {"1234": -100, "15": 5}, "n": 12345678901234567890}}');
+  const config = lm15.Config.fromJSON(toLm15(saved) as lm15.JsonObject);
+  assert.equal(lm15.stringifyJson(lm15.Config.toJSON(config)), lm15KeepsOrder
+    ? '{"temperature":0.5,"extensions":{"logit_bias":{"1234":-100,"15":5},"n":12345678901234567890}}'
+    : '{"temperature":0.5,"extensions":{"logit_bias":{"15":5,"1234":-100},"n":12345678901234567890}}');
+  const stored = lmcc.parseJson('{"model": "m", "message": {"role": "assistant", "parts": [{"type": "tool_call", "id": "c1", "name": "f", "input": {"reasoning": "r", "2024": 7}}]}, "finish_reason": "tool_call", "usage": {}}');
+  const reply = lm15.Response.fromJSON(toLm15(stored) as lm15.JsonObject);
+  assert.equal(lm15.stringifyJson(lm15.Response.toJSON(reply)).includes(lm15KeepsOrder ? '"input":{"reasoning":"r","2024":7}' : '"input":{"2024":7,"reasoning":"r"}'), true);
+});
+
+test("a malformed order record is refused, not guessed", () => {
+  const bad = { b: 1, "10": 2 };
+  Object.defineProperty(bad, Symbol.for("lm15.memberOrder"), { value: "b,10", enumerable: false, configurable: true });
+  assert.throws(() => lmcc.memberNames(bad), /member order record/);
+});

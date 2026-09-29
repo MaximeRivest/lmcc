@@ -1,6 +1,6 @@
 Package: lmcc
 Title: The Language Model Calling Convention
-Version: 0.8.4
+Version: 0.8.5
 Authors@R: person("Maxime", "Rivest", email = "mrive052@gmail.com", role = c("aut", "cre", "cph"))
 Description: Lays out a call to a language model and reads the reply back:
     where each argument goes, how the result comes back, how each type

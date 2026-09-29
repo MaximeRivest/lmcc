@@ -43,7 +43,7 @@
   "entry": {
    "name": "format_key_names_v1",
    "versions": {
-    "kernel": "0.8.4",
+    "kernel": "0.8.5",
     "vocab": {
      "format/json": "0.1.0"
     }
