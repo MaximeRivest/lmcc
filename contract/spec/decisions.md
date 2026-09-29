@@ -1811,9 +1811,13 @@ plain copies, sent a schema's integer-like properties first.
   the same meaning); lmcc's name kept and lm15 taught two (two names for
   one protocol).
 - **The bridge (`ts/src/lm15.ts`).** `request()` hands lm15 a copy in
-  lm15's forms: a `bigint` becomes lm15's `RawNumber` (its digits; lm15
-  refuses a `bigint`, so an int64 in a schema's `enum` or an input value
-  used to throw), objects keep their record. It detects the lm15 it runs
+  lm15's forms, of the plan's request and of the caller's `Config`: a
+  `bigint` becomes lm15's `RawNumber` (its digits; lm15 refuses a
+  `bigint`, so an int64 in a schema's `enum` or an input value used to
+  throw), objects keep their record. The conversion is exported as
+  `toLm15` for the other places lmcc data meets lm15 (a saved `Config`
+  for `Config.fromJSON`, a stored reply for `Response.fromJSON`), so a
+  frontend does not write its own; functai had (`lm15Data`). It detects the lm15 it runs
   with: `lm15KeepsOrder` is true when lm15 exports `MEMBER_ORDER` as the
   same symbol. With lm15 1.0.0-rc.2, the published one, which refuses any
   record, the copies are plain and the wire order is JavaScript's, as
@@ -1825,9 +1829,10 @@ plain copies, sent a schema's integer-like properties first.
   form.
 - **Checks.** `ts/tests/order.test.ts` holds the paths: the symbol, the
   schema's order and a big integer on the wire, a merged `Config`, a
-  conflict between two big integers, a malformed record. They were run
-  against lm15 1.0.0-rc.2 (the fallback) and against lm15-ts `8358d49`
-  (the order, all 42 TypeScript tests); `./check` runs them against the
+  conflict between two big integers, a caller's `Config` built from lmcc
+  data, a saved `Config` and a stored reply through `toLm15`, a malformed
+  record. They were run against lm15 1.0.0-rc.2 (the fallback) and
+  against lm15-ts `7169da2` (the order); `./check` runs them against the
   installed one.
 
 Costs, stated. The order reaches the provider only with an lm15 that

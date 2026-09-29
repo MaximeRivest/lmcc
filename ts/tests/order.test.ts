@@ -178,7 +178,7 @@ test("a nullable shape's base puts its type last, as every kernel does", () => {
  */
 
 import * as lm15 from "@lm15/lm15";
-import { ConfigConflict, lm15KeepsOrder, request as lm15Request } from "../src/lm15.ts";
+import { ConfigConflict, lm15KeepsOrder, request as lm15Request, toLm15 } from "../src/lm15.ts";
 
 function structured(): lmcc.RenderResult {
   const reg = registry();
@@ -231,6 +231,25 @@ test("a caller's Config holding the plan's big integer agrees with it; a differe
   const other = lm15.Config.fromJSON(lm15.parseJson(`{"response_format": ${format.replace("12345678901234567890", "12345678901234567891")}}`) as lm15.JsonObject);
   assert.throws(() => lm15Request(rendered, { model: "m", config: other }), (e: unknown) =>
     e instanceof ConfigConflict && /12345678901234567890/.test(e.message) && /12345678901234567891/.test(e.message));
+});
+
+test("a caller's Config built from lmcc data (a plain object, an ordered extension, a big integer) goes to lm15 as it takes it", () => {
+  const extensions = lmcc.parseJson('{"metadata": {"b": "x", "10": "y"}, "seed_space": 12345678901234567890}') as Record<string, unknown>;
+  const config = { temperature: 0.5, extensions } as unknown as lm15.Config;
+  const sent = lm15.stringifyJson(lm15.Request.toJSON(lm15Request(structured(), { model: "m", config })));
+  assert.match(sent, /"seed_space":12345678901234567890/);
+  assert.match(sent, lm15KeepsOrder ? /"metadata":\{"b":"x","10":"y"\}/ : /"metadata":\{"10":"y","b":"x"\}/);
+});
+
+test("toLm15 hands lm15 what lmcc parsed: a saved Config and a stored reply", () => {
+  const saved = lmcc.parseJson('{"temperature": 0.5, "extensions": {"logit_bias": {"1234": -100, "15": 5}, "n": 12345678901234567890}}');
+  const config = lm15.Config.fromJSON(toLm15(saved) as lm15.JsonObject);
+  assert.equal(lm15.stringifyJson(lm15.Config.toJSON(config)), lm15KeepsOrder
+    ? '{"temperature":0.5,"extensions":{"logit_bias":{"1234":-100,"15":5},"n":12345678901234567890}}'
+    : '{"temperature":0.5,"extensions":{"logit_bias":{"15":5,"1234":-100},"n":12345678901234567890}}');
+  const stored = lmcc.parseJson('{"model": "m", "message": {"role": "assistant", "parts": [{"type": "tool_call", "id": "c1", "name": "f", "input": {"reasoning": "r", "2024": 7}}]}, "finish_reason": "tool_call", "usage": {}}');
+  const reply = lm15.Response.fromJSON(toLm15(stored) as lm15.JsonObject);
+  assert.equal(lm15.stringifyJson(lm15.Response.toJSON(reply)).includes(lm15KeepsOrder ? '"input":{"reasoning":"r","2024":7}' : '"input":{"2024":7,"reasoning":"r"}'), true);
 });
 
 test("a malformed order record is refused, not guessed", () => {

@@ -297,7 +297,9 @@ order included):
   provider wrote it. With lm15 1.0.0-rc.2, which refuses the record,
   `lmcc/lm15` sends plain copies instead (`bridge.lm15KeepsOrder` says
   which): integer-like property names then reach the provider first, as
-  before. What JavaScript serializes itself (`JSON.stringify` of a reading)
+  before. Hand lm15 anything else lmcc parsed through `bridge.toLm15`
+  (`Config.fromJSON(bridge.toLm15(saved))`): it converts a `bigint` to
+  lm15's `RawNumber` and keeps or drops the record as that lm15 needs. What JavaScript serializes itself (`JSON.stringify` of a reading)
   always follows JavaScript's order. Python has no such boundary.
 - **Hints** (the prose of a refusal) name TypeScript APIs; codes, fixes and
   partials are identical.

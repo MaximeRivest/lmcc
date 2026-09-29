@@ -7,6 +7,7 @@
  * nothing here can drift from what lm15 says a request or a response is. It
  * mirrors the Python bridge, `lmcc_lm15`.
  *
+ * - `toLm15(value)` → lmcc data as lm15 takes it (below).
  * - `request(rendered, {model, config})` → an lm15 `Request`: the plan's
  *   request settings (what the adapter needs: `config.reasoning` for native
  *   thinking, `config.response_format` for a JSON reader, `tools` for a put)
@@ -39,9 +40,13 @@ export const lm15KeepsOrder: boolean = (lm15 as { MEMBER_ORDER?: unknown }).MEMB
  * lmcc data as lm15 takes it: a `bigint` becomes lm15's `RawNumber` (its
  * digits, exactly; lm15 refuses a `bigint`), objects are copied in their
  * order, which lm15 keeps when it can (above), and `__proto__` stays a
- * member. lm15's own values (a `RawNumber`) pass as they are.
+ * member. lm15's own values (a `RawNumber`) pass as they are. `request()`
+ * applies it to the plan's request and the caller's `Config`; use it for
+ * anything else lmcc parsed that lm15 reads (a saved `Config` for
+ * `Config.fromJSON`, a stored reply for `Response.fromJSON`).
  */
-function toLm15(value: unknown): unknown {
+export function toLm15<T>(value: T): T;
+export function toLm15(value: unknown): unknown {
   if (typeof value === "bigint") return new lm15.RawNumber(value.toString());
   if (Array.isArray(value)) return value.map(toLm15);
   if (!isPlainObject(value)) return value;
@@ -101,7 +106,8 @@ function merge(base: Record<string, unknown>, extra: Record<string, unknown>, pa
 export function request(rendered: RenderResult, opts: { model: string; config?: Config; override?: boolean }): Request {
   const d = rendered.request(opts.model);
   if (opts.config !== undefined) {
-    d["config"] = merge((d["config"] as Record<string, unknown>) ?? {}, Config.toJSON(opts.config) as Record<string, unknown>, "config", opts.override ?? false);
+    const config = Config.toJSON(toLm15(opts.config)) as Record<string, unknown>;
+    d["config"] = merge((d["config"] as Record<string, unknown>) ?? {}, config, "config", opts.override ?? false);
   }
   return Request.fromJSON(toLm15(d) as JsonObject);
 }
