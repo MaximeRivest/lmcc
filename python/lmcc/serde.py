@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from . import extensions as _extensions
 from . import formats as _formats
-from .adapter import Adapter, adapter as make_adapter
+from .adapter import Adapter, adapter as make_adapter, check_purpose
 from .errors import refuse
 from .transport import Transport, spelling_format_refs
 
@@ -88,7 +88,7 @@ def load(entry: dict, *, registry=None) -> Adapter:
 
     transports: dict[str, object] = {}
     for purpose, s in (entry.get("transports") or {}).items():
-        where = f"transports[{purpose!r}]"
+        where = check_purpose(purpose)
         if not isinstance(s, dict):
             refuse("entry-malformed", f"{where}: must be an object",
                    fix={"action": "edit-entry", "path": where})

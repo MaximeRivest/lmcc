@@ -19,8 +19,8 @@ validate_setting_path <- function(path, where) {
 
 setting_leaves <- function(settings, prefix = "") {
   out <- list()
-  for (k in names(settings)) {
-    v <- settings[[k]]
+  for (m in members_of(settings)) {
+    k <- m[[1]]; v <- m[[2]]
     if (k == "config" && !nzchar(prefix) && is_obj(v)) out <- c(out, setting_leaves(v, "config."))
     else out[[length(out) + 1L]] <- list(paste0(prefix, k), v)
   }
@@ -125,20 +125,20 @@ validate_transport <- function(t, where) {
       sprintf("%s.requires: %s is not a capability fact; known: %s", where, pyrepr(fact), sorted_repr(CAPABILITY_FACTS)))
   }
   for (i in seq_along(t$find)) validate_find_rule(t$find[[i]], sprintf("%s.find[%d]", where, i - 1L))
-  for (target in names(t$put)) {
-    place <- t$put[[target]]
+  for (m in members_of(t$put)) {
+    target <- m[[1]]; place <- m[[2]]
     if (!grepl(TO_RE, target, perl = TRUE) || !is_str(place) || !grepl(PUT_RE, place, perl = TRUE))
       malformed(paste0(where, ".put"), sprintf("%s.put: %s: %s \u2014 a put is '@purpose' or '@purpose.<sub>' \u2192 'request.<key>' or 'message:<role>'", where, pyrepr(target), pyrepr(place)))
   }
   for (leaf in setting_leaves(t$request_settings)) validate_setting_path(leaf[[1]], sprintf("%s.request_settings[%s]", where, pyrepr(leaf[[1]])))
   for (place in t$put) if (startsWith(place, "request.")) validate_setting_path(substring(place, 9L), paste0(where, ".put"))
-  for (target in names(t$written_as)) {
-    nm <- t$written_as[[target]]
+  for (m in members_of(t$written_as)) {
+    target <- m[[1]]; nm <- m[[2]]
     if (!has_key(t$put, target) || !is_str(nm) || !nzchar(nm)) malformed(paste0(where, ".written_as"), sprintf("%s.written_as: %s must name a placed field and a format name", where, pyrepr(target)))
   }
   validate_spelling(t$spelling, paste0(where, ".spelling"))
-  for (k in names(t$tell)) if (!(k %in% c("system", "developer", "user", "assistant")) || !is_str(t$tell[[k]]))
-    malformed(paste0(where, ".tell"), sprintf("%s.tell: %s must name a message role, text", where, pyrepr(k)))
+  for (m in members_of(t$tell)) if (!(m[[1]] %in% c("system", "developer", "user", "assistant")) || !is_str(m[[2]]))
+    malformed(paste0(where, ".tell"), sprintf("%s.tell: %s must name a message role, text", where, pyrepr(m[[1]])))
   if (!t$in_template && !length(t$find) && !length(t$put))
     malformed(where, sprintf("%s: in_template=false but no rule or put serves the field \u2014 the value would be unrecoverable", where))
 }

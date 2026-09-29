@@ -1,0 +1,96 @@
+{
+ "name": "std-table-format-parse-member-order",
+ "kind": "parse",
+ "ordered": true,
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "rows_v1",
+  "versions": {
+   "kernel": "0.8.4",
+   "vocab": {
+    "format/table": "0.2.0"
+   }
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n\nReply with EXACTLY these sections:\n{% for f in outputs %}<{f.name}>\n{f.value}\n{% endfor %}</done>"
+   },
+   {
+    "directive": "turns"
+   },
+   {
+    "role": "user",
+    "text": "{% for f in inputs %}== {f.name} ==\n{f.value}\n{% endfor %}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  },
+  "formats": {
+   "list[object]": {
+    "use": "table",
+    "options": {
+     "columns": [
+      "b",
+      "10",
+      "",
+      "2"
+     ]
+    }
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Tabulate.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "rows",
+    "direction": "output",
+    "shape": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "b": {
+        "type": "string"
+       },
+       "10": {
+        "type": "string"
+       },
+       "": {
+        "type": "string"
+       },
+       "2": {
+        "type": "string"
+       }
+      }
+     }
+    }
+   }
+  ]
+ },
+ "response": "<rows>\n| b | 10 |  | 2 |\n| B | TEN | EMPTY | TWO |\n</done>",
+ "expect": {
+  "values": {
+   "rows": [
+    {
+     "b": "B",
+     "10": "TEN",
+     "": "EMPTY",
+     "2": "TWO"
+    }
+   ]
+  },
+  "repairs": []
+ }
+}

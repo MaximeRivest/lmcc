@@ -1,6 +1,7 @@
 {
  "name": "std-fenced-tools-render-member-order",
  "kind": "render",
+ "ordered": true,
  "vocab": [
   "std"
  ],

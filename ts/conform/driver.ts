@@ -16,7 +16,7 @@
 import { createInterface } from "node:readline";
 import * as lmcc from "../src/index.ts";
 import { install as installStd } from "../src/std/index.ts";
-import { jsonEqual, ownValue, parseJson, pretty, setMember } from "../src/json.ts";
+import { isPlainObject, jsonEqual, memberNames, orderedObject, ownValue, parseJson, pretty, setMember } from "../src/json.ts";
 import { nativeExtensions } from "../src/extensions.ts";
 import { sha256Hex } from "../src/sha256.ts";
 import { jsonText } from "../src/json.ts";
@@ -35,9 +35,9 @@ function signatureFingerprint(signature: Case): string {
 function caseTurns(c: Case): [Case, Record<string, Case[]>] {
   const fp = signatureFingerprint(c["signature"]);
   const current = { signature: fp, inputs: c["inputs"] ?? {}, steps: c["steps"] ?? [] };
-  // Slot names are data: Object.fromEntries keeps a slot named __proto__ an own member.
-  const slots: Record<string, Case[]> = Object.fromEntries(
-    Object.entries((c["turns"] ?? {}) as Record<string, Case[]>).map(([name, ts]) => [name, ts.map((t) => ({ signature: fp, ...t }))]));
+  // Slot names are data: a slot named __proto__ or "" is an own member, in the case's order.
+  const turns = (c["turns"] ?? {}) as Record<string, Case[]>;
+  const slots: Record<string, Case[]> = orderedObject(memberNames(turns).map((name) => [name, turns[name].map((t) => ({ signature: fp, ...t }))]));
   return [current, slots];
 }
 
@@ -57,7 +57,21 @@ function unclaimedOf(c: Case): string | null {
   return null;
 }
 
-function compare(expected: unknown, got: unknown, what: string): Result {
+/** Whether every object lists its members in the same order (kernel §1), recursively. */
+function sameOrder(expected: unknown, got: unknown): boolean {
+  if (Array.isArray(expected) && Array.isArray(got)) return expected.every((x, i) => sameOrder(x, got[i]));
+  if (isPlainObject(expected) && isPlainObject(got)) {
+    const a = memberNames(expected);
+    const b = memberNames(got);
+    return a.length === b.length && a.every((k, i) => k === b[i]) && a.every((k) => sameOrder(expected[k], got[k]));
+  }
+  return true;
+}
+
+function compare(expected: unknown, got: unknown, what: string, ordered = false): Result {
+  if (jsonEqual(expected, got) && ordered && !sameOrder(expected, got)) {
+    return { ok: false, detail: `${what}: member order differs (the case is ordered, kernel §9)\n--- expected\n${memberNames(expected as object)}\n--- got\n${memberNames(got as object)}` };
+  }
   if (jsonEqual(expected, got)) return { ok: true, detail: "" };
   return { ok: false, detail: `${what} mismatch\n--- expected\n${pretty(expected)}\n--- got\n${pretty(got)}` };
 }
@@ -194,6 +208,7 @@ function streamTrace(plan: lmcc.Plan, response: unknown): unknown[] {
 export function runCase(c: Case): Result {
   const expect = c["expect"];
   const kind = c["kind"];
+  const ordered = c["ordered"] === true;
   const unclaimed = unclaimedOf(c);
   if (unclaimed) return { ok: true, detail: "", unclaimed };
   const registry = registryFor(c);
@@ -201,30 +216,30 @@ export function runCase(c: Case): Result {
   let plan: lmcc.Plan | null = null;
   try {
     const adapter = lmcc.load(c["entry"], { registry });
-    if (kind === "roundtrip") return compare(expect["entry"], lmcc.dump(adapter, registry), "entry");
+    if (kind === "roundtrip") return compare(expect["entry"], lmcc.dump(adapter, registry), "entry", ordered);
     stage = "signature";
     const sig = lmcc.signatureFromDict(c["signature"]);
     stage = "bind";
     plan = adapter.bind(sig, c["capabilities"] ?? {}, { registry });
     if (kind === "plan") {
       const [, slots] = caseTurns(c);
-      return compare({ skeleton: expect["skeleton"], prefix: expect["prefix"] }, { skeleton: plan.skeleton(), prefix: plan.prefix({ turns: slots }) }, "plan");
+      return compare({ skeleton: expect["skeleton"], prefix: expect["prefix"] }, { skeleton: plan.skeleton(), prefix: plan.prefix({ turns: slots }) }, "plan", ordered);
     }
     if (kind === "render") {
       const [current, slots] = caseTurns(c);
-      return compare(expect["request"], plan.render(lmcc.Turn.fromJSON(current), { turns: slots }).request(), "request");
+      return compare(expect["request"], plan.render(lmcc.Turn.fromJSON(current), { turns: slots }).request(), "request", ordered);
     }
     if (kind === "parse") {
       const reading = plan.read(c["response"]);
-      let r = compare(expect["values"], reading.values, "values");
+      let r = compare(expect["values"], reading.values, "values", ordered);
       if (!r.ok) return r;
       if ("repairs" in expect) {
-        r = compare(expect["repairs"], reading.repairs, "repairs");
+        r = compare(expect["repairs"], reading.repairs, "repairs", ordered);
         if (!r.ok) return r;
       }
       for (const [key, got] of [["probabilities", reading.probabilities], ["measured_by", reading.measuredBy]] as const) {
         if (key in expect) {
-          r = compare(expect[key], got, key);
+          r = compare(expect[key], got, key, ordered);
           if (!r.ok) return r;
         }
       }
@@ -257,7 +272,7 @@ export function runCase(c: Case): Result {
     }
     if (kind === "refuse" && err.code === expect["code"]) {
       if ("fix" in expect) {
-        const r = compare(expect["fix"], err.fix, `fix of [${err.code}]`);
+        const r = compare(expect["fix"], err.fix, `fix of [${err.code}]`, ordered);
         if (!r.ok) return r;
       }
       if (expect["at"] === "parse" && "response" in c && plan !== null) {

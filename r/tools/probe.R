@@ -5,8 +5,12 @@
 
 lib <- Sys.getenv("LMCC_R_LIB", file.path(dirname(sub("^--file=", "", grep("^--file=", commandArgs(FALSE), value = TRUE)[[1]])), "..", ".lib"))
 suppressPackageStartupMessages(library(lmcc, lib.loc = lib))
+# R's `$` and argument matching complete a partial name (`x$id` finds a member
+# "identifier" when "id" is absent): the kernel reads data by exact name, and
+# any partial match, like any other warning, fails the run here.
+options(warnPartialMatchDollar = TRUE, warnPartialMatchArgs = TRUE, warnPartialMatchAttr = TRUE, warn = 2)
 ns <- asNamespace("lmcc")
-for (n in c("is_obj", "is_str", "get_key", "has_key", "pytruthy", "reading_to_list", "step_to_list", "model_step", "as_message")) assign(n, get(n, envir = ns))
+for (n in c("is_obj", "is_str", "get_key", "has_key", "set_key", "members_of", "pytruthy", "reading_to_list", "step_to_list", "model_step", "as_message")) assign(n, get(n, envir = ns))
 
 refusal_of <- function(e) jobj(code = e$code, fix = e$fix, partial = e$partial, hint = e$hint)
 attempt <- function(expr) tryCatch(jobj(ok = expr), lmcc_refusal = function(e) jobj(refused = refusal_of(e)))
@@ -30,13 +34,14 @@ observe <- function(c) {
   out$describe <- describe_plan(plan)
   fp <- signature_fingerprint(sig)
   slots <- jobj()
-  for (name in names(get_key(c, "turns", jobj()))) slots[[name]] <- lapply(c$turns[[name]], function(t) if (has_key(t, "signature")) t else c(jobj(signature = fp), t))
+  # Slot names are data: a slot "" is found and written by position.
+  for (m in members_of(get_key(c, "turns", jobj()))) slots <- set_key(slots, m[[1]], lapply(m[[2]], function(t) if (has_key(t, "signature")) t else c(jobj(signature = fp), t)))
   out$prefix <- attempt(prefix(plan, slots))
   out$skeleton <- skeleton(plan)
   if (has_key(c, "inputs")) {
     current <- jobj(signature = fp, inputs = c$inputs, steps = get_key(c, "steps", list()))
     out$turn_json <- attempt(turn_to_list(turn_from_list(current)))
-    out$slot_json <- attempt({ r <- jobj(); for (k in names(slots)) r[[k]] <- lapply(slots[[k]], function(t) turn_to_list(turn_from_list(t))); r })
+    out$slot_json <- attempt({ r <- jobj(); for (m in members_of(slots)) r <- set_key(r, m[[1]], lapply(m[[2]], function(t) turn_to_list(turn_from_list(t)))); r })
     out$render <- attempt({ r <- render(plan, turn_from_list(current), slots); jobj(request = request_of(r, "m"), hash = sha256_of(request_of(r))) })
   }
   if (has_key(c, "response")) {

@@ -105,7 +105,8 @@ refuses); pass `env = unclass(Sys.getenv())` until lm15 fixes it.
 
 The differential check (`python contract/harness/differential.py --probe
 'Rscript r/tools/probe.R'`) compares everything else on every corpus case
-and 2,640 fuzzed replies against Python.
+3,000 fuzzed replies and 84 variants with hostile member names against
+Python, member order included.
 
 - **Shipped code (UDF formats)**: this runtime places no UDF language; the six
   corpus cases that need `udf:python` are unclaimed. A format built from R
@@ -118,6 +119,14 @@ and 2,640 fuzzed replies against Python.
   array an unnamed list (`jarr()`), null is `NULL`. A vector of length other
   than one is not a JSON value: use a list. R strings cannot hold U+0000, so a
   reply containing it cannot be represented.
+- **A member named `""`**: any string is a member name (kernel section 1),
+  and lmcc finds and writes one by position. Your own code reading what lmcc
+  returns cannot use `x[[""]]` (always `NULL`) or `x[[""]] <- v` (appends a
+  second member); use `x[names(x) == ""]` or `match("", names(x))`. And `$`
+  completes a partial name on a list: `reading$values$na` returns a member
+  `"name"` when there is no `"na"`; use `[["na"]]`, which matches exactly
+  (lmcc's own driver and probe run with R's partial-match warnings as
+  errors).
 - **Type names**: the builders name no type unless given `type =`; a
   signature from `signature_from_list()` is identical in every kernel.
 - **Names** that R's base packages use (`parse`, `load`, `system`, `step`) are

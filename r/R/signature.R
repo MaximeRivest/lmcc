@@ -135,8 +135,8 @@ lmcc_signature <- function(instructions, inputs = list(), outputs = list()) {
   fields <- list()
   for (direction in c("input", "output")) {
     entries <- if (direction == "input") inputs else outputs
-    for (name in names(entries)) {
-      spec <- entries[[name]]
+    for (m in members_of(entries)) {
+      name <- m[[1]]; spec <- m[[2]]
       if (!inherits(spec, "lmcc_field_spec")) spec <- field_spec(spec)
       f <- list(name = name, direction = direction, shape = spec$shape, purpose = spec$purpose)
       if (!is.null(spec$type)) f$type <- spec$type

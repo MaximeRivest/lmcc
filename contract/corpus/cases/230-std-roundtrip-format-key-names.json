@@ -1,6 +1,7 @@
 {
  "name": "std-roundtrip-format-key-names",
  "kind": "roundtrip",
+ "ordered": true,
  "vocab": [
   "std"
  ],

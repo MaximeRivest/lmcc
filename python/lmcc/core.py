@@ -55,6 +55,11 @@ def is_identifier(name: object) -> bool:
     return isinstance(name, str) and _IDENTIFIER.match(name) is not None
 
 
+def is_purpose(name: object) -> bool:
+    """A purpose as a field declares it: a name or dotted names (`tools.calls`)."""
+    return isinstance(name, str) and _PURPOSE.match(name) is not None
+
+
 def format_number(value: float) -> str:
     """ECMAScript Number::toString over the shortest round-trip digits.
 

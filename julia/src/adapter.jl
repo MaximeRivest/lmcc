@@ -32,6 +32,18 @@ mutable struct Adapter
     guards::Vector{Tuple{String,Int}}
 end
 
+"""
+A transport's key, checked as it is loaded (§2): a purpose a field can bear,
+a name or dotted names (`tools`, `tools.calls`); `""` or `a-b` would key a
+transport no field reaches. Returns its path.
+"""
+function check_purpose(purpose)
+    where = "transports[$(pyrepr(purpose))]"
+    (purpose isa AbstractString && occursin(_PURPOSE, purpose)) ||
+        _malformed(where, "$where: a purpose is a name or dotted names (tools, tools.calls), as a field declares it")
+    where
+end
+
 "The template's last message when it is an assistant message: the reply's prefill (§3)."
 function adapter_prefill(a::Adapter)
     isempty(a.template) && return nothing
@@ -129,7 +141,7 @@ function adapter(; messages=nothing, template=nothing, reader=nothing, transport
     sb = OrderedDict{String,Any}()
     for (purpose, value) in something(transports, JObj())
         purpose = String(purpose)
-        where = "transports[$(pyrepr(purpose))]"
+        where = check_purpose(purpose)
         if value isa AbstractString
             sb[purpose] = jobj("use" => value, "options" => JObj())
         elseif value isa Transport
@@ -217,7 +229,7 @@ function resolve_extensions(a::Adapter, reg::Registry)
         check_compatible(name, needs, ext_version(b))
         resolved[name] = ResolvedExtension(name, needs, b)
     end
-    by_family = Dict(family_of(n) => r for (n, r) in resolved)
+    by_family = OrderedDict(family_of(n) => r for (n, r) in resolved)
     for (purpose, binding) in a.transports
         where = "transports[$(pyrepr(purpose))]"
         _walk_rules(_transport_of(reg, binding, where), (r, path) -> begin
@@ -266,7 +278,7 @@ function load(entry; registry::Registry=default_registry())
     transports = OrderedDict{String,Any}()
     ets = get(entry, "transports", nothing)
     for (purpose, s) in (pytruthy(ets) ? ets : JObj())
-        where = "transports[$(pyrepr(purpose))]"
+        where = check_purpose(purpose)
         isobj(s) || _malformed(where, "$where: must be an object")
         if haskey(s, "use")
             name = s["use"]

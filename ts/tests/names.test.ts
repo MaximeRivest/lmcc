@@ -120,3 +120,39 @@ test("the lm15 bridge merges a caller's schema holding __proto__ without losing 
   assert.deepEqual(sent.config.response_format, settings["response_format"]);
   assert.deepEqual(Object.keys((sent.config.response_format as { schema: { properties: object } }).schema.properties), ["__proto__", "toString"]);
 });
+
+/*
+ * The whole class, closed by construction: outside json.ts, no module of the
+ * kernel or the standard pack lists, copies or tests an object's names with
+ * JavaScript's own operations, each of which either reaches the prototype
+ * (`in`) or loses the order a value holds (`Object.keys`/`values`/`entries`/
+ * `fromEntries`/`assign`, an object spread, `for ... in`). They go through
+ * memberNames, setMember, orderedObject, copyObject, hasOwn and ownValue.
+ */
+test("no module outside json.ts reads, copies or builds a record with JavaScript's own name operations", async () => {
+  const ts = (await import("typescript")).default;
+  const { readFileSync, readdirSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const root = new URL("../src/", import.meta.url).pathname;
+  const found: string[] = [];
+  const PROTO = new Set(Object.getOwnPropertyNames(Object.prototype));
+  for (const dir of ["", "std"]) {
+    for (const file of readdirSync(join(root, dir))) {
+      if (!file.endsWith(".ts") || (dir === "" && file === "json.ts")) continue;
+      const path = join(root, dir, file);
+      const sf = ts.createSourceFile(path, readFileSync(path, "utf8"), ts.ScriptTarget.Latest, true);
+      const at = (n: import("typescript").Node) => `${join(dir, file)}:${sf.getLineAndCharacterOfPosition(n.getStart()).line + 1}`;
+      const visit = (n: import("typescript").Node): void => {
+        if (ts.isSpreadAssignment(n)) found.push(`${at(n)} object spread`);
+        else if (ts.isForInStatement(n)) found.push(`${at(n)} for ... in`);
+        else if (ts.isPropertyAccessExpression(n) && n.expression.getText(sf) === "Object"
+          && ["keys", "values", "entries", "fromEntries", "assign", "getOwnPropertyNames"].includes(n.name.text)) found.push(`${at(n)} Object.${n.name.text}`);
+        else if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.InKeyword
+          && (!ts.isStringLiteral(n.left) || PROTO.has(n.left.text))) found.push(`${at(n)} ${n.getText(sf)}`);
+        ts.forEachChild(n, visit);
+      };
+      visit(sf);
+    }
+  }
+  assert.deepEqual(found, []);
+});

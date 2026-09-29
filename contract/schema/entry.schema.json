@@ -109,7 +109,8 @@
     "transports": {
       "type": "object",
       "propertyNames": {
-        "pattern": "^[A-Za-z_][A-Za-z0-9_.]*$"
+        "description": "a purpose: a name or dotted names, as a field declares it (signature.schema.json)",
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*$"
       },
       "additionalProperties": {
         "$ref": "#/$defs/transport"

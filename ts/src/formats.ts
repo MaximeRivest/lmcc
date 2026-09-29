@@ -18,7 +18,7 @@
 import { refuse } from "./errors.ts";
 import { Capture, isObj, nullableBase, isMedia, readValue, shapeSummary, spellValue, structuralKeys, SCALAR_TYPES, type Field, type Part } from "./core.ts";
 import { pyRepr, pyStr } from "./text.ts";
-import { setMember } from "./json.ts";
+import { memberNames, setMember } from "./json.ts";
 
 export type Direction = "in" | "out" | "both";
 
@@ -53,7 +53,7 @@ export interface FormatSpec {
 /** Build a format from functions: the `lmcc.format(...)` surface. */
 export function makeFormat(spec: FormatSpec): Format {
   const accepts = typeof spec.accepts === "string" ? [spec.accepts] : [...(spec.accepts ?? ["*"])];
-  return {
+  const format: Format = {
     name: spec.name ?? null,
     accepts,
     direction: spec.direction ?? (spec.read ? "both" : "in"),
@@ -62,8 +62,9 @@ export function makeFormat(spec: FormatSpec): Format {
     reads: [...(spec.reads ?? ["text"])],
     describe: (field) => (spec.describe ? spec.describe(field) : null),
     write: spec.write,
-    ...(spec.read ? { read: spec.read } : {}),
   };
+  if (spec.read) format.read = spec.read;
+  return format;
 }
 
 export function isFormat(value: unknown): value is Format {
@@ -99,14 +100,14 @@ export const MEDIA_DEFAULT: Format = Object.freeze({
       refuse("value-invalid", `field ${pyRepr(field.name)}: a ${pyRepr(value["type"])} part given where a ${pyRepr(kind)} part is declared`);
     }
     const part: Record<string, unknown> = { type: kind };
-    for (const k of Object.keys(value)) if (k !== "type") setMember(part, k, value[k]);
+    for (const k of memberNames(value)) if (k !== "type") setMember(part, k, value[k]);
     return [part as Part];
   },
   read: (capture: Capture, field: Field) => {
     const parts = capture.of(field.shape["media"] as string);
     if (!parts.length) refuse("parse-value", `field ${pyRepr(field.name)}: no ${pyStr(field.shape["media"])} part in the capture`);
     const out: Record<string, unknown> = {};
-    for (const k of Object.keys(parts[0])) if (k !== "type") setMember(out, k, parts[0][k]);
+    for (const k of memberNames(parts[0])) if (k !== "type") setMember(out, k, parts[0][k]);
     return out;
   },
 });

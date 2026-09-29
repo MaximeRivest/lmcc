@@ -449,16 +449,16 @@ describe_plan <- function(x) {
     out[["reader"]][["anchors"]] <- lapply(p$reader$anchors, function(a) list(a[[1]], a[[2]], a[[3]]))
     if (length(p$reader$unrepaired)) out[["reader"]][["unrepaired"]] <- as.list(p$reader$unrepaired)
     if (nzchar(p$reader$tail)) out[["reader"]][["tail"]] <- p$reader$tail
-  } else if (!is.null(p$reader$spec)) for (k in setdiff(names(p$reader$spec), "kind")) out[["reader"]] <- set_key(out[["reader"]], k, p$reader$spec[[k]])
+  } else if (!is.null(p$reader$spec)) for (m in members_of(p$reader$spec)) if (m[[1]] != "kind") out[["reader"]] <- set_key(out[["reader"]], m[[1]], m[[2]])
   vocab <- jobj()
-  for (c in p$formats) if (!is.null(c$format$name) && !is.null(p$registry$formats[[c$format$name]])) vocab[[paste0("format/", c$format$name)]] <- p$registry$formats[[c$format$name]]$version
-  for (r in p$resolved) if (!is.null(p$registry$transports[[r$name]])) vocab[[paste0("transport/", r$name)]] <- p$registry$transports[[r$name]]$version
+  for (c in p$formats) if (!is.null(c$format$name) && !is.null(get_key(p$registry$formats, c$format$name))) vocab[[paste0("format/", c$format$name)]] <- get_key(p$registry$formats, c$format$name)$version
+  for (r in p$resolved) if (!is.null(get_key(p$registry$transports, r$name))) vocab[[paste0("transport/", r$name)]] <- get_key(p$registry$transports, r$name)$version
   k <- p$adapter$reader[["kind"]]
-  if (!is.null(p$registry$readers[[k]])) vocab[[paste0("reader/", k)]] <- p$registry$readers[[k]]$version
+  if (!is.null(get_key(p$registry$readers, k))) vocab[[paste0("reader/", k)]] <- get_key(p$registry$readers, k)$version
   turn_info <- jobj()
   for (r in p$resolved) if (!is.null(p$turn_input_formats[[r$purpose]])) {
     ref <- r$transport$spelling[["input_format"]]
-    v <- p$registry$formats[[ref[["use"]]]]$version
+    v <- get_key(p$registry$formats, ref[["use"]])$version
     vocab[[paste0("format/", ref[["use"]])]] <- v
     turn_info[[r$purpose]] <- jobj(input_format = ref, version = v)
   }

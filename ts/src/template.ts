@@ -14,6 +14,7 @@
 import { refuse } from "./errors.ts";
 import type { Field, Part } from "./core.ts";
 import { pyRepr } from "./text.ts";
+import { copyObject, ownValue, setMember } from "./json.ts";
 
 // ASCII-explicit on purpose: the template grammar is one grammar everywhere.
 const S = "[ \\t\\n\\r\\f\\v]";
@@ -197,9 +198,9 @@ export function validateNodes(nodes: Node[], opts: {
           { fix: { action: "edit-template", path: where, slot: node.slot } });
       }
       if (inputFields.has(node.slot)) covered.add(node.slot);
-      for (const c of validateNodes(branches(node), { ...opts, slots, inLoopVar })) covered.add(c);
+      for (const c of validateNodes(branches(node), { knownFields, inputFields, where, slots, inLoopVar })) covered.add(c);
     } else if (node.kind === "loop") {
-      for (const c of validateNodes(node.body, { ...opts, slots, inLoopVar: node.var })) covered.add(c);
+      for (const c of validateNodes(node.body, { knownFields, inputFields, where, slots, inLoopVar: node.var })) covered.add(c);
       if (node.source === "inputs") for (const c of inputFields) covered.add(c);
     }
   }
@@ -232,12 +233,14 @@ export function renderNodes(nodes: Node[], env: RenderEnv, out: Part[], buf: str
       for (const [role, kind, text] of env.turnMessages(node.source)) {
         const attrs: Record<string, string> = { role, kind, text };
         for (const n of node.body) {
-          buf.push(n.kind === "text" ? n.text : attrs[(n as SlotNode).path.slice((n as SlotNode).path.indexOf(".") + 1)]);
+          buf.push(n.kind === "text" ? n.text : ownValue(attrs, (n as SlotNode).path.slice((n as SlotNode).path.indexOf(".") + 1)) as string);
         }
       }
     } else {
       for (const f of env.loopFields(node.source)) {
-        renderNodes(node.body, env, out, buf, { ...(loopCtx ?? {}), [node.var]: f });
+        const ctx = copyObject<Field>(loopCtx);
+        setMember(ctx, node.var, f);
+        renderNodes(node.body, env, out, buf, ctx);
       }
     }
   }

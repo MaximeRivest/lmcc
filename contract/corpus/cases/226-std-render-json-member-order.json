@@ -1,6 +1,7 @@
 {
  "name": "std-render-json-member-order",
  "kind": "render",
+ "ordered": true,
  "vocab": [
   "std"
  ],

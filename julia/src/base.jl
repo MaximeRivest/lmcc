@@ -358,7 +358,7 @@ function _shortest(v::Float64)
     (String(digits), n)
 end
 
-const _SHORT_ESC = Dict('"' => "\\\"", '\\' => "\\\\", '\b' => "\\b", '\f' => "\\f", '\n' => "\\n", '\r' => "\\r", '\t' => "\\t")
+const _SHORT_ESC = OrderedDict('"' => "\\\"", '\\' => "\\\\", '\b' => "\\b", '\f' => "\\f", '\n' => "\\n", '\r' => "\\r", '\t' => "\\t")
 
 "A JSON string: `\"`, `\\` and U+0000–U+001F escaped, everything else verbatim."
 function json_string(s::AbstractString)

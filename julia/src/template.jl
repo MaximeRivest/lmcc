@@ -193,14 +193,14 @@ function render_nodes(nodes, env, out::Vector{Any}, buf::IOBuffer, loop_ctx=noth
             state === nothing || render_nodes(state ? node.body : node.orelse, env, out, buf, loop_ctx)
         elseif over_turns(node)
             for (role, kind, text) in env_turn_messages(env, node.source)
-                attrs = Dict("role" => role, "kind" => kind, "text" => text)
+                attrs = OrderedDict("role" => role, "kind" => kind, "text" => text)
                 for n in node.body
                     write(buf, n isa TextNode ? n.text : attrs[_partition(n.path, '.')[3]])
                 end
             end
         else
             for f in env_loop_fields(env, node.source)
-                ctx = loop_ctx === nothing ? Dict{String,Field}() : copy(loop_ctx)
+                ctx = loop_ctx === nothing ? OrderedDict{String,Field}() : copy(loop_ctx)
                 ctx[node.var] = f
                 render_nodes(node.body, env, out, buf, ctx)
             end

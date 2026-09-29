@@ -15,7 +15,7 @@ request_of <- function(r, model = NULL) {
   if (!is.null(model)) out[["model"]] <- model
   if (!is.null(r$system)) out[["system"]] <- r$system
   out[["messages"]] <- r$messages
-  for (k in names(r$request_settings)) out[[k]] <- r$request_settings[[k]]
+  for (m in members_of(r$request_settings)) out <- set_key(out, m[[1]], m[[2]])
   out
 }
 
@@ -156,10 +156,11 @@ slot_values <- function(p, turns) {
   if (!length(turns)) return(out)
   by_slot <- if (is_arr(turns)) list(turns = turns) else turns
   if (!is_obj(by_slot) && !(is.list(by_slot) && !is.null(names(by_slot)))) refuse("turn-invalid", "turns is {slot: [turn]} or a list for the slot 'turns'")
-  for (name in names(by_slot)) {
-    ts <- by_slot[[name]]
+  # Slot names are data: found by position, so a slot "" is seen and refused.
+  for (m in members_of(by_slot)) {
+    name <- m[[1]]; ts <- m[[2]]
     if (!length(ts)) next
-    if (name == "steps" || is.null(p$slots[[name]]))
+    if (name == "steps" || !has_key(p$slots, name))
       refuse("turns-unplaced", paste0(sprintf("turns given for slot %s, which ", pyrepr(name)), if (name == "steps") "is the current turn's own steps" else "the template does not place",
                                       "; placed slots: ", if (length(p$slots)) sorted_repr(names(p$slots)) else "none"))
     out[[name]] <- lapply(seq_along(ts), function(i) check_turn(p, ts[[i]], sprintf("turns[%s][%d]", pyrepr(name), i - 1L), TRUE))

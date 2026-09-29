@@ -200,9 +200,9 @@ or an artifact key may be named `toString`, `__proto__`, `"10"` or `""`.
 Inputs, values, turns and partials are ordinary objects, so JavaScript's
 own lookups can answer from the prototype: test a name with `Object.hasOwn`
 (never `name in record` or `record.hasOwnProperty`), read it with
-`lmcc.ownValue`, list names with `lmcc.memberNames` or `Object.keys`, and
-write an arbitrary name with `lmcc.setMember` (`record["__proto__"] = v`
-sets the prototype; an object literal's `__proto__:` does too). A value
+`lmcc.ownValue`, list names with `lmcc.memberNames`, and write an
+arbitrary name with `lmcc.setMember` (`record["__proto__"] = v` sets the
+prototype; an object literal's `__proto__:` does too). A value
 named like a method shadows it: `String(values)` throws when an output is
 named `toString`.
 
@@ -218,18 +218,27 @@ assert.deepEqual(Object.keys(built), ["__proto__"]);
 
 **Members keep their order.** JavaScript enumerates integer-like names
 (`"10"`) first. lmcc keeps the order a value holds, as every other kernel
-does: an object lmcc builds (a parse, a copy, a reading, a turn) records its
-order where JavaScript's differs, and every JSON lmcc writes follows it.
-The record is invisible to JavaScript (`Object.keys`, spread,
-`JSON.stringify` and `structuredClone` neither see nor copy it). An object
-literal or a `JSON.parse` result has lost the order before lmcc sees it:
-build one with `lmcc.orderedObject`, read JSON with `lmcc.parseJson`.
+does: `lmcc.setMember` adds a name after the ones an object holds (a
+replaced member keeps its place, one removed and set again comes last),
+recording the order where JavaScript's would differ; every object lmcc
+builds (a parse, a copy, a reading, a table row, a turn, a dump) is built
+that way, and every JSON lmcc writes follows it. The record is invisible
+to JavaScript (`Object.keys`, spread, `JSON.stringify` and
+`structuredClone` neither see nor copy it), so use lmcc's helpers where
+order matters: `lmcc.memberNames` to list, `lmcc.setMember` to add,
+`lmcc.copyObject(a, b)` for `{...a, ...b}`, `lmcc.orderedObject(entries)`
+to build. A member added by plain assignment is listed after the recorded
+ones in JavaScript's order. An object literal or a `JSON.parse` result has
+lost the order before lmcc sees it: build one with `lmcc.orderedObject`,
+read JSON with `lmcc.parseJson`.
 
 ```ts
 assert.deepEqual(Object.keys(record), ["10", "toString", "b"]);
 assert.deepEqual(lmcc.memberNames(record), ["toString", "b", "10"]);
 assert.equal(lmcc.jsonText(record), '{"toString":"a","b":1,"10":2}');
 assert.equal(lmcc.jsonText(lmcc.orderedObject([["b", 1], ["10", 2]])), '{"b":1,"10":2}');
+lmcc.setMember(record, "2", 3);
+assert.equal(lmcc.jsonText(lmcc.copyObject(record, { b: 0 })), '{"toString":"a","b":0,"10":2,"2":3}');
 ```
 
 **Two copies of lmcc in one program** (npm installs it twice easily) work:
@@ -261,7 +270,8 @@ tarball (`npm pack` in `ts/`).
 The contract names the places two hosts may legitimately differ; this kernel
 takes these, and nothing else (the differential check,
 `python contract/harness/differential.py --probe 'node ts/tools/probe.ts'`, compares everything else on every corpus
-case and 2,600 fuzzed replies):
+case, 3,000 fuzzed replies and 84 variants with hostile member names, member
+order included):
 
 - **Shipped code (UDF formats)**: this runtime places no UDF language, so an
   artifact that ships Python code refuses `format-untrusted`/`udf-unplaceable`

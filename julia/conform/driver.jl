@@ -34,8 +34,21 @@ function unclaimed_of(c)
 end
 
 ok() = jobj("ok" => true, "detail" => "")
-compare(expected, got, what) = json_equal(expected, got) ? ok() :
-    jobj("ok" => false, "detail" => "$what mismatch\n--- expected\n$(json_text(expected; spaced=true))\n--- got\n$(json_text(got; spaced=true))")
+# Whether every object lists its members in the same order (kernel §1), recursively.
+function same_order(a, b)
+    if isobj(a) && isobj(b)
+        collect(keys(a)) == collect(keys(b)) || return false
+        return all(same_order(a[k], b[k]) for k in keys(a))
+    end
+    isarr(a) && isarr(b) && length(a) == length(b) && return all(same_order(x, y) for (x, y) in zip(a, b))
+    true
+end
+function compare(expected, got, what, ordered=false)
+    json_equal(expected, got) || return jobj("ok" => false, "detail" => "$what mismatch\n--- expected\n$(json_text(expected; spaced=true))\n--- got\n$(json_text(got; spaced=true))")
+    ordered && !same_order(expected, got) && return jobj("ok" => false,
+        "detail" => "$what: member order differs (the case is ordered, kernel §9)\n--- expected\n$(json_text(expected; spaced=true))\n--- got\n$(json_text(got; spaced=true))")
+    ok()
+end
 
 message_parts(r) = (m = (isobj(r) && isobj(get(r, "message", nothing))) ? r["message"] : r; isobj(m) && isarr(get(m, "parts", nothing)) ? m["parts"] : Any[])
 finish_reason_of(r) = (isobj(r) && isobj(get(r, "message", nothing))) ? get(r, "finish_reason", nothing) : nothing
@@ -161,6 +174,7 @@ end
 function run_case(c)
     expect = c["expect"]
     kind = c["kind"]
+    ordered = get(c, "ordered", false) === true
     u = unclaimed_of(c)
     u === nothing || return jobj("ok" => true, "detail" => "", "unclaimed" => u)
     reg = registry_for(c)
@@ -168,26 +182,26 @@ function run_case(c)
     plan = nothing
     try
         a = load(c["entry"]; registry=reg)
-        kind == "roundtrip" && return compare(expect["entry"], LMCC.dump(a; registry=reg), "entry")
+        kind == "roundtrip" && return compare(expect["entry"], LMCC.dump(a; registry=reg), "entry", ordered)
         stage = "signature"
         sig = signature_from_dict(c["signature"])
         stage = "bind"
         plan = LMCC.bind(a, sig; capabilities=get(c, "capabilities", JObj()), registry=reg)
         if kind == "plan"
             _, slots = case_turns(c)
-            return compare(jobj("skeleton" => expect["skeleton"], "prefix" => expect["prefix"]), jobj("skeleton" => skeleton(plan), "prefix" => prefix(plan; turns=slots)), "plan")
+            return compare(jobj("skeleton" => expect["skeleton"], "prefix" => expect["prefix"]), jobj("skeleton" => skeleton(plan), "prefix" => prefix(plan; turns=slots)), "plan", ordered)
         end
         if kind == "render"
             current, slots = case_turns(c)
-            return compare(expect["request"], request(render(plan, turn_from_dict(current); turns=slots)), "request")
+            return compare(expect["request"], request(render(plan, turn_from_dict(current); turns=slots)), "request", ordered)
         end
         if kind == "parse"
             reading = LMCC.read(plan, c["response"])
-            r = compare(expect["values"], reading.values, "values")
+            r = compare(expect["values"], reading.values, "values", ordered)
             r["ok"] || return r
             for (key, got) in (("repairs", reading.repairs), ("probabilities", reading.probabilities), ("measured_by", reading.measured_by))
                 haskey(expect, key) || continue
-                r = compare(expect[key], got, key)
+                r = compare(expect[key], got, key, ordered)
                 r["ok"] || return r
             end
             _, captures, _ = LMCC.parse_with_captures(plan, c["response"])
@@ -216,7 +230,7 @@ function run_case(c)
         end
         if kind == "refuse" && err.code == expect["code"]
             if haskey(expect, "fix")
-                r = compare(expect["fix"], err.fix, "fix of [$(err.code)]")
+                r = compare(expect["fix"], err.fix, "fix of [$(err.code)]", ordered)
                 r["ok"] || return r
             end
             if get(expect, "at", nothing) == "parse" && haskey(c, "response") && plan !== nothing

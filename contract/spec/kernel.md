@@ -138,14 +138,18 @@ it is `""`); `signature-malformed` names the offender (fix
 `edit-signature`, with `field` when a field is the offender).
 
 **Names are data.** Every name the kernel keys a record by is an ordinary
-name: field names, turn slot names and purposes (identifiers), and format
-keys and the member names of JSON values and of a shape's `properties`
-(any string, the empty string `""` included). A name the host language
+name: field names, turn slot names and purposes (identifiers; a purpose
+may be dotted, `tools.calls`), and format keys and the member names of
+JSON values and of a shape's `properties` (any string, the empty string
+`""` included). An artifact's transports are keyed by purposes, so a
+key that is not one (`""`, `a-b`) refuses `entry-malformed` at load
+(§2); a turn slot no template places, `""` included, refuses
+`turns-unplaced` (§3a). A name the host language
 gives meaning to (`__proto__`, `toString`, `constructor` in JavaScript;
 `""`, which R's lookup by name never finds) is present in a record
 exactly when the record holds it, is written as a member like any other,
 once, and is missing when it is absent: never read from, or written
-into, what the host's records inherit (cases 214–225, 230, D-58).
+into, what the host's records inherit (cases 214–225, 230–233, 236, D-58).
 
 **Members keep their order.** An object's members are in the order the
 value holds them (a case file: the order written; a reply: the order
@@ -154,10 +158,11 @@ in that order: a value through `format/json`, a written reply, a call's
 `{input}` (§6), a data part's text, a shape in a description or a tool
 list. A shape's `properties` keep theirs wherever they are copied or
 listed (`reader/json_object`'s `required`, in property order). Only
-canonical JSON (§3a) reorders, by code point. A host whose records
-enumerate names in an order of their own (a JavaScript object puts
-integer-like names such as `"10"` first) carries the order itself
-(cases 226–229, D-58).
+canonical JSON (§3a) reorders, by code point. A member added to a value
+comes after the ones it holds; one replaced keeps its place. A host whose
+records enumerate names in an order of their own (a JavaScript object
+puts integer-like names such as `"10"` first; a hash table has none)
+carries the order itself (cases 226–230, 234, 235, D-58).
 
 `shape` is JSON Schema; the kernel reads only these keywords and carries
 every other one untouched for formats to use:
@@ -310,7 +315,8 @@ refuses `response-malformed`.
 
 Its `probabilities` and `method` are not text. `plan.read(response)`
 also returns `probabilities`, `{field: {key: p}}`, gathered verbatim from
-every data part of the reply (keys are lm15's: the answer keys as
+every data part of the reply, in its order and under the names it gives,
+a name no output bears or `""` included (case 234; keys are lm15's: the answer keys as
 strings, `"true"`/`"false"` for a boolean, `"0"`…`"n-1"` for an ordered
 judgment), and `measured_by`, `{field: method}` (lm15's
 `JudgmentMethod`: how the numbers were measured, never a
@@ -840,7 +846,11 @@ Predicate = {capability} | {not} | {all} | {any}
 ```
 
 Transports are keyed by purpose in the artifact, as data, or referenced
-`{"use": name, "options"?}` (vocabulary, `transport/<name>`). A reference
+`{"use": name, "options"?}` (vocabulary, `transport/<name>`). A key that
+is not a purpose as a field declares one (a name or dotted names:
+`tools`, `tools.calls`; not `""`, not `a-b`) keys a transport no field
+can reach and refuses `entry-malformed` at load, before its value is
+read (cases 231, 232). A reference
 is resolved at load, and what the factory returns is checked by the
 kernel's own rules exactly as inline data (an empty `between`
 delimiter, a bad predicate, an unrecoverable hidden field): a failing
@@ -1149,7 +1159,10 @@ extension it passes; "core only" is a complete, honest claim.
 **The driver protocol.** `runner.py --driver CMD` starts one process and
 streams JSON Lines: one case per line in, one `{"ok", "detail"?,
 "unclaimed"?, "stream_trace"?}` per line out. Values compare by JSON
-equality: objects unordered, arrays ordered, numbers by value. For
+equality: objects unordered, arrays ordered, numbers by value. A case
+marked `"ordered": true` compares member order too: every object of its
+expectation lists its members in the order the kernel's value holds
+them (§1, "Members keep their order"). For
 `parse` cases and `refuse` cases at `parse`, `stream_trace` is the §8
 one-scalar event log — a list per feed of `[kind, field]` or
 `[kind, field, text]` digests, then the EOF list or `{"refusal": code}`;

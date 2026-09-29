@@ -103,7 +103,8 @@ t = tool(t, "call_1", "Sunny, 22C")
 
 The differential check (`python contract/harness/differential.py --probe
 'julia --project=julia julia/tools/probe.jl'`) compares everything else on
-every corpus case and 2,640 fuzzed replies against Python.
+every corpus case, 3,000 fuzzed replies and 84 variants with hostile member
+names against Python, member order included.
 
 - **Shipped code (UDF formats)**: this runtime places no UDF language; the six
   corpus cases that need `udf:python` are unclaimed. A format built from Julia
@@ -119,7 +120,7 @@ every corpus case and 2,640 fuzzed replies against Python.
   so a `Dict` given as a value or a shape is written in hash order (a
   shape's `required` too). Where order shows, give an `OrderedDict` (`jobj`),
   a `NamedTuple`, or JSON read with `parse_json`; every object lmcc builds
-  is ordered. Python's `dict` keeps the order written.
+  is ordered (the kernel builds no `Dict`; a unit test holds it). Python's `dict` keeps the order written.
 - **Names** Julia's `Base` uses for something else (`bind`, `parse`, `read`,
   `step`, `dump`) are `LMCC.`-qualified.
 - **Regex (`pattern/legacy-re2`)**: bound to Julia's PCRE2 with DOTALL (label

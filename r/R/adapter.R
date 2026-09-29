@@ -29,6 +29,16 @@ use_vocab <- function(name, ...) jobj(use = name, options = jobj(...))
 is_description <- function(b) is_obj(b) && length(b) == 1L && identical(names(b), "describe")
 is_reference <- function(b) is_obj(b) && has_key(b, "use")
 
+# A transport's key, checked as it is loaded (kernel section 2): a purpose a
+# field can bear, a name or dotted names ("tools", "tools.calls"); "" or "a-b"
+# would key a transport no field reaches. Returns its path.
+check_purpose <- function(purpose) {
+  where <- sprintf("transports[%s]", pyrepr(purpose))
+  if (!(is_str(purpose) && grepl(PURPOSE_RE, purpose, perl = TRUE)))
+    malformed(where, sprintf("%s: a purpose is a name or dotted names (tools, tools.calls), as a field declares it", where))
+  where
+}
+
 adapter_prefill <- function(a) {
   n <- length(a$template)
   if (!n) return(NULL)
@@ -114,8 +124,8 @@ adapter <- function(messages, reader = NULL, transports = NULL, formats = NULL, 
   if (kind == "derived" && length(rd) != 1L) malformed("reader", sprintf("reader: the derived reader takes only 'kind', not %s", sorted_repr(setdiff(names(rd), "kind"))))
   if (!is_bool(strict)) malformed("strict", sprintf("strict must be true or false, not %s", pyrepr(strict)))
   sb <- list()
-  for (purpose in names(transports)) {
-    value <- transports[[purpose]]; where <- sprintf("transports[%s]", pyrepr(purpose))
+  for (m in members_of(transports)) {
+    purpose <- m[[1]]; value <- m[[2]]; where <- check_purpose(purpose)
     sb[[purpose]] <- if (is_str(value)) jobj(use = value, options = jobj())
       else if (is_transport(value)) { validate_transport(value, where); value }
       else if (is_obj(value) && has_key(value, "use")) jobj(use = value[["use"]], options = as_obj(get_key(value, "options")))
@@ -227,7 +237,7 @@ load_adapter <- function(entry, registry = default_registry()) {
   if (!is_obj(rs)) malformed("reader", "entry.reader must be an object")
   kind <- get_key(rs, "kind")
   if (!identical(kind, "derived")) {
-    named <- if (is_str(kind)) reg$readers[[kind]] else NULL
+    named <- if (is_str(kind)) get_key(reg$readers, kind) else NULL
     if (is.null(named)) refuse("unknown-reader", sprintf("reader.kind %s is neither the kernel reader 'derived' nor a registered reader", pyrepr(kind)),
                                fix = jobj(action = "install-vocabulary", kind = "reader", name = pystr(kind)))
     check_vocab(paste0("reader/", kind), vocab, named$version)
@@ -235,12 +245,12 @@ load_adapter <- function(entry, registry = default_registry()) {
   }
   transports <- list()
   ets <- get_key(entry, "transports")
-  for (purpose in names(if (pytruthy(ets)) ets else list())) {
-    s <- ets[[purpose]]; where <- sprintf("transports[%s]", pyrepr(purpose))
+  for (m in members_of(if (pytruthy(ets)) ets else list())) {
+    purpose <- m[[1]]; s <- m[[2]]; where <- check_purpose(purpose)
     if (!is_obj(s)) malformed(where, sprintf("%s: must be an object", where))
     if (has_key(s, "use")) {
       name <- s[["use"]]
-      named <- if (is_str(name)) reg$transports[[name]] else NULL
+      named <- if (is_str(name)) get_key(reg$transports, name) else NULL
       if (is.null(named)) refuse("unknown-transport", sprintf("%s: transport %s is not registered", where, pyrepr(name)),
                                  fix = jobj(action = "install-vocabulary", kind = "transport", name = pystr(name)))
       check_vocab(paste0("transport/", name), vocab, named$version)
@@ -256,7 +266,7 @@ load_adapter <- function(entry, registry = default_registry()) {
     if (!is_obj(f)) malformed(where, sprintf("%s: must be an object", where))
     if (has_key(f, "use")) {
       name <- f[["use"]]
-      named <- if (is_str(name)) reg$formats[[name]] else NULL
+      named <- if (is_str(name)) get_key(reg$formats, name) else NULL
       if (is.null(named)) refuse("unknown-format", sprintf("%s: format %s is not registered", where, pyrepr(name)),
                                  fix = jobj(action = "install-vocabulary", kind = "format", name = pystr(name)))
       check_vocab(paste0("format/", name), vocab, named$version)
@@ -278,7 +288,7 @@ load_adapter <- function(entry, registry = default_registry()) {
   resolve_extensions(a, reg)
   for (ref in spelling_format_refs(a, reg)) {
     named_format(reg, ref[[2]][["use"]], get_key(ref[[2]], "options"), ref[[1]])
-    check_vocab(paste0("format/", ref[[2]][["use"]]), vocab, reg$formats[[ref[[2]][["use"]]]]$version)
+    check_vocab(paste0("format/", ref[[2]][["use"]]), vocab, get_key(reg$formats, ref[[2]][["use"]])$version)
   }
   a
 }
@@ -304,7 +314,7 @@ dump_adapter <- function(a, registry = default_registry()) {
     b <- a$transports[[purpose]]
     if (is_transport(b)) transports[[purpose]] <- transport_to_list(b)
     else {
-      named <- reg$transports[[b[["use"]]]]
+      named <- get_key(reg$transports, b[["use"]])
       if (is.null(named)) refuse("unknown-transport", sprintf("cannot dump: transport %s is not registered (its version is part of the artifact)", pyrepr(b[["use"]])),
                                  fix = jobj(action = "install-vocabulary", kind = "transport", name = b[["use"]]))
       vocab[[paste0("transport/", b[["use"]])]] <- named$version
@@ -313,7 +323,7 @@ dump_adapter <- function(a, registry = default_registry()) {
   }
   for (ref in spelling_format_refs(a, reg)) {
     named_format(reg, ref[[2]][["use"]], get_key(ref[[2]], "options"), ref[[1]])
-    vocab[[paste0("format/", ref[[2]][["use"]])]] <- reg$formats[[ref[[2]][["use"]]]]$version
+    vocab[[paste0("format/", ref[[2]][["use"]])]] <- get_key(reg$formats, ref[[2]][["use"]])$version
   }
   formats <- jobj()
   for (m in members_of(a$formats)) {
@@ -323,7 +333,7 @@ dump_adapter <- function(a, registry = default_registry()) {
       refuse("format-not-self-contained", sprintf("cannot dump formats[%s]: an R format is a closure, not shippable source; bind it at runtime with bind_type() (never serialized) or reference a registered format by name", pyrepr(key)),
              fix = jobj(action = "reship-udf", path = sprintf("formats[%s]", pyrepr(key))))
     } else if (is_reference(b)) {
-      named <- reg$formats[[b[["use"]]]]
+      named <- get_key(reg$formats, b[["use"]])
       if (is.null(named)) refuse("unknown-format", sprintf("cannot dump: format %s is not registered", pyrepr(b[["use"]])),
                                  fix = jobj(action = "install-vocabulary", kind = "format", name = b[["use"]]))
       vocab[[paste0("format/", b[["use"]])]] <- named$version
@@ -332,7 +342,7 @@ dump_adapter <- function(a, registry = default_registry()) {
   }
   kind <- a$reader[["kind"]]
   if (kind != "derived") {
-    named <- reg$readers[[kind]]
+    named <- get_key(reg$readers, kind)
     if (is.null(named)) refuse("unknown-reader", sprintf("cannot dump: reader %s is not registered (its version is part of the artifact)", pyrepr(kind)),
                                fix = jobj(action = "install-vocabulary", kind = "reader", name = pystr(kind)))
     vocab[[paste0("reader/", kind)]] <- named$version

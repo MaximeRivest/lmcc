@@ -1,5 +1,25 @@
 # The corpus
 
+**Order you can see, the empty purpose and slot (kernel 0.8.4, D-58, third
+pass).** Cases 231–236 were typed by hand from kernel §1, §2, §3 and §9 as
+amended and from `format-table.md`. Every expectation matched the Python
+kernel once its load check existed, except one authoring slip in 234: its
+data part first had `"value": {}` beside the text `Answer: yes`, and a data
+part's value is text to the reader (§3), so the answer read `yes{}`; the
+case now reads `1` from `"value": 1` after `Answer: `, as intended. A case
+may now say `"ordered": true` (§9): its expectations compare member order
+too. 226–230, 234 and 235 do; earlier cases do not, because eight of them
+list the members the kernel chooses itself (a reading's fields, an entry's
+top-level keys) in another order than the reference, which no rule fixes.
+Before the fixes, with the new drivers: TypeScript failed 230 (format keys
+dumped `"10"` first), 231, 232, 234 (probability labels reordered) and 235
+(a table row reordered); Julia failed 231 and 232; R failed 232, 233 (the
+turns of slot `""` dropped silently), and 234 (probabilities keyed `""`
+refused), and passed 231 by accident (it refused `transports['']` as "not
+an object"); Python failed 231 and 232 (it loaded both). 236 failed on no
+kernel at the parent commit; a review found R failing it before the second
+pass.
+
 **The empty name and member order (kernel 0.8.4, D-58).** Cases 223–230
 were typed by hand from kernel §1 as amended ("Names are data": any
 string, `""` included; "Members keep their order") before any kernel ran

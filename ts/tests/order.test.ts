@@ -1,5 +1,5 @@
 /**
- * Members keep their order (kernel §1, corpus 226–229). A JavaScript object
+ * Members keep their order (kernel §1, corpus 226–230, 234, 235). A JavaScript object
  * enumerates integer-like names ("1", "10") first; lmcc carries the order a
  * value holds on the objects it builds and writes by it. The corpus drives
  * values through the driver's parse; these tests hold the paths it does not
@@ -79,13 +79,74 @@ test("the order is invisible to JavaScript and never copied by it; lmcc's copies
   assert.deepEqual(Object.getOwnPropertySymbols(plain), []);
 });
 
-test("a member added later comes after the ones read; one deleted is gone", () => {
-  const value = lmcc.parseJson('{"b": 1, "10": 2, "a": 3}') as Record<string, unknown>;
-  value["5"] = 5;
-  value["c"] = 6;
-  delete value["a"];
-  assert.deepEqual(lmcc.memberNames(value), ["b", "10", "5", "c"]);
-  assert.equal(lmcc.jsonText(value), '{"b":1,"10":2,"5":5,"c":6}');
+test("setMember adds a name last, keeps a replaced one in place, and puts one set again last", () => {
+  const v = lmcc.parseJson('{"b": 1, "10": 2}') as Record<string, unknown>;
+  lmcc.setMember(v, "5", 5);
+  lmcc.setMember(v, "2", 2);
+  assert.equal(lmcc.jsonText(v), '{"b":1,"10":2,"5":5,"2":2}');
+  // The first integer-like name added to an object that recorded nothing.
+  const plain = lmcc.parseJson('{"b": 1}') as Record<string, unknown>;
+  lmcc.setMember(plain, "10", 2);
+  assert.equal(lmcc.jsonText(plain), '{"b":1,"10":2}');
+  // A literal holds JavaScript's order; setMember keeps it and appends.
+  const literal: Record<string, unknown> = { 3: "c", 1: "a" };
+  lmcc.setMember(literal, "x", 0);
+  lmcc.setMember(literal, "0", 0);
+  assert.deepEqual(lmcc.memberNames(literal), ["1", "3", "x", "0"]);
+  // Replacing keeps the place; removing and setting again puts it last (a Python dict does both).
+  lmcc.setMember(v, "10", 20);
+  delete v["b"];
+  lmcc.setMember(v, "b", 1);
+  assert.equal(lmcc.jsonText(v), '{"10":20,"5":5,"2":2,"b":1}');
+  // Plain assignment is JavaScript's: its names follow the recorded ones, in JavaScript's order.
+  v["7"] = 7;
+  v["6"] = 6;
+  assert.deepEqual(lmcc.memberNames(v), ["10", "5", "2", "b", "6", "7"]);
+  // copyObject is a spread that keeps the order, with later members set in turn.
+  assert.equal(lmcc.jsonText(lmcc.copyObject(lmcc.parseJson('{"b": 1, "10": 2}') as object, { "3": 3, b: 0 })), '{"b":0,"10":2,"3":3}');
+});
+
+function tablePlan(format: Record<string, unknown>): [lmcc.Plan, lmcc.Registry] {
+  const reg = registry();
+  const columns = ["b", "10", "", "2"];
+  const adapter = lmcc.load({
+    name: "rows", versions: { kernel: "0.8.4", vocab: {} },
+    template: [{ role: "system", text: "{instruction}\n<o>{o}</o>" }, { directive: "turns" }, { role: "user", text: "{q}" }],
+    reader: { kind: "derived" }, formats: { "list[object]": format },
+  }, { registry: reg });
+  const sig = lmcc.signatureFromDict({ instructions: "Do.", fields: [
+    { name: "q", direction: "input", shape: { type: "string" } },
+    { name: "o", direction: "output", shape: { type: "array", items: { type: "object", properties: lmcc.orderedObject(columns.map((k) => [k, { type: "string" }])) } } }] });
+  return [adapter.bind(sig, {}, { registry: reg }), reg];
+}
+
+test("a table row is read in column order, and written in it again by another format", () => {
+  const [table] = tablePlan({ use: "table", options: { columns: ["b", "10", "", "2"] } });
+  const values = table.parse("<o>| B | TEN | EMPTY | TWO |</o>");
+  const row = (values["o"] as Record<string, unknown>[])[0];
+  assert.deepEqual(lmcc.memberNames(row), ["b", "10", "", "2"]);
+  const [json] = tablePlan({ use: "json", options: { indent: null } });
+  assert.equal(assistantText(json.render({ q: "x" }, { turns: [json.example({ q: "prev" }, values)] }).request()),
+    '<o>[{"b": "B", "10": "TEN", "": "EMPTY", "2": "TWO"}]</o>');
+});
+
+test("probabilities and measured_by keep the reply's order, under any name", () => {
+  const plan = jsonPlan();
+  const reply = lmcc.parseJson('{"role": "assistant", "parts": [{"type": "text", "text": "<o>{}</o>"}, {"type": "data", "value": 1, "probabilities": {"o": {"b": 0.2, "10": 0.7, "": 0.1}, "": {"x": 1}}, "method": "m"}]}');
+  const reading = plan.read(reply);
+  assert.equal(lmcc.jsonText(reading.probabilities), '{"o":{"b":0.2,"10":0.7,"":0.1},"":{"x":1}}');
+  assert.equal(lmcc.jsonText(reading.measuredBy), '{"o":"m","":"m"}');
+});
+
+test("an artifact is dumped with its format keys and options in the order it was loaded", () => {
+  const reg = registry();
+  const entry = lmcc.parseJson(`{"name": "keys", "versions": {"kernel": "0.8.4", "vocab": {}},
+    "template": [{"role": "system", "text": "{instruction}"}], "reader": {"kind": "derived"},
+    "formats": {"": {"use": "json"}, "10": {"use": "json", "options": {"indent": null}}, "b": {"describe": "B"}, "2": {"use": "table", "options": {"columns": ["z", "1"]}}}}`) as Record<string, unknown>;
+  const dumped = lmcc.dump(lmcc.load(entry, { registry: reg }), reg);
+  assert.deepEqual(lmcc.memberNames(dumped["formats"] as object), ["", "10", "b", "2"]);
+  assert.equal(lmcc.jsonText(lmcc.dump(lmcc.adapter({ template: [{ role: "system", text: "{instruction}" }], formats: lmcc.orderedObject([["b", "json"], ["1", "json"]]) }), reg)["formats"]),
+    '{"b":{"use":"json"},"1":{"use":"json"}}');
 });
 
 test("a shape's properties keep their order: signature, schema, required, description", () => {
@@ -99,4 +160,10 @@ test("a shape's properties keep their order: signature, schema, required, descri
     '{"instructions":"Do.","fields":[{"name":"o","direction":"output","shape":{"type":"object","properties":{"b":{"type":"string"},"1":{"type":"string"},"":{"type":"integer"}}}}]}');
   const object = lmcc.t.object(lmcc.orderedObject([["b", lmcc.t.string()], ["1", lmcc.t.string()]]));
   assert.deepEqual(object["required"], ["b", "1"]);
+});
+
+test("a nullable shape's base puts its type last, as every kernel does", () => {
+  const [base, nullable] = lmcc.nullableBase({ type: ["string", "null"], description: "d" } as lmcc.Shape);
+  assert.equal(nullable, true);
+  assert.equal(lmcc.jsonText(base), '{"description":"d","type":"string"}');
 });

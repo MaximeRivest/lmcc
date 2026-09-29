@@ -15,7 +15,7 @@ import { Reader } from "../reader.ts";
 import type { Registry } from "../registry.ts";
 import { pyRepr, strip } from "../text.ts";
 import { dumps, loads, members } from "./jsontext.ts";
-import { hasOwn, keepOrder, memberNames, setMember, type Json } from "../json.ts";
+import { copyObject, hasOwn, memberNames, setMember, type Json } from "../json.ts";
 
 export const VERSION = "0.2.1";
 export const PROBABILITY_POLICIES = ["off", "if_available", "required"];
@@ -39,24 +39,21 @@ export function closed(shape: unknown): unknown {
   if (Array.isArray(shape)) return shape.map(closed);
   if (!isPlain(shape)) return shape;
   const out: Record<string, unknown> = {};
-  const names = memberNames(shape);
-  for (const key of names) {
+  for (const key of memberNames(shape)) {
     const value = shape[key];
     if (MAP.has(key) && isPlain(value)) {
       const map: Record<string, unknown> = {};
-      const inner = memberNames(value);
-      for (const k of inner) setMember(map, k, closed(value[k]));
-      setMember(out, key, keepOrder(map, inner));
+      for (const k of memberNames(value)) setMember(map, k, closed(value[k]));
+      setMember(out, key, map);
     } else if (ONE.has(key) || LIST.has(key)) setMember(out, key, closed(value));
     else setMember(out, key, value);
   }
   if (hasOwn(out, "properties") && isPlain(out["properties"])) {
     // Every property, in property order (kernel §1: members keep their order).
-    out["required"] = memberNames(out["properties"]);
-    if (!hasOwn(out, "additionalProperties")) out["additionalProperties"] = false;
+    setMember(out, "required", memberNames(out["properties"]));
+    if (!hasOwn(out, "additionalProperties")) setMember(out, "additionalProperties", false);
   }
-  const added = ["required", "additionalProperties"].filter((k) => hasOwn(out, k) && !names.includes(k));
-  return keepOrder(out, [...names, ...added]);
+  return out;
 }
 
 export class JsonObjectReader extends Reader {
@@ -64,14 +61,14 @@ export class JsonObjectReader extends Reader {
 
   constructor(spec: Record<string, unknown>) {
     super();
-    const extra = Object.keys(spec).filter((k) => k !== "kind" && k !== "probabilities").sort();
+    const extra = memberNames(spec).filter((k) => k !== "kind" && k !== "probabilities").sort();
     const policy = spec["probabilities"];
     if (extra.length || (policy !== undefined && policy !== null && !PROBABILITY_POLICIES.includes(policy as string))) {
       refuse("entry-malformed",
         `reader: json_object takes 'probabilities' (${PROBABILITY_POLICIES.join(" | ")})` + (extra.length ? `, not ${pyRepr(extra)}` : `, not ${pyRepr(policy)}`),
         { fix: { action: "edit-entry", path: "reader" } });
     }
-    this.spec = { ...spec };
+    this.spec = copyObject(spec);
   }
 
   override requires(): string[] {
@@ -80,21 +77,19 @@ export class JsonObjectReader extends Reader {
 
   override requestSettings(fields: Field[]): Record<string, unknown> {
     const policy = this.spec["probabilities"];
-    const extra = policy !== undefined && policy !== null ? { probabilities: policy } : {};
     const properties: Record<string, unknown> = {};
     for (const f of fields) {
       const shape = closed(f.shape) as Record<string, unknown>;
-      setMember(properties, f.name, f.desc ? { ...shape, description: f.desc } : shape);
+      setMember(properties, f.name, f.desc ? copyObject(shape, { description: f.desc }) : shape);
     }
-    return {
-      config: {
-        response_format: {
-          type: "json_schema",
-          schema: { type: "object", properties, required: fields.map((f) => f.name), additionalProperties: false },
-        },
-        ...extra,
+    const config: Record<string, unknown> = {
+      response_format: {
+        type: "json_schema",
+        schema: { type: "object", properties, required: fields.map((f) => f.name), additionalProperties: false },
       },
     };
+    if (policy !== undefined && policy !== null) config["probabilities"] = policy;
+    return { config };
   }
 
   split(text: string, fieldNames: string[]): Record<string, string> {

@@ -1,9 +1,9 @@
 {
- "name": "parse-data-part-member-order",
+ "name": "parse-data-part-probabilities-names",
  "kind": "parse",
  "ordered": true,
  "entry": {
-  "name": "answer_order_v1",
+  "name": "answer_judged_v1",
   "versions": {
    "kernel": "0.8.4",
    "vocab": {}
@@ -50,27 +50,39 @@
    },
    {
     "type": "data",
-    "value": {
-     "b": 1,
-     "10": {
-      "2": null,
-      "a": [
-       {
-        "1": true,
-        "": false
-       }
-      ]
+    "value": 1,
+    "probabilities": {
+     "answer": {
+      "b": 0.2,
+      "10": 0.7,
+      "": 0.1
      },
-     "": "e"
-    }
+     "": {
+      "x": 1
+     }
+    },
+    "method": "provider_classification"
    }
   ]
  },
  "expect": {
   "values": {
-   "answer": "{\"b\":1,\"10\":{\"2\":null,\"a\":[{\"1\":true,\"\":false}]},\"\":\"e\"}"
+   "answer": "1"
   },
-  "probabilities": {},
-  "measured_by": {}
+  "repairs": [],
+  "probabilities": {
+   "answer": {
+    "b": 0.2,
+    "10": 0.7,
+    "": 0.1
+   },
+   "": {
+    "x": 1
+   }
+  },
+  "measured_by": {
+   "answer": "provider_classification",
+   "": "provider_classification"
+  }
  }
 }

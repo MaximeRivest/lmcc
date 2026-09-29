@@ -13,7 +13,7 @@
 
 import { refuse } from "./errors.ts";
 import { isObj, textPart, validateResponsePart, type Field, type Message, type Part } from "./core.ts";
-import { hasToJSON, isPlainObject, jsonText, keepOrder, memberNames, ownValue, setMember } from "./json.ts";
+import { copyObject, hasToJSON, isPlainObject, jsonText, memberNames, ownValue, setMember } from "./json.ts";
 import { sha256Hex } from "./sha256.ts";
 import { pyRepr } from "./text.ts";
 import { brand } from "./brand.ts";
@@ -57,9 +57,8 @@ export function toJson(value: unknown, where = "turn"): unknown {
   if (Array.isArray(value)) return value.map((v, i) => toJson(v, `${where}[${i}]`));
   if (isPlainObject(value)) {
     const out: Record<string, unknown> = {};
-    const names = memberNames(value).filter((k) => value[k] !== undefined);
-    for (const k of names) setMember(out, k, toJson(value[k], `${where}.${k}`));
-    return keepOrder(out, names);
+    for (const k of memberNames(value)) if (value[k] !== undefined) setMember(out, k, toJson(value[k], `${where}.${k}`));
+    return out;
   }
   refuse("turn-invalid", `${where}: a ${value === undefined ? "missing value" : typeof value} has no JSON form; a turn holds JSON values in their fields' shapes`);
 }
@@ -77,7 +76,7 @@ export function asMessage(reply: unknown): Message {
   let r = reply;
   if (isObj(r) && isObj(r["message"])) r = r["message"];
   if (isObj(r) && Array.isArray(r["parts"])) {
-    return { role: (r["role"] as string | undefined) ?? "assistant", parts: r["parts"].map((p) => (isObj(p) ? { ...p } : p)) as Part[] };
+    return { role: (r["role"] as string | undefined) ?? "assistant", parts: r["parts"].map((p) => (isObj(p) ? copyObject(p) : p)) as Part[] };
   }
   refuse("response-malformed", "a reply is text, an lm15 message {role, parts}, or an lm15 response {message: ...}");
 }
@@ -171,7 +170,7 @@ function outputParts(output: unknown): Part[] {
   for (const p of output) {
     if (!isObj(p) || typeof p["type"] !== "string") refuse("turn-invalid", `a tool output part must be an lm15 part with a type, got ${pyRepr(p)}`);
   }
-  return output.map((p) => ({ ...p })) as Part[];
+  return output.map((p) => copyObject(p)) as Part[];
 }
 
 /** One call of one signature (§3a). Build with `plan.turn`/`plan.example`; advance with `step`, `tool`, `finish`. */
@@ -200,13 +199,13 @@ export class Turn {
 
   /**
    * This turn with `meta` replaced (§3a: carried, never read by render). Merge
-   * yourself to add a key: `turn.withMeta({ ...turn.meta, refusal })`. A value
+   * yourself to add a key: `turn.withMeta(copyObject(turn.meta, { refusal }))`. A value
    * with no JSON form refuses `turn-invalid` here, not when the turn is saved.
    */
   withMeta(meta: Record<string, unknown>): Turn {
     if (!isPlainObject(meta)) refuse("turn-invalid", "turn.meta: an object");
     toJson(meta, "turn.meta");
-    return this.with({ meta: { ...meta } });
+    return this.with({ meta: copyObject(meta) });
   }
 
   /** This turn with `score` replaced: a finite number, or `null` for none (§3a: carried, never read). */
@@ -246,7 +245,7 @@ export class Turn {
     if (pending.length) refuse("turn-invalid", `cannot finish with unanswered call ${pyRepr(callId(pending[0]))}`);
     const last = [...this.steps].reverse().find((s) => s instanceof ModelStep) as ModelStep | undefined;
     if (!last) refuse("turn-invalid", "cannot finish a turn with no model step");
-    return this.with({ outputs: { ...last.outputs } });
+    return this.with({ outputs: copyObject(last.outputs) });
   }
 
   get done(): boolean {
@@ -265,14 +264,14 @@ export class Turn {
     };
     if (this.outputs !== null) out.outputs = toJson(this.outputs, "turn.outputs") as Record<string, unknown>;
     if (this.score !== null) out.score = this.score;
-    if (Object.keys(this.meta).length) out.meta = toJson(this.meta, "turn.meta") as Record<string, unknown>;
+    if (memberNames(this.meta).length) out.meta = toJson(this.meta, "turn.meta") as Record<string, unknown>;
     return out;
   }
 
   /** JSON → a turn (schema/turn.schema.json). */
   static fromJSON(data: unknown, where = "turn"): Turn {
     if (!isObj(data)) refuse("turn-invalid", `${where}: a turn is an object`);
-    const unknown = Object.keys(data).filter((k) => !["signature", "inputs", "steps", "outputs", "score", "meta"].includes(k)).sort();
+    const unknown = memberNames(data).filter((k) => !["signature", "inputs", "steps", "outputs", "score", "meta"].includes(k)).sort();
     if (unknown.length) refuse("turn-invalid", `${where}: unknown key(s) ${pyRepr(unknown)}`);
     const sig = data["signature"];
     const inputs = data["inputs"];
@@ -284,7 +283,7 @@ export class Turn {
       const at = `${where}.steps[${i}]`;
       if (!isObj(s) || (s["kind"] !== "model" && s["kind"] !== "tool")) refuse("turn-invalid", `${at}: a step is {kind: model|tool, ...}`);
       if (s["kind"] === "model") {
-        if (Object.keys(s).some((k) => !["kind", "outputs", "message", "request", "calls_field"].includes(k)) || !isObj(s["outputs"])) {
+        if (memberNames(s).some((k) => !["kind", "outputs", "message", "request", "calls_field"].includes(k)) || !isObj(s["outputs"])) {
           refuse("turn-invalid", `${at}: a model step is {kind, outputs, message?, request?, calls_field?}`);
         }
         let message: Message | null = (s["message"] ?? null) as Message | null;
@@ -292,9 +291,9 @@ export class Turn {
           message = asMessage(message);
           for (const p of message.parts) validateResponsePart(p);
         }
-        steps.push(new ModelStep({ ...(s["outputs"] as Record<string, unknown>) }, message, (s["request"] ?? null) as string | null, (s["calls_field"] ?? null) as string | null));
+        steps.push(new ModelStep(copyObject(s["outputs"] as object), message, (s["request"] ?? null) as string | null, (s["calls_field"] ?? null) as string | null));
       } else {
-        if (Object.keys(s).some((k) => !["kind", "id", "name", "output", "children"].includes(k))
+        if (memberNames(s).some((k) => !["kind", "id", "name", "output", "children"].includes(k))
           || !["id", "name"].every((k) => typeof s[k] === "string" && s[k])) {
           refuse("turn-invalid", `${at}: a tool step is {kind, id, name, output, children?}`);
         }
@@ -304,7 +303,7 @@ export class Turn {
     });
     const meta = data["meta"] || {};
     if (!isObj(meta)) refuse("turn-invalid", `${where}.meta: an object`);
-    return new Turn(sig, { ...inputs }, steps, outputs === null ? null : { ...outputs }, (data["score"] ?? null) as number | null, { ...meta });
+    return new Turn(sig, copyObject(inputs), steps, outputs === null ? null : copyObject(outputs), (data["score"] ?? null) as number | null, copyObject(meta));
   }
 }
 

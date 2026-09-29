@@ -14,7 +14,7 @@
 import { refuse } from "../errors.ts";
 import { isObj, type Capture, type Field, type Part } from "../core.ts";
 import type { Format } from "../formats.ts";
-import { integerValue, setMember } from "../json.ts";
+import { integerValue, memberNames, setMember } from "../json.ts";
 import type { Registry } from "../registry.ts";
 import { pyRepr, pyTruthy, strip } from "../text.ts";
 import { Transport } from "../transport.ts";
@@ -37,7 +37,7 @@ function toolItems(value: unknown, field: Field): Record<string, unknown>[] {
     if (isObj(item)) spec = item;
     else spec = {};
     if (typeof spec["name"] !== "string" || !spec["name"]) refuse("format-write-error", `field ${pyRepr(field.name)}: tools[${i}] needs a string 'name'`);
-    const unknown = Object.keys(spec).filter((k) => !TOOL_KEYS.includes(k) && k !== "type" && spec[k] !== undefined).sort();
+    const unknown = memberNames(spec).filter((k) => !TOOL_KEYS.includes(k) && k !== "type" && spec[k] !== undefined).sort();
     if (unknown.length) {
       refuse("format-write-error", `field ${pyRepr(field.name)}: tools[${i}] has keys ${pyRepr(unknown)}; a tool is name, description, parameters (lm15 FunctionTool)`);
     }
@@ -80,7 +80,7 @@ export class FunctionToolFormat extends Base {
   read(capture: Capture): unknown {
     return capture.of("function").map((p) => {
       const out: Record<string, unknown> = {};
-      for (const k of Object.keys(p)) if (k !== "type") setMember(out, k, p[k]);
+      for (const k of memberNames(p)) if (k !== "type") setMember(out, k, p[k]);
       return out;
     });
   }
@@ -124,7 +124,7 @@ export class ToolCallsFormat extends Base {
     for (const p of capture.parts) {
       if (p.type === "tool_call") {
         const out: Record<string, unknown> = {};
-        for (const k of Object.keys(p)) if (k !== "type" && k !== "continuation") setMember(out, k, p[k]);
+        for (const k of memberNames(p)) if (k !== "type" && k !== "continuation") setMember(out, k, p[k]);
         calls.push(out);
       } else if (typeof p["text"] === "string") {
         let obj: unknown;
@@ -154,7 +154,7 @@ export class CitationsFormat extends Base {
     for (const p of capture.parts) {
       if (p.type === "citation") {
         const c: Record<string, unknown> = {};
-        for (const k of Object.keys(p)) if (k !== "type" && k !== "continuation") setMember(c, k, p[k]);
+        for (const k of memberNames(p)) if (k !== "type" && k !== "continuation") setMember(c, k, p[k]);
         out.push(c);
       } else if (typeof p["text"] === "string") {
         const t = strip(p["text"] as string);

@@ -9,7 +9,7 @@
 
 import { refuse } from "./errors.ts";
 import { CAPABILITY_FACTS, isObj } from "./core.ts";
-import { deepCopy, hasOwn, ownValue } from "./json.ts";
+import { copyObject, deepCopy, hasOwn, memberNames, ownValue, setMember } from "./json.ts";
 import type { FindRule } from "./reader.ts";
 import { pyRepr, pyTruthy } from "./text.ts";
 import { brand } from "./brand.ts";
@@ -44,7 +44,7 @@ export function validateSettingPath(path: string, where: string): void {
 /** Flatten request settings to `[dotted path, value]` at the two levels the kernel validates. */
 export function settingLeaves(settings: Record<string, unknown>, prefix = ""): [string, unknown][] {
   const out: [string, unknown][] = [];
-  for (const key of Object.keys(settings)) {
+  for (const key of memberNames(settings)) {
     const value = settings[key];
     if (key === "config" && !prefix && isObj(value)) out.push(...settingLeaves(value, "config."));
     else out.push([prefix + key, value]);
@@ -59,7 +59,7 @@ export interface Alternative { when?: Predicate; use?: Transport; else?: Transpo
 function asList(x: unknown): unknown[] {
   if (Array.isArray(x)) return [...x];
   if (typeof x === "string") return [...x];
-  if (isObj(x)) return Object.keys(x);
+  if (isObj(x)) return memberNames(x);
   if (x === undefined || x === null) return [];
   return [x];
 }
@@ -67,7 +67,7 @@ function asList(x: unknown): unknown[] {
 function asDict(x: unknown, where: string, key: string): Record<string, unknown> {
   if (x === undefined) return {};
   if (!isObj(x)) malformed(`${where}.${key}`, `${where}.${key}: must be an object`);
-  return { ...x };
+  return copyObject(x);
 }
 
 export class Transport {
@@ -83,25 +83,34 @@ export class Transport {
   choose: Alternative[] | null = null;
 
   constructor(init: Partial<Pick<Transport, "when" | "requires" | "in_template" | "tell" | "request_settings" | "put" | "find" | "spelling" | "written_as" | "choose">> = {}) {
-    Object.assign(this, init);
+    if (init.when !== undefined) this.when = init.when;
+    if (init.requires !== undefined) this.requires = init.requires;
+    if (init.in_template !== undefined) this.in_template = init.in_template;
+    if (init.tell !== undefined) this.tell = init.tell;
+    if (init.request_settings !== undefined) this.request_settings = init.request_settings;
+    if (init.put !== undefined) this.put = init.put;
+    if (init.find !== undefined) this.find = init.find;
+    if (init.spelling !== undefined) this.spelling = init.spelling;
+    if (init.written_as !== undefined) this.written_as = init.written_as;
+    if (init.choose !== undefined) this.choose = init.choose;
   }
 
   toDict(): Record<string, unknown> {
     if (this.choose !== null) {
       return {
-        choose: this.choose.map((alt) => ("else" in alt && alt.else ? { else: alt.else.toDict() } : { when: { ...alt.when }, use: alt.use!.toDict() })),
+        choose: this.choose.map((alt) => ("else" in alt && alt.else ? { else: alt.else.toDict() } : { when: copyObject(alt.when) as Predicate, use: alt.use!.toDict() })),
       };
     }
     const d: Record<string, unknown> = {};
     if (this.when !== null) d["when"] = deepCopy(this.when);
     if (this.requires.length) d["requires"] = [...this.requires];
     if (!this.in_template) d["in_template"] = false;
-    if (Object.keys(this.tell).length) d["tell"] = { ...this.tell };
-    if (Object.keys(this.request_settings).length) d["request_settings"] = deepCopy(this.request_settings);
-    if (Object.keys(this.put).length) d["put"] = { ...this.put };
-    if (Object.keys(this.written_as).length) d["written_as"] = { ...this.written_as };
-    if (this.find.length) d["find"] = this.find.map((r) => ({ ...r }));
-    if (Object.keys(this.spelling).length) d["spelling"] = deepCopy(this.spelling);
+    if (memberNames(this.tell).length) d["tell"] = copyObject(this.tell);
+    if (memberNames(this.request_settings).length) d["request_settings"] = deepCopy(this.request_settings);
+    if (memberNames(this.put).length) d["put"] = copyObject(this.put);
+    if (memberNames(this.written_as).length) d["written_as"] = copyObject(this.written_as);
+    if (this.find.length) d["find"] = this.find.map((r) => copyObject(r));
+    if (memberNames(this.spelling).length) d["spelling"] = deepCopy(this.spelling);
     return d;
   }
 
@@ -121,16 +130,16 @@ export class Transport {
     if (!isObj(data)) malformed(where, `${where}: a transport is an object`);
     if ("choose" in data) {
       const choose = data["choose"];
-      if (Object.keys(data).length !== 1 || !Array.isArray(choose) || !choose.length) {
+      if (memberNames(data).length !== 1 || !Array.isArray(choose) || !choose.length) {
         malformed(where, `${where}: choose is a non-empty list and stands alone`);
       }
       const alts: Alternative[] = [];
       choose.forEach((alt, i) => {
         const aw = `${where}.choose[${i}]`;
         if (!isObj(alt)) malformed(aw, `${aw}: an alternative is an object`);
-        const keys = Object.keys(alt).sort().join(",");
+        const keys = memberNames(alt).sort().join(",");
         if ("else" in alt) {
-          if (Object.keys(alt).length !== 1 || i !== choose.length - 1) malformed(aw, `${aw}: else stands alone and comes last`);
+          if (memberNames(alt).length !== 1 || i !== choose.length - 1) malformed(aw, `${aw}: else stands alone and comes last`);
           alts.push({ else: Transport.fromDict(alt["else"], aw) });
         } else if (keys === "use,when") {
           validatePredicate(alt["when"], `${aw}.when`);
@@ -141,12 +150,12 @@ export class Transport {
       });
       return new Transport({ choose: alts });
     }
-    const unknown = Object.keys(data).filter((k) => !KEYS.includes(k));
+    const unknown = memberNames(data).filter((k) => !KEYS.includes(k));
     if (unknown.length) malformed(where, `${where}: unknown transport key(s) ${sortedList(unknown)}; known keys are ${pyRepr(KEYS)}`);
     if ("spelling" in data && !isObj(data["spelling"])) malformed(`${where}.spelling`, `${where}.spelling: must be an object`);
     const find = asList(data["find"]).map((r, i) => {
       if (!isObj(r)) malformed(`${where}.find[${i}]`, `${where}.find[${i}]: a rule is an object`);
-      return { ...r } as FindRule;
+      return copyObject(r) as FindRule;
     });
     const s = new Transport({
       when: (data["when"] ?? null) as Predicate | null,
@@ -178,29 +187,30 @@ export class Transport {
       }
     });
     this.find.forEach((r, i) => validateFindRule(r, `${where}.find[${i}]`));
-    for (const target of Object.keys(this.put)) {
+    for (const target of memberNames(this.put)) {
       const place = this.put[target];
       if (!TO.test(target) || typeof place !== "string" || !PUT.test(place)) {
         malformed(`${where}.put`, `${where}.put: ${pyRepr(target)}: ${pyRepr(place)} — a put is '@purpose' or '@purpose.<sub>' → 'request.<key>' or 'message:<role>'`);
       }
     }
     for (const [path] of settingLeaves(this.request_settings)) validateSettingPath(path, `${where}.request_settings[${pyRepr(path)}]`);
-    for (const place of Object.values(this.put)) {
+    for (const target of memberNames(this.put)) {
+      const place = this.put[target];
       if (place.startsWith("request.")) validateSettingPath(place.slice("request.".length), `${where}.put`);
     }
-    for (const target of Object.keys(this.written_as)) {
+    for (const target of memberNames(this.written_as)) {
       const name = this.written_as[target];
       if (!hasOwn(this.put, target) || typeof name !== "string" || !name) {
         malformed(`${where}.written_as`, `${where}.written_as: ${pyRepr(target)} must name a placed field and a format name`);
       }
     }
     validateSpelling(this.spelling, `${where}.spelling`);
-    for (const k of Object.keys(this.tell)) {
+    for (const k of memberNames(this.tell)) {
       if (!["system", "developer", "user", "assistant"].includes(k) || typeof this.tell[k] !== "string") {
         malformed(`${where}.tell`, `${where}.tell: ${pyRepr(k)} must name a message role, text`);
       }
     }
-    if (!this.in_template && !this.find.length && !Object.keys(this.put).length) {
+    if (!this.in_template && !this.find.length && !memberNames(this.put).length) {
       malformed(where, `${where}: in_template=false but no rule or put serves the field — the value would be unrecoverable`);
     }
   }
@@ -219,14 +229,14 @@ export class Transport {
       if (chosen === null) {
         refuse("capability-missing",
           `purpose ${pyRepr(purpose)}: transport ${pyRepr(name)}: no alternative of 'choose' holds for the declared capabilities and there is no else`,
-          { fix: { action: "satisfy-predicate", purpose, predicate: { any: s.choose.map((alt) => ({ ...alt.when })) } } });
+          { fix: { action: "satisfy-predicate", purpose, predicate: { any: s.choose.map((alt) => copyObject(alt.when)) } } });
       }
       s = chosen;
     }
     if (s.when !== null && !evalPredicate(s.when, capabilities)) {
       refuse("capability-missing",
         `purpose ${pyRepr(purpose)}: transport ${pyRepr(name)}: 'when' ${pyRepr(s.when)} is false for the declared capabilities`,
-        { fix: { action: "satisfy-predicate", purpose, predicate: { ...s.when } } });
+        { fix: { action: "satisfy-predicate", purpose, predicate: copyObject(s.when) } });
     }
     for (const fact of s.requires) {
       if (!pyTruthy(ownValue(capabilities, fact))) {
@@ -240,11 +250,11 @@ export class Transport {
   /** A copy with `{field}` in tell bound to the purpose's field. */
   bound(fieldName: string): Transport {
     const tell: Record<string, string> = {};
-    for (const k of Object.keys(this.tell)) tell[k] = this.tell[k].split("{field}").join(fieldName);
+    for (const k of memberNames(this.tell)) setMember(tell, k, this.tell[k].split("{field}").join(fieldName));
     return new Transport({
       when: this.when, requires: [...this.requires], in_template: this.in_template, tell,
-      request_settings: { ...this.request_settings }, put: { ...this.put }, find: this.find.map((r) => ({ ...r })),
-      spelling: { ...this.spelling }, written_as: { ...this.written_as },
+      request_settings: copyObject(this.request_settings), put: copyObject<string>(this.put), find: this.find.map((r) => copyObject(r) as FindRule),
+      spelling: copyObject(this.spelling), written_as: copyObject<string>(this.written_as),
     });
   }
 }
@@ -276,8 +286,8 @@ export function validateSpelling(spelling: unknown, where: string): void {
   if (valid) {
     const s = spelling as Record<string, unknown>;
     const allowed = ["call", "result", "input_format", "probe", "value", "position"];
-    valid = Object.keys(s).every((k) => allowed.includes(k));
-    valid &&= ["call", "result"].every((k) => !(k in s) || typeof s[k] === "string");
+    valid = memberNames(s).every((k) => allowed.includes(k));
+    valid &&= ["call", "result"].every((k) => !hasOwn(s, k) || typeof s[k] === "string");
     if ("value" in s) {
       const w = s["value"];
       valid &&= w === null || (typeof w === "string" && writeSlots(w).join("\u0000") === "value");
@@ -285,12 +295,12 @@ export function validateSpelling(spelling: unknown, where: string): void {
     if ("position" in s) valid &&= s["position"] === "before" || s["position"] === "after";
     if ("input_format" in s) {
       const ref = s["input_format"];
-      valid &&= "call" in s && isObj(ref) && Object.keys(ref).every((k) => k === "use" || k === "options")
+      valid &&= "call" in s && isObj(ref) && memberNames(ref).every((k) => k === "use" || k === "options")
         && typeof ref["use"] === "string" && Boolean(ref["use"]) && isObj(ref["options"] ?? {});
     }
     if ("probe" in s) {
       const probe = s["probe"];
-      valid &&= "call" in s && isObj(probe) && Object.keys(probe).every((k) => ["id", "name", "input"].includes(k))
+      valid &&= "call" in s && isObj(probe) && memberNames(probe).every((k) => ["id", "name", "input"].includes(k))
         && typeof probe["name"] === "string" && Boolean(probe["name"]) && isObj(probe["input"])
         && typeof (probe["id"] ?? "probe") === "string" && Boolean(probe["id"] ?? "probe");
     }
@@ -338,9 +348,9 @@ export function validateFindRule(r: unknown, where: string): void {
   if (typeof src !== "string" || !FROM.test(src)) malformed(where, `${where}: 'from' is 'text' or 'part:<part kind>'`);
   if (typeof to !== "string" || !TO.test(to)) malformed(where, `${where}: 'to' is '@purpose' or '@purpose.<sub>'`);
   const known = ["from", "to", "remove", "between", "pattern", "line_prefixed", "complete_reply", "repair"];
-  const unknown = Object.keys(r).filter((k) => !known.includes(k));
+  const unknown = memberNames(r).filter((k) => !known.includes(k));
   if (unknown.length) malformed(where, `${where}: unknown rule key(s) ${sortedList(unknown)}`);
-  const kinds = ["between", "pattern", "line_prefixed"].filter((k) => k in r);
+  const kinds = ["between", "pattern", "line_prefixed"].filter((k) => hasOwn(r, k));
   if (src === "text") {
     if (kinds.length !== 1) malformed(where, `${where}: a text rule needs exactly one of between/pattern/line_prefixed`);
     const k = kinds[0];
@@ -362,8 +372,8 @@ export function validateFindRule(r: unknown, where: string): void {
 }
 
 export function validatePredicate(p: unknown, where: string): void {
-  if (!isObj(p) || Object.keys(p).length !== 1) malformed(where, `${where}: a predicate is one of ${pyRepr(PREDICATE_KEYS)}, one key`);
-  const key = Object.keys(p)[0];
+  if (!isObj(p) || memberNames(p).length !== 1) malformed(where, `${where}: a predicate is one of ${pyRepr(PREDICATE_KEYS)}, one key`);
+  const key = memberNames(p)[0];
   const value = p[key];
   if (key === "capability") {
     if (typeof value === "string" && !CAPABILITY_FACTS.has(value)) {
@@ -381,7 +391,7 @@ export function validatePredicate(p: unknown, where: string): void {
 }
 
 export function evalPredicate(p: Predicate, capabilities: Record<string, unknown>): boolean {
-  const key = Object.keys(p)[0];
+  const key = memberNames(p)[0];
   const value = p[key];
   if (key === "capability") return pyTruthy(ownValue(capabilities, value as string));
   if (key === "not") return !evalPredicate(value as Predicate, capabilities);

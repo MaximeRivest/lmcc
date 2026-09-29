@@ -121,3 +121,22 @@ test_that("a member named \"\" is found, written once, and compared (kernel sect
   expect_equal(json_text(lmcc:::closed_shape(shape)),
     "{\"type\":\"object\",\"properties\":{\"b\":{\"type\":\"string\"},\"\":{\"type\":\"object\",\"properties\":{\"\":{}},\"required\":[\"\"],\"additionalProperties\":false}},\"required\":[\"b\",\"\"],\"additionalProperties\":false}")
 })
+
+test_that("names from callers are found by position: registry entries, type bindings, signatures (kernel section 1, D-58)", {
+  # The corpus reaches artifacts, turns and replies; these are the R API's own records.
+  reg <- lmcc_registry(extensions = character(0))
+  register_format(reg, "", function(options) make_format(write = function(v, f) "x", accepts = "*"))
+  register_format(reg, "b", function(options) make_format(write = function(v, f) "y", accepts = "*"))
+  expect_equal(names(describe_registry(reg)$formats), c("", "b"))
+  expect_equal(lmcc:::named_format(reg, "", jobj())$name, "")
+  expect_error(register_format(reg, "", function(options) NULL), class = "lmcc_refusal")
+  bind_type(reg, "", use = "b")
+  expect_equal(lmcc:::type_binding(reg, "")$name, "b")
+  expect_null(lmcc:::type_binding(reg, "c"))
+  # A member added comes last; one replaced keeps its place.
+  x <- lmcc:::set_key(lmcc:::set_key(parse_json("{\"b\": 1, \"10\": 2}"), "", 3), "b", 0)
+  expect_equal(json_text(x), "{\"b\":0,\"10\":2,\"\":3}")
+  expect_equal(lmcc:::key_index(x, NULL), 0L)
+  # An unnamed entry is a field named "", which a signature refuses.
+  expect_error(lmcc_signature("Do.", inputs = list(shape_string()), outputs = list(a = shape_string())), class = "lmcc_refusal")
+})

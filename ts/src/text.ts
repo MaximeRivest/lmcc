@@ -81,7 +81,7 @@ export function readBoolean(text: string, where: string): boolean {
 /** Truthiness as the reference host tests it: empty containers and `""` are false. */
 export function pyTruthy(value: unknown): boolean {
   if (Array.isArray(value)) return value.length > 0;
-  if (isPlainObject(value)) return Object.keys(value).length > 0;
+  if (isPlainObject(value)) return memberNames(value).length > 0;
   if (typeof value === "bigint") return value !== 0n;
   return Boolean(value);
 }

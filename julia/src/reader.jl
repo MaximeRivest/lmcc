@@ -109,7 +109,7 @@ _lead_strip(k) = String(Base.lstrip(==('\n'), k))
 function repairable_markers(markers)
     distinct = unique([m for m in markers if !isempty(m)])
     key(m) = _lead_strip(marker_key(m))
-    counts = Dict{String,Int}()
+    counts = OrderedDict{String,Int}()
     for m in distinct
         counts[key(m)] = get(counts, key(m), 0) + 1
     end
@@ -334,7 +334,7 @@ function derived_read(r::DerivedReader, text::AbstractString, names; allow_missi
 end
 
 function reader_join(r::DerivedReader, spelled)
-    by = Dict(spelled)
+    by = OrderedDict(spelled)
     check_collisions(spelled, reader_markers(r))
     pieces = [p * by[n] * s for (n, p, s) in r.anchors if haskey(by, n)]
     cstrip(join(pieces) * (isempty(pieces) ? "" : r.tail), ('\n',))

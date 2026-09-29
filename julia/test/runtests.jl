@@ -60,6 +60,24 @@ end
     @test err isa Refusal && err.code == "format-not-self-contained"
 end
 
+@testset "records keep their order: no hash-ordered Dict in the kernel (kernel §1, D-58)" begin
+    # A Dict iterates in hash order; every record the kernel builds is an
+    # OrderedDict (JObj), so what it writes follows the value's order.
+    # Docstrings may show a caller's Dict; code may not build one.
+    found = String[]
+    for (dir, _, files) in walkdir(joinpath(ROOT, "julia", "src")), f in files
+        endswith(f, ".jl") || continue
+        code = replace(read(joinpath(dir, f), String), r"\"\"\"(?s:.*?)\"\"\"" => "", r"#[^\n]*" => "")
+        for m in eachmatch(r"(?<![A-Za-z])Dict[{(]", code)
+            push!(found, "$f: $(m.match)")
+        end
+    end
+    @test isempty(found)
+    x = parse_json("{\"b\": 1, \"10\": 2}")
+    x[""] = 3; x["b"] = 0
+    @test json_text(x) == "{\"b\":0,\"10\":2,\"\":3}"   # added last, replaced in place
+end
+
 function mutate(text, rng)
     n = ncodeunits(text)
     i = LMCC.boundary(text, rand(rng, 0:n))

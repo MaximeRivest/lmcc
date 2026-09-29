@@ -40,7 +40,7 @@ export { LegacyRE2, nativeExtensions, type ExtensionBinding, type PatternBinding
 export { ModelStep, ToolStep, Turn, canonicalJson, sha256, signatureFingerprint, toJson, type TurnJSON, type ModelStepJSON, type ToolStepJSON } from "./turn.ts";
 export { sha256Hex } from "./sha256.ts";
 export { find, put, when, choose } from "./helpers.ts";
-export { parseJson, jsonText, jsonEqual, formatNumber, JsonSyntaxError, hasOwn, ownValue, setMember, memberNames, orderedObject, type Json, type JsonObject } from "./json.ts";
+export { parseJson, jsonText, jsonEqual, formatNumber, JsonSyntaxError, hasOwn, ownValue, setMember, memberNames, orderedObject, copyObject, type Json, type JsonObject } from "./json.ts";
 export { strip } from "./text.ts";
 
 export { defaultRegistry };

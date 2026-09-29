@@ -24,6 +24,10 @@
         "plan"
       ]
     },
+    "ordered": {
+      "type": "boolean",
+      "description": "Compare member order too: every object of the expectation lists its members in the order the kernel's value holds them (kernel section 1, section 9). Default false: objects compare unordered."
+    },
     "vocab": {
       "type": "array",
       "items": {
@@ -102,16 +106,13 @@
     },
     "turns": {
       "type": "object",
-      "propertyNames": {
-        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
-      },
       "additionalProperties": {
         "type": "array",
         "items": {
           "$ref": "urn:lmcc:schema:turn:0.8.0"
         }
       },
-      "description": "slot name → turns; a turn may omit signature, and the harness writes the case signature's fingerprint"
+      "description": "slot name → turns, as a caller passes them to render (any string: a name the template does not place, \"\" included, refuses turns-unplaced, kernel section 3a); a turn may omit signature, and the harness writes the case signature's fingerprint"
     }
   },
   "allOf": [

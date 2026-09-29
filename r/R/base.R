@@ -99,7 +99,7 @@ is_int_value <- function(x) {
 # written twice. `match` finds "" like any other name.
 key_index <- function(x, k) {
   n <- names(x)
-  if (is.null(n)) return(0L)
+  if (is.null(n) || !is.character(k) || length(k) != 1L || is.na(k)) return(0L)
   i <- match(k, n)
   if (is.na(i)) 0L else i
 }

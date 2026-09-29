@@ -8,14 +8,14 @@
  * `render`, `read`/`parse`, `stream`, `describe`, `skeleton`, `prefix`.
  */
 
-import { refuse, Refusal } from "./errors.ts";
+import { refuse, Refusal, type Fix } from "./errors.ts";
 import {
   asParts, Capture, forgiveValue, finishReason, formatKey, isObj, makeMessage, mergeTextParts, partText, replyProbabilities,
   responseTextAndParts, shapeSummary, spellValue, structuralKeys, textPart, type Field, type Message, type Part,
 } from "./core.ts";
 import { isDescription, type Adapter, type Reference } from "./adapter.ts";
 import { accepts as formatAccepts, isFormat, kernelDefault, loadUdf, SCALAR_DEFAULT, type Format } from "./formats.ts";
-import { deepCopy, hasOwn, isPlainObject, jsonEqual, jsonText, ownValue, setMember } from "./json.ts";
+import { copyObject, deepCopy, hasOwn, isPlainObject, jsonEqual, jsonText, memberNames, orderedObject, ownValue, setMember } from "./json.ts";
 import {
   applyFindRules, DerivedReader, Reader, refuseMissing, repairableMarkers, repairMarkers,
   type Anchor, type Edit, type FindRule, type PatternMatcher, type ReaderResult, type Repair,
@@ -71,7 +71,7 @@ export class RenderResult {
     if (this.system !== null) out["system"] = this.system;
     out["messages"] = this.messages;
     const settings = deepCopy(this.requestSettings);
-    for (const k of Object.keys(settings)) setMember(out, k, settings[k]);
+    for (const k of memberNames(settings)) setMember(out, k, settings[k]);
     return out;
   }
 
@@ -80,7 +80,7 @@ export class RenderResult {
     let message = asMessage(reply);
     const values = this.plan.parse(reply);
     if (this.plan.prefill) {
-      message = { ...message, parts: mergeTextParts([textPart(this.plan.prefill), ...message.parts]) };
+      message = copyObject(message, { parts: mergeTextParts([textPart(this.plan.prefill), ...message.parts]) }) as unknown as Message;
     }
     return this.turn.withStep(new ModelStep(values as Record<string, unknown>, message, sha256(this.request()), this.plan.callsField));
   }
@@ -313,7 +313,7 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
   private checkNames(values: unknown, direction: string, where: string): void {
     if (!isObj(values)) refuse("turn-invalid", `${where}: an object of ${direction} field values`);
     const known = new Set(this.signature.fields.filter((f) => f.direction === direction).map((f) => f.name));
-    for (const k of Object.keys(values)) {
+    for (const k of memberNames(values)) {
       if (!known.has(k)) refuse("turn-invalid", `${where}.${k}: not an ${direction} field of this signature`);
     }
   }
@@ -366,7 +366,7 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
     if (turns === undefined || turns === null) return out;
     const bySlot: Record<string, readonly unknown[]> = Array.isArray(turns) ? { turns } : (turns as Record<string, readonly unknown[]>);
     if (!isObj(bySlot)) refuse("turn-invalid", "turns is {slot: [turn]} or a list for the slot 'turns'");
-    for (const name of Object.keys(bySlot)) {
+    for (const name of memberNames(bySlot)) {
       const ts = bySlot[name];
       if (!ts || !ts.length) continue;
       if (name === "steps" || !this.slots.has(name)) {
@@ -422,7 +422,7 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
       messages.unshift(m);
       own.push(m);
     }
-    for (const role of Object.keys(this.tell)) {
+    for (const role of memberNames(this.tell)) {
       if (role === "system") continue;
       const text = this.tell[role];
       const target = own.find((m) => m.role === role);
@@ -478,7 +478,7 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
       out.push(...this.userSide(t.inputs).map((m): [Message, string] => [m, "input"]));
       if (t.steps.length) {
         out.push(...this.writeSteps(t, ctx));
-      } else if (t.outputs && Object.keys(t.outputs).length) {
+      } else if (t.outputs && memberNames(t.outputs).length) {
         const [message] = this.modelMessage(new ModelStep(t.outputs), ctx);
         if (message !== null) out.push([message, "model"]);
       }
@@ -517,7 +517,7 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
   private modelMessage(step: ModelStep, ctx: WriteContext): [Message | null, Map<string, string>] {
     if (this.adapter.replay === "verbatim" && step.message !== null) {
       ctx.modelSteps++;
-      return [makeMessage("assistant", step.message.parts.map((p) => ({ ...p }))), new Map()];
+      return [makeMessage("assistant", step.message.parts.map((p) => copyObject(p) as Part)), new Map()];
     }
     if (this.adapter.replay === "recorded" && step.message !== null) {
       let same: boolean;
@@ -530,7 +530,7 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
       }
       if (same) {
         ctx.modelSteps++;
-        return [makeMessage("assistant", step.message.parts.map((p) => ({ ...p }))), new Map()];
+        return [makeMessage("assistant", step.message.parts.map((p) => copyObject(p) as Part)), new Map()];
       }
     }
     return this.writeModelStep(step, ctx);
@@ -539,7 +539,7 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
   private writeModelStep(step: ModelStep, ctx: WriteContext): [Message | null, Map<string, string>] {
     const outputs = step.outputs;
     const recorded = step.message?.parts ?? [];
-    const parts: Part[] = recorded.filter((p) => this.replayTypes.has(p.type)).map((p) => ({ ...p }));
+    const parts: Part[] = recorded.filter((p) => this.replayTypes.has(p.type)).map((p) => copyObject(p) as Part);
     const before: string[] = [];
     const after: string[] = [];
     for (const [fname, w] of this.turnWriters) {
@@ -604,7 +604,7 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
         for (let p of written) {
           if (assigned) {
             ids.set(p["id"] as string, `s${k}_${p["id"]}`);
-            p = { ...p, id: ids.get(p["id"] as string)! };
+            p = copyObject(p, { id: ids.get(p["id"] as string)! }) as Part;
           }
           callParts.push(p);
         }
@@ -615,7 +615,7 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
       const withTail = [...placedParts, []];
       for (let i = 0; i < Math.min(pieces.length, withTail.length); i++) {
         if (pieces[i]) parts.push(textPart(pieces[i]));
-        parts.push(...withTail[i].map((x) => ({ ...x })));
+        parts.push(...withTail[i].map((x) => copyObject(x) as Part));
       }
     } else if (text) {
       parts.push(textPart(text));
@@ -631,10 +631,10 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
     if (owner !== null && "result" in owner.transport.spelling) {
       const output = step.output.filter((p) => p.type === "text" && typeof p["text"] === "string").map((p) => p["text"] as string).join("\n");
       const text = spellTurn(owner.transport.spelling["result"] as string, { id: step.id, name: step.name, output });
-      const media = step.output.filter((p) => p.type !== "text").map((p) => ({ ...p }));
+      const media = step.output.filter((p) => p.type !== "text").map((p) => copyObject(p) as Part);
       return makeMessage("user", [textPart(text), ...media]);
     }
-    return makeMessage("tool", [{ type: "tool_result", id: writtenId, name: step.name, content: step.output.map((p) => ({ ...p })) }]);
+    return makeMessage("tool", [{ type: "tool_result", id: writtenId, name: step.name, content: step.output.map((p) => copyObject(p) as Part) }]);
   }
 
   /** One call writer, used for written turns and the bind-time sample (§6). */
@@ -731,7 +731,7 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
       if (err instanceof Refusal) {
         if (cut && !derived) this.refuseCut("", {}, err.hint);
         if (!(err.code === "parse-missing-fields" && isObj(err.partial))) throw err;
-        raw = { ...(err.partial as Record<string, string>) };
+        raw = copyObject<string>(err.partial as object);
         missingErr = err;
       } else {
         if (cut && !derived) this.refuseCut("", {}, (err as Error).message);
@@ -741,7 +741,7 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
     const missing = names.filter((n) => !hasOwn(raw, n));
     if (cut) {
       const ended: Record<string, string> = {};
-      for (const k of Object.keys(raw)) if (!toEnd.has(k)) setMember(ended, k, raw[k]);
+      for (const k of memberNames(raw)) if (!toEnd.has(k)) setMember(ended, k, raw[k]);
       if (missing.length) this.refuseCut(`before field ${pyRepr(missing[0])}`, ended);
       if (toEnd.size) this.refuseCut(`inside field ${pyRepr(names.find((n) => toEnd.has(n)))}`, ended);
       if (!derived) this.refuseCut("", ended);
@@ -813,20 +813,19 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
     const out: Record<string, unknown> = {
       adapter: this.adapter.name,
       reader: { kind: this.adapter.reader["kind"] } as Record<string, unknown>,
-      capabilities: { ...this.capabilities },
-      inputs: this.visibleInputs.map((f) => ({
-        name: f.name, type: f.type, shape: f.shape, format: choice(f).format.name ?? "(inline)", resolved_by: choice(f).resolvedBy, ...described(f),
-      })),
-      outputs: this.visibleOutputs.map((f) => ({
-        name: f.name, type: f.type, shape: f.shape, format: choice(f).format.name ?? "(inline)", resolved_by: choice(f).resolvedBy, ...described(f),
-        found: found.has(f.name),
-      })),
+      capabilities: copyObject(this.capabilities),
+      inputs: this.visibleInputs.map((f) => copyObject({
+        name: f.name, type: f.type, shape: f.shape, format: choice(f).format.name ?? "(inline)", resolved_by: choice(f).resolvedBy,
+      }, described(f))),
+      outputs: this.visibleOutputs.map((f) => copyObject({
+        name: f.name, type: f.type, shape: f.shape, format: choice(f).format.name ?? "(inline)", resolved_by: choice(f).resolvedBy,
+      }, described(f), { found: found.has(f.name) })),
       hidden: this.signature.fields.filter((f) => !visibleIn.has(f) && !visibleOut.has(f)).map((f) => f.name),
-      transports: Object.fromEntries(this.resolved.map((r) => [r.purpose, r.name])),
-      extensions: Object.fromEntries([...this.extensions.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([n, r]) => [n, describeResolved(r)])),
-      find: this.findRules.map(([name, r]) => ({ field: name, ...r })),
+      transports: orderedObject(this.resolved.map((r) => [r.purpose, r.name])),
+      extensions: orderedObject([...this.extensions.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([n, r]) => [n, describeResolved(r)])),
+      find: this.findRules.map(([name, r]) => copyObject({ field: name }, r)),
       puts: this.puts.map(([name, place]) => ({ field: name, at: place })),
-      tell: { ...this.tell },
+      tell: copyObject(this.tell),
       request_settings: deepCopy(this.requestSettings),
       strict: this.adapter.strict,
     };
@@ -839,7 +838,7 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
       if (this.reader.unrepaired.length) reader["unrepaired"] = [...this.reader.unrepaired];
       if (this.reader.tail) reader["tail"] = this.reader.tail;
     } else if (this.reader.spec) {
-      for (const k of Object.keys(this.reader.spec)) if (k !== "kind") setMember(reader, k, this.reader.spec[k]);
+      for (const k of memberNames(this.reader.spec)) if (k !== "kind") setMember(reader, k, this.reader.spec[k]);
     }
     const vocab: Record<string, string> = {};
     for (const c of this.formats.values()) {
@@ -889,7 +888,7 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
       lines.push(`output ${String(f["name"]).padEnd(20)} ${f["format"]} (${f["resolved_by"]})${f["found"] ? " + rule" : ""}`);
     }
     for (const h of d["hidden"] as string[]) lines.push(`hidden ${h.padEnd(20)} served by transport/put`);
-    if (Object.keys(d["request_settings"] as object).length) lines.push(`request_settings: ${JSON.stringify(d["request_settings"])}`);
+    if (memberNames(d["request_settings"] as object).length) lines.push(`request_settings: ${pyRepr(d["request_settings"])}`);
     return lines.join("\n");
   }
 }
@@ -897,7 +896,7 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
 function dropUndefined(values: Record<string, unknown>): Record<string, unknown> {
   if (!isObj(values)) return values;
   const out: Record<string, unknown> = {};
-  for (const k of Object.keys(values)) if (values[k] !== undefined) setMember(out, k, values[k]);
+  for (const k of memberNames(values)) if (values[k] !== undefined) setMember(out, k, values[k]);
   return out;
 }
 
@@ -1094,7 +1093,7 @@ function deriveReader(plan: Plan<any, any>): DerivedReader {
       if (!loops.length) {
         hint += `, on the same line: a bare slot's marker is the text on its own line (write 'Answer: {${name}}' or '<${name}>{${name}}</${name}>', not a marker on the line above), or use an outputs loop`;
       }
-      refuse("not-readable", hint, { fix: { ...here, field: name } });
+      refuse("not-readable", hint, { fix: copyObject(here, { field: name }) as unknown as Fix });
     }
   }
   const seen = new Map<string, string>();
@@ -1102,7 +1101,7 @@ function deriveReader(plan: Plan<any, any>): DerivedReader {
     const key = rstrip(prefix);
     if (seen.has(key)) {
       refuse("not-readable", `fields ${pyRepr(seen.get(key))} and ${pyRepr(name)} share the anchor ${pyRepr(key)}; anchors must tell fields apart`,
-        { fix: { ...here, field: name } });
+        { fix: copyObject(here, { field: name }) as unknown as Fix });
     }
     seen.set(key, name);
   }
@@ -1119,7 +1118,7 @@ function instantiate(loop: LoopNode, f: Field, plan: Plan<any, any>, fix: { acti
     } else if (node.kind === "slot") {
       const attr = node.path.slice(node.path.indexOf(".") + 1);
       if (!node.path.includes(".")) {
-        refuse("not-readable", `slot {${node.path}} inside the output pattern is not invertible`, { fix: { ...fix, slot: node.path } });
+        refuse("not-readable", `slot {${node.path}} inside the output pattern is not invertible`, { fix: copyObject(fix, { slot: node.path }) as unknown as Fix });
       }
       if (attr === "value") {
         if (target === post) refuse("not-readable", "the output-pattern block has two {f.value} holes per field; one value, one hole", { fix });
@@ -1129,7 +1128,7 @@ function instantiate(loop: LoopNode, f: Field, plan: Plan<any, any>, fix: { acti
       else if (attr === "type") target.push(f.type ?? "");
       else if (attr === "schema") target.push(plan.schemaHint(f));
       else if (attr === "purpose") target.push(f.purpose);
-      else refuse("not-readable", `slot {${node.path}} inside the output pattern is not invertible`, { fix: { ...fix, slot: node.path } });
+      else refuse("not-readable", `slot {${node.path}} inside the output pattern is not invertible`, { fix: copyObject(fix, { slot: node.path }) as unknown as Fix });
     } else {
       refuse("not-readable", "nested loops inside the output-pattern block are not invertible", { fix });
     }
@@ -1280,11 +1279,11 @@ export function bind<I, O>(adapter: Adapter, sig: Signature<I, O>, capabilities:
       }
       return t;
     };
-    if (!transport.in_template || Object.keys(transport.put).length) hidden.add(f.name);
+    if (!transport.in_template || memberNames(transport.put).length) hidden.add(f.name);
     for (const r of transport.find) {
       const t = target(r["to"] as string, "rule");
       const rule: Record<string, unknown> = {};
-      for (const k of Object.keys(r)) if (k !== "to") rule[k] = r[k];
+      for (const k of memberNames(r)) if (k !== "to") setMember(rule, k, r[k]);
       plan.findRules.push([t.name, rule as FindRule]);
       plan.ruleOwner.push(res);
       if (t !== f) hidden.add(t.name);
@@ -1293,7 +1292,7 @@ export function bind<I, O>(adapter: Adapter, sig: Signature<I, O>, capabilities:
         plan.callsOwner = res;
       }
     }
-    for (const ref of Object.keys(transport.put)) {
+    for (const ref of memberNames(transport.put)) {
       const place = transport.put[ref];
       const t = target(ref, "put");
       plan.puts.push([t.name, place]);
@@ -1302,7 +1301,7 @@ export function bind<I, O>(adapter: Adapter, sig: Signature<I, O>, capabilities:
         plan.writtenAs.set(t.name, registry.namedFormat(transport.written_as[ref], {}, `transports[${pyRepr(f.purpose)}].written_as`));
       }
     }
-    for (const role of Object.keys(transport.tell)) {
+    for (const role of memberNames(transport.tell)) {
       const existing = ownValue(plan.tell, role) as string | undefined;
       setMember(plan.tell, role, existing ? existing + "\n" + transport.tell[role] : transport.tell[role]);
     }
@@ -1441,7 +1440,7 @@ export function bind<I, O>(adapter: Adapter, sig: Signature<I, O>, capabilities:
       }
       continue;
     }
-    const probe: Record<string, unknown> = { id: "probe", ...((r.transport.spelling["probe"] as Record<string, unknown>) ?? { name: "probe", input: { probe: true } }) };
+    const probe: Record<string, unknown> = copyObject({ id: "probe" }, (r.transport.spelling["probe"] as object | undefined) ?? { name: "probe", input: { probe: true } });
     const own = plan.findRules.filter(([name, rt]) => name === callsField && rt.from === "text");
     let readBack: unknown = null;
     let spelled = "(writer refused)";
@@ -1510,7 +1509,7 @@ function bindTurns(plan: Plan<any, any>): void {
     let key: string;
     if (r.from.startsWith("part:")) key = `channel\u0000${r.from}`;
     else {
-      const k = ["between", "line_prefixed", "pattern"].find((x) => x in r)!;
+      const k = ["between", "line_prefixed", "pattern"].find((x) => hasOwn(r, x))!;
       key = `${k}\u0000${jsonText(r[k])}`;
     }
     if (!groups.has(key)) groups.set(key, []);

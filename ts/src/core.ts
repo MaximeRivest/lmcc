@@ -10,7 +10,7 @@
  */
 
 import { refuse, Refusal } from "./errors.ts";
-import { formatNumber, isPlainObject, jsonEqual, jsonText, keepOrder, memberNames, setMember, type JsonObject } from "./json.ts";
+import { copyObject, formatNumber, isPlainObject, jsonEqual, jsonText, memberNames, setMember, type JsonObject } from "./json.ts";
 import { asciiLower, pyRepr, pyStr, readBoolean, readInteger, readNumber, strip, WHITESPACE } from "./text.ts";
 import { brand } from "./brand.ts";
 
@@ -58,14 +58,14 @@ export function nullableBase(shape: Shape): [Shape, boolean] {
     const others = t.filter((x) => x !== "null");
     if (t.includes("null") && others.length === 1 && t.length === 2) {
       const base: Record<string, unknown> = {};
-      const names = memberNames(shape);
-      for (const k of names) setMember(base, k, k === "type" ? others[0] : shape[k]);
-      return [keepOrder(base, names) as Shape, true];
+      for (const k of memberNames(shape)) if (k !== "type") setMember(base, k, shape[k]);
+      base["type"] = others[0];
+      return [base as Shape, true];
     }
     return [shape, false];
   }
   const alts = shape["anyOf"];
-  if (Array.isArray(alts) && alts.length === 2 && Object.keys(shape).length === 1) {
+  if (Array.isArray(alts) && alts.length === 2 && memberNames(shape).length === 1) {
     const isNull = (a: unknown) => isObj(a) && jsonEqual(a, { type: "null" });
     const nulls = alts.filter(isNull);
     const others = alts.filter((a) => !isNull(a));
@@ -344,9 +344,10 @@ export function replyProbabilities(response: unknown): [Record<string, Record<st
     if (typeof method !== "string" || !isObj(dist)) {
       refuse("response-malformed", "a data part's 'method' is text and its 'probabilities' an object {field: {key: p}}");
     }
-    for (const field of Object.keys(dist)) {
+    for (const field of memberNames(dist)) {
       const keys = dist[field];
-      const valid = isObj(keys) && Object.values(keys).every((p) => {
+      const valid = isObj(keys) && memberNames(keys).every((k) => {
+        const p = keys[k];
         const n = typeof p === "bigint" ? Number(p) : p;
         return typeof n === "number" && n >= 0 && n <= 1;
       });
@@ -356,7 +357,7 @@ export function replyProbabilities(response: unknown): [Record<string, Record<st
       if (Object.prototype.hasOwnProperty.call(probabilities, field)) {
         refuse("parse-ambiguous", `two data parts carry probabilities for ${pyRepr(field)} — refusing to guess which measured the answer`);
       }
-      setMember(probabilities, field, { ...(keys as Record<string, number>) });
+      setMember(probabilities, field, copyObject<number>(keys));
       setMember(measuredBy, field, method);
     }
   }
@@ -373,11 +374,11 @@ export function normalizeResponseParts(parts: unknown[]): Part[] {
     const last = out[out.length - 1];
     if (hasText && texts.length && last["type"] === part.type) {
       texts.push(part["text"] as string);
-      for (const k of Object.keys(part)) if (k !== "type" && k !== "text") setMember(last, k, part[k]);
+      for (const k of memberNames(part)) if (k !== "type" && k !== "text") setMember(last, k, part[k]);
       continue;
     }
     if (texts.length) last["text"] = texts.join("");
-    out.push({ ...part });
+    out.push(copyObject(part));
     texts = hasText ? [part["text"] as string] : [];
   }
   if (texts.length) out[out.length - 1]["text"] = texts.join("");
