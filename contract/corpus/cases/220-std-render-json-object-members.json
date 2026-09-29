@@ -1,0 +1,158 @@
+{
+ "name": "std-render-json-object-members",
+ "kind": "render",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "json_names_v1",
+  "versions": {
+   "kernel": "0.8.0",
+   "vocab": {
+    "reader/json_object": "0.2.0",
+    "format/json": "0.1.0"
+   }
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}"
+   },
+   {
+    "directive": "turns"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "reader": {
+   "kind": "json_object"
+  },
+  "formats": {
+   "*": {
+    "use": "json"
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Answer.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "object"
+    }
+   },
+   {
+    "name": "__proto__",
+    "direction": "output",
+    "shape": {
+     "type": "object",
+     "properties": {
+      "__proto__": {
+       "type": "string"
+      },
+      "toString": {
+       "type": "integer"
+      }
+     }
+    }
+   }
+  ]
+ },
+ "capabilities": {
+  "native_structured_output": true
+ },
+ "inputs": {
+  "q": {
+   "__proto__": "v",
+   "constructor": {
+    "toString": 1
+   }
+  }
+ },
+ "turns": {
+  "turns": [
+   {
+    "signature": "sha256:46c7a31d3cfffac241c404c3002c505932dd8a049a8c69f0620958a537a4df4a",
+    "inputs": {
+     "q": {
+      "valueOf": 2
+     }
+    },
+    "outputs": {
+     "__proto__": {
+      "__proto__": "x",
+      "toString": 3
+     }
+    }
+   }
+  ]
+ },
+ "expect": {
+  "request": {
+   "system": "Answer.",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "{\n  \"valueOf\": 2\n}"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "{\n  \"__proto__\": {\n    \"__proto__\": \"x\",\n    \"toString\": 3\n  }\n}"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "{\n  \"__proto__\": \"v\",\n  \"constructor\": {\n    \"toString\": 1\n  }\n}"
+      }
+     ]
+    }
+   ],
+   "config": {
+    "response_format": {
+     "type": "json_schema",
+     "schema": {
+      "type": "object",
+      "properties": {
+       "__proto__": {
+        "type": "object",
+        "properties": {
+         "__proto__": {
+          "type": "string"
+         },
+         "toString": {
+          "type": "integer"
+         }
+        },
+        "required": [
+         "__proto__",
+         "toString"
+        ],
+        "additionalProperties": false
+       }
+      },
+      "required": [
+       "__proto__"
+      ],
+      "additionalProperties": false
+     }
+    }
+   }
+  }
+ }
+}

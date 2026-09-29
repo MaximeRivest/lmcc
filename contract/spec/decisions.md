@@ -1530,3 +1530,253 @@ object under this reader is still refused by strict providers, as
 before; with Gemini, which enforced the open schema, a record now also
 refuses keys it does not declare.
 
+**D-58 · Names are data, and members keep their order (kernel 0.8.4;
+the version is the maintainer's, see Contract).** Asked by the maintainer
+on 2026-09-29 ("fix … so every kernel is held to it"), after functai's
+TypeScript stage 1 found the first half, then again after two reviews of
+that fix found the other two, a third time after two more reviews found
+the same hazards in places the fixes had not reached, and a fourth time
+after two reviews of the third pass found one more keyed lookup in R and
+a grammar the kernels matched differently (the third and fourth passes
+are the last items below). Four host hazards of one kind: a record keyed
+by names that the host's own record type does not hold as data.
+
+1. **TypeScript, `Object.prototype`.** The kernel kept records keyed by
+   field names and JSON members in ordinary objects and read them with
+   `name in obj` / `obj[name]` and wrote them with `obj[name] = v`. A name
+   `Object.prototype` has was read from the prototype when absent, and
+   `__proto__` was written into the prototype. Silent cases: an input
+   named `__proto__` was sent as `{}`, a JSON input's `__proto__` member
+   was dropped, an output named `__proto__` was read as nothing, and a
+   reply missing an output named `toString` read it as `""` instead of
+   refusing `parse-missing-fields`. Loud but wrong: a valid partial
+   example refused `value-invalid`, and the json_object reader refused a
+   correct reply `parse-ambiguous`.
+2. **R, the empty name.** R reads `x[[""]]` as `NULL` and `x[[""]] <- v`
+   appends: a JSON member named `""` (in an input, a turn's output, a
+   shape's `properties`) was sent as `null` and written twice
+   (`properties` with `""` twice, `required: ["", …, ""]`), a format key
+   `""` refused at load, and the R driver's JSON equality called
+   `{"": 1}` equal to `{"": 2}`.
+3. **TypeScript, member order.** A JavaScript object enumerates
+   integer-like names (`"10"`) first. `{"b": 1, "10": 2}` was written
+   `{"10": 2, "b": 1}` by the json format, a written reply, a call's
+   `{input}` and a data part's text, and a shape's `required` became
+   `["1", "b"]` where Python writes `["b", "1"]`. `format-json.md` already
+   said "in the value's own order"; D-16 had noted the reordering only
+   for field names, which are identifiers and never integer-like.
+4. **Julia, hash order.** A `Dict` iterates in hash order. The plan kept
+   its formats, `written_as` and turn input formats in `Dict`s, so
+   `describe()["versions"]["vocab"]` listed `format/tool_calls` before
+   `format/function_tool` where the other three kernels list them in
+   signature order. No check saw it: every comparison ignored member
+   order.
+
+- **Contract.** Kernel §1 says both rules: "Names are data" (format keys
+  and member names are any string, `""` included) and "Members keep
+  their order" (every JSON the kernel or a standard format writes, except
+  canonical JSON, spells members in the value's order; `required` in
+  property order). Nothing is newly allowed. Some inputs that loaded or
+  rendered in 0.8.4 now refuse (the third and fourth passes list them):
+  that is a change to when a code fires, breaking by the rule. It is
+  classed here as a patch, for the maintainer to ratify with the release:
+  every newly refused input was outside a grammar already published (the
+  entry and signature schemas, §2's purposes, lm15's `ToolCallPart`),
+  was accepted by only some of the four kernels, or keyed a transport no
+  field could reach, so no artifact that worked the same everywhere
+  changes. A minor version would make every artifact pinned to 0.8 be
+  re-pinned for inputs none of them holds. Kernel 0.8.4 is already on
+  npm with hazards 1 and 3; shipping the fix needs a new package version,
+  and the package version is the kernel version, so that release is the
+  maintainer's decision, not taken here; this branch moves no version. Cases
+  214–222 pin hazard 1: inputs and a partial example (214), a guard,
+  bare slots and a turn slot named `__proto__` (215), outputs read by
+  the derived reader (216) and missing (217), outputs read by the
+  json_object reader (218) and missing (219), JSON members through the
+  json format, the reader's schema, its written reply and a turn
+  fingerprint (220), artifact keys through load and dump (221), and a
+  transport bound under the purpose `__proto__` (222). Cases 223–225
+  and 230 pin hazard 2 (`""` in an input value, a turn output and a
+  shape property, through the json format and the json_object reader;
+  `""` members read from a reply; format keys `""` and `"10"` through
+  load and dump); 226–229 pin hazard 3 (the json format, the reader's
+  schema and written reply, a fenced call's `{input}` and a tool's
+  parameters, a data part's text). All were typed from the spec; the
+  corpus README states what failed where before the fixes.
+- **TypeScript, names.** Records stay ordinary objects with ordinary
+  prototypes, so no type or behaviour a caller sees changes except the
+  bug: every read of a name-keyed record is an own-member read
+  (`hasOwn`, `ownValue`) and every write goes through `setMember`; the
+  three are exported for packs and callers. Null-prototype records were
+  rejected: a caller's `values.hasOwnProperty(...)`, `String(values)`
+  and Node's `assert.deepStrictEqual` against a literal would all break,
+  and records callers build would still need own reads. Capabilities are
+  now read own-only too: capabilities given as `Object.create(defaults)`
+  or through getters on a prototype are no longer seen (no capability
+  fact is an `Object.prototype` name, so this fixed no bug; it is the
+  same rule, and `describe()` already listed own members only). The
+  conformance driver, the differential probe and the streaming fuzz test
+  had the same bug and are fixed. `ts/tests/names.test.ts` holds the
+  paths the corpus does not reach.
+- **TypeScript, order.** The larger fix, over stating a host
+  difference: a JavaScript object cannot hold the order, so lmcc carries
+  it: the list of its names under the registered symbol
+  `lmcc.memberOrder`, not enumerable. The third pass put the list where
+  names are added, not where objects are built: `setMember` appends a
+  name the object does not hold (a replaced one keeps its place; one
+  removed and set again comes last, as in a Python dict), starting the
+  list the first time an integer-like name is added to an object with
+  members. So an object is ordered whenever lmcc built it name by name,
+  whatever built it. Five helpers are the only way `src/` touches a
+  record's names (`memberNames`, `setMember`, `orderedObject`,
+  `copyObject`, and `hasOwn`/`ownValue`), and a test fails on any
+  `Object.keys`/`values`/`entries`/`fromEntries`/`assign`, object
+  spread, `for ... in` or `in` with a data name outside `json.ts`
+  (`names.test.ts`). Nothing is recorded while JavaScript's order is the
+  value's, which is every object without an integer-like name. Rejected: `Map` values (a
+  breaking change to every reading and input, and `values.o.b` would stop
+  working), a `Map` only where order is at stake (a value's type would
+  depend on the names a model wrote), a `Proxy` whose `ownKeys` returns
+  the order (JavaScript's own writers would then agree, but
+  `structuredClone` and `postMessage` throw on a proxy), and a
+  module-level `WeakMap` (invisible to a second copy of lmcc, and to a
+  debugger). `ts/tests/order.test.ts` holds the paths the corpus does
+  not reach (a reading written back, a turn's JSON read back with
+  `parseJson`, copies, a member added later).
+- **R.** A name that comes from data and is not a validated identifier
+  (a JSON member, a format key, a slot, a probabilities field, a
+  registry or type-binding name, a request setting, a put or tell key)
+  is found and written by position (`key_index`, `get_key`, `set_key`,
+  `members_of` in `base.R`), never by `[[name]]`, and one object is
+  updated by another with `merge_obj` (Python's `{**a, **b}`), never
+  `c(a, b)`, which holds a name both have twice. `[[name]]` remains for
+  names the kernel chose or validated first (field names, template
+  slots, turn slots after the placed-slot check, purposes after load's
+  check, loop variables, tell roles, request-setting paths checked
+  against the pinned list) and for keys it builds itself with a prefix
+  (`"k"`, `"channel\u0001"`); the first two passes had claimed "never by
+  `[[name]]`" for all of them, which was not true, and the third pass
+  missed the call-id map (fourth pass, below). R's other
+  hazard of this kind, `$`'s partial matching on lists, is now checked on
+  every run: the conformance driver and the differential probe set
+  `warnPartialMatchDollar`, `warnPartialMatchArgs` and
+  `warnPartialMatchAttr` and turn every warning into an error.
+- **Julia** built its records as `OrderedDict`s but kept three plan
+  tables in `Dict`s (hazard 4); the kernel now builds no `Dict` at all,
+  and a unit test fails on one. Its exposure left is the caller's: a
+  `Dict` a caller passes iterates in hash order, and lmcc writes it in
+  that order (stated in its README).
+- **Seeing order (third pass).** Every comparison ignored member order
+  (Python's `==`, each driver's JSON equality, the differential's sorted
+  walk, and the TypeScript probe wrote with `JSON.stringify`), so order
+  was pinned only through rendered text, and the drift the reviews found
+  passed `./check`. Now: a case marked `"ordered": true` compares member
+  order too (kernel §9; cases 226–230, 234, 235 are); the differential
+  compares every object's member order on everything it observes (the
+  TypeScript probe writes with `jsonText`); and it adds, for each case
+  whose data holds member names (shape properties, inputs, turns,
+  replies, tool calls, probabilities, table columns), two variants with
+  those names replaced by `""`, `"10"`, `"2"`, `"__proto__"`,
+  `"toString"`, `"4294967295"`, `"NA"`, `"..."` and the like, in orders
+  JavaScript would change. Rejected: ordering every corpus comparison,
+  which would pin the order of members the kernel chooses itself (a
+  reading's fields, an entry's top-level keys: eight cases differ there
+  between their file and the reference, harmlessly) and so
+  over-specify every future kernel.
+- **Purposes (third pass).** A transport keyed by `""` loaded in Python,
+  TypeScript and Julia and was dumped back; `a-b` loaded in all four;
+  R refused `""` by accident ("must be an object"). A purpose is what a
+  field declares, a name or dotted names, so load now refuses any other
+  key `entry-malformed` with `fix: edit-entry` at `transports[...]`,
+  before reading its value (kernel §2, cases 231, 232). The entry schema
+  allowed `^[A-Za-z_][A-Za-z0-9_.]*$` (so `a.` and `a..b`), looser than
+  the signature's purpose grammar; it now says the same grammar. This
+  refuses artifacts that loaded before; each keyed a transport no field
+  could reach, so no working artifact changes, but it is a change to
+  when `entry-malformed` fires, stated here.
+- **Also pinned (third pass).** A turn slot `""` refuses
+  `turns-unplaced` (R dropped its turns silently; case 233, for which the
+  case schema's `turns` now takes any slot name, as a caller can pass);
+  probabilities keep the reply's order under any name, a name no output
+  bears and `""` included, as §3's "verbatim" said (R refused
+  `response-malformed`, TypeScript reordered the labels; case 234); a
+  table row is read in column order (TypeScript reordered it; case 235);
+  a table with a column `""` renders (case 236; a review of the second
+  pass found R failing it before that pass); an artifact dumps its
+  format keys in the order loaded (TypeScript reordered them; case 230,
+  now ordered). TypeScript's
+  `nullableBase` puts `type` last again, as the other kernels do (the
+  second pass had moved it; no bytes differed).
+- **Fourth pass.** Two reviews of the third pass found:
+  - *R keyed the call-id map by a call id* (`ids[[id]]`), a value, not
+    a member name, so no name fuzz reached it: a call whose id is `""`
+    was written with no `id`, where the other kernels wrote `s0_`. The
+    map is now two character vectors found with `match`. What a call id
+    `""` means was open; it now refuses `turn-invalid` in all four
+    kernels, native or spelled alike (kernel §3a, cases 237, 238),
+    rather than being written `s<k>_`: lm15's `ToolCallPart` refuses an
+    empty id, a tool step with id `""` already refused, so the call could
+    never be answered, the heredoc calls format already required a
+    non-empty id, and writing `s0_` would invent an id from nothing.
+    Rejected: refusing a call's `name` `""` the same way, since
+    `format/tool_calls` reads a fenced call's name verbatim and would
+    then read values it cannot write back; a call named `""` written as
+    a native part still reaches lm15, which refuses it when the request
+    is built. Stated, not fixed here.
+  - *A grammar matched differently.* Python and PCRE (Julia, R) let `$`
+    match before a final `\n`, so `a\n` passed as a purpose, a field
+    name or purpose, a turn slot, an extension name or version, a find
+    rule's `from`/`to` or a put place in three kernels and refused in
+    TypeScript; and Python's `\d`/`isdigit` and Julia's `\d` took other
+    scripts' digits, so Python loaded an entry for kernel `0.٨.4` as
+    0.8.4 (and raised `ValueError` on `0.8.²`). §7a now says every
+    grammar matches the whole text, in ASCII; Python uses `fullmatch`,
+    Julia and R `\A…\z`, digits are `[0-9]` (cases 239–249, 251).
+  - *R wrote a member twice*: `reader/json_object` concatenated a
+    field's description onto a shape that had one (case 250, ordered);
+    every such `c(a, b)` is now `merge_obj` or `set_key`.
+  - *The judges could not see it.* The differential decoded probe lines
+    with plain `json.loads`, which keeps the last of two members, so a
+    member written twice compared equal: it now fails the probe on any
+    duplicate at any depth; it split lines with `str.splitlines`, which
+    also splits at U+2028, and the TypeScript driver and probe read with
+    `node:readline`, which does too (a case holding U+2028 crashed the
+    TypeScript driver; case 251): all now split at `\n` only. A failed
+    `ordered` comparison in the TypeScript driver names the path.
+- **Pinned elsewhere.** A refusal's `partial` has no field in the case
+  schema, so cases 217 and 219 do not pin it; the differential check
+  compares every refusal's `partial` across the four kernels on every
+  case and fuzzed reply, and `names.test.ts` checks TypeScript's.
+  Case 222's `tell` is never rendered (a parse case) and pins nothing.
+
+Costs, stated. A JavaScript caller who writes `{ __proto__: "x" }` as an
+object literal sets the literal's prototype, not a member (the language
+does that before lmcc sees it); such a value must be built with a
+computed key, `JSON.parse`, `Object.fromEntries` or `setMember`. Records
+lmcc returns (readings, turns, a refusal's `partial`, `describe()`) are
+ordinary objects: `name in record` and an unguarded `record[name]` answer
+from the prototype for a name the record lacks, `String(values)` throws
+when an output is named `toString`, and `Object.assign({}, values)` drops
+a `__proto__` member; `ts/README.md` says to use `Object.hasOwn`,
+`ownValue`, `memberNames` and `setMember`. The recorded order is lmcc's,
+not JavaScript's: `JSON.stringify` of a reading, and the request lm15
+serializes, put integer-like names first (a `response_format` schema
+reaches the provider that way; its `required` keeps the property order);
+a tool call's `input` or a data part lm15 parsed arrives in JavaScript's
+order; an object literal or a `JSON.parse` result has lost the order
+before lmcc sees it (`orderedObject`, `parseJson`); a member added by
+plain assignment (`obj[k] = v`) rather than `setMember` is listed after
+the recorded ones in JavaScript's order, and one deleted and assigned
+again goes back to its recorded place. A pack that builds its own
+records with `obj[name] = v` can still lose a `__proto__` member or the
+order of integer-like names; the kernel reads what it returns as own
+members and writes it by `memberNames`. The order list grows by one
+entry per name `setMember` adds and keeps names removed with `delete`
+(they are skipped when read), so an object whose members are removed and
+added many times holds a longer list than members. `lmcc.memberOrder`
+is unversioned: two copies of lmcc at different versions share it, so
+its meaning (a list of names, the last listing of a name wins, names
+not held are skipped) is a small public protocol from now on. A Julia
+caller's `Dict` and a JavaScript caller's literal keep their host's
+order; an R caller reading a reading with `values[[""]]` gets `NULL`
+and `values$na` may complete to another member (`r/README.md`).

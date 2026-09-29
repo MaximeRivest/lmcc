@@ -1,0 +1,43 @@
+{
+ "name": "refuse-load-purpose-empty",
+ "kind": "refuse",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "tools_v1",
+  "versions": {
+   "kernel": "0.8.4",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n\nReply with EXACTLY these sections:\n{% for f in outputs %}<{f.name}>\n{f.value}\n{% endfor %}</done>"
+   },
+   {
+    "directive": "turns"
+   },
+   {
+    "role": "user",
+    "text": "{% for f in inputs %}== {f.name} ==\n{f.value}\n{% endfor %}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  },
+  "transports": {
+   "": {
+    "use": "native_tools"
+   }
+  }
+ },
+ "expect": {
+  "code": "entry-malformed",
+  "at": "load",
+  "fix": {
+   "action": "edit-entry",
+   "path": "transports['']"
+  }
+ }
+}

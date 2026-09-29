@@ -26,16 +26,16 @@ mutable struct Plan
     resolved::Vector{Resolved}
     find_rules::Vector{Tuple{String,JObj}}
     puts::Vector{Tuple{String,String}}
-    written_as::Dict{String,Format}
+    written_as::OrderedDict{String,Format}
     tell::JObj
     request_settings::JObj
-    formats::Dict{String,FormatChoice}
+    formats::OrderedDict{String,FormatChoice}
     reader::Any
     prefill::String
     find_repairable::Vector{String}
     find_unrepaired::Vector{String}
     extensions::OrderedDict{String,ResolvedExtension}
-    turn_input_formats::Dict{String,Format}
+    turn_input_formats::OrderedDict{String,Format}
     rule_owner::Vector{Resolved}
     slots::OrderedDict{String,Tuple{String,Int}}
     calls_field::Union{Nothing,String}
@@ -44,9 +44,9 @@ mutable struct Plan
     replay_types::Set{String}
 end
 
-Plan(a, s, c, r) = Plan(a, s, c, r, Field[], Field[], Resolved[], Tuple{String,JObj}[], Tuple{String,String}[], Dict{String,Format}(),
-    JObj(), JObj(), Dict{String,FormatChoice}(), nothing, "", String[], String[], OrderedDict{String,ResolvedExtension}(),
-    Dict{String,Format}(), Resolved[], OrderedDict{String,Tuple{String,Int}}(), nothing, nothing, OrderedDict{String,JObj}(), Set{String}())
+Plan(a, s, c, r) = Plan(a, s, c, r, Field[], Field[], Resolved[], Tuple{String,JObj}[], Tuple{String,String}[], OrderedDict{String,Format}(),
+    JObj(), JObj(), OrderedDict{String,FormatChoice}(), nothing, "", String[], String[], OrderedDict{String,ResolvedExtension}(),
+    OrderedDict{String,Format}(), Resolved[], OrderedDict{String,Tuple{String,Int}}(), nothing, nothing, OrderedDict{String,JObj}(), Set{String}())
 
 "An lm15 request minus its model (§3): `system`, `messages`, request settings."
 struct RenderResult
@@ -99,7 +99,7 @@ struct Env
     plan::Plan
     values::JObj
     partial::Bool
-    texts::Dict{String,Vector{Tuple{String,String,String}}}
+    texts::OrderedDict{String,Vector{Tuple{String,String,String}}}
     filled::Set{String}
 end
 
@@ -263,7 +263,7 @@ end
 function _slot_values(p::Plan, turns)
     out = OrderedDict{String,Vector{Turn}}()
     turns === nothing && return out
-    by_slot = isarr(turns) ? Dict("turns" => turns) : turns
+    by_slot = isarr(turns) ? OrderedDict("turns" => turns) : turns
     isobj(by_slot) || refuse("turn-invalid", "turns is {slot: [turn]} or a list for the slot 'turns'")
     for (name, ts) in by_slot
         name = String(name)
@@ -280,7 +280,7 @@ function _render(p::Plan, current::Turn, slot_values; stop_at=nothing)
     !isempty(current.steps) && isempty(p.slots) &&
         refuse("turns-unplaced", "the current turn has steps, but the template places no turn slot to write them; add turns()")
     ctx = WriteContext(0)
-    texts = Dict{String,Vector{Tuple{String,String,String}}}()
+    texts = OrderedDict{String,Vector{Tuple{String,String,String}}}()
     for (name, (form, _)) in p.slots
         form == "text" || continue
         msgs = _slot_messages(p, name, current, slot_values, WriteContext(0))
@@ -349,7 +349,7 @@ function _render(p::Plan, current::Turn, slot_values; stop_at=nothing)
     RenderResult(Any[m for m in messages if m["role"] != "system"], settings, system, p, current)
 end
 
-function _render_message(p::Plan, nodes, values; partial=false, texts=Dict{String,Vector{Tuple{String,String,String}}}(), filled=Set{String}())
+function _render_message(p::Plan, nodes, values; partial=false, texts=OrderedDict{String,Vector{Tuple{String,String,String}}}(), filled=Set{String}())
     out = Any[]
     buf = IOBuffer()
     render_nodes(nodes, Env(p, values, partial, texts, filled), out, buf)
@@ -392,7 +392,7 @@ end
 
 function _write_steps(p::Plan, t::Turn, ctx)
     out = Tuple{JObj,String}[]
-    ids = Dict{String,String}()
+    ids = OrderedDict{String,String}()
     for s in t.steps
         if s isa ModelStep
             m, ids = _model_message(p, s, ctx)
@@ -408,7 +408,7 @@ end
 function _model_message(p::Plan, s::ModelStep, ctx)
     if p.adapter.replay == "verbatim" && s.message !== nothing
         ctx.model_steps += 1
-        return (make_message("assistant", Any[copy(x) for x in s.message["parts"]]), Dict{String,String}())
+        return (make_message("assistant", Any[copy(x) for x in s.message["parts"]]), OrderedDict{String,String}())
     end
     if p.adapter.replay == "recorded" && s.message !== nothing
         same = try
@@ -420,7 +420,7 @@ function _model_message(p::Plan, s::ModelStep, ctx)
         end
         if same
             ctx.model_steps += 1
-            return (make_message("assistant", Any[copy(x) for x in s.message["parts"]]), Dict{String,String}())
+            return (make_message("assistant", Any[copy(x) for x in s.message["parts"]]), OrderedDict{String,String}())
         end
     end
     _write_model_step(p, s, ctx)
@@ -443,7 +443,7 @@ function _write_model_step(p::Plan, s::ModelStep, ctx)
         elseif w["by"] == "derived:line_prefixed"
             join((w["prefix"] * line for line in split(t, '\n')), "\n")
         else
-            spell_turn(w["template"], Dict("value" => t))
+            spell_turn(w["template"], OrderedDict("value" => t))
         end
         push!(get(w, "position", "after") == "before" ? before : after, piece)
     end
@@ -464,7 +464,7 @@ function _write_model_step(p::Plan, s::ModelStep, ctx)
     end
     body = isempty(spelled) ? "" : reader_join(p.reader, spelled)
     text = join([x for x in vcat(before, [body], after) if !isempty(x)], "\n")
-    ids = Dict{String,String}()
+    ids = OrderedDict{String,String}()
     calls = p.calls_field === nothing ? nothing : get(outs, p.calls_field, nothing)
     call_parts = Any[]
     if pytruthy(calls)
@@ -478,6 +478,7 @@ function _write_model_step(p::Plan, s::ModelStep, ctx)
         for x in written
             (get(x, "type", nothing) == "tool_call" && get(x, "id", nothing) isa AbstractString && get(x, "name", nothing) isa AbstractString && isobj(get(x, "input", nothing))) ||
                 refuse("turn-not-renderable", "field $(pyrepr(p.calls_field)): its format must write lm15 tool_call parts {type, id, name, input}; got $(pyrepr(x))")
+            isempty(x["id"]) && refuse("turn-invalid", "field $(pyrepr(p.calls_field)): call $(pyrepr(x["name"])) has the id '', and a call's id is non-empty text (lm15 ToolCallPart.id; a tool step answers the call by it)")
         end
         owner = p.calls_owner
         if owner !== nothing && haskey(owner.transport.spelling, "call")
@@ -515,7 +516,7 @@ function _tool_message(p::Plan, s::ToolStep, written_id)
     owner = p.calls_owner
     if owner !== nothing && haskey(owner.transport.spelling, "result")
         output = join((x["text"] for x in s.output if get(x, "type", nothing) == "text" && get(x, "text", nothing) isa AbstractString), "\n")
-        t = spell_turn(owner.transport.spelling["result"], Dict("id" => s.id, "name" => s.name, "output" => output))
+        t = spell_turn(owner.transport.spelling["result"], OrderedDict("id" => s.id, "name" => s.name, "output" => output))
         return make_message("user", vcat(Any[textpart(t)], Any[copy(x) for x in s.output if get(x, "type", nothing) != "text"]))
     end
     make_message("tool", Any[jobj("type" => "tool_result", "id" => written_id, "name" => s.name, "content" => Any[copy(x) for x in s.output])])
@@ -539,7 +540,7 @@ function call_text(p::Plan, r::Resolved, call)
             refuse("format-write-error", "spelling.input_format on purpose $(pyrepr(r.purpose)): $(sprint(showerror, err))")
         end
     end
-    spell_turn(r.transport.spelling["call"], Dict("id" => pystr(something(get(call, "id", nothing), "")),
+    spell_turn(r.transport.spelling["call"], OrderedDict("id" => pystr(something(get(call, "id", nothing), "")),
         "name" => pystr(something(get(call, "name", nothing), "")), "input" => body))
 end
 
@@ -837,7 +838,7 @@ function _derive_reader(p::Plan)
     length(loops) > 1 && refuse("not-readable", "the template has $(length(loops)) output-pattern loops; one pattern"; fix=here)
     anchors = Tuple{String,String,String}[]
     tail = ""
-    texts = Dict{String,String}()
+    texts = OrderedDict{String,String}()
     if !isempty(loops)
         length(holes) == 1 || refuse("not-readable", "an outputs loop and bare output slots cannot both form the pattern"; fix=here)
         loop = loops[1][2]
@@ -862,7 +863,7 @@ function _derive_reader(p::Plan)
             refuse("not-readable", hint; fix=merge(here, jobj("field" => name)))
         end
     end
-    seen = Dict{String,String}()
+    seen = OrderedDict{String,String}()
     for (name, prefix, _) in anchors
         key = wrstrip(prefix)
         haskey(seen, key) && refuse("not-readable", "fields $(pyrepr(seen[key])) and $(pyrepr(name)) share the anchor $(pyrepr(key)); anchors must tell fields apart";
@@ -914,7 +915,7 @@ function _tail_after(nodes, loop)
 end
 
 function _literal_segments(nodes, sig)
-    out = Dict{String,String}()
+    out = OrderedDict{String,String}()
     prev = ""
     last = nothing
     firstline(s) = occursin('\n', s) ? String(split(s, '\n'; limit=2)[1]) : s
@@ -1009,7 +1010,7 @@ function bind(adapter::Adapter, sig::Signature; capabilities=JObj(), registry::R
     p.extensions = resolve_extensions(adapter, registry)
 
     # 1. transports per purpose, in signature order
-    by_purpose = Dict{String,Field}()
+    by_purpose = OrderedDict{String,Field}()
     for f in sig.fields
         f.purpose == "plain" && continue
         haskey(by_purpose, f.purpose) && refuse("purpose-ambiguous",
@@ -1018,7 +1019,7 @@ function bind(adapter::Adapter, sig::Signature; capabilities=JObj(), registry::R
         by_purpose[f.purpose] = f
     end
     hidden = Set{String}()
-    setting_owner = Dict{String,Any}()
+    setting_owner = OrderedDict{String,Any}()
     for f in sig.fields
         f.purpose == "plain" && continue
         b = get(adapter.transports, f.purpose, nothing)

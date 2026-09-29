@@ -8,10 +8,10 @@
  *     node tools/probe.ts < cases.jsonl > observations.jsonl
  */
 
-import { createInterface } from "node:readline";
+import { onLines } from "../conform/lines.ts";
 import * as lmcc from "../src/index.ts";
 import { install as installStd } from "../src/std/index.ts";
-import { parseJson } from "../src/json.ts";
+import { isPlainObject, jsonText, memberNames, orderedObject, parseJson } from "../src/json.ts";
 import { asMessage, ModelStep, sha256, Turn } from "../src/turn.ts";
 
 type Case = Record<string, any>;
@@ -64,14 +64,14 @@ export function observe(c: Case): Record<string, unknown> {
     return out;
   }
   out["describe"] = plan.describe();
-  const slots: Record<string, Case[]> = {};
-  for (const [name, ts] of Object.entries((c["turns"] ?? {}) as Record<string, Case[]>)) slots[name] = ts.map((t) => fill(sig, t));
+  const turns = (c["turns"] ?? {}) as Record<string, Case[]>;
+  const slots: Record<string, Case[]> = orderedObject(memberNames(turns).map((name) => [name, turns[name].map((t) => fill(sig, t))]));
   out["prefix"] = attempt(() => plan.prefix({ turns: slots }));
   out["skeleton"] = plan.skeleton();
   if ("inputs" in c) {
     const current = fill(sig, { inputs: c["inputs"], steps: c["steps"] ?? [] });
     out["turn_json"] = attempt(() => Turn.fromJSON(current).toJSON());
-    out["slot_json"] = attempt(() => Object.fromEntries(Object.entries(slots).map(([k, ts]) => [k, ts.map((t) => Turn.fromJSON(t).toJSON())])));
+    out["slot_json"] = attempt(() => orderedObject(memberNames(slots).map((k) => [k, slots[k].map((t) => Turn.fromJSON(t).toJSON())])));
     out["render"] = attempt(() => {
       const rendered = plan.render(Turn.fromJSON(current), { turns: slots });
       return { request: rendered.request("m"), hash: sha256(rendered.request()) };
@@ -96,8 +96,24 @@ export function observe(c: Case): Record<string, unknown> {
   return out;
 }
 
-const rl = createInterface({ input: process.stdin, crlfDelay: Infinity });
-rl.on("line", (line) => {
+/**
+ * An observation as lmcc writes JSON: members in the value's order (the
+ * differential compares it), integers beyond 2^53 as "<n>n", and what
+ * `JSON.stringify` would drop (a function, a missing value) dropped.
+ */
+function observed(value: unknown): unknown {
+  if (typeof value === "bigint") return value.toString() + "n";
+  if (value !== null && typeof value === "object" && typeof (value as { toJSON?: unknown }).toJSON === "function") {
+    return observed((value as { toJSON: () => unknown }).toJSON());
+  }
+  if (Array.isArray(value)) return value.map((v) => (v === undefined || typeof v === "function" ? null : observed(v)));
+  if (isPlainObject(value)) {
+    return orderedObject(memberNames(value).filter((k) => value[k] !== undefined && typeof value[k] !== "function").map((k) => [k, observed(value[k])]));
+  }
+  return value;
+}
+
+onLines((line) => {
   if (!line.trim()) return;
   let answer: unknown;
   try {
@@ -105,5 +121,5 @@ rl.on("line", (line) => {
   } catch (err) {
     answer = { crash: (err as Error).stack ?? String(err) };
   }
-  process.stdout.write(JSON.stringify(answer, (_k, v) => (typeof v === "bigint" ? v.toString() + "n" : v)) + "\n");
+  process.stdout.write(jsonText(observed(answer)) + "\n");
 });

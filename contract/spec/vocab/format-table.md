@@ -36,4 +36,7 @@ writes as the `null` cell text.
 
 **Corpus.** `17-std-table-format-demo-reader.json` (render incl. escaping via
 an example turn), `18-std-table-format-parse.json` (header skip + coercion),
-`45-std-json-number-spelling.json` (number and boolean cells).
+`45-std-json-number-spelling.json` (number and boolean cells),
+`235-std-table-format-parse-member-order.json` (a row's members in column
+order, `""` and integer-like columns included),
+`236-std-table-format-render-empty-column.json` (a column `""`).

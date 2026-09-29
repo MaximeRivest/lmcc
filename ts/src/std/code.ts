@@ -10,13 +10,14 @@ import type { Format } from "../formats.ts";
 import type { Registry } from "../registry.ts";
 import { pyRepr } from "../text.ts";
 import { Transport } from "../transport.ts";
+import { copyObject, memberNames } from "../json.ts";
 
 export const VERSION = "0.1.0";
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 function options(opts: Record<string, unknown>, calls = false): [string, string] {
   const allowed = calls ? ["marker", "tool"] : ["marker"];
-  const unknown = Object.keys(opts).filter((k) => !allowed.includes(k)).sort();
+  const unknown = memberNames(opts).filter((k) => !allowed.includes(k)).sort();
   if (unknown.length) throw new Error(`unknown options: ${pyRepr(unknown)}`);
   const marker = opts["marker"] ?? "PY_END";
   const tool = opts["tool"] ?? "run_python";
@@ -44,7 +45,7 @@ export class CodeArguments implements Format {
   }
 
   code(value: unknown): string {
-    if (!isObj(value) || Object.keys(value).length !== 1 || !("code" in value) || typeof value["code"] !== "string") {
+    if (!isObj(value) || memberNames(value).length !== 1 || !("code" in value) || typeof value["code"] !== "string") {
       throw new Error("code arguments must be exactly {code: string}");
     }
     return value["code"];
@@ -102,7 +103,7 @@ export class CodeCalls implements Format {
 
   write(value: unknown, field: Field): Part[] {
     if (!Array.isArray(value)) throw new Error("calls must be a list");
-    return value.map((c) => ({ type: "tool_call", ...this.native(c, field, true) }) as Part);
+    return value.map((c) => copyObject({ type: "tool_call" }, this.native(c, field, true)) as Part);
   }
 
   read(capture: Capture, field: Field): unknown {

@@ -23,8 +23,8 @@ from dataclasses import dataclass
 
 from .errors import refuse
 
-_NAME = re.compile(r"^[a-z][a-z0-9_]*/[a-z][a-z0-9_-]*$")
-_SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
+_NAME = re.compile(r"[a-z][a-z0-9_]*/[a-z][a-z0-9_-]*")     # matched whole (fullmatch)
+_SEMVER = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+")            # ASCII digits: \d is Unicode
 
 
 def family_of(name: str) -> str:
@@ -160,11 +160,11 @@ def validate_declaration(extensions: object) -> dict[str, str]:
                fix={"action": "edit-entry", "path": "extensions"})
     seen: dict[str, str] = {}
     for name, version in extensions.items():
-        if not isinstance(name, str) or not _NAME.match(name):
+        if not isinstance(name, str) or not _NAME.fullmatch(name):
             refuse("entry-malformed",
                    f"extensions: {name!r} is not an extension name ('<family>/<name>', lowercase)",
                    fix={"action": "edit-entry", "path": "extensions"})
-        if not isinstance(version, str) or not _SEMVER.match(version):
+        if not isinstance(version, str) or not _SEMVER.fullmatch(version):
             refuse("entry-malformed",
                    f"extensions: {name!r}: version {version!r} is not MAJOR.MINOR.PATCH",
                    fix={"action": "edit-entry", "path": "extensions"})

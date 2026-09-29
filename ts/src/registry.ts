@@ -19,9 +19,9 @@ import { Reader } from "./reader.ts";
 import { pyRepr, pyStr } from "./text.ts";
 import { Transport } from "./transport.ts";
 import { describeBinding, nativeExtensions, type ExtensionBinding } from "./extensions.ts";
-import type { JsonObject } from "./json.ts";
 import { brand, brandedByAnyVersion } from "./brand.ts";
 import { KERNEL_VERSION } from "./version.ts";
+import { copyObject, orderedObject, type Json, type JsonObject } from "./json.ts";
 
 export interface Named<F> {
   readonly factory: F;
@@ -107,7 +107,7 @@ export class Registry {
   format(type: string, spec: (FormatSpec | { use: string; options?: Record<string, unknown> }) & { shape?: JsonObject }): Format {
     const shape = spec.shape ?? {};
     if ("use" in spec && typeof spec.use === "string") {
-      const binding = { use: spec.use, options: { ...(spec.options ?? {}) } };
+      const binding = { use: spec.use, options: copyObject(spec.options) };
       this.typeBindings.push({ type, binding, shape });
       return this.namedFormat(binding.use, binding.options);
     }
@@ -121,7 +121,7 @@ export class Registry {
   /** The shape a bound type name lowers to, or `null`. */
   shapeOf(type: string): JsonObject | null {
     const hit = this.typeBindings.find((b) => b.type === type);
-    return hit ? { ...hit.shape } : null;
+    return hit ? copyObject<Json>(hit.shape) : null;
   }
 
   typeBinding(type: string | null): Format | null {
@@ -199,7 +199,7 @@ export class Registry {
 
   describe(): Record<string, unknown> {
     const versions = (m: Map<string, Named<unknown>>) =>
-      Object.fromEntries([...m.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([n, e]) => [n, e.version]));
+      orderedObject([...m.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([n, e]) => [n, e.version]));
     return {
       formats: versions(this.formats),
       type_bindings: this.typeBindings.map((b) => ({
@@ -208,11 +208,14 @@ export class Registry {
         shape: b.shape,
       })),
       transports: versions(this.transports),
-      readers: { derived: "kernel", ...versions(this.readers) },
+      readers: copyObject({ derived: "kernel" }, versions(this.readers)),
       allow_udf: this.allowUdf,
-      extensions: Object.fromEntries([...this.extensions.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([n, b]) => [n, describeBinding(b)])),
+      extensions: orderedObject([...this.extensions.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([n, b]) => [n, describeBinding(b)])),
     };
   }
 }
 
 brand(Registry, "Registry");
+
+/** The registry `bind`, `load` and `dump` use when you pass none. */
+export const defaultRegistry = new Registry();

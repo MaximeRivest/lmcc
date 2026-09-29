@@ -9,13 +9,17 @@
 import { refuse } from "./errors.ts";
 import { isObj } from "./core.ts";
 import { isFormat, type Format } from "./formats.ts";
+import { copyObject, memberNames, setMember } from "./json.ts";
 import { compileTemplate, RESERVED_SLOTS, turnSlots as nodeTurnSlots, type Node } from "./template.ts";
-import { pyRepr } from "./text.ts";
+import { PURPOSE_RE, pyRepr } from "./text.ts";
 import { Transport } from "./transport.ts";
 import { defaultDeclaration, validateDeclaration } from "./extensions.ts";
-import type { Registry } from "./registry.ts";
+import { defaultRegistry, type Registry } from "./registry.ts";
 import type { Signature } from "./signature.ts";
-import type { Plan } from "./plan.ts";
+// plan.ts and serde.ts import this module back. The cycle is safe: each side
+// uses the other only inside function bodies, never while modules evaluate.
+import { bind, type Plan } from "./plan.ts";
+import { dump } from "./serde.ts";
 import { brand } from "./brand.ts";
 
 const SLOT_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -52,7 +56,7 @@ export type Reference = { use: string; options: Record<string, unknown>; describ
 export type FormatBinding = Reference | { describe: string } | Record<string, unknown> | Format;
 
 export function isDescription(binding: unknown): binding is { describe: string } {
-  return isObj(binding) && !isFormat(binding) && Object.keys(binding).length === 1 && "describe" in binding;
+  return isObj(binding) && !isFormat(binding) && memberNames(binding).length === 1 && "describe" in binding;
 }
 
 export function isTransport(x: unknown): x is Transport {
@@ -78,8 +82,8 @@ export class Adapter {
     template: Record<string, unknown>[]; reader: Record<string, unknown>; transports: Record<string, Transport | Reference>;
     formats: Record<string, FormatBinding>; name: string; extensions: Record<string, string>; replay: Replay; strict: boolean;
   }) {
-    this.template = Object.freeze(init.template.map((m) => ({ ...m })));
-    this.reader = { ...init.reader };
+    this.template = Object.freeze(init.template.map((m) => copyObject(m)));
+    this.reader = copyObject(init.reader);
     this.transports = init.transports;
     this.formats = init.formats;
     this.name = init.name;
@@ -89,11 +93,11 @@ export class Adapter {
   }
 
   bind<I, O>(signature: Signature<I, O>, capabilities: Record<string, unknown> = {}, opts: { registry?: Registry } = {}): Plan<I, O> {
-    return bindHook.bind(this, signature, capabilities, opts.registry ?? bindHook.defaultRegistry()) as Plan<I, O>;
+    return bind(this, signature, capabilities, opts.registry ?? defaultRegistry);
   }
 
   dump(opts: { registry?: Registry } = {}): Record<string, unknown> {
-    return bindHook.dump(this, opts.registry ?? bindHook.defaultRegistry());
+    return dump(this, opts.registry ?? defaultRegistry);
   }
 
   /** The template's last message when it is an assistant message: the reply's prefill (§3). */
@@ -143,23 +147,6 @@ export class Adapter {
   }
 }
 
-/** Filled by plan.ts and serde.ts (avoids an import cycle). */
-export const bindHook: {
-  bind: (a: Adapter, s: Signature<unknown, unknown>, c: Record<string, unknown>, r: Registry) => unknown;
-  dump: (a: Adapter, r: Registry) => Record<string, unknown>;
-  defaultRegistry: () => Registry;
-} = {
-  bind: () => {
-    throw new Error("lmcc: plan module not loaded");
-  },
-  dump: () => {
-    throw new Error("lmcc: serde module not loaded");
-  },
-  defaultRegistry: () => {
-    throw new Error("lmcc: registry module not loaded");
-  },
-};
-
 function description(value: Record<string, unknown>, where: string): { describe?: string } {
   if (!("describe" in value)) return {};
   const text = value["describe"];
@@ -169,23 +156,37 @@ function description(value: Record<string, unknown>, where: string): { describe?
   return { describe: text };
 }
 
+/**
+ * A transport's purpose, checked as it is loaded (§2): a name or dotted
+ * names (`tools`, `tools.calls`), the purposes a field can bear; `""` or
+ * `a-b` would key a transport no field reaches. Returns its path.
+ */
+export function checkPurpose(purpose: string): string {
+  const where = `transports[${pyRepr(purpose)}]`;
+  if (!PURPOSE_RE.test(purpose)) {
+    refuse("entry-malformed", `${where}: a purpose is a name or dotted names (tools, tools.calls), as a field declares it`,
+      { fix: { action: "edit-entry", path: where } });
+  }
+  return where;
+}
+
 /** One `formats` entry, normalized (§5). */
 export function formatEntry(key: string, value: unknown): FormatBinding {
   const where = `formats[${pyRepr(key)}]`;
   if (typeof value === "string") return { use: value, options: {} };
   if (isFormat(value)) return value;
   if (isObj(value) && "use" in value) {
-    const extra = Object.keys(value).filter((k) => !["use", "options", "describe"].includes(k)).sort();
+    const extra = memberNames(value).filter((k) => !["use", "options", "describe"].includes(k)).sort();
     if (extra.length || !isObj(value["options"] ?? {})) {
       refuse("entry-malformed", `${where}: a reference is {use, options?, describe?}` + (extra.length ? `, not ${pyRepr(extra)}` : ""),
         { fix: { action: "edit-entry", path: where } });
     }
-    return { use: value["use"] as string, options: { ...((value["options"] as Record<string, unknown>) ?? {}) }, ...description(value, where) };
+    return copyObject({ use: value["use"] as string, options: copyObject(value["options"] as object | undefined) }, description(value, where)) as Reference;
   }
-  if (isObj(value) && "language" in value) return { ...value };
+  if (isObj(value) && "language" in value) return copyObject(value);
   if (isObj(value) && "describe" in value) {
-    if (Object.keys(value).length !== 1) {
-      refuse("entry-malformed", `${where}: a description is {describe} alone, not ${pyRepr(Object.keys(value).filter((k) => k !== "describe").sort())}`,
+    if (memberNames(value).length !== 1) {
+      refuse("entry-malformed", `${where}: a description is {describe} alone, not ${pyRepr(memberNames(value).filter((k) => k !== "describe").sort())}`,
         { fix: { action: "edit-entry", path: where } });
     }
     const described = description(value, where);
@@ -230,7 +231,7 @@ export function adapter(opts: AdapterOptions = {}): Adapter {
     }
     if ("directive" in m) {
       const slot = m["slot"] ?? "turns";
-      if (m["directive"] !== "turns" || Object.keys(m).some((k) => k !== "directive" && k !== "slot") || typeof slot !== "string" || !SLOT_NAME.test(slot)) {
+      if (m["directive"] !== "turns" || memberNames(m).some((k) => k !== "directive" && k !== "slot") || typeof slot !== "string" || !SLOT_NAME.test(slot)) {
         refuse("entry-malformed", `${at}: a directive is {"directive": "turns", "slot"?: name} (demos and history are turn slots since kernel 0.7)`,
           { fix: { action: "edit-entry", path: at } });
       }
@@ -254,27 +255,27 @@ export function adapter(opts: AdapterOptions = {}): Adapter {
   if (!isObj(reader)) refuse("entry-malformed", "entry.reader must be an object", { fix: { action: "edit-entry", path: "reader" } });
   const kind = reader["kind"];
   if (typeof kind !== "string" || !kind) refuse("unknown-reader", "reader.kind must name a reader", { fix: { action: "edit-entry", path: "reader" } });
-  if (kind === "derived" && Object.keys(reader).some((k) => k !== "kind")) {
-    refuse("entry-malformed", `reader: the derived reader takes only 'kind', not ${pyRepr(Object.keys(reader).filter((k) => k !== "kind").sort())}`,
+  if (kind === "derived" && memberNames(reader).some((k) => k !== "kind")) {
+    refuse("entry-malformed", `reader: the derived reader takes only 'kind', not ${pyRepr(memberNames(reader).filter((k) => k !== "kind").sort())}`,
       { fix: { action: "edit-entry", path: "reader" } });
   }
   const strict = opts.strict ?? false;
   if (typeof strict !== "boolean") refuse("entry-malformed", `strict must be true or false, not ${pyRepr(strict)}`, { fix: { action: "edit-entry", path: "strict" } });
   const sBindings: Record<string, Transport | Reference> = {};
-  for (const purpose of Object.keys(opts.transports ?? {})) {
+  for (const purpose of memberNames(opts.transports ?? {})) {
     const value = opts.transports![purpose];
-    const where = `transports[${pyRepr(purpose)}]`;
-    if (typeof value === "string") sBindings[purpose] = { use: value, options: {} };
+    const where = checkPurpose(purpose);
+    if (typeof value === "string") setMember(sBindings, purpose, { use: value, options: {} });
     else if (value instanceof Transport) {
       value.validate(where);
-      sBindings[purpose] = value;
+      setMember(sBindings, purpose, value);
     } else if (isObj(value) && "use" in value) {
-      sBindings[purpose] = { use: value["use"] as string, options: { ...((value["options"] as Record<string, unknown>) ?? {}) } };
-    } else if (isObj(value)) sBindings[purpose] = Transport.fromDict(value, where);
+      setMember(sBindings, purpose, { use: value["use"] as string, options: copyObject(value["options"] as object | undefined) });
+    } else if (isObj(value)) setMember(sBindings, purpose, Transport.fromDict(value, where));
     else refuse("entry-malformed", `${where}: expected a name, Transport, use(...), or object`, { fix: { action: "edit-entry", path: where } });
   }
   const fBindings: Record<string, FormatBinding> = {};
-  for (const key of Object.keys(opts.formats ?? {})) fBindings[key] = formatEntry(key, opts.formats![key]);
+  for (const key of memberNames(opts.formats ?? {})) setMember(fBindings, key, formatEntry(key, opts.formats![key]));
   let declared = validateDeclaration(opts.extensions);
   if (opts.declareDefaults ?? true) declared = defaultDeclaration(sBindings, declared, isTransport);
   const adp = new Adapter({

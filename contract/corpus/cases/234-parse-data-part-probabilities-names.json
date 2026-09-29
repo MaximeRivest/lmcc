@@ -1,0 +1,88 @@
+{
+ "name": "parse-data-part-probabilities-names",
+ "kind": "parse",
+ "ordered": true,
+ "entry": {
+  "name": "answer_judged_v1",
+  "versions": {
+   "kernel": "0.8.4",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\nAnswer: {answer}"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Answer.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "response": {
+  "role": "assistant",
+  "parts": [
+   {
+    "type": "text",
+    "text": "Answer: "
+   },
+   {
+    "type": "data",
+    "value": 1,
+    "probabilities": {
+     "answer": {
+      "b": 0.2,
+      "10": 0.7,
+      "": 0.1
+     },
+     "": {
+      "x": 1
+     }
+    },
+    "method": "provider_classification"
+   }
+  ]
+ },
+ "expect": {
+  "values": {
+   "answer": "1"
+  },
+  "repairs": [],
+  "probabilities": {
+   "answer": {
+    "b": 0.2,
+    "10": 0.7,
+    "": 0.1
+   },
+   "": {
+    "x": 1
+   }
+  },
+  "measured_by": {
+   "answer": "provider_classification",
+   "": "provider_classification"
+  }
+ }
+}

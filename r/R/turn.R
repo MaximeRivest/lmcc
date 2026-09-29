@@ -37,7 +37,7 @@ to_json <- function(value, where = "turn") {
   if (is.factor(value) && length(value) == 1L) return(as.character(value))
   if (is_obj(value)) {
     out <- jobj()
-    for (k in names(value)) out <- set_key(out, k, to_json(value[[k]], paste0(where, ".", k)))
+    for (m in members_of(value)) out <- set_key(out, m[[1]], to_json(m[[2]], paste0(where, ".", m[[1]])))
     return(out)
   }
   if (is.list(value)) return(lapply(seq_along(value), function(i) to_json(value[[i]], sprintf("%s[%d]", where, i - 1L))))

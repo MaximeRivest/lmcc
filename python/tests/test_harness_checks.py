@@ -69,3 +69,26 @@ def test_a_stream_that_drops_its_deltas_fails(monkeypatch):
     bad = runner._check_stream_success(Silent(plan), case["response"], reading.values,
                                        reading.repairs, raw=raw)
     assert not bad["ok"] and "deltas against batch raw text" in bad["detail"]
+
+
+def _differential(monkeypatch):
+    monkeypatch.syspath_prepend(str(HARNESS))
+    import differential
+    return differential
+
+
+def test_the_differential_refuses_a_member_written_twice(monkeypatch):
+    """A probe that writes one member twice fails, at any depth; plain
+    json.loads would keep the last and compare equal (review S1, D-58)."""
+    d = _differential(monkeypatch)
+    ok = d.read_observation('{"a": {"description": "x", "type": "string"}}')
+    assert ok == {"a": {"description": "x", "type": "string"}}
+    twice = d.read_observation('{"a": {"description": "x", "type": "string", "description": "y"}}')
+    assert "crash" in twice and "'description' twice" in twice["crash"]
+    assert "crash" in d.read_observation('[{"k": 1, "k": 1}]'[1:-1])
+
+
+def test_the_differential_splits_probe_lines_at_newline_only(monkeypatch):
+    d = _differential(monkeypatch)
+    out = '{"k": "a\u2028b\u2029c\x85"}\n{"k": 2}\n'
+    assert [d.read_observation(x) for x in d.probe_lines(out)] == [{"k": "a\u2028b\u2029c\x85"}, {"k": 2}]

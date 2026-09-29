@@ -10,11 +10,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field as dc_field
 
+from .core import is_purpose
 from .errors import refuse
 from .transport import Transport
 from .template import RESERVED_SLOTS, compile_template, turn_slots
 
-_SLOT_NAME = __import__("re").compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_SLOT_NAME = __import__("re").compile(r"[A-Za-z_][A-Za-z0-9_]*")   # matched whole
 REPLAY = ("recorded", "values", "verbatim")
 
 
@@ -171,6 +172,18 @@ def is_description(binding: object) -> bool:
     return isinstance(binding, dict) and set(binding) == {"describe"}
 
 
+def check_purpose(purpose: object) -> str:
+    """A transport's key, checked as it is loaded (kernel §2): a purpose a
+    field can bear, a name or dotted names (`tools`, `tools.calls`); `""` or
+    `a-b` would key a transport no field reaches. Returns its path."""
+    where = f"transports[{purpose!r}]"
+    if not is_purpose(purpose):
+        refuse("entry-malformed", f"{where}: a purpose is a name or dotted names (tools, tools.calls), "
+                                  f"as a field declares it",
+               fix={"action": "edit-entry", "path": where})
+    return where
+
+
 def adapter(*, messages: list[dict] | None = None, template: list[dict] | dict | None = None,
             reader: dict | None = None, transports: dict | None = None,
             formats: dict | None = None, name: str = "adapter",
@@ -203,7 +216,7 @@ def adapter(*, messages: list[dict] | None = None, template: list[dict] | dict |
         if "directive" in m:
             slot = m.get("slot", "turns")
             if (m["directive"] != "turns" or set(m) - {"directive", "slot"}
-                    or not isinstance(slot, str) or not _SLOT_NAME.match(slot)):
+                    or not isinstance(slot, str) or not _SLOT_NAME.fullmatch(slot)):
                 refuse("entry-malformed",
                        f"template[{i}]: a directive is {{\"directive\": \"turns\", \"slot\"?: "
                        f"name}} (demos and history are turn slots since kernel 0.7)",
@@ -237,7 +250,7 @@ def adapter(*, messages: list[dict] | None = None, template: list[dict] | dict |
                fix={"action": "edit-entry", "path": "strict"})
     s_bindings: dict[str, object] = {}
     for purpose, value in (transports or {}).items():
-        where = f"transports[{purpose!r}]"
+        where = check_purpose(purpose)
         if isinstance(value, str):
             s_bindings[purpose] = {"use": value, "options": {}}
         elif isinstance(value, Transport):

@@ -1,0 +1,141 @@
+{
+ "name": "std-render-json-member-order",
+ "kind": "render",
+ "ordered": true,
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "json_order_v1",
+  "versions": {
+   "kernel": "0.8.4",
+   "vocab": {
+    "format/json": "0.1.0"
+   }
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>{% endfor %}"
+   },
+   {
+    "directive": "turns"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  },
+  "formats": {
+   "*": {
+    "use": "json"
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Answer.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "object"
+    }
+   },
+   {
+    "name": "o",
+    "direction": "output",
+    "shape": {
+     "type": "object",
+     "properties": {
+      "b": {
+       "type": "string"
+      },
+      "10": {
+       "type": "integer"
+      },
+      "2": {
+       "type": "boolean"
+      },
+      "a": {
+       "type": "null"
+      }
+     }
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "q": {
+   "z": 0,
+   "10": {
+    "b": 1,
+    "1": 2
+   },
+   "2": [
+    {
+     "x": null,
+     "0": "zero"
+    }
+   ],
+   "a": "last"
+  }
+ },
+ "turns": {
+  "turns": [
+   {
+    "inputs": {
+     "q": {
+      "b": "B",
+      "1": "one"
+     }
+    },
+    "outputs": {
+     "o": {
+      "b": "x",
+      "10": 1,
+      "2": true,
+      "a": null
+     }
+    }
+   }
+  ]
+ },
+ "expect": {
+  "request": {
+   "system": "Answer.\n<o>\nJSON matching this schema: {\"type\": \"object\", \"properties\": {\"b\": {\"type\": \"string\"}, \"10\": {\"type\": \"integer\"}, \"2\": {\"type\": \"boolean\"}, \"a\": {\"type\": \"null\"}}}\n</o>",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "{\n  \"b\": \"B\",\n  \"1\": \"one\"\n}"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "<o>\n{\n  \"b\": \"x\",\n  \"10\": 1,\n  \"2\": true,\n  \"a\": null\n}\n</o>"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "{\n  \"z\": 0,\n  \"10\": {\n    \"b\": 1,\n    \"1\": 2\n  },\n  \"2\": [\n    {\n      \"x\": null,\n      \"0\": \"zero\"\n    }\n  ],\n  \"a\": \"last\"\n}"
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

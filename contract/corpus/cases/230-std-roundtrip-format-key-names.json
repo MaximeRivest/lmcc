@@ -1,0 +1,80 @@
+{
+ "name": "std-roundtrip-format-key-names",
+ "kind": "roundtrip",
+ "ordered": true,
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "format_key_names_v1",
+  "versions": {
+   "kernel": "0.8.4",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\nA: {a}"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  },
+  "formats": {
+   "": {
+    "use": "json"
+   },
+   "10": {
+    "use": "json",
+    "options": {
+     "indent": null
+    }
+   },
+   "b": {
+    "describe": "B"
+   }
+  }
+ },
+ "expect": {
+  "entry": {
+   "name": "format_key_names_v1",
+   "versions": {
+    "kernel": "0.8.4",
+    "vocab": {
+     "format/json": "0.1.0"
+    }
+   },
+   "template": [
+    {
+     "role": "system",
+     "text": "{instruction}\nA: {a}"
+    },
+    {
+     "role": "user",
+     "text": "{q}"
+    }
+   ],
+   "reader": {
+    "kind": "derived"
+   },
+   "formats": {
+    "": {
+     "use": "json"
+    },
+    "10": {
+     "use": "json",
+     "options": {
+      "indent": null
+     }
+    },
+    "b": {
+     "describe": "B"
+    }
+   }
+  }
+ }
+}

@@ -16,8 +16,8 @@ from .errors import refuse
 
 _KEYS = ("when", "requires", "in_template", "tell", "request_settings", "put", "written_as", "find", "spelling")
 _PREDICATE_KEYS = ("capability", "not", "all", "any")
-_TO = re.compile(r"^@purpose(\.[A-Za-z_][A-Za-z0-9_]*)?$")
-_PUT = re.compile(r"^(request\.[a-z_][a-z0-9_.]*|message:(system|developer|user|assistant))$")
+_TO = re.compile(r"@purpose(\.[A-Za-z_][A-Za-z0-9_]*)?")          # matched whole (fullmatch)
+_PUT = re.compile(r"request\.[a-z_][a-z0-9_.]*|message:(system|developer|user|assistant)")
 
 # The request settings are a partial lm15 request (kernel §3): the first path
 # segment is `config` or `tools`; `config` keys are the pinned lm15 Config
@@ -52,7 +52,7 @@ def setting_leaves(request_settings: dict, prefix: str = "") -> list[tuple[str, 
         else:
             out.append((path, value))
     return out
-_FROM = re.compile(r"^(text|part:[a-z_]+)$")
+_FROM = re.compile(r"text|part:[a-z_]+")
 # outside the portable RE2 dialect (kernel §7a)
 
 
@@ -162,7 +162,7 @@ class Transport:
         for i, r in enumerate(self.find):
             validate_find_rule(r, where=f"{where}.find[{i}]")
         for target, place in self.put.items():
-            if not _TO.match(target) or not isinstance(place, str) or not _PUT.match(place):
+            if not _TO.fullmatch(target) or not isinstance(place, str) or not _PUT.fullmatch(place):
                 refuse("entry-malformed",
                        f"{where}.put: {target!r}: {place!r} — a put is "
                        f"'@purpose' or '@purpose.<sub>' → 'request.<key>' or 'message:<role>'",
@@ -318,10 +318,10 @@ def validate_find_rule(r: dict, *, where: str) -> None:
         refuse("entry-malformed", f"{where}: a rule is an object",
                fix={"action": "edit-entry", "path": where})
     src, to = r.get("from"), r.get("to")
-    if not isinstance(src, str) or not _FROM.match(src):
+    if not isinstance(src, str) or not _FROM.fullmatch(src):
         refuse("entry-malformed", f"{where}: 'from' is 'text' or 'part:<part kind>'",
                fix={"action": "edit-entry", "path": where})
-    if not isinstance(to, str) or not _TO.match(to):
+    if not isinstance(to, str) or not _TO.fullmatch(to):
         refuse("entry-malformed", f"{where}: 'to' is '@purpose' or '@purpose.<sub>'",
                fix={"action": "edit-entry", "path": where})
     unknown = set(r) - {"from", "to", "remove", "between", "pattern", "line_prefixed",

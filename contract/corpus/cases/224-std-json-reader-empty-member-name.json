@@ -1,0 +1,166 @@
+{
+ "name": "std-json-reader-empty-member-name",
+ "kind": "render",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "json_reader_empty_name_v1",
+  "versions": {
+   "kernel": "0.8.4",
+   "vocab": {
+    "reader/json_object": "0.2.0",
+    "format/json": "0.1.0"
+   }
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}"
+   },
+   {
+    "directive": "turns"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "reader": {
+   "kind": "json_object"
+  },
+  "formats": {
+   "*": {
+    "use": "json"
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Answer.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "o",
+    "direction": "output",
+    "shape": {
+     "type": "object",
+     "properties": {
+      "": {
+       "type": "string"
+      },
+      "inner": {
+       "type": "object",
+       "properties": {
+        "": {
+         "type": "integer"
+        }
+       }
+      }
+     }
+    }
+   }
+  ]
+ },
+ "capabilities": {
+  "native_structured_output": true
+ },
+ "inputs": {
+  "q": "x"
+ },
+ "turns": {
+  "turns": [
+   {
+    "inputs": {
+     "q": "y"
+    },
+    "outputs": {
+     "o": {
+      "": "a",
+      "inner": {
+       "": 1
+      }
+     }
+    }
+   }
+  ]
+ },
+ "expect": {
+  "request": {
+   "system": "Answer.",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "y"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "{\n  \"o\": {\n    \"\": \"a\",\n    \"inner\": {\n      \"\": 1\n    }\n  }\n}"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "x"
+      }
+     ]
+    }
+   ],
+   "config": {
+    "response_format": {
+     "type": "json_schema",
+     "schema": {
+      "type": "object",
+      "properties": {
+       "o": {
+        "type": "object",
+        "properties": {
+         "": {
+          "type": "string"
+         },
+         "inner": {
+          "type": "object",
+          "properties": {
+           "": {
+            "type": "integer"
+           }
+          },
+          "required": [
+           ""
+          ],
+          "additionalProperties": false
+         }
+        },
+        "required": [
+         "",
+         "inner"
+        ],
+        "additionalProperties": false
+       }
+      },
+      "required": [
+       "o"
+      ],
+      "additionalProperties": false
+     }
+    }
+   }
+  }
+ }
+}

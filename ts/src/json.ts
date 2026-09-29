@@ -34,13 +34,127 @@ export interface ParseOptions {
 
 const MAX_SAFE = BigInt(Number.MAX_SAFE_INTEGER);
 
-/** Set a member without letting `__proto__` reach the prototype. */
+/*
+ * Records keyed by names (field names, JSON members, artifact keys) are
+ * ordinary objects, read and written as data: any name is an own member or
+ * absent, never one `Object.prototype` has (`toString`, `constructor`,
+ * `__proto__`, ...), and their members keep the order the value holds
+ * (kernel §1). Four helpers are the only way lmcc touches such a record's
+ * names, and `tests/names.test.ts` keeps it so (no `Object.keys`, object
+ * spread or `for ... in` anywhere else in `src/`):
+ *
+ *   memberNames(obj)            its names, in the value's order (read)
+ *   setMember(obj, name, value) set one; a new name comes last (write)
+ *   orderedObject(entries)      a record built from (name, value) pairs
+ *   copyObject(obj, ...more)    a shallow copy, then `more`'s members set
+ *
+ * plus `hasOwn`/`ownValue` for a single name.
+ *
+ * Member order. A JavaScript object enumerates integer-like names ("0",
+ * "10") first, in numeric order, however it was built; every other host
+ * keeps the order a value holds. So an object whose order JavaScript would
+ * change carries its own: the list of its names under a registered symbol,
+ * not enumerable, so `Object.keys`, spread, `JSON.stringify`,
+ * `structuredClone` and deep equality neither see nor copy it. `setMember`
+ * keeps the list as it adds names; nothing is recorded while JavaScript's
+ * order is the value's (no integer-like name yet).
+ */
+
+const ORDER = Symbol.for("lmcc.memberOrder");
+
+type Recorded = { [ORDER]?: string[] };
+
+/** An array index name ("0", "10", not "01" or "4294967295"): JavaScript enumerates these first. */
+function isIndexName(key: string): boolean {
+  return /^(0|[1-9][0-9]{0,9})$/.test(key) && Number(key) < 4294967295;
+}
+
+function record(obj: object, names: string[]): void {
+  Object.defineProperty(obj, ORDER, { value: names, configurable: true, enumerable: false, writable: false });
+}
+
+/**
+ * Set a member as data: `__proto__` is an own member like any other, never
+ * the prototype; a name the object does not hold yet comes after every
+ * member it holds (as a Python dict or a Julia OrderedDict adds it), even an
+ * integer-like name JavaScript would move first. Replacing a member keeps
+ * its place. A member added by plain assignment instead (`obj[k] = v`) is
+ * listed after the recorded ones, in JavaScript's order.
+ */
 export function setMember(obj: Record<string, unknown>, key: string, value: unknown): void {
+  const added = !Object.prototype.hasOwnProperty.call(obj, key);
+  const recorded = Object.prototype.hasOwnProperty.call(obj, ORDER) ? (obj as Recorded)[ORDER]! : null;
+  const before = added && !recorded && isIndexName(key) ? Object.keys(obj) : null;
   if (key === "__proto__") {
     Object.defineProperty(obj, key, { value, writable: true, enumerable: true, configurable: true });
   } else {
     obj[key] = value;
   }
+  if (!added) return;
+  if (recorded) recorded.push(key);
+  else if (before && before.length) record(obj, [...before, key]);
+}
+
+/** Whether `key` is `obj`'s own member (an inherited `toString` is not). */
+export function hasOwn(obj: object, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(obj, key);
+}
+
+/** `obj[key]` when `key` is `obj`'s own member, else `undefined`. */
+export function ownValue(obj: object, key: string): unknown {
+  return Object.prototype.hasOwnProperty.call(obj, key) ? (obj as Record<string, unknown>)[key] : undefined;
+}
+
+/**
+ * An object's own enumerable member names in the value's order: the order
+ * lmcc read, built or added them in (a name removed and set again comes
+ * last); names added by plain assignment follow, in JavaScript's order.
+ * Without a record this is `Object.keys`.
+ */
+export function memberNames(obj: object): string[] {
+  const own = Object.keys(obj);
+  if (!Object.prototype.hasOwnProperty.call(obj, ORDER)) return own;
+  const recorded = (obj as Recorded)[ORDER]!;
+  const present = new Set(own);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (let i = recorded.length - 1; i >= 0; i--) {
+    const k = recorded[i];
+    if (present.has(k) && !seen.has(k)) {
+      seen.add(k);
+      out.push(k);
+    }
+  }
+  out.reverse();
+  if (out.length === own.length) return out;
+  for (const k of own) if (!seen.has(k)) out.push(k);
+  return out;
+}
+
+/**
+ * A plain object whose members are in the order given, even integer-like
+ * names JavaScript would move first: `orderedObject([["b", 1], ["10", 2]])`
+ * is written `{"b": 1, "10": 2}` by every lmcc writer. A name given twice
+ * keeps its first place and its last value (as a JSON parse does).
+ */
+export function orderedObject<V = unknown>(entries: Iterable<readonly [string, V]>): Record<string, V> {
+  const out: Record<string, V> = {};
+  for (const [k, v] of entries) setMember(out, k, v);
+  return out;
+}
+
+/**
+ * A shallow copy of `obj` (its own members, in its order), then each of
+ * `more`'s members set in turn: `copyObject(a, b)` is `{...a, ...b}` with
+ * the order kept and `__proto__` a member. Values are shared, not copied.
+ */
+export function copyObject<V = unknown>(obj: object | null | undefined, ...more: (object | null | undefined)[]): Record<string, V> {
+  const out: Record<string, V> = {};
+  for (const src of [obj, ...more]) {
+    if (src === null || src === undefined) continue;
+    for (const k of memberNames(src)) setMember(out, k, (src as Record<string, V>)[k]);
+  }
+  return out;
 }
 
 class Parser {
@@ -203,7 +317,7 @@ class Parser {
       this.i++;
       this.ws();
       const value = this.value();
-      if (Object.prototype.hasOwnProperty.call(out, key) && this.duplicates === "reject") {
+      if (this.duplicates === "reject" && Object.prototype.hasOwnProperty.call(out, key)) {
         throw new JsonSyntaxError(`duplicate member ${JSON.stringify(key)}`, this.i);
       }
       setMember(out, key, value);
@@ -334,7 +448,7 @@ export function jsonText(value: unknown, options: JsonTextOptions = {}): string 
     if (hasToJSON(v)) return write(v.toJSON());
     if (Array.isArray(v)) return "[" + v.map(write).join(item) + "]";
     if (isPlainObject(v)) {
-      let keys = Object.keys(v).filter((k) => v[k] !== undefined);
+      let keys = memberNames(v).filter((k) => v[k] !== undefined);
       if (options.sortKeys) keys = [...keys].sort(compareCodePoints);
       return "{" + keys.map((k) => jsonString(k) + key + write(v[k])).join(item) + "}";
     }
@@ -382,12 +496,12 @@ export function pretty(value: unknown): string {
   return JSON.stringify(value, (_k, v) => (typeof v === "bigint" ? v.toString() : v), 1) ?? "undefined";
 }
 
-/** A deep copy of JSON-like data (plain objects and arrays; other values shared). */
+/** A deep copy of JSON-like data (plain objects and arrays; other values shared), members in order. */
 export function deepCopy<T>(value: T): T {
   if (Array.isArray(value)) return value.map(deepCopy) as T;
   if (isPlainObject(value)) {
     const out: Record<string, unknown> = {};
-    for (const k of Object.keys(value)) setMember(out, k, deepCopy(value[k]));
+    for (const k of memberNames(value)) setMember(out, k, deepCopy(value[k]));
     return out as T;
   }
   return value;

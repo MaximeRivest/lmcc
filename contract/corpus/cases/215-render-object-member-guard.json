@@ -1,0 +1,108 @@
+{
+ "name": "render-object-member-guard",
+ "kind": "render",
+ "entry": {
+  "name": "rag_v1",
+  "versions": {
+   "kernel": "0.8.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n<constructor>{constructor}</constructor>"
+   },
+   {
+    "directive": "turns",
+    "slot": "__proto__"
+   },
+   {
+    "role": "user",
+    "text": "{% if toString %}Context: {toString}\n\n{% endif %}Question: {valueOf}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Answer from the context.",
+  "fields": [
+   {
+    "name": "valueOf",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "toString",
+    "direction": "input",
+    "shape": {
+     "type": [
+      "string",
+      "null"
+     ]
+    }
+   },
+   {
+    "name": "constructor",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "valueOf": "And its population?",
+  "toString": "Paris has 2.1 million people."
+ },
+ "turns": {
+  "__proto__": [
+   {
+    "inputs": {
+     "valueOf": "Capital of France?"
+    },
+    "steps": [],
+    "outputs": {
+     "constructor": "Paris"
+    }
+   }
+  ]
+ },
+ "expect": {
+  "request": {
+   "system": "Answer from the context.\n<constructor>...</constructor>",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "Question: Capital of France?"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "<constructor>Paris</constructor>"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "Context: Paris has 2.1 million people.\n\nQuestion: And its population?"
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

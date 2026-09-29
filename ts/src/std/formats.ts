@@ -11,7 +11,7 @@
 import { Refusal } from "../errors.ts";
 import { readValue, type Field, type Shape } from "../core.ts";
 import type { Format } from "../formats.ts";
-import { formatNumber, hasToJSON, isPlainObject } from "../json.ts";
+import { formatNumber, hasToJSON, isPlainObject, memberNames, ownValue, setMember } from "../json.ts";
 import type { Registry } from "../registry.ts";
 import { strip, pyRepr } from "../text.ts";
 import { dumps, loads } from "./jsontext.ts";
@@ -29,7 +29,7 @@ export function lower(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(lower);
   if (isPlainObject(value)) {
     const out: Record<string, unknown> = {};
-    for (const k of Object.keys(value)) out[k] = lower(value[k]);
+    for (const k of memberNames(value)) setMember(out, k, lower(value[k]));
     return out;
   }
   return value;
@@ -113,7 +113,7 @@ export class TableFormat extends Base {
     const rows: string[] = [];
     for (const item of lower(value) as Record<string, unknown>[]) {
       const cells = this.columns.map((col) => {
-        const raw = item[col];
+        const raw = ownValue(item, col);
         let cell = raw === undefined || raw === null ? this.nullText : spellCell(raw, col);
         cell = cell.split(this.escape).join(this.escape + this.escape);
         cell = cell.split(this.delimiter).join(this.escape + this.delimiter);
@@ -145,7 +145,7 @@ export class TableFormat extends Base {
       const item: Record<string, unknown> = {};
       this.columns.forEach((col, i) => {
         const cell = strip(cells[i]);
-        item[col] = cell === this.nullText ? null : cellRead(itemProps[col] ?? {}, cell, `column ${pyRepr(col)}`);
+        setMember(item, col, cell === this.nullText ? null : cellRead((ownValue(itemProps, col) ?? {}) as Shape, cell, `column ${pyRepr(col)}`));
       });
       out.push(item);
     }

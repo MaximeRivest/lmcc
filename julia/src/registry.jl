@@ -1,7 +1,7 @@
 # Extensions (kernel §10) and the registry: the sockets vocabulary plugs into.
 
-const _EXT_NAME = r"^[a-z][a-z0-9_]*/[a-z][a-z0-9_-]*$"
-const _SEMVER = r"^\d+\.\d+\.\d+$"
+const _EXT_NAME = r"\A[a-z][a-z0-9_]*/[a-z][a-z0-9_-]*\z"
+const _SEMVER = r"\A[0-9]+\.[0-9]+\.[0-9]+\z"
 family_of(name) = split(name, '/')[1]
 
 "What a host binds under an extension name: the contract, its version, a label saying how."
@@ -17,9 +17,9 @@ the engine's. Inputs the contract leaves unspecified (Unicode classes, POSIX
 classes, `\\Q…\\E`) may differ from the reference's `python:re`.
 """
 struct LegacyRE2 <: ExtensionBinding
-    compiled::Dict{String,Tuple{Regex,Bool}}
+    compiled::OrderedDict{String,Tuple{Regex,Bool}}
 end
-LegacyRE2() = LegacyRE2(Dict{String,Tuple{Regex,Bool}}())
+LegacyRE2() = LegacyRE2(OrderedDict{String,Tuple{Regex,Bool}}())
 ext_name(::LegacyRE2) = "pattern/legacy-re2"
 ext_version(::LegacyRE2) = "0.1.0"
 ext_label(::LegacyRE2) = "julia:PCRE2"
@@ -107,7 +107,7 @@ end
 function validate_declaration(ext)
     ext === nothing && return JObj()
     isobj(ext) || _malformed("extensions", "extensions must be an object of '<family>/<name>': version")
-    seen = Dict{String,String}()
+    seen = OrderedDict{String,String}()
     for (name, version) in ext
         (name isa AbstractString && occursin(_EXT_NAME, name)) ||
             _malformed("extensions", "extensions: $(pyrepr(name)) is not an extension name ('<family>/<name>', lowercase)")
@@ -145,7 +145,7 @@ mutable struct Registry
 end
 
 function Registry(; allow_udf::Bool=false, extensions=nothing)
-    natives = Dict(ext_name(b) => b for b in native_extensions())
+    natives = OrderedDict(ext_name(b) => b for b in native_extensions())
     reg = Registry(OrderedDict{String,Named}(), Tuple{Any,Any,JObj}[], OrderedDict{String,Named}(), OrderedDict{String,Named}(),
         OrderedDict{String,ExtensionBinding}(), allow_udf)
     for name in (extensions === nothing ? collect(keys(natives)) : extensions)

@@ -6,8 +6,7 @@
  */
 
 import { Transport, type Predicate } from "./transport.ts";
-import type { Registry } from "./registry.ts";
-import { bindHook } from "./adapter.ts";
+import { defaultRegistry, type Registry } from "./registry.ts";
 
 function to(sub: string | undefined): string {
   if (sub === undefined) return "@purpose";
@@ -73,7 +72,7 @@ type Choice = Transport | Record<string, unknown> | string;
 
 /** The first transport whose predicate holds: `choose([[when.has("native_reasoning"), "native_reasoning"]], {otherwise: "reasoning_tags"})`. */
 export function choose(alternatives: readonly (readonly [Predicate, Choice])[], opts: { otherwise?: Choice; registry?: Registry } = {}): Transport {
-  const registry = opts.registry ?? bindHook.defaultRegistry();
+  const registry = opts.registry ?? defaultRegistry;
   const resolve = (t: Choice): Transport => {
     if (t instanceof Transport) return t;
     if (typeof t === "string") return registry.transport(t, {});

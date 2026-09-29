@@ -1,0 +1,181 @@
+{
+ "name": "std-fenced-tools-render-member-order",
+ "kind": "render",
+ "ordered": true,
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "tools_order_v1",
+  "versions": {
+   "kernel": "0.8.4",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "directive": "turns"
+   },
+   {
+    "role": "user",
+    "text": "{question}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  },
+  "transports": {
+   "tools": {
+    "use": "fenced_tools"
+   }
+  },
+  "formats": {
+   "list[Tool]": {
+    "use": "function_tool"
+   },
+   "list[ToolCall]": {
+    "use": "tool_calls"
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Answer, using tools when needed.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "tools",
+    "direction": "input",
+    "type": "list[Tool]",
+    "shape": {
+     "type": "array",
+     "items": {
+      "type": "object"
+     }
+    },
+    "purpose": "tools"
+   },
+   {
+    "name": "calls",
+    "direction": "output",
+    "type": "list[ToolCall]",
+    "shape": {
+     "type": "array",
+     "items": {
+      "type": "object"
+     }
+    },
+    "purpose": "tools.calls"
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "capabilities": {
+  "instruct": true
+ },
+ "inputs": {
+  "question": "Pick.",
+  "tools": [
+   {
+    "name": "pick",
+    "description": "Pick one.",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "b": {
+       "type": "string"
+      },
+      "10": {
+       "type": "integer"
+      },
+      "": {
+       "type": "string"
+      }
+     }
+    }
+   }
+  ]
+ },
+ "steps": [
+  {
+   "kind": "model",
+   "outputs": {
+    "calls": [
+     {
+      "id": "call_1",
+      "name": "pick",
+      "input": {
+       "b": "x",
+       "10": 1,
+       "": "e",
+       "n": {
+        "2": 2,
+        "a": 1
+       }
+      }
+     }
+    ]
+   },
+   "calls_field": "calls"
+  },
+  {
+   "kind": "tool",
+   "id": "call_1",
+   "name": "pick",
+   "output": [
+    {
+     "type": "text",
+     "text": "ok"
+    }
+   ]
+  }
+ ],
+ "expect": {
+  "request": {
+   "system": "Answer, using tools when needed.\n<answer>\n...\n</answer>\n\n\nYou may call a tool by replying with exactly one fenced block:\n```tool\n{\"name\": \"<tool>\", \"input\": {...}}\n```\nand nothing else; you will be given the result and asked again.\n\n- pick({\"type\": \"object\", \"properties\": {\"b\": {\"type\": \"string\"}, \"10\": {\"type\": \"integer\"}, \"\": {\"type\": \"string\"}}}): Pick one.",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "Pick."
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "```tool\n{\"name\": \"pick\", \"input\": {\"b\": \"x\", \"10\": 1, \"\": \"e\", \"n\": {\"2\": 2, \"a\": 1}}}\n```"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "Result of pick (call_1):\nok"
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

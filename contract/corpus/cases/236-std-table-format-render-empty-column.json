@@ -1,0 +1,132 @@
+{
+ "name": "std-table-format-render-empty-column",
+ "kind": "render",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "rows_v1",
+  "versions": {
+   "kernel": "0.8.4",
+   "vocab": {
+    "format/table": "0.2.0"
+   }
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n\nReply with EXACTLY these sections:\n{% for f in outputs %}<{f.name}>\n{f.value}\n{% endfor %}</done>"
+   },
+   {
+    "directive": "turns"
+   },
+   {
+    "role": "user",
+    "text": "{% for f in inputs %}== {f.name} ==\n{f.value}\n{% endfor %}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  },
+  "formats": {
+   "list[object]": {
+    "use": "table",
+    "options": {
+     "columns": [
+      "",
+      "10",
+      "b"
+     ]
+    }
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Tabulate.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "rows",
+    "direction": "output",
+    "shape": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "": {
+        "type": "string"
+       },
+       "10": {
+        "type": "string"
+       },
+       "b": {
+        "type": "string"
+       }
+      }
+     }
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "q": "go"
+ },
+ "turns": {
+  "turns": [
+   {
+    "inputs": {
+     "q": "prev"
+    },
+    "outputs": {
+     "rows": [
+      {
+       "b": "B",
+       "": "E",
+       "10": "T"
+      }
+     ]
+    }
+   }
+  ]
+ },
+ "expect": {
+  "request": {
+   "system": "Tabulate.\n\nReply with EXACTLY these sections:\n<rows>\n|  | 10 | b |  (one row per item)\n</done>",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "== q ==\nprev\n"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "<rows>\n| E | T | B |\n</done>"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "== q ==\ngo\n"
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

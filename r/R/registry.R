@@ -1,6 +1,6 @@
 # Extensions (kernel section 10) and the registry: the sockets.
 
-EXT_NAME_RE <- "^[a-z][a-z0-9_]*/[a-z][a-z0-9_-]*$"
+EXT_NAME_RE <- "\\A[a-z][a-z0-9_]*/[a-z][a-z0-9_-]*\\z"
 family_of <- function(name) strsplit(name, "/", fixed = TRUE)[[1]][[1]]
 NON_RE2 <- "\\(\\?[=!>]|\\(\\?P?<|\\\\[1-9]|\\\\k<|[*+?}]\\+"
 
@@ -68,13 +68,13 @@ validate_declaration <- function(ext) {
   if (is.null(ext)) return(jobj())
   if (!is_obj(ext)) malformed("extensions", "extensions must be an object of '<family>/<name>': version")
   seen <- list()
-  for (name in names(ext)) {
-    version <- ext[[name]]
+  for (m in members_of(ext)) {
+    name <- m[[1]]; version <- m[[2]]
     if (!grepl(EXT_NAME_RE, name, perl = TRUE)) malformed("extensions", sprintf("extensions: %s is not an extension name ('<family>/<name>', lowercase)", pyrepr(name)))
-    if (!is_str(version) || !grepl("^[0-9]+\\.[0-9]+\\.[0-9]+$", version, perl = TRUE)) malformed("extensions", sprintf("extensions: %s: version %s is not MAJOR.MINOR.PATCH", pyrepr(name), pyrepr(version)))
+    if (!is_str(version) || !grepl("\\A[0-9]+\\.[0-9]+\\.[0-9]+\\z", version, perl = TRUE)) malformed("extensions", sprintf("extensions: %s: version %s is not MAJOR.MINOR.PATCH", pyrepr(name), pyrepr(version)))
     fam <- family_of(name)
-    if (!is.null(seen[[fam]])) malformed("extensions", sprintf("extensions: %s and %s both govern family %s; declare one contract per family", pyrepr(seen[[fam]]), pyrepr(name), pyrepr(fam)))
-    seen[[fam]] <- name
+    if (has_key(seen, fam)) malformed("extensions", sprintf("extensions: %s and %s both govern family %s; declare one contract per family", pyrepr(get_key(seen, fam)), pyrepr(name), pyrepr(fam)))
+    seen <- set_key(seen, fam, name)
   }
   as_obj(ext)
 }
@@ -120,23 +120,23 @@ default_registry <- function() {
 #' @param exist_ok Replace an existing entry instead of refusing.
 #' @export
 register_format <- function(reg, name, factory, version = "0.1.0", exist_ok = FALSE) {
-  if (!is.null(reg$formats[[name]]) && !exist_ok) refuse("already-registered", sprintf("format %s is already registered", pyrepr(name)))
-  reg$formats[[name]] <- list(factory = factory, version = version)
+  if (has_key(reg$formats, name) && !exist_ok) refuse("already-registered", sprintf("format %s is already registered", pyrepr(name)))
+  reg$formats <- set_key(reg$formats, name, list(factory = factory, version = version))
   invisible(reg)
 }
 #' @rdname register_format
 #' @export
 register_transport <- function(reg, name, factory, version = "0.1.0", exist_ok = FALSE) {
-  if (!is.null(reg$transports[[name]]) && !exist_ok) refuse("already-registered", sprintf("transport %s is already registered", pyrepr(name)))
-  reg$transports[[name]] <- list(factory = factory, version = version)
+  if (has_key(reg$transports, name) && !exist_ok) refuse("already-registered", sprintf("transport %s is already registered", pyrepr(name)))
+  reg$transports <- set_key(reg$transports, name, list(factory = factory, version = version))
   invisible(reg)
 }
 #' @rdname register_format
 #' @export
 register_reader <- function(reg, name, factory, version = "0.1.0", exist_ok = FALSE) {
   if (name == "derived") refuse("already-registered", "reader 'derived' is kernel grammar and cannot be replaced")
-  if (!is.null(reg$readers[[name]]) && !exist_ok) refuse("already-registered", sprintf("reader %s is already registered", pyrepr(name)))
-  reg$readers[[name]] <- list(factory = factory, version = version)
+  if (has_key(reg$readers, name) && !exist_ok) refuse("already-registered", sprintf("reader %s is already registered", pyrepr(name)))
+  reg$readers <- set_key(reg$readers, name, list(factory = factory, version = version))
   invisible(reg)
 }
 
@@ -147,18 +147,18 @@ register_reader <- function(reg, name, factory, version = "0.1.0", exist_ok = FA
 #' @param use,options A registered format's name and options.
 #' @export
 bind_type <- function(reg, type, format = NULL, use = NULL, options = jobj()) {
-  reg$type_bindings[[type]] <- if (!is.null(use)) list(use = use, options = options) else format
+  reg$type_bindings <- set_key(reg$type_bindings, type, if (!is.null(use)) list(use = use, options = options) else format)
   invisible(reg)
 }
 
 type_binding <- function(reg, type) {
-  if (is.null(type) || is.null(reg$type_bindings[[type]])) return(NULL)
-  b <- reg$type_bindings[[type]]
+  if (!is_str(type) || !has_key(reg$type_bindings, type)) return(NULL)
+  b <- get_key(reg$type_bindings, type)
   if (is_format(b)) b else named_format(reg, b$use, b$options)
 }
 
 named_format <- function(reg, name, options, where = NULL) {
-  e <- reg$formats[[name]]
+  e <- if (is_str(name)) get_key(reg$formats, name) else NULL
   if (is.null(e)) refuse("unknown-format", sprintf("format %s is not registered \u2014 install the package that provides it, or ship the format with the artifact", pyrepr(name)),
                          fix = jobj(action = "install-vocabulary", kind = "format", name = name))
   at <- where %||% sprintf("format %s", pyrepr(name))
@@ -169,7 +169,7 @@ named_format <- function(reg, name, options, where = NULL) {
 }
 
 named_transport <- function(reg, name, options, where = NULL) {
-  e <- reg$transports[[name]]
+  e <- if (is_str(name)) get_key(reg$transports, name) else NULL
   if (is.null(e)) refuse("unknown-transport", sprintf("transport %s is not registered \u2014 install the package that provides it, or inline the transport as data", pyrepr(name)),
                          fix = jobj(action = "install-vocabulary", kind = "transport", name = name))
   at <- where %||% sprintf("transport %s", pyrepr(name))
@@ -183,7 +183,7 @@ named_transport <- function(reg, name, options, where = NULL) {
 
 named_reader <- function(reg, spec) {
   kind <- get_key(spec, "kind")
-  e <- if (is_str(kind)) reg$readers[[kind]] else NULL
+  e <- if (is_str(kind)) get_key(reg$readers, kind) else NULL
   if (is.null(e)) refuse("unknown-reader", sprintf("reader kind %s is neither the kernel reader 'derived' nor a registered reader \u2014 install the package that provides it", pyrepr(kind)),
                          fix = jobj(action = "install-vocabulary", kind = "reader", name = pystr(kind)))
   r <- tryCatch(e$factory(spec), error = function(err) if (is_refusal(err)) stop(err) else malformed("reader", sprintf("reader: %s rejects its spec: %s", pyrepr(kind), conditionMessage(err))))
@@ -191,7 +191,7 @@ named_reader <- function(reg, spec) {
   r
 }
 
-versions_of <- function(m) { n <- ssort(names(m)); as_obj(structure(lapply(n, function(k) m[[k]]$version), names = n)) }
+versions_of <- function(m) { n <- ssort(names(m)); as_obj(structure(lapply(n, function(k) get_key(m, k)$version), names = n)) }
 
 #' Describe a registry or a plan as plain data
 #'
@@ -203,7 +203,7 @@ versions_of <- function(m) { n <- ssort(names(m)); as_obj(structure(lapply(n, fu
 #' @export
 describe_registry <- function(x) {
   jobj(formats = versions_of(x$formats),
-       type_bindings = lapply(names(x$type_bindings), function(t) { b <- x$type_bindings[[t]]; jobj(type = t, format = if (is_format(b)) b$name %||% "(inline)" else b$use) }),
-       transports = versions_of(x$transports), readers = c(jobj(derived = "kernel"), versions_of(x$readers)), allow_udf = x$allow_udf,
+       type_bindings = lapply(members_of(x$type_bindings), function(m) { t <- m[[1]]; b <- m[[2]]; jobj(type = t, format = if (is_format(b)) b$name %||% "(inline)" else b$use) }),
+       transports = versions_of(x$transports), readers = merge_obj(jobj(derived = "kernel"), versions_of(x$readers)), allow_udf = x$allow_udf,
        extensions = as_obj(lapply(x$extensions[ssort(names(x$extensions))], function(b) jobj(version = b$version, binding = b$binding))))
 }

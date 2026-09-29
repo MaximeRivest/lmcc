@@ -10,10 +10,10 @@
 
 import { refuse } from "./errors.ts";
 import { isObj } from "./core.ts";
-import { Adapter, adapter as makeAdapter, bindHook, isTransport, type Reference } from "./adapter.ts";
+import { adapter as makeAdapter, checkPurpose, isTransport, type Adapter, type Reference } from "./adapter.ts";
 import { isFormat, loadUdf } from "./formats.ts";
-import { deepCopy } from "./json.ts";
-import type { Registry } from "./registry.ts";
+import { copyObject, deepCopy, hasOwn, memberNames, setMember } from "./json.ts";
+import { defaultRegistry, type Registry } from "./registry.ts";
 import { pyRepr, pyStr } from "./text.ts";
 import { Transport, validateSpelling } from "./transport.ts";
 import { resolveExtensions } from "./extensions.ts";
@@ -42,7 +42,7 @@ export function checkCompatible(kind: string, theirs: string, ours: string): voi
 }
 
 function checkVocabVersion(ref: string, declared: Record<string, unknown>, provided: string): void {
-  if (ref in declared) checkCompatible(ref, declared[ref] as string, provided);
+  if (hasOwn(declared, ref)) checkCompatible(ref, declared[ref] as string, provided);
 }
 
 function transportOf(registry: Registry) {
@@ -60,7 +60,7 @@ export function* spellingFormatRefs(adp: Adapter, registry: Registry): Generator
     validateSpelling(t.spelling, `${where}.spelling`);
     if ("input_format" in t.spelling) yield [`${where}.spelling.input_format`, t.spelling["input_format"] as Reference];
   }
-  for (const purpose of Object.keys(adp.transports)) {
+  for (const purpose of memberNames(adp.transports)) {
     const where = `transports[${pyRepr(purpose)}]`;
     yield* walk(transportOf(registry)(purpose, adp.transports[purpose], where), where);
   }
@@ -80,10 +80,10 @@ export function resolveAdapterExtensions(adp: Adapter, registry: Registry) {
 // ---------------------------------------------------------------------- load
 
 export function load(entry: unknown, opts: { registry?: Registry } = {}): Adapter {
-  const registry = opts.registry ?? bindHook.defaultRegistry();
+  const registry = opts.registry ?? defaultRegistry;
   if (!isObj(entry)) refuse("entry-malformed", "entry must be a JSON object", { fix: { action: "edit-entry", path: "" } });
   for (const key of ["template", "reader", "versions"]) {
-    if (!(key in entry)) refuse("entry-malformed", `entry is missing required key ${pyRepr(key)}`, { fix: { action: "edit-entry", path: key } });
+    if (!hasOwn(entry, key)) refuse("entry-malformed", `entry is missing required key ${pyRepr(key)}`, { fix: { action: "edit-entry", path: key } });
   }
   const versions = entry["versions"];
   if (!isObj(versions)) refuse("entry-malformed", "versions must be an object", { fix: { action: "edit-entry", path: "versions" } });
@@ -111,9 +111,9 @@ export function load(entry: unknown, opts: { registry?: Registry } = {}): Adapte
 
   const transports: Record<string, Transport | Reference> = {};
   const entryTransports = (entry["transports"] || {}) as Record<string, unknown>;
-  for (const purpose of Object.keys(entryTransports)) {
+  for (const purpose of memberNames(entryTransports)) {
     const s = entryTransports[purpose];
-    const where = `transports[${pyRepr(purpose)}]`;
+    const where = checkPurpose(purpose);
     if (!isObj(s)) refuse("entry-malformed", `${where}: must be an object`, { fix: { action: "edit-entry", path: where } });
     if ("use" in s) {
       const name = s["use"];
@@ -123,17 +123,17 @@ export function load(entry: unknown, opts: { registry?: Registry } = {}): Adapte
           { fix: { action: "install-vocabulary", kind: "transport", name: pyStr(name) } });
       }
       checkVocabVersion(`transport/${name}`, vocabVersions, named.version);
-      const options = { ...((s["options"] as Record<string, unknown>) ?? {}) };
+      const options = copyObject(s["options"] as object | undefined);
       registry.transport(name as string, options, where); // resolve at load (§6)
-      transports[purpose] = { use: name as string, options };
+      setMember(transports, purpose, { use: name as string, options });
     } else {
-      transports[purpose] = Transport.fromDict(s, where);
+      setMember(transports, purpose, Transport.fromDict(s, where));
     }
   }
 
   const formats: Record<string, unknown> = {};
   const entryFormats = (entry["formats"] || {}) as Record<string, unknown>;
-  for (const key of Object.keys(entryFormats)) {
+  for (const key of memberNames(entryFormats)) {
     const f = entryFormats[key];
     const where = `formats[${pyRepr(key)}]`;
     if (!isObj(f)) refuse("entry-malformed", `${where}: must be an object`, { fix: { action: "edit-entry", path: where } });
@@ -144,12 +144,12 @@ export function load(entry: unknown, opts: { registry?: Registry } = {}): Adapte
         refuse("unknown-format", `${where}: format ${pyRepr(name)} is not registered`, { fix: { action: "install-vocabulary", kind: "format", name: pyStr(name) } });
       }
       checkVocabVersion(`format/${name}`, vocabVersions, named.version);
-      const options = { ...((f["options"] as Record<string, unknown>) ?? {}) };
+      const options = copyObject(f["options"] as object | undefined);
       registry.namedFormat(name as string, options, where); // resolve at load (§5)
-      formats[key] = { ...f, options };
+      setMember(formats, key, copyObject(f, { options }));
     } else if ("language" in f) {
       for (const req of ["write", "sha256"]) {
-        if (!(req in f)) refuse("entry-malformed", `${where}: a shipped format needs ${pyRepr(req)}`, { fix: { action: "edit-entry", path: `${where}.${req}` } });
+        if (!hasOwn(f, req)) refuse("entry-malformed", `${where}: a shipped format needs ${pyRepr(req)}`, { fix: { action: "edit-entry", path: `${where}.${req}` } });
       }
       if (!registry.allowUdf) {
         refuse("format-untrusted", `${where}: the artifact ships a ${pyStr(f["language"])} UDF and this runtime will not place code (a TypeScript runtime places no UDF language; bind a runtime format for the type with registry.format)`,
@@ -157,7 +157,7 @@ export function load(entry: unknown, opts: { registry?: Registry } = {}): Adapte
       }
       loadUdf(f, where);
     } else if ("describe" in f) {
-      formats[key] = { ...f };
+      setMember(formats, key, copyObject(f));
     } else {
       refuse("entry-malformed", `${where}: a format entry is {use}, a shipped UDF, or a description {describe}`, { fix: { action: "edit-entry", path: where } });
     }
@@ -180,38 +180,38 @@ export function load(entry: unknown, opts: { registry?: Registry } = {}): Adapte
 
 function ref(binding: Reference): Record<string, unknown> {
   const out: Record<string, unknown> = { use: binding.use };
-  if (binding.options && Object.keys(binding.options).length) out["options"] = deepCopy(binding.options);
+  if (binding.options && memberNames(binding.options).length) out["options"] = deepCopy(binding.options);
   if ("describe" in binding) out["describe"] = binding.describe;
   return out;
 }
 
-export function dump(adp: Adapter, registry: Registry = bindHook.defaultRegistry()): Record<string, unknown> {
+export function dump(adp: Adapter, registry: Registry = defaultRegistry): Record<string, unknown> {
   const vocab: Record<string, string> = {};
   const transports: Record<string, unknown> = {};
-  for (const purpose of Object.keys(adp.transports)) {
+  for (const purpose of memberNames(adp.transports)) {
     const binding = adp.transports[purpose];
     if (isTransport(binding)) {
-      transports[purpose] = binding.toDict();
+      setMember(transports, purpose, binding.toDict());
     } else {
       const named = registry.transports.get(binding.use);
       if (!named) {
         refuse("unknown-transport", `cannot dump: transport ${pyRepr(binding.use)} is not registered (its version is part of the artifact)`,
           { fix: { action: "install-vocabulary", kind: "transport", name: binding.use } });
       }
-      vocab[`transport/${binding.use}`] = named.version;
-      transports[purpose] = ref(binding);
+      setMember(vocab, `transport/${binding.use}`, named.version);
+      setMember(transports, purpose, ref(binding));
     }
   }
   for (const [where, r] of spellingFormatRefs(adp, registry)) {
     registry.namedFormat(r.use, r.options, where);
-    vocab[`format/${r.use}`] = registry.formats.get(r.use)!.version;
+    setMember(vocab, `format/${r.use}`, registry.formats.get(r.use)!.version);
   }
   const formats: Record<string, unknown> = {};
-  for (const key of Object.keys(adp.formats)) {
+  for (const key of memberNames(adp.formats)) {
     const binding = adp.formats[key];
     if (isFormat(binding)) {
       if (binding.shipped) {
-        formats[key] = { ...binding.shipped };
+        setMember(formats, key, copyObject(binding.shipped));
         continue;
       }
       refuse("format-not-self-contained",
@@ -224,10 +224,10 @@ export function dump(adp: Adapter, registry: Registry = bindHook.defaultRegistry
         refuse("unknown-format", `cannot dump: format ${pyRepr(binding["use"])} is not registered`,
           { fix: { action: "install-vocabulary", kind: "format", name: binding["use"] as string } });
       }
-      vocab[`format/${binding["use"]}`] = named.version;
-      formats[key] = ref(binding as Reference);
+      setMember(vocab, `format/${binding["use"]}`, named.version);
+      setMember(formats, key, ref(binding as Reference));
     } else {
-      formats[key] = { ...(binding as Record<string, unknown>) };
+      setMember(formats, key, copyObject(binding as object));
     }
   }
   const readerKind = adp.reader["kind"] as string;
@@ -237,17 +237,15 @@ export function dump(adp: Adapter, registry: Registry = bindHook.defaultRegistry
       refuse("unknown-reader", `cannot dump: reader ${pyRepr(readerKind)} is not registered (its version is part of the artifact)`,
         { fix: { action: "install-vocabulary", kind: "reader", name: pyStr(readerKind) } });
     }
-    vocab[`reader/${readerKind}`] = named.version;
+    setMember(vocab, `reader/${readerKind}`, named.version);
   }
   const entry: Record<string, unknown> = { name: adp.name, versions: { kernel: KERNEL_VERSION, vocab } };
-  if (Object.keys(adp.extensions).length) entry["extensions"] = { ...adp.extensions };
-  entry["template"] = adp.template.map((m) => ({ ...m }));
-  entry["reader"] = { ...adp.reader };
+  if (memberNames(adp.extensions).length) entry["extensions"] = copyObject(adp.extensions);
+  entry["template"] = adp.template.map((m) => copyObject(m));
+  entry["reader"] = copyObject(adp.reader);
   if (adp.replay !== "recorded") entry["replay"] = adp.replay;
   if (adp.strict) entry["strict"] = true;
-  if (Object.keys(transports).length) entry["transports"] = transports;
-  if (Object.keys(formats).length) entry["formats"] = formats;
+  if (memberNames(transports).length) entry["transports"] = transports;
+  if (memberNames(formats).length) entry["formats"] = formats;
   return entry;
 }
-
-bindHook.dump = dump;

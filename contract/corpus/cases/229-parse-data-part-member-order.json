@@ -1,0 +1,76 @@
+{
+ "name": "parse-data-part-member-order",
+ "kind": "parse",
+ "ordered": true,
+ "entry": {
+  "name": "answer_order_v1",
+  "versions": {
+   "kernel": "0.8.4",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\nAnswer: {answer}"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Answer.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "response": {
+  "role": "assistant",
+  "parts": [
+   {
+    "type": "text",
+    "text": "Answer: "
+   },
+   {
+    "type": "data",
+    "value": {
+     "b": 1,
+     "10": {
+      "2": null,
+      "a": [
+       {
+        "1": true,
+        "": false
+       }
+      ]
+     },
+     "": "e"
+    }
+   }
+  ]
+ },
+ "expect": {
+  "values": {
+   "answer": "{\"b\":1,\"10\":{\"2\":null,\"a\":[{\"1\":true,\"\":false}]},\"\":\"e\"}"
+  },
+  "probabilities": {},
+  "measured_by": {}
+ }
+}

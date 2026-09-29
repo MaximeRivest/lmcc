@@ -1,0 +1,192 @@
+{
+ "name": "std-json-reader-member-order",
+ "kind": "render",
+ "ordered": true,
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "json_reader_order_v1",
+  "versions": {
+   "kernel": "0.8.4",
+   "vocab": {
+    "reader/json_object": "0.2.0",
+    "format/json": "0.1.0"
+   }
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}"
+   },
+   {
+    "directive": "turns"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "reader": {
+   "kind": "json_object"
+  },
+  "formats": {
+   "*": {
+    "use": "json"
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Answer.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "o",
+    "direction": "output",
+    "shape": {
+     "type": "object",
+     "properties": {
+      "b": {
+       "type": "string"
+      },
+      "1": {
+       "type": "string"
+      },
+      "": {
+       "type": "string"
+      },
+      "a": {
+       "type": "object",
+       "properties": {
+        "z": {
+         "type": "integer"
+        },
+        "0": {
+         "type": "integer"
+        }
+       }
+      }
+     }
+    }
+   }
+  ]
+ },
+ "capabilities": {
+  "native_structured_output": true
+ },
+ "inputs": {
+  "q": "x"
+ },
+ "turns": {
+  "turns": [
+   {
+    "signature": "sha256:f47461ffb95eb65eb03db02799d0a49184019285d7a91eed725414ed4263591b",
+    "inputs": {
+     "q": "y"
+    },
+    "outputs": {
+     "o": {
+      "b": "B",
+      "1": "one",
+      "": "e",
+      "a": {
+       "z": 1,
+       "0": 0
+      }
+     }
+    }
+   }
+  ]
+ },
+ "expect": {
+  "request": {
+   "system": "Answer.",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "y"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "{\n  \"o\": {\n    \"b\": \"B\",\n    \"1\": \"one\",\n    \"\": \"e\",\n    \"a\": {\n      \"z\": 1,\n      \"0\": 0\n    }\n  }\n}"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "x"
+      }
+     ]
+    }
+   ],
+   "config": {
+    "response_format": {
+     "type": "json_schema",
+     "schema": {
+      "type": "object",
+      "properties": {
+       "o": {
+        "type": "object",
+        "properties": {
+         "b": {
+          "type": "string"
+         },
+         "1": {
+          "type": "string"
+         },
+         "": {
+          "type": "string"
+         },
+         "a": {
+          "type": "object",
+          "properties": {
+           "z": {
+            "type": "integer"
+           },
+           "0": {
+            "type": "integer"
+           }
+          },
+          "required": [
+           "z",
+           "0"
+          ],
+          "additionalProperties": false
+         }
+        },
+        "required": [
+         "b",
+         "1",
+         "",
+         "a"
+        ],
+        "additionalProperties": false
+       }
+      },
+      "required": [
+       "o"
+      ],
+      "additionalProperties": false
+     }
+    }
+   }
+  }
+ }
+}

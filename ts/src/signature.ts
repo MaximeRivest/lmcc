@@ -18,7 +18,7 @@
  */
 
 import { refuse } from "./errors.ts";
-import { deepCopy, type Json, type JsonObject } from "./json.ts";
+import { copyObject, deepCopy, memberNames, type Json, type JsonObject } from "./json.ts";
 import { isObj, type Field, type Shape } from "./core.ts";
 import { isIdentifier, pyRepr, PURPOSE_RE } from "./text.ts";
 import { brand } from "./brand.ts";
@@ -112,7 +112,7 @@ function fixField(f: { name: unknown }): { action: string; field?: string } {
 
 function deepFreeze<T>(value: T): T {
   if (typeof value === "object" && value !== null && !Object.isFrozen(value)) {
-    for (const v of Object.values(value)) deepFreeze(v);
+    for (const k of memberNames(value)) deepFreeze((value as Record<string, unknown>)[k]);
     Object.freeze(value);
   }
   return value;
@@ -202,14 +202,14 @@ export function signature<IM extends Entries = {}, OM extends Entries = {}>(
 ): Signature<ValuesOf<IM>, ValuesOf<OM>> {
   const fields: FieldInput[] = [];
   for (const [direction, entries] of [["input", spec.inputs ?? {}], ["output", spec.outputs ?? {}]] as const) {
-    for (const name of Object.keys(entries)) {
+    for (const name of memberNames(entries)) {
       const value = (entries as Entries)[name];
       const f = isFieldSpec(value) ? value : field(value as TypedShape<unknown>);
       if (!isObj(f.shape)) {
         refuse("unmapped-type", `field ${pyRepr(name)}: a shape is a JSON-Schema object (use the t builders)`,
           { fix: { action: "edit-signature", field: name } });
       }
-      fields.push({ name, direction, shape: { ...f.shape }, type: f.type, purpose: f.purpose, desc: f.desc });
+      fields.push({ name, direction, shape: copyObject<Json>(f.shape), type: f.type, purpose: f.purpose, desc: f.desc });
     }
   }
   return new Signature(instructions, fields);
@@ -219,14 +219,14 @@ type Members = readonly (string | number)[];
 
 /** Shape builders: plain JSON Schema with a static type for TypeScript. */
 export const t = {
-  string: (extra: JsonObject = {}): TypedShape<string> => ({ type: "string", ...extra }),
+  string: (extra: JsonObject = {}): TypedShape<string> => copyObject({ type: "string" }, extra),
   /**
    * An integer. Its values are `number` when exact; beyond ±(2^53 − 1) the
    * kernel carries them as `bigint` (at least int64, kernel §7a).
    */
-  integer: (extra: JsonObject = {}): TypedShape<number> => ({ type: "integer", ...extra }),
-  number: (extra: JsonObject = {}): TypedShape<number> => ({ type: "number", ...extra }),
-  boolean: (extra: JsonObject = {}): TypedShape<boolean> => ({ type: "boolean", ...extra }),
+  integer: (extra: JsonObject = {}): TypedShape<number> => copyObject({ type: "integer" }, extra),
+  number: (extra: JsonObject = {}): TypedShape<number> => copyObject({ type: "number" }, extra),
+  boolean: (extra: JsonObject = {}): TypedShape<boolean> => copyObject({ type: "boolean" }, extra),
   /** Membership: `t.enum("low", "high")`. */
   enum: <const M extends Members>(...members: M): TypedShape<M[number]> => {
     const shape: JsonObject = { enum: [...members] as Json[] };
@@ -242,12 +242,12 @@ export const t = {
   object: <P extends Record<string, TypedShape<unknown>>>(properties: P): TypedShape<{ [K in keyof P]: SpecValue<P[K]> }> => ({
     type: "object",
     properties: properties as unknown as JsonObject,
-    required: Object.keys(properties),
+    required: memberNames(properties),
   }),
   /** An lm15 part of this type (`image`, `document`, …); its value is the part's data. */
   media: (type: string): TypedShape<Record<string, unknown>> => ({ media: type }),
   /** Any JSON Schema, with the static type you declare: `t.json<Person[]>({type: "array"})`. */
-  json: <T = unknown>(schema: JsonObject = {}): TypedShape<T> => ({ ...schema }),
+  json: <T = unknown>(schema: JsonObject = {}): TypedShape<T> => copyObject<Json>(schema) as TypedShape<T>,
 };
 
 brand(Signature, "Signature");

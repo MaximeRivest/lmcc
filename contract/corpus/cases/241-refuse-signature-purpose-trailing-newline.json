@@ -1,0 +1,52 @@
+{
+ "name": "refuse-signature-purpose-trailing-newline",
+ "kind": "refuse",
+ "entry": {
+  "name": "scalars_v1",
+  "versions": {
+   "kernel": "0.8.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n{% endfor %}</done>"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Read.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "a",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    },
+    "purpose": "answer\n"
+   }
+  ]
+ },
+ "expect": {
+  "code": "signature-malformed",
+  "fix": {
+   "action": "edit-signature",
+   "field": "a"
+  },
+  "at": "signature"
+ }
+}

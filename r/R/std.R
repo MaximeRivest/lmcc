@@ -180,7 +180,7 @@ json_object_reader <- function(spec) {
     requires = function() "native_structured_output",
     request_settings = function(fields) {
       props <- jobj()
-      for (f in fields) props[[f$name]] <- if (!is.null(f$desc) && nzchar(f$desc)) c(closed_shape(f$shape), jobj(description = f$desc)) else closed_shape(f$shape)
+      for (f in fields) props[[f$name]] <- if (!is.null(f$desc) && nzchar(f$desc)) set_key(closed_shape(f$shape), "description", f$desc) else closed_shape(f$shape)
       config <- jobj(response_format = jobj(type = "json_schema", schema = jobj(type = "object", properties = props,
         required = lapply(fields, function(f) f$name), additionalProperties = FALSE)))
       if (!is.null(policy)) config[["probabilities"]] <- policy
@@ -287,7 +287,7 @@ citations_format <- function(options) make_format(
       if (identical(get_key(p, "type"), "citation")) out[[length(out) + 1L]] <- drop_key(drop_key(p, "type"), "continuation")
       else if (is_str(get_key(p, "text"))) {
         t <- wstrip(p[["text"]])
-        if (grepl("^[0-9]+$", t, perl = TRUE) && !(t %in% seen)) { seen <- c(seen, t); out[[length(out) + 1L]] <- jobj(source = integer_value(t)) }
+        if (grepl("\\A[0-9]+\\z", t, perl = TRUE) && !(t %in% seen)) { seen <- c(seen, t); out[[length(out) + 1L]] <- jobj(source = integer_value(t)) }
       }
     }
     out
@@ -423,19 +423,22 @@ closed_shape <- function(shape) {
   if (is_arr(shape)) return(lapply(shape, closed_shape))
   if (!is_obj(shape)) return(shape)
   out <- as_obj(shape)
-  for (key in names(out)) {
-    v <- out[[key]]
+  # By position: a property may be named "" (kernel section 1).
+  for (i in seq_along(out)) {
+    key <- names(out)[[i]]
+    v <- out[[i]]
     if (key %in% maps && is_obj(v)) {
       v <- as_obj(v)
-      for (n in names(v)) v[n] <- list(closed_shape(v[[n]]))
-      out[[key]] <- v
+      for (j in seq_along(v)) v[j] <- list(closed_shape(v[[j]]))
+      out[[i]] <- v
     } else if (key %in% one) {
-      out[key] <- list(closed_shape(v))
+      out[i] <- list(closed_shape(v))
     }
   }
-  if (is_obj(out[["properties"]])) {
-    out[["required"]] <- as.list(unname(names(out[["properties"]])))
-    if (!("additionalProperties" %in% names(out))) out[["additionalProperties"]] <- FALSE
+  properties <- get_key(out, "properties")
+  if (is_obj(properties)) {
+    out <- set_key(out, "required", as.list(unname(names(properties))))
+    if (!has_key(out, "additionalProperties")) out <- set_key(out, "additionalProperties", FALSE)
   }
   out
 }

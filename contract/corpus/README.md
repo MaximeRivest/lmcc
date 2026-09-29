@@ -1,5 +1,72 @@
 # The corpus
 
+**Whole grammars, call ids, one description (kernel 0.8.4, D-58, fourth
+pass).** Cases 237–251 were typed by hand from kernel §3a (a call's id is
+non-empty), §7a (every grammar matches the whole text, in ASCII) and
+`reader-json_object.md` (the field's description replaces the shape's),
+each expectation written before any kernel ran it. Before the fixes:
+Python failed 237–249 (it loaded names ending in `\n`, took `0.٨.4` for
+0.8.4 and wrote a call id `""` as `s0_`); Julia failed 237–245 and
+247–249 (PCRE's `$` and Unicode `\d`); R failed 237–244 and 247–250 (250
+by writing `description` twice); TypeScript failed 237, 238 and 251, the
+last because its driver read cases with `node:readline`, which also ends a
+line at U+2028. Case 248 was first written with a `between` rule, which a
+later check refused at the same path in every kernel, so it passed
+everywhere for the wrong reason; it now uses a channel rule (`from:
+"part:thinking\n"`), which the fixed kernels refuse and the parents loaded.
+Three other changes followed the first run and moved no expectation: the
+load cases built on 232 gained a signature (the Python driver raised
+`KeyError` on a load case with none that the kernel loaded, ending the run;
+it now reports "the entry loaded"), and 243–245 dropped their `pattern` rule, whose extension was
+refused before the malformed one could be.
+
+**Order you can see, the empty purpose and slot (kernel 0.8.4, D-58, third
+pass).** Cases 231–236 were typed by hand from kernel §1, §2, §3 and §9 as
+amended and from `format-table.md`. Every expectation matched the Python
+kernel once its load check existed, except one authoring slip in 234: its
+data part first had `"value": {}` beside the text `Answer: yes`, and a data
+part's value is text to the reader (§3), so the answer read `yes{}`; the
+case now reads `1` from `"value": 1` after `Answer: `, as intended. A case
+may now say `"ordered": true` (§9): its expectations compare member order
+too. 226–230, 234 and 235 do; earlier cases do not, because eight of them
+list the members the kernel chooses itself (a reading's fields, an entry's
+top-level keys) in another order than the reference, which no rule fixes.
+Before the fixes, with the new drivers: TypeScript failed 230 (format keys
+dumped `"10"` first), 231, 232, 234 (probability labels reordered) and 235
+(a table row reordered); Julia failed 231 and 232; R failed 232, 233 (the
+turns of slot `""` dropped silently), and 234 (probabilities keyed `""`
+refused), and passed 231 by accident (it refused `transports['']` as "not
+an object"); Python failed 231 and 232 (it loaded both). 236 failed on no
+kernel at the parent commit; a review found R failing it before the second
+pass.
+
+**The empty name and member order (kernel 0.8.4, D-58).** Cases 223–230
+were typed by hand from kernel §1 as amended ("Names are data": any
+string, `""` included; "Members keep their order") before any kernel ran
+them. Every expectation matched the Python kernel on the first run; one
+case (225) first lacked the `native_structured_output` capability its
+reader needs, an authoring slip that changed no expected value. Case 220
+gained its turn's `signature`, computed with `sha256sum` over hand-typed
+canonical bytes, so the turn fingerprint it was said to pin is pinned.
+Before the fixes, TypeScript failed 226–229 (integer-like names such as
+`"10"` written first) and R failed 223, 224, 227, 228 (a member `""` read
+as null and written twice) and 230 (a format key `""` refused at load);
+Python and Julia passed all eight. 225 (reading `""` members) failed on no
+kernel: it pins the read direction. A member's order is pinned only
+through bytes the kernel writes (rendered text, `required`); the harness
+compares objects without order, as JSON does.
+
+**Names are data (kernel 0.8.4, D-58).** Cases 214–222 were typed by hand
+from kernel §1 ("Names are data"), §2–§4 and §3a: field names, a turn
+slot, a purpose, artifact keys and JSON members named like JavaScript's
+`Object.prototype` members (`__proto__`, `toString`, `valueOf`,
+`constructor`, `hasOwnProperty`, `isPrototypeOf`). Honestly stated, the
+Python kernel existed when they were written, and none of their
+expectations was produced by running it. All nine failed on the
+TypeScript kernel (a missing output read as `""`, a `__proto__` member
+dropped, a correct JSON reply refused) and passed at once on Python,
+Julia and R. No earlier case changed.
+
 **Kernel 0.8.4 (D-54).** Cases 209–211 were authored by hand from the
 spec. 209 pins a fingerprint over a shape holding `0.0`, `1.0` and
 `1e-07`, 210 a fenced call input holding `1.0` and `1e-07`; both failed on

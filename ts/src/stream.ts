@@ -22,6 +22,7 @@
 import { Capture, replyProbabilities, textPart, validateResponsePart, partText, type Part } from "./core.ts";
 import { DerivedReader, EMPHASIS, fold, IGNORABLE, markerKey, Reader, repairMarkers, textCaptures, type FindRule, type PatternMatcher, type ReaderStream, type Repair } from "./reader.ts";
 import { lstrip, rstrip, strip, WHITESPACE } from "./text.ts";
+import { copyObject, memberNames, ownValue, setMember } from "./json.ts";
 import type { Plan } from "./plan.ts";
 import { brand } from "./brand.ts";
 
@@ -756,7 +757,7 @@ export class Stream<O = Record<string, unknown>> {
       this.partMode = true;
       if (this.pieces.length) this.appendPart(textPart(this.pieces.join("")));
     }
-    const part = this.appendPart({ ...delta });
+    const part = this.appendPart(copyObject(delta));
     const text = delta.type === "text" || delta.type === "data" ? partText(delta) : "";
     if (text) this.pieces.push(text);
     return [text, part];
@@ -769,7 +770,7 @@ export class Stream<O = Record<string, unknown>> {
     const last = this.parts.length - 1;
     if (hasText && last >= 0 && this.parts[last]["type"] === kind && this.partTexts[last] !== null) {
       this.partTexts[last]!.push(text);
-      for (const key of Object.keys(part)) if (key !== "type" && key !== "text") this.parts[last][key] = part[key];
+      for (const key of memberNames(part)) if (key !== "type" && key !== "text") setMember(this.parts[last], key, part[key]);
       return [kind, text, false];
     }
     this.parts.push(part);
@@ -778,7 +779,7 @@ export class Stream<O = Record<string, unknown>> {
   }
 
   private materializedParts(): Record<string, unknown>[] {
-    return this.parts.map((part, i) => (this.partTexts[i] !== null ? { ...part, text: this.partTexts[i]!.join("") } : part));
+    return this.parts.map((part, i) => (this.partTexts[i] !== null ? copyObject(part, { text: this.partTexts[i]!.join("") }) : part));
   }
 
   private run(text: string, part: PartDelta | null, final: boolean): void {
@@ -813,9 +814,9 @@ export class Stream<O = Record<string, unknown>> {
       let prefixes: Record<string, string> = stageText || !final ? this.readerStream.feed(stageText) : {};
       if (final) {
         prefixes = this.readerStream.finish();
-        this.readerFinalNames = new Set(Object.keys(prefixes));
+        this.readerFinalNames = new Set(memberNames(prefixes));
       }
-      for (const name of Object.keys(prefixes)) {
+      for (const name of memberNames(prefixes)) {
         const f = this.fields.get(name);
         if (!f) continue;
         f.present = true;
@@ -868,7 +869,7 @@ export class Stream<O = Record<string, unknown>> {
         if (!raw.startsWith(already)) throw new StreamBug(`stream projection for '${field.name}' revised emitted text`);
         const delta = raw.slice(already.length);
         if (delta) events.push({ kind: "field_delta", field: field.name, text: delta });
-        events.push({ kind: "field_done", field: field.name, value: values![field.name] });
+        events.push({ kind: "field_done", field: field.name, value: ownValue(values!, field.name) });
       }
       return events;
     }

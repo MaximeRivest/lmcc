@@ -302,13 +302,13 @@ function fix!(s::Section, limit::Int)
 end
 
 mutable struct DerivedReducer
-    fields::Dict{String,FieldState}
+    fields::OrderedDict{String,FieldState}
     wanted::Vector{Tuple{String,String,String}}
     tail::String
     bounds::Prefixes
-    holds::Dict{String,Prefixes}
+    holds::OrderedDict{String,Prefixes}
     scanners::OrderedDict{String,Scanner}
-    first::Dict{String,Int}
+    first::OrderedDict{String,Int}
     duplicated::Set{String}
     sections::OrderedDict{String,Section}
     length::Int
@@ -320,7 +320,7 @@ function DerivedReducer(r::DerivedReader, fields, names)
     wanted = [(n, wrstrip(p), wstrip(s)) for (n, p, s) in r.anchors if n in names]
     tail = wstrip(r.tail)
     markers = vcat([m for (_, m, _) in wanted], isempty(tail) ? String[] : [tail])
-    holds = Dict{String,Prefixes}()
+    holds = OrderedDict{String,Prefixes}()
     for (_, _, c) in wanted
         haskey(holds, c) || (holds[c] = Prefixes(vcat(markers, isempty(c) ? String[] : [c])))
     end
@@ -328,7 +328,7 @@ function DerivedReducer(r::DerivedReader, fields, names)
     for m in markers
         haskey(scanners, m) || (scanners[m] = Scanner(m, 0, ""))
     end
-    DerivedReducer(fields, wanted, tail, Prefixes(markers), holds, scanners, Dict{String,Int}(), Set{String}(),
+    DerivedReducer(fields, wanted, tail, Prefixes(markers), holds, scanners, OrderedDict{String,Int}(), Set{String}(),
         OrderedDict{String,Section}(), 0, "", false)
 end
 
@@ -550,7 +550,7 @@ has_stream_face(r) = r isa DerivedReader || which(reader_stream, Tuple{typeof(r)
 
 "The buffering choices, visible through `describe(plan)`."
 function describe_streaming(p::Plan)
-    counts = Dict{String,Int}()
+    counts = OrderedDict{String,Int}()
     for (f, _) in p.find_rules
         counts[f] = get(counts, f, 0) + 1
     end
@@ -601,22 +601,22 @@ mutable struct Stream
     part_texts::Vector{Union{Nothing,Vector{String}}}
     part_mode::Bool
     finished::Bool
-    fields::Dict{String,FieldState}
+    fields::OrderedDict{String,FieldState}
     stages::Vector{Tuple{String,Any}}
     by_field::OrderedDict{String,Vector{Any}}
-    counted::Dict{String,Int}
+    counted::OrderedDict{String,Int}
     derived::Union{Nothing,DerivedReducer}
     repair::Union{Nothing,MarkerRepair}
     repair_find::Union{Nothing,MarkerRepair}
     reader_stream::Any
-    reader_prefixes::Dict{String,String}
+    reader_prefixes::OrderedDict{String,String}
     reader_final_names::Union{Nothing,Set{String}}
     opening::Vector{JObj}
 end
 
 "A pure, sans-I/O streaming parser for this plan (§8)."
 function stream(p::Plan)
-    fields = Dict(f.name => FieldState(f.name) for f in p.signature.fields)
+    fields = OrderedDict(f.name => FieldState(f.name) for f in p.signature.fields)
     names = [f.name for f in p.visible_outputs]
     stages = Tuple{String,Any}[]
     by_field = OrderedDict{String,Vector{Any}}()
@@ -631,8 +631,8 @@ function stream(p::Plan)
     repair = derived !== nothing && !isempty(p.reader.repairable) ? MarkerRepair(p.reader.repairable) : nothing
     repair_find = isempty(p.find_repairable) ? nothing : MarkerRepair(p.find_repairable)
     rs = derived === nothing ? reader_stream(p.reader, names) : nothing
-    s = Stream(p, IOBuffer(), JObj[], Union{Nothing,Vector{String}}[], false, false, fields, stages, by_field, Dict{String,Int}(),
-        derived, repair, repair_find, rs, Dict{String,String}(), nothing, JObj[])
+    s = Stream(p, IOBuffer(), JObj[], Union{Nothing,Vector{String}}[], false, false, fields, stages, by_field, OrderedDict{String,Int}(),
+        derived, repair, repair_find, rs, OrderedDict{String,String}(), nothing, JObj[])
     if !isempty(p.prefill)
         _run!(s, p.prefill, nothing, false)
         s.opening = _events!(s, false)
@@ -730,7 +730,7 @@ function _run!(s::Stream, t::String, part, final::Bool)
         s.repair === nothing || (st = repair_feed!(s.repair, st, final))
         reducer_feed!(s.derived, st, final)
     elseif s.reader_stream !== nothing
-        prefixes = (!isempty(st) || !final) ? s.reader_stream.feed(st) : Dict{String,String}()
+        prefixes = (!isempty(st) || !final) ? s.reader_stream.feed(st) : OrderedDict{String,String}()
         if final
             prefixes = s.reader_stream.finish()
             s.reader_final_names = Set(keys(prefixes))

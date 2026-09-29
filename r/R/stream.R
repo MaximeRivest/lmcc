@@ -453,7 +453,7 @@ append_part <- function(s, part) {
   n <- length(s$parts)
   if (has_text && n && identical(s$parts[[n]][["type"]], kind) && !is.null(s$part_texts[[n]])) {
     s$part_texts[[n]] <- c(s$part_texts[[n]], t)
-    for (k in setdiff(names(part), c("type", "text"))) s$parts[[n]] <- set_key(s$parts[[n]], k, part[[k]])
+    for (m in members_of(part)) if (!(m[[1]] %in% c("type", "text"))) s$parts[[n]] <- set_key(s$parts[[n]], m[[1]], m[[2]])
     return(list(kind, t, FALSE))
   }
   s$parts[[n + 1L]] <- part

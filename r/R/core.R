@@ -233,14 +233,15 @@ reply_probabilities <- function(response) {
     if (is.null(dist) && is.null(method)) next
     if (is.null(dist) || is.null(method)) refuse("response-malformed", "a data part's 'probabilities' and 'method' come together (lm15 INV-052)")
     if (!is_str(method) || !is_obj(dist)) refuse("response-malformed", "a data part's 'method' is text and its 'probabilities' an object {field: {key: p}}")
-    for (field in names(dist)) {
-      keys <- dist[[field]]
+    # Field names here are the provider's, any string ("" included): by position.
+    for (m in members_of(dist)) {
+      field <- m[[1]]; keys <- m[[2]]
       ok <- is_obj(keys) && all(vapply(keys, function(p) is_num(p) && { v <- num_value(p); !is_bigint(v) && v >= 0 && v <= 1 }, TRUE))
       if (!ok) refuse("response-malformed", sprintf("probabilities for %s must map each answer key to a number in [0, 1]", pyrepr(field)))
       if (has_key(probabilities, field))
         refuse("parse-ambiguous", sprintf("two data parts carry probabilities for %s \u2014 refusing to guess which measured the answer", pyrepr(field)))
-      probabilities[[field]] <- as_obj(keys)
-      measured[[field]] <- method
+      probabilities <- set_key(probabilities, field, as_obj(keys))
+      measured <- set_key(measured, field, method)
     }
   }
   list(probabilities, measured)
@@ -255,7 +256,7 @@ normalize_response_parts <- function(parts) {
     n <- length(out)
     if (has_text && length(texts) && identical(out[[n]][["type"]], part[["type"]])) {
       texts <- c(texts, part[["text"]])
-      for (k in setdiff(names(part), c("type", "text"))) out[[n]] <- set_key(out[[n]], k, part[[k]])
+      for (m in members_of(part)) if (!(m[[1]] %in% c("type", "text"))) out[[n]] <- set_key(out[[n]], m[[1]], m[[2]])
       next
     }
     if (length(texts)) out[[n]][["text"]] <- paste(texts, collapse = "")

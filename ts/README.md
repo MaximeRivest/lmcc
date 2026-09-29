@@ -195,6 +195,52 @@ try {
 assert.equal((answered.meta.refusal as { code: string }).code, "parse-value");
 ```
 
+**Names are data; records are ordinary objects.** A field, a JSON member
+or an artifact key may be named `toString`, `__proto__`, `"10"` or `""`.
+Inputs, values, turns and partials are ordinary objects, so JavaScript's
+own lookups can answer from the prototype: test a name with `Object.hasOwn`
+(never `name in record` or `record.hasOwnProperty`), read it with
+`lmcc.ownValue`, list names with `lmcc.memberNames`, and write an
+arbitrary name with `lmcc.setMember` (`record["__proto__"] = v` sets the
+prototype; an object literal's `__proto__:` does too). A value
+named like a method shadows it: `String(values)` throws when an output is
+named `toString`.
+
+```ts
+const record = lmcc.parseJson('{"toString": "a", "b": 1, "10": 2}') as Record<string, unknown>;
+assert.equal("valueOf" in record, true);            // inherited, not held
+assert.equal(Object.hasOwn(record, "valueOf"), false);
+assert.equal(lmcc.ownValue(record, "toString"), "a");
+const built: Record<string, unknown> = {};
+lmcc.setMember(built, "__proto__", 1);
+assert.deepEqual(Object.keys(built), ["__proto__"]);
+```
+
+**Members keep their order.** JavaScript enumerates integer-like names
+(`"10"`) first. lmcc keeps the order a value holds, as every other kernel
+does: `lmcc.setMember` adds a name after the ones an object holds (a
+replaced member keeps its place, one removed and set again comes last),
+recording the order where JavaScript's would differ; every object lmcc
+builds (a parse, a copy, a reading, a table row, a turn, a dump) is built
+that way, and every JSON lmcc writes follows it. The record is invisible
+to JavaScript (`Object.keys`, spread, `JSON.stringify` and
+`structuredClone` neither see nor copy it), so use lmcc's helpers where
+order matters: `lmcc.memberNames` to list, `lmcc.setMember` to add,
+`lmcc.copyObject(a, b)` for `{...a, ...b}`, `lmcc.orderedObject(entries)`
+to build. A member added by plain assignment is listed after the recorded
+ones in JavaScript's order. An object literal or a `JSON.parse` result has
+lost the order before lmcc sees it: build one with `lmcc.orderedObject`,
+read JSON with `lmcc.parseJson`.
+
+```ts
+assert.deepEqual(Object.keys(record), ["10", "toString", "b"]);
+assert.deepEqual(lmcc.memberNames(record), ["toString", "b", "10"]);
+assert.equal(lmcc.jsonText(record), '{"toString":"a","b":1,"10":2}');
+assert.equal(lmcc.jsonText(lmcc.orderedObject([["b", 1], ["10", 2]])), '{"b":1,"10":2}');
+lmcc.setMember(record, "2", 3);
+assert.equal(lmcc.jsonText(lmcc.copyObject(record, { b: 0 })), '{"toString":"a","b":0,"10":2,"2":3}');
+```
+
 **Two copies of lmcc in one program** (npm installs it twice easily) work:
 `instanceof` and `isRefusal` recognize objects from another copy of the same
 kernel version, and a pack (`lmcc/std`) installed from one copy plugs into
@@ -224,7 +270,8 @@ tarball (`npm pack` in `ts/`).
 The contract names the places two hosts may legitimately differ; this kernel
 takes these, and nothing else (the differential check,
 `python contract/harness/differential.py --probe 'node ts/tools/probe.ts'`, compares everything else on every corpus
-case and 2,600 fuzzed replies):
+case, 3,000 fuzzed replies and 88 variants with hostile member names, member
+order included):
 
 - **Shipped code (UDF formats)**: this runtime places no UDF language, so an
   artifact that ships Python code refuses `format-untrusted`/`udf-unplaceable`
@@ -242,6 +289,14 @@ case and 2,600 fuzzed replies):
   `s` and `u` flags (label `ecmascript:RegExp`); identity escapes of
   non-syntax characters (`\:`) refuse and `\d`/`\w` are ASCII. The contract
   leaves these unspecified.
+- **Member order at JavaScript's own boundaries**: lmcc writes every JSON in
+  a value's order (above), but what JavaScript serializes itself follows
+  JavaScript's order: `JSON.stringify` of a reading, and the request lm15
+  sends, so a `response_format` schema whose property names are
+  integer-like reaches the provider with those properties first (its
+  `required` list keeps the property order). A tool call's `input` or a
+  data part that lm15 parsed arrives in JavaScript's order. Python has no
+  such boundary.
 - **Hints** (the prose of a refusal) name TypeScript APIs; codes, fixes and
   partials are identical.
 

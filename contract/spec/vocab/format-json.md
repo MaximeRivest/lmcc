@@ -11,7 +11,8 @@ Strict RFC 8259 text; strings escaped minimally (`"`, `\`, and
 U+0000–U+001F — the short forms `\n \r \t \b \f` where they exist, else
 `\u00XX`), all other characters emitted raw (no `\uXXXX` for non-ASCII);
 numbers by the kernel number spelling (`kernel.md` §7a); object members
-in the value's own order. Two layouts:
+in the value's own order (`kernel.md` §1: any member name, `""` and
+`"10"` included, where it stands). Two layouts:
 
 - *indented* (`indent` = n): members and items one per line, nested
   blocks indented by n spaces, `"key": value`, items separated by `,` +

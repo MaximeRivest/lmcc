@@ -9,15 +9,20 @@
 
 lib <- Sys.getenv("LMCC_R_LIB", file.path(dirname(sub("^--file=", "", grep("^--file=", commandArgs(FALSE), value = TRUE)[[1]])), "..", ".lib"))
 suppressPackageStartupMessages(library(lmcc, lib.loc = lib))
+# R's `$` and argument matching complete a partial name (`x$id` finds a member
+# "identifier" when "id" is absent): the kernel reads data by exact name, and
+# any partial match, like any other warning, fails the run here.
+options(warnPartialMatchDollar = TRUE, warnPartialMatchArgs = TRUE, warnPartialMatchAttr = TRUE, warn = 2)
 ns <- asNamespace("lmcc")
 for (n in c("is_obj", "is_arr", "is_str", "json_equal", "get_key", "has_key", "set_key", "bsl", "blen", "chars_of", "parse_with_captures",
-            "native_extensions", "capture_text", "describe_refusal")) assign(n, get(n, envir = ns))
+            "native_extensions", "capture_text", "describe_refusal", "members_of")) assign(n, get(n, envir = ns))
 
 case_turns <- function(c) {
   fp <- signature_fingerprint(signature_from_list(c$signature))
   current <- jobj(signature = fp, inputs = get_key(c, "inputs", jobj()), steps = get_key(c, "steps", list()))
   slots <- jobj()
-  for (name in names(get_key(c, "turns", jobj()))) slots[[name]] <- lapply(c$turns[[name]], function(t) if (has_key(t, "signature")) t else c(jobj(signature = fp), t))
+  # Slot names are data: a slot named "" is found and written by position.
+  for (m in members_of(get_key(c, "turns", jobj()))) slots <- set_key(slots, m[[1]], lapply(m[[2]], function(t) if (has_key(t, "signature")) t else c(jobj(signature = fp), t)))
   list(current, slots)
 }
 
@@ -37,8 +42,22 @@ unclaimed_of <- function(c) {
 }
 
 ok <- function() jobj(ok = TRUE, detail = "")
-compare <- function(expected, got, what) if (json_equal(expected, got)) ok() else
-  jobj(ok = FALSE, detail = paste0(what, " mismatch\n--- expected\n", json_text(expected, spaced = TRUE), "\n--- got\n", json_text(got, spaced = TRUE)))
+# Whether every object lists its members in the same order (kernel section 1), recursively.
+same_order <- function(a, b) {
+  if (is_obj(a) && is_obj(b)) {
+    if (!identical(as.character(names(a)), as.character(names(b)))) return(FALSE)
+    for (i in seq_along(a)) if (!same_order(a[[i]], b[[i]])) return(FALSE)
+    return(TRUE)
+  }
+  if (is_arr(a) && is_arr(b) && length(a) == length(b)) { for (i in seq_along(a)) if (!same_order(a[[i]], b[[i]])) return(FALSE) }
+  TRUE
+}
+compare <- function(expected, got, what, ordered = FALSE) {
+  detail <- function(why) paste0(what, why, "\n--- expected\n", json_text(expected, spaced = TRUE), "\n--- got\n", json_text(got, spaced = TRUE))
+  if (!json_equal(expected, got)) return(jobj(ok = FALSE, detail = detail(" mismatch")))
+  if (ordered && !same_order(expected, got)) return(jobj(ok = FALSE, detail = detail(": member order differs (the case is ordered, kernel section 9)")))
+  ok()
+}
 
 message_parts <- function(r) { m <- if (is_obj(r) && is_obj(get_key(r, "message"))) r$message else r; if (is_obj(m) && is_arr(get_key(m, "parts"))) m$parts else list() }
 finish_reason_of <- function(r) if (is_obj(r) && is_obj(get_key(r, "message"))) get_key(r, "finish_reason") else NULL
@@ -130,31 +149,31 @@ stream_trace <- function(plan, response) {
 }
 
 run_case <- function(c) {
-  expect <- c$expect; kind <- c$kind
+  expect <- c$expect; kind <- c$kind; ordered <- isTRUE(get_key(c, "ordered"))
   u <- unclaimed_of(c)
   if (!is.null(u)) return(jobj(ok = TRUE, detail = "", unclaimed = u))
   reg <- registry_for(c)
   stage <- "load"; plan <- NULL
   tryCatch({
     a <- load_adapter(c$entry, reg)
-    if (kind == "roundtrip") return(compare(expect$entry, dump_adapter(a, reg), "entry"))
+    if (kind == "roundtrip") return(compare(expect$entry, dump_adapter(a, reg), "entry", ordered))
     stage <- "signature"
     sig <- signature_from_list(c$signature)
     stage <- "bind"
     plan <- lmcc_bind(a, sig, get_key(c, "capabilities", jobj()), reg)
     if (kind == "plan") {
       slots <- case_turns(c)[[2]]
-      return(compare(jobj(skeleton = expect$skeleton, prefix = expect$prefix), jobj(skeleton = skeleton(plan), prefix = prefix(plan, slots)), "plan"))
+      return(compare(jobj(skeleton = expect$skeleton, prefix = expect$prefix), jobj(skeleton = skeleton(plan), prefix = prefix(plan, slots)), "plan", ordered))
     }
     if (kind == "render") {
       ct <- case_turns(c)
-      return(compare(expect$request, request_of(render(plan, turn_from_list(ct[[1]]), ct[[2]])), "request"))
+      return(compare(expect$request, request_of(render(plan, turn_from_list(ct[[1]]), ct[[2]])), "request", ordered))
     }
     if (kind == "parse") {
       reading <- read_reply(plan, c$response)
-      r <- compare(expect$values, reading$values, "values")
+      r <- compare(expect$values, reading$values, "values", ordered)
       if (!r$ok) return(r)
-      for (k in c("repairs", "probabilities", "measured_by")) if (has_key(expect, k)) { r <- compare(expect[[k]], reading[[k]], k); if (!r$ok) return(r) }
+      for (k in c("repairs", "probabilities", "measured_by")) if (has_key(expect, k)) { r <- compare(get_key(expect, k), get_key(reading, k), k, ordered); if (!r$ok) return(r) }
       caps <- parse_with_captures(plan, c$response)[[2]]
       raw <- jobj()
       for (n in names(caps)) { t <- capture_text(caps[[n]]); if (nzchar(t)) raw[[n]] <- t }
@@ -172,7 +191,7 @@ run_case <- function(c) {
     if (kind == "refuse" && err$code == expect$code && has_key(expect, "at") && stage != expect$at)
       return(jobj(ok = FALSE, detail = sprintf("refusal [%s] fired at %s, the case says %s", err$code, stage, expect$at)))
     if (kind == "refuse" && err$code == expect$code) {
-      if (has_key(expect, "fix")) { r <- compare(expect$fix, err$fix, sprintf("fix of [%s]", err$code)); if (!r$ok) return(r) }
+      if (has_key(expect, "fix")) { r <- compare(expect$fix, err$fix, sprintf("fix of [%s]", err$code), ordered); if (!r$ok) return(r) }
       if (identical(get_key(expect, "at"), "parse") && has_key(c, "response") && !is.null(plan)) {
         r <- check_stream_refusal(plan, c$response, err)
         if (r$ok) r$stream_trace <- stream_trace(plan, c$response)

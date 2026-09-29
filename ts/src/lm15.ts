@@ -23,7 +23,7 @@ import type { Plan, Reading, RenderResult } from "./plan.ts";
 import type { StreamEvent as LmccEvent, StreamResult } from "./stream.ts";
 import type { Turn } from "./turn.ts";
 import { isObj } from "./core.ts";
-import { jsonEqual } from "./json.ts";
+import { copyObject, hasOwn, jsonEqual, memberNames, setMember } from "./json.ts";
 
 /** The caller's Config contradicts what the plan's request settings require. */
 export class ConfigConflict extends Error {
@@ -34,16 +34,16 @@ export class ConfigConflict extends Error {
 }
 
 function merge(base: Record<string, unknown>, extra: Record<string, unknown>, path: string, override: boolean): Record<string, unknown> {
-  const out: Record<string, unknown> = { ...base };
-  for (const key of Object.keys(extra)) {
+  const out = copyObject(base);
+  for (const key of memberNames(extra)) {
     const value = extra[key];
     const here = path ? `${path}.${key}` : key;
-    if (key in out && isObj(out[key]) && isObj(value)) {
-      out[key] = merge(out[key] as Record<string, unknown>, value, here, override);
-    } else if (key in out && !jsonEqual(out[key], value) && !override) {
+    if (hasOwn(out, key) && isObj(out[key]) && isObj(value)) {
+      setMember(out, key, merge(out[key] as Record<string, unknown>, value, here, override));
+    } else if (hasOwn(out, key) && !jsonEqual(out[key], value) && !override) {
       throw new ConfigConflict(`${here}: the plan's request settings require ${JSON.stringify(out[key])} (a transport or reader asked for it) but the caller's Config says ${JSON.stringify(value)}; pass override: true to insist`);
     } else {
-      out[key] = value;
+      setMember(out, key, value);
     }
   }
   return out;

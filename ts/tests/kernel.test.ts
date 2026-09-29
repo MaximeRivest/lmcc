@@ -174,14 +174,14 @@ test("streaming refines batch under random multi-chunk splits of corpus and muta
         const [, values, repairs, captures] = batch as ["ok", Record<string, unknown>, unknown[], Map<string, lmcc.Capture>];
         assert.ok(jsonEqual(end.values, values), where);
         assert.ok(jsonEqual(end.repairs, repairs), where);
-        const joined: Record<string, string> = {};
+        const joined = new Map<string, string>(); // field names are data: __proto__ is one (case 216)
         for (const e of events) {
           if (e.kind === "field_delta") {
             assert.ok(e.text, where);
-            joined[e.field] = (joined[e.field] ?? "") + e.text;
+            joined.set(e.field, (joined.get(e.field) ?? "") + e.text);
           }
         }
-        for (const [field, capture] of captures) assert.equal(joined[field] ?? "", capture.text, where);
+        for (const [field, capture] of captures) assert.equal(joined.get(field) ?? "", capture.text, where);
         successes++;
       } catch (err) {
         if (!(err instanceof lmcc.Refusal)) throw err;

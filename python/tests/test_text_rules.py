@@ -262,3 +262,29 @@ def test_kernel_json_spells_numbers_by_ecmascript_and_sorts_by_code_point():
         assert err.code == "value-invalid"
     else:
         raise AssertionError("a non-finite number has no JSON spelling")
+
+
+# ------------------------------------------------ grammars match whole text
+
+@pytest.mark.parametrize("tail", ["\n", "\r", "\r\n", "\u2028", " ", "\x00"])
+def test_name_grammars_match_the_whole_text(tail):
+    """`$` also matches before a final "\\n" in Python and PCRE, not in
+    ECMAScript: every grammar is matched whole, so all four kernels agree
+    (corpus 239-249, 251)."""
+    assert core.is_identifier("a") and not core.is_identifier("a" + tail)
+    assert core.is_purpose("tools.calls") and not core.is_purpose("tools.calls" + tail)
+    for rule in ({"from": "text" + tail, "to": "@purpose", "between": ["<", ">"]},
+                 {"from": "text", "to": "@purpose" + tail, "between": ["<", ">"]}):
+        with pytest.raises(lmcc.Refusal) as err:
+            validate_find_rule(rule, where="r")
+        assert err.value.code == "entry-malformed"
+
+
+@pytest.mark.parametrize("version", ["0.\u0668.4", "0.8.4\n", "0.8.\u00b2", "0.8.٤"])
+def test_versions_are_ascii_digits(version):
+    """str.isdigit and \\d accept other scripts' digits (and `int("²")`
+    raises); a version is MAJOR.MINOR.PATCH in ASCII (corpus 244-246)."""
+    from lmcc.serde import check_compatible
+    with pytest.raises(lmcc.Refusal) as err:
+        check_compatible("kernel", version, "0.8.4")
+    assert err.value.code == "entry-malformed"

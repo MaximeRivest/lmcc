@@ -1,0 +1,68 @@
+{
+ "name": "parse-object-member-names",
+ "kind": "parse",
+ "entry": {
+  "name": "sections_v1",
+  "versions": {
+   "kernel": "0.8.0",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n\nReply with EXACTLY these sections:\n{% for f in outputs %}<{f.name}>\n{f.value}\n{% endfor %}</done>"
+   },
+   {
+    "directive": "turns"
+   },
+   {
+    "role": "user",
+    "text": "{% for f in inputs %}== {f.name} ==\n{f.value}\n{% endfor %}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Answer.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "__proto__",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "toString",
+    "direction": "output",
+    "shape": {
+     "type": "integer"
+    }
+   },
+   {
+    "name": "valueOf",
+    "direction": "output",
+    "shape": {
+     "type": "boolean"
+    }
+   }
+  ]
+ },
+ "response": "<__proto__>\nA\n<toString>\n7\n<valueOf>\ntrue\n</done>",
+ "expect": {
+  "values": {
+   "__proto__": "A",
+   "toString": 7,
+   "valueOf": true
+  }
+ }
+}

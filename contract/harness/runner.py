@@ -135,6 +135,7 @@ class PythonDriver:
         lmcc = self.lmcc
         expect = case["expect"]
         kind = case["kind"]
+        ordered = bool(case.get("ordered", False))
         unclaimed = self._unclaimed(case)
         if unclaimed:
             return {"ok": True, "detail": "", "unclaimed": unclaimed}
@@ -144,7 +145,10 @@ class PythonDriver:
             adapter = lmcc.load(case["entry"], registry=registry)
             if kind == "roundtrip":
                 dumped = lmcc.dump(adapter, registry)
-                return _compare(expect["entry"], dumped, "entry")
+                return _compare(expect["entry"], dumped, "entry", ordered)
+            if kind == "refuse" and expect.get("at") == "load" and "signature" not in case:
+                return {"ok": False, "detail": f"expected refusal {expect['code']!r} at load, "
+                                               f"but the entry loaded"}
             stage = "signature"
             sig = lmcc.signature_from_dict(case["signature"])
             stage = "bind"
@@ -153,24 +157,24 @@ class PythonDriver:
             if kind == "plan":
                 _, slots = case_turns(case)
                 got = {"skeleton": baked.skeleton(), "prefix": baked.prefix(turns=slots)}
-                return _compare({"skeleton": expect["skeleton"], "prefix": expect["prefix"]}, got, "plan")
+                return _compare({"skeleton": expect["skeleton"], "prefix": expect["prefix"]}, got, "plan", ordered)
             if kind == "render":
                 current, slots = case_turns(case)
                 result = baked.render(lmcc.Turn.from_dict(current), turns=slots)
-                return _compare(expect["request"], result.request(), "request")
+                return _compare(expect["request"], result.request(), "request", ordered)
             if kind == "parse":
                 reading = baked.read(case["response"])
                 values = reading.values
-                compared = _compare(expect["values"], values, "values")
+                compared = _compare(expect["values"], values, "values", ordered)
                 if not compared["ok"]:
                     return compared
                 if "repairs" in expect:
-                    compared = _compare(expect["repairs"], reading.repairs, "repairs")
+                    compared = _compare(expect["repairs"], reading.repairs, "repairs", ordered)
                     if not compared["ok"]:
                         return compared
                 for key in ("probabilities", "measured_by"):     # kernel §3: data parts
                     if key in expect:
-                        compared = _compare(expect[key], getattr(reading, key), key)
+                        compared = _compare(expect[key], getattr(reading, key), key, ordered)
                         if not compared["ok"]:
                             return compared
                 _, captures, _ = baked._parse_with_captures(case["response"])
@@ -198,7 +202,7 @@ class PythonDriver:
                         "detail": f"refusal [{err.code}] fired at {stage}, the case says {expect['at']}"}
             if kind == "refuse" and err.code == expect["code"]:
                 if "fix" in expect:
-                    compared = _compare(expect["fix"], err.fix, f"fix of [{err.code}]")
+                    compared = _compare(expect["fix"], err.fix, f"fix of [{err.code}]", ordered)
                     if not compared["ok"]:
                         return compared
                 if expect.get("at") == "parse" and "response" in case:
@@ -398,7 +402,22 @@ class SubprocessDriver:
         self.proc.wait()
 
 
-def _compare(expected, got, what: str) -> dict:
+def _same_order(expected, got) -> bool:
+    """Whether every object lists its members in the same order (kernel §1),
+    recursively; values are compared by `==` separately."""
+    if isinstance(expected, dict) and isinstance(got, dict):
+        return list(expected) == list(got) and all(_same_order(expected[k], got[k]) for k in expected)
+    if isinstance(expected, list) and isinstance(got, list):
+        return all(_same_order(x, y) for x, y in zip(expected, got))
+    return True
+
+
+def _compare(expected, got, what: str, ordered: bool = False) -> dict:
+    if expected == got and ordered and not _same_order(expected, got):
+        return {"ok": False,
+                "detail": f"{what}: member order differs (the case is ordered, kernel §9)\n--- expected\n"
+                          f"{json.dumps(expected, indent=1, ensure_ascii=False)}\n"
+                          f"--- got\n{json.dumps(got, indent=1, ensure_ascii=False)}"}
     if expected == got:
         return {"ok": True, "detail": ""}
     return {"ok": False,

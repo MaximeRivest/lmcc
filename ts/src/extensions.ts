@@ -13,6 +13,7 @@ import { isObj } from "./core.ts";
 import type { PatternMatcher } from "./reader.ts";
 import { pyRepr } from "./text.ts";
 import type { Transport } from "./transport.ts";
+import { copyObject, memberNames, setMember } from "./json.ts";
 
 const NAME = /^[a-z][a-z0-9_]*\/[a-z][a-z0-9_-]*$/;
 const SEMVER = /^\d+\.\d+\.\d+$/;
@@ -128,7 +129,8 @@ function walkTransport(t: Transport, visit: (rule: Record<string, unknown>, path
 /** Whether any inline transport carries a rule of `family` (named ones are not seen). */
 export function usesFamily(transports: Record<string, unknown>, family: string, isTransport: (x: unknown) => x is Transport): boolean {
   let found = false;
-  for (const s of Object.values(transports)) {
+  for (const purpose of memberNames(transports)) {
+    const s = transports[purpose];
     if (!isTransport(s)) continue;
     walkTransport(s, (r) => {
       if (family === "pattern" && "pattern" in r) found = true;
@@ -139,8 +141,10 @@ export function usesFamily(transports: Record<string, unknown>, family: string, 
 
 /** The constructor's convenience (§10): an inline `pattern` rule declares the default tier. */
 export function defaultDeclaration(transports: Record<string, unknown>, declared: Record<string, string>, isTransport: (x: unknown) => x is Transport): Record<string, string> {
-  if (usesFamily(transports, "pattern", isTransport) && !Object.keys(declared).some((n) => familyOf(n) === "pattern")) {
-    return { ...declared, [LegacyRE2.extension]: LegacyRE2.version };
+  if (usesFamily(transports, "pattern", isTransport) && !memberNames(declared).some((n) => familyOf(n) === "pattern")) {
+    const out = copyObject<string>(declared);
+    setMember(out, LegacyRE2.extension, LegacyRE2.version);
+    return out;
   }
   return declared;
 }
@@ -152,7 +156,7 @@ export function validateDeclaration(extensions: unknown): Record<string, string>
     refuse("entry-malformed", "extensions must be an object of '<family>/<name>': version", { fix: { action: "edit-entry", path: "extensions" } });
   }
   const seen = new Map<string, string>();
-  for (const name of Object.keys(extensions)) {
+  for (const name of memberNames(extensions)) {
     const version = extensions[name];
     if (!NAME.test(name)) {
       refuse("entry-malformed", `extensions: ${pyRepr(name)} is not an extension name ('<family>/<name>', lowercase)`, { fix: { action: "edit-entry", path: "extensions" } });
@@ -167,7 +171,7 @@ export function validateDeclaration(extensions: unknown): Record<string, string>
     }
     seen.set(fam, name);
   }
-  return { ...(extensions as Record<string, string>) };
+  return copyObject<string>(extensions);
 }
 
 export interface ResolveContext {
@@ -182,7 +186,7 @@ export interface ResolveContext {
 export function resolveExtensions(ctx: ResolveContext): Map<string, Resolved> {
   const declared = validateDeclaration(ctx.extensions);
   const resolved = new Map<string, Resolved>();
-  for (const name of Object.keys(declared)) {
+  for (const name of memberNames(declared)) {
     const needs = declared[name];
     const binding = ctx.bound.get(name);
     if (!binding) {
@@ -195,7 +199,7 @@ export function resolveExtensions(ctx: ResolveContext): Map<string, Resolved> {
   }
   const byFamily = new Map<string, Resolved>();
   for (const r of resolved.values()) byFamily.set(familyOf(r.name), r);
-  for (const purpose of Object.keys(ctx.transports)) {
+  for (const purpose of memberNames(ctx.transports)) {
     const where = `transports[${pyRepr(purpose)}]`;
     const transport = ctx.transportOf(purpose, ctx.transports[purpose], where);
     walkTransport(transport, (r, path) => {

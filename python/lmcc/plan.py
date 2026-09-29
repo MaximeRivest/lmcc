@@ -579,6 +579,11 @@ class Plan:
                     refuse("turn-not-renderable",
                            f"field {self.calls_field!r}: its format must write lm15 tool_call "
                            f"parts {{type, id, name, input}}; got {p!r}")
+                if not p["id"]:
+                    refuse("turn-invalid",
+                           f"field {self.calls_field!r}: call {p['name']!r} has the id '', and a "
+                           f"call's id is non-empty text (lm15 ToolCallPart.id; a tool step "
+                           f"answers the call by it)")
             owner = self.calls_owner
             if owner is not None and "call" in owner.transport.spelling:
                 call_text = "\n".join(self._call_text(owner, p) for p in written)

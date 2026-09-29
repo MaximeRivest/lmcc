@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from . import extensions as _extensions
 from . import formats as _formats
-from .adapter import Adapter, adapter as make_adapter
+from .adapter import Adapter, adapter as make_adapter, check_purpose
 from .errors import refuse
 from .transport import Transport, spelling_format_refs
 
@@ -25,7 +25,7 @@ def _parse_version(version: object, *, what: str) -> tuple[int, int, int]:
         refuse("entry-malformed", f"{what}: version must be a string",
                fix={"action": "edit-entry", "path": "versions"})
     parts = version.split(".")
-    if len(parts) != 3 or not all(p.isdigit() for p in parts):
+    if len(parts) != 3 or not all(p and all("0" <= c <= "9" for c in p) for p in parts):
         refuse("entry-malformed", f"{what}: version {version!r} is not MAJOR.MINOR.PATCH",
                fix={"action": "edit-entry", "path": "versions"})
     return tuple(int(p) for p in parts)  # type: ignore[return-value]
@@ -88,7 +88,7 @@ def load(entry: dict, *, registry=None) -> Adapter:
 
     transports: dict[str, object] = {}
     for purpose, s in (entry.get("transports") or {}).items():
-        where = f"transports[{purpose!r}]"
+        where = check_purpose(purpose)
         if not isinstance(s, dict):
             refuse("entry-malformed", f"{where}: must be an object",
                    fix={"action": "edit-entry", "path": where})

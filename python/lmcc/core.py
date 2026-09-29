@@ -36,10 +36,13 @@ DIRECTIONS = ("input", "output")
 # or int()/float() directly on model text anywhere in the kernel or std.
 
 WHITESPACE = " \t\n\r\f\v"
-_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-_PURPOSE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$")
-_INTEGER = re.compile(r"^-?[0-9]+$")
-_NUMBER = re.compile(r"^-?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?$")
+# Every grammar below is matched whole (`fullmatch`): `$` also matches
+# before a final "\n" in Python and PCRE, which would let `a\n` pass as a
+# name here while an ECMAScript host refuses it.
+_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+_PURPOSE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*")
+_INTEGER = re.compile(r"-?[0-9]+")
+_NUMBER = re.compile(r"-?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?")
 
 
 def strip(text: str) -> str:
@@ -52,7 +55,12 @@ def rstrip(text: str) -> str:
 
 
 def is_identifier(name: object) -> bool:
-    return isinstance(name, str) and _IDENTIFIER.match(name) is not None
+    return isinstance(name, str) and _IDENTIFIER.fullmatch(name) is not None
+
+
+def is_purpose(name: object) -> bool:
+    """A purpose as a field declares it: a name or dotted names (`tools.calls`)."""
+    return isinstance(name, str) and _PURPOSE.fullmatch(name) is not None
 
 
 def format_number(value: float) -> str:
@@ -89,14 +97,14 @@ def format_number(value: float) -> str:
 
 def read_integer(text: str, *, where: str) -> int:
     t = strip(text)
-    if not _INTEGER.match(t):
+    if not _INTEGER.fullmatch(t):
         refuse("parse-value", f"{where}: {t!r} is not an integer")
     return int(t)
 
 
 def read_number(text: str, *, where: str) -> float:
     t = strip(text)
-    if not _NUMBER.match(t):
+    if not _NUMBER.fullmatch(t):
         refuse("parse-value", f"{where}: {t!r} is not a number")
     value = float(t)
     if not math.isfinite(value):
@@ -270,7 +278,7 @@ def _validated(sig: SignatureCore) -> SignatureCore:
         if not isinstance(f.shape, dict):
             refuse("signature-malformed", f"field {f.name!r}: shape must be an object",
                    fix=_fix_field(f))
-        if not isinstance(f.purpose, str) or not _PURPOSE.match(f.purpose):
+        if not isinstance(f.purpose, str) or not _PURPOSE.fullmatch(f.purpose):
             refuse("signature-malformed",
                    f"field {f.name!r}: purpose {f.purpose!r} is not a (dotted) identifier",
                    fix=_fix_field(f))

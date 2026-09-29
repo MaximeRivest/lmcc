@@ -93,11 +93,40 @@ is_int_value <- function(x) {
   is.integer(x) && length(x) == 1L && !is.na(x) || (is.double(x) && length(x) == 1L && is.finite(x) && x == trunc(x) && !is.object(x))
 }
 
-has_key <- function(x, k) !is.null(names(x)) && k %in% names(x)
-get_key <- function(x, k, default = NULL) if (has_key(x, k)) x[[k]] else default
+# Members are found and written by position, never by R's lookup by name:
+# `x[[""]]` is NULL and `x[[""]] <- v` appends, so a member named "" (any
+# string is a JSON member name, kernel section 1) would read as null and be
+# written twice. `match` finds "" like any other name.
+key_index <- function(x, k) {
+  n <- names(x)
+  if (is.null(n) || !is.character(k) || length(k) != 1L || is.na(k)) return(0L)
+  i <- match(k, n)
+  if (is.na(i)) 0L else i
+}
+has_key <- function(x, k) key_index(x, k) > 0L
+get_key <- function(x, k, default = NULL) { i <- key_index(x, k); if (i) x[[i]] else default }
 set_key <- function(x, k, v) {
-  if (is.null(v)) x[k] <- list(NULL) else x[[k]] <- v
+  i <- key_index(x, k)
+  if (i) {
+    x[i] <- list(v)
+  } else {
+    i <- length(x) + 1L
+    x[i] <- list(v)
+    names(x)[i] <- k
+  }
   x
+}
+# One object updated by another, as Python's {**a, **b}: a's members in
+# order, each one b also has replaced in place, then b's other members in
+# b's order. Never c(a, b), which holds a name twice when both have it.
+merge_obj <- function(a, b) {
+  for (m in members_of(b)) a <- set_key(a, m[[1]], m[[2]])
+  a
+}
+# The members of an object as (name, value) pairs, in order, by position.
+members_of <- function(x) {
+  n <- names(x)
+  lapply(seq_along(x), function(i) list(n[[i]], x[[i]]))
 }
 drop_key <- function(x, k) {
   if (has_key(x, k)) x <- x[names(x) != k]
@@ -158,7 +187,8 @@ json_equal <- function(a, b) {
   if (is.null(a) || is.null(b)) return(is.null(a) && is.null(b))
   if (is_obj(a) && is_obj(b)) {
     if (length(a) != length(b)) return(FALSE)
-    for (k in names(a)) if (!has_key(b, k) || !json_equal(a[[k]], b[[k]])) return(FALSE)
+    ka <- names(a)
+    for (i in seq_along(a)) { j <- key_index(b, ka[[i]]); if (!j || !json_equal(a[[i]], b[[j]])) return(FALSE) }
     return(TRUE)
   }
   if (is_arr(a) && is_arr(b)) {
@@ -405,18 +435,18 @@ wrstrip <- function(s) sub("[ \t\n\r\f\v]+$", "", s, perl = TRUE)
 nlstrip <- function(s) sub("^\n+", "", sub("\n+$", "", s, perl = TRUE), perl = TRUE)
 is_ws_char <- function(ch) ch %in% c(" ", "\t", "\n", "\r", "\f", "\v")
 
-is_identifier <- function(x) is_str(x) && grepl("^[A-Za-z_][A-Za-z0-9_]*$", x, perl = TRUE)
-PURPOSE_RE <- "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*$"
+is_identifier <- function(x) is_str(x) && grepl("\\A[A-Za-z_][A-Za-z0-9_]*\\z", x, perl = TRUE)
+PURPOSE_RE <- "\\A[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*\\z"
 
 read_integer <- function(text, where) {
   t <- wstrip(text)
-  if (!grepl("^-?[0-9]+$", t, perl = TRUE)) refuse("parse-value", sprintf("%s: %s is not an integer", where, pyrepr(t)))
+  if (!grepl("\\A-?[0-9]+\\z", t, perl = TRUE)) refuse("parse-value", sprintf("%s: %s is not an integer", where, pyrepr(t)))
   integer_value(t)
 }
 
 read_number <- function(text, where) {
   t <- wstrip(text)
-  if (!grepl("^-?[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?$", t, perl = TRUE)) refuse("parse-value", sprintf("%s: %s is not a number", where, pyrepr(t)))
+  if (!grepl("\\A-?[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?\\z", t, perl = TRUE)) refuse("parse-value", sprintf("%s: %s is not a number", where, pyrepr(t)))
   v <- parse_f64(t)
   if (!is.finite(v)) refuse("parse-value", sprintf("%s: %s is not a finite number", where, pyrepr(t)))
   v
@@ -579,7 +609,7 @@ pyrepr <- function(x) {
     if (is_bigint(v) || is.integer(v)) return(num_text(v))
     return(repr_float(v))
   }
-  if (is_obj(x)) return(paste0("{", paste(vapply(names(x), function(k) paste0(repr_str(k), ": ", pyrepr(x[[k]])), ""), collapse = ", "), "}"))
+  if (is_obj(x)) return(paste0("{", paste(vapply(seq_along(x), function(i) paste0(repr_str(names(x)[[i]]), ": ", pyrepr(x[[i]])), ""), collapse = ", "), "}"))
   if (is.list(x)) return(paste0("[", paste(vapply(x, pyrepr, ""), collapse = ", "), "]"))
   if (is.character(x)) return(paste0("[", paste(vapply(x, repr_str, ""), collapse = ", "), "]"))
   paste(format(x), collapse = " ")
