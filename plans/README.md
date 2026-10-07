@@ -28,3 +28,4 @@ code is at the git tag `kernel-0.6`.
 | `11-heredoc-turns.md` | ✅ kernel 0.6: formatted arguments and explicit turns samples; raw-code heredoc writer/reader, portable tests and runnable notebook | M |
 | `12-turns.md` | ✅ kernel 0.7 (Python): one `Turn` record replaces `demos` and `history`; named slots as messages or text, guards, writers for hidden fields, recorded or value replay, unique ids · open: Go port, live-provider checks, dspy_session on turns | L |
 | `13-helpers.md` | ✅ `lmcc.find` / `put` / `when` / `choose` helpers that return today's plain data, for autocompletion | S |
+| `14-host-json-other-kernels.md` | a host type's JSON form both ways and lm15's media parts as field types and values, in TypeScript, Julia and R (Python done, D-61) | M |

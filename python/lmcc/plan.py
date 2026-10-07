@@ -226,7 +226,15 @@ class Plan:
         return self.reader.format([(f.name, self.placeholder(f)) for f in self.visible_outputs])
 
     def write(self, f: core.Field, value: object, *, fmt: _formats.Format | None = None) -> list[dict]:
+        own = fmt is None and self.formats[f.name].resolved_by.startswith("runtime:")
         fmt = fmt or self.format_for(f)
+        if not own and self.registry.to_json_hook(value) is not None:
+            # a type bound with to_json reaches the format bound to it as itself,
+            # every other format (the artifact's, the kernel's) as its JSON form
+            try:
+                value = to_json(value, where=f"field {f.name!r}", registry=self.registry)
+            except Refusal as err:
+                refuse("format-write-error", err.hint)
         try:
             written = fmt.write(value, f)
         except Refusal:
@@ -276,14 +284,25 @@ class Plan:
         t = Turn.from_dict(data)
         self._check_turn(t, "turn", past=False, pending_ok=True)
 
-        def lift_all(values: dict) -> dict:
-            return {k: lift_value(self.signature.field_named(k).annotation, v)
-                    for k, v in values.items()}
+        def lift_one(where: str, k: str, v: object) -> object:
+            ann = self.signature.field_named(k).annotation
+            try:
+                return lift_value(ann, v, registry=self.registry)
+            except Refusal:
+                raise
+            except Exception as exc:  # noqa: BLE001 — a host constructor; name the value
+                refuse("turn-invalid", f"{where}.{k}: cannot rebuild a {core.typename(ann)} from "
+                                       f"its JSON: {exc}")
 
-        steps = tuple(ModelStep(lift_all(s.outputs), s.message, s.request, s.calls_field)
-                      if isinstance(s, ModelStep) else s for s in t.steps)
-        return Turn(t.signature, lift_all(t.inputs), steps,
-                    None if t.outputs is None else lift_all(t.outputs), t.score, dict(t.meta))
+        def lift_all(values: dict, where: str = "turn") -> dict:
+            return {k: lift_one(where, k, v) for k, v in values.items()}
+
+        steps = tuple(ModelStep(lift_all(s.outputs, f"turn.steps[{i}].outputs"), s.message,
+                                s.request, s.calls_field)
+                      if isinstance(s, ModelStep) else s for i, s in enumerate(t.steps))
+        return Turn(t.signature, lift_all(t.inputs, "turn.inputs"), steps,
+                    None if t.outputs is None else lift_all(t.outputs, "turn.outputs"),
+                    t.score, dict(t.meta))
 
     @property
     def fingerprint(self) -> str:
@@ -506,7 +525,8 @@ class Plan:
             try:
                 values, _c, reps = self._parse_with_captures(step.message, continued=False)
                 reading = Reading(values, reps)
-                same = to_json(reading.values) == to_json(step.outputs) and not any(
+                same = to_json(reading.values, registry=self.registry) == to_json(
+                    step.outputs, registry=self.registry) and not any(
                     r["repair"] in ("marker", "unclosed", "value") for r in reading.repairs)
             except Refusal:
                 same = False

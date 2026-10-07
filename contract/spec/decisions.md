@@ -1897,3 +1897,52 @@ type binding, runtime only; #3 in the lm15 bridge). The choices made while
 building them and not in the recommendation are stated here and in D-61
 for review: the refusal part, the order before `parse-ambiguous`, the
 patch number, the names `to_json`/`from_json`, binding on import.
+
+**D-61 · A host type's JSON form is part of its binding; lm15's media
+parts are bound by the bridge (Python; no kernel change).** GitHub issues
+#4 and #3.
+
+- **#4, the bug.** `lmcc.turn.lift` called `model_validate` only for an
+  object or a text, so a list-like type (or a number-like one) came back
+  as plain JSON when a turn was loaded, and the format bound to it
+  received a `Pages` live and a list of base64 dicts on replay. `lift`
+  now rebuilds from any JSON; `lmcc_std`'s copy of `lift` is the kernel's.
+- **#4, the hook.** `lmcc.format(T, ..., to_json=, from_json=)`: the
+  type's JSON form, both ways, on the binding that already holds its
+  format and shape, never serialized (D-07). This is the 2026-09-02
+  answer to "lower/lift feel like what codecs is trying to be" (conversation
+  `01a061fe`): a type's local materialization belongs to its binding, not
+  to a layer of its own. A turn writes it (`to_json`, by `isinstance`),
+  `plan.load_turn` rebuilds with it (`lift`), and **the format bound to
+  the type receives the type itself, live or replayed; every other
+  format (the artifact's, the kernel's defaults) receives the JSON form.**
+  Without hooks, dataclasses and pydantic models cross as before. The
+  issue's names `dump`/`load` were not taken: lmcc's `dump`/`load` are
+  the artifact's.
+- **Binding refinements.** A binding with neither `write` nor `use` binds
+  no format, only a shape and a JSON form (the type crosses by its
+  shape's format); a declared `shape` now wins over the mechanical
+  lowering of a dataclass (it was silently ignored); binding the same
+  type again replaces its binding (the second one was silently dead).
+- **#3.** `import lmcc_lm15` binds `ImagePart`, `AudioPart`, `VideoPart`,
+  `DocumentPart`, `BinaryPart` in the default registry (`install(registry)`
+  for another): shape `{"media": kind}`, no format (the kernel's media
+  default or the artifact's), JSON form lm15's own `part_to_dict`, `type`
+  included so a part of another kind refuses `value-invalid`. A part given
+  by `path` keeps its path; lm15 reads the file when it sends. lmcc never
+  touches the file system. The kernel never imports lm15 (it only names
+  the bridge in an `unmapped-type` hint).
+
+Costs, stated. `to_json`, `Turn.to_dict` and `lift` look in the default
+registry unless given one: a program with its own registry passes it
+(`turn.to_dict(registry=...)`); `plan.load_turn` passes the plan's; the
+standard formats, which see no registry, use the default. The bridge
+binds on import (a side effect on the default registry); a later
+`lmcc.format(ImagePart, ...)` replaces it. A hooked value nested inside
+another value reaches an artifact's format as its JSON form only through
+`to_json` or `lmcc_std.lower`; a pack that walks values its own way does
+not see the hook. TypeScript, Julia and R have the same gaps, each in its
+own form (TypeScript cannot recognise an lm15 part by its value; it
+writes an lm15-ts image with `mediaType`, which lm15 refuses only at
+send), and none rebuilds host types from a turn: plan 14. No corpus case:
+host types are not data.

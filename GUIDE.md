@@ -348,6 +348,36 @@ assert rp.describe()["outputs"][0]["resolved_by"] == "runtime:list[int]"
 assert rp.parse("<rows>\n3, 5, 8\n</rows>") == {"rows": [3, 5, 8]}
 ```
 
+A turn holds JSON (§8). A type without a JSON form of its own (raw
+bytes, a library's object) says how it becomes JSON and back on the same
+binding, so the format bound to it always receives the type itself,
+whether the call is live or replayed from a saved turn; any other format
+receives the JSON form:
+
+```python
+class Pages(list):
+    """pages of {"text", "png": bytes}: raw bytes have no JSON form"""
+
+registry.format(Pages, write=lambda pages: "\n\n".join(p["text"] for p in pages),
+    to_json=lambda pages: [{"text": p["text"], "png": p["png"].hex()} for p in pages],
+    from_json=lambda data: Pages({"text": p["text"], "png": bytes.fromhex(p["png"])} for p in data))
+
+@lmcc.fn(registry=registry)
+def summarize(text: Pages) -> str:
+    """Summarize the document."""
+
+sp = summarize.bind(adapter, registry=registry)
+done = sp.render(text=Pages([{"text": "page one", "png": b"\x89PNG"}])).step(
+    "<summarize>\nOne page.\n</summarize>").finish()
+saved = json.loads(json.dumps(done.to_dict(registry=registry)))   # the bytes became text
+assert saved["inputs"]["text"] == [{"text": "page one", "png": "89504e47"}]
+assert type(sp.load_turn(saved).inputs["text"]) is Pages          # and came back as Pages
+```
+
+The lm15 bridge binds lm15's own media parts this way: after `import
+lmcc_lm15`, `picture: lm15.ImagePart` is a `{"media": "image"}` field and
+an lm15 part is a value for any media field of its kind.
+
 That binding is per runtime — code, never serialized. An artifact can
 name a format for a type (`"formats": {"list[int]": {"use": "csv"}}`) or
 carry one **whole** (source, language, deps, hash, author):

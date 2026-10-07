@@ -19,7 +19,7 @@ import typing
 from dataclasses import dataclass, field as dc_field, replace
 
 from . import core
-from .errors import refuse
+from .errors import Refusal, refuse
 
 __all__ = ["Turn", "ModelStep", "ToolStep", "canonical_json", "sha256",
            "signature_fingerprint"]
@@ -47,10 +47,32 @@ def signature_fingerprint(sig: core.SignatureCore) -> str:
 
 # ------------------------------------------------------------------ values
 
-def to_json(value: object, *, where: str = "turn") -> object:
-    """A host value as the JSON its field's shape describes."""
+def _registry(registry):
+    if registry is None:
+        from .registry import default_registry
+        return default_registry
+    return registry
+
+
+def to_json(value: object, *, where: str = "turn", registry=None) -> object:
+    """A host value as the JSON its field's shape describes. A type bound
+    with ``to_json`` (``lmcc.format(T, to_json=...)``, in ``registry``, by
+    default the default registry) gives its own; a dataclass gives its
+    fields, a pydantic model its ``model_dump``."""
+    hook = _registry(registry).to_json_hook(value)
+    if hook is not None:
+        try:
+            data = hook(value)
+        except Refusal:
+            raise
+        except Exception as exc:  # noqa: BLE001 — the hook is host code; name it
+            refuse("turn-invalid", f"{where}: {type(value).__name__}'s to_json failed: {exc}")
+        if type(data) is type(value):
+            refuse("turn-invalid", f"{where}: {type(value).__name__}'s to_json returned a "
+                                   f"{type(value).__name__} again, not its JSON form")
+        return to_json(data, where=where, registry=registry)
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
-        return {f.name: to_json(getattr(value, f.name), where=f"{where}.{f.name}")
+        return {f.name: to_json(getattr(value, f.name), where=f"{where}.{f.name}", registry=registry)
                 for f in dataclasses.fields(value)}
     dump = getattr(value, "model_dump", None)
     if callable(dump):
@@ -62,10 +84,10 @@ def to_json(value: object, *, where: str = "turn") -> object:
         for k, v in value.items():
             if not isinstance(k, str):
                 refuse("turn-invalid", f"{where}: object keys must be strings, got {k!r}")
-            out[k] = to_json(v, where=f"{where}.{k}")
+            out[k] = to_json(v, where=f"{where}.{k}", registry=registry)
         return out
     if isinstance(value, (list, tuple)):
-        return [to_json(v, where=f"{where}[{i}]") for i, v in enumerate(value)]
+        return [to_json(v, where=f"{where}[{i}]", registry=registry) for i, v in enumerate(value)]
     if value is None or isinstance(value, (str, bool, int)):
         return value
     if isinstance(value, float):
@@ -73,33 +95,40 @@ def to_json(value: object, *, where: str = "turn") -> object:
             refuse("turn-invalid", f"{where}: {value!r} has no JSON form")
         return value
     refuse("turn-invalid", f"{where}: a {type(value).__name__} has no JSON form; "
-                           f"a turn holds JSON values in their fields' shapes")
+                           f"a turn holds JSON values in their fields' shapes (bind its JSON "
+                           f"form with lmcc.format({type(value).__name__}, to_json=..., "
+                           f"from_json=...))")
 
 
-def lift(annotation: object, data: object) -> object:
+def lift(annotation: object, data: object, *, registry=None) -> object:
     """JSON → a host value, guided by a field's annotation (Python host
-    side; unknown annotations return the data unchanged)."""
+    side; unknown annotations return the data unchanged). A type bound with
+    ``from_json`` is rebuilt by it; a pydantic model by ``model_validate``;
+    either from any JSON (an object, a list, a text, a number)."""
     if annotation is None or data is None:
         return data
     origin, args = typing.get_origin(annotation), typing.get_args(annotation)
     if origin is typing.Annotated:
-        return lift(args[0], data)
+        return lift(args[0], data, registry=registry)
     if origin is typing.Union or getattr(origin, "__name__", "") == "UnionType":
         real = [a for a in args if a is not type(None)]
-        return lift(real[0], data) if len(real) == 1 else data
+        return lift(real[0], data, registry=registry) if len(real) == 1 else data
+    hook = _registry(registry).from_json_hook(annotation)
+    if hook is not None:
+        return hook(data)
     if origin in (list, typing.List) and isinstance(data, list) and args:
-        return [lift(args[0], v) for v in data]
+        return [lift(args[0], v, registry=registry) for v in data]
     if origin in (dict, typing.Dict) and isinstance(data, dict) and len(args) == 2:
-        return {k: lift(args[1], v) for k, v in data.items()}
+        return {k: lift(args[1], v, registry=registry) for k, v in data.items()}
     if isinstance(annotation, type):
         if issubclass(annotation, enum.Enum):
             return annotation(data)
         if dataclasses.is_dataclass(annotation) and isinstance(data, dict):
             hints = typing.get_type_hints(annotation)
-            return annotation(**{f.name: lift(hints.get(f.name), data[f.name])
+            return annotation(**{f.name: lift(hints.get(f.name), data[f.name], registry=registry)
                                  for f in dataclasses.fields(annotation) if f.name in data})
         validate = getattr(annotation, "model_validate", None)
-        if callable(validate) and isinstance(data, (dict, str)):
+        if callable(validate):
             return validate(data)
     return data
 
@@ -147,8 +176,9 @@ class ModelStep:
         value = self.outputs.get(self.calls_field) if self.calls_field else None
         return list(value) if isinstance(value, (list, tuple)) else []
 
-    def to_dict(self) -> dict:
-        out: dict = {"kind": "model", "outputs": to_json(self.outputs, where="step.outputs")}
+    def to_dict(self, *, registry=None) -> dict:
+        out: dict = {"kind": "model", "outputs": to_json(self.outputs, where="step.outputs",
+                                                         registry=registry)}
         if self.message is not None:
             out["message"] = self.message
         if self.request is not None:
@@ -168,10 +198,10 @@ class ToolStep:
     children: tuple = ()
     kind: str = dc_field(default="tool", init=False)
 
-    def to_dict(self) -> dict:
+    def to_dict(self, *, registry=None) -> dict:
         out: dict = {"kind": "tool", "id": self.id, "name": self.name, "output": list(self.output)}
         if self.children:
-            out["children"] = [c.to_dict() for c in self.children]
+            out["children"] = [c.to_dict(registry=registry) for c in self.children]
         return out
 
 
@@ -241,16 +271,19 @@ class Turn:
         return replace(self, steps=self.steps + (step,))
 
     # -- JSON (schema/turn.schema.json)
-    def to_dict(self) -> dict:
+    def to_dict(self, *, registry=None) -> dict:
+        """The turn as JSON (``schema/turn.schema.json``): values by
+        ``to_json`` with the type bindings of ``registry`` (by default the
+        default registry; pass the plan's when it has its own)."""
         out: dict = {"signature": self.signature,
-                     "inputs": to_json(self.inputs, where="turn.inputs"),
-                     "steps": [s.to_dict() for s in self.steps]}
+                     "inputs": to_json(self.inputs, where="turn.inputs", registry=registry),
+                     "steps": [s.to_dict(registry=registry) for s in self.steps]}
         if self.outputs is not None:
-            out["outputs"] = to_json(self.outputs, where="turn.outputs")
+            out["outputs"] = to_json(self.outputs, where="turn.outputs", registry=registry)
         if self.score is not None:
             out["score"] = self.score
         if self.meta:
-            out["meta"] = to_json(self.meta, where="turn.meta")
+            out["meta"] = to_json(self.meta, where="turn.meta", registry=registry)
         return out
 
     @classmethod
