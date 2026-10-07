@@ -1848,3 +1848,52 @@ Ratified-by: Maxime Rivest, 2026-09-29 (in session): the record as a
 permanent protocol of lm15 and lmcc, and the release of D-58 and D-59 as
 kernel 0.8.5, the patch D-58 proposed. lm15 1.0.0-rc.3 was published the
 same day; lmcc requires it.
+
+**D-60 · A reply the provider stopped refuses `parse-filtered` (kernel
+0.8.6, a patch).** GitHub issue #5, from a real extraction run
+(2026-10-02): Claude stopped partway through toxicology papers; the
+frontend saw `parse-missing-fields`, asked again with a hint, sent the
+empty reply back (which Claude refuses), and the user was told the reply
+"could not be read". The cause and the fix (another model) took a person
+reading the log. Reproduced with lmcc 0.8.5 alone: an empty stopped reply
+refused `parse-missing-fields`; a stopped reply whose text fit the pattern
+was returned as the answer.
+
+- **The rule (kernel §4a, Filtered).** lm15 gives two signals for one
+  event, both in the pinned contract: the finish reason `content_filter`
+  ("provider safety/refusal stop": Anthropic's `refusal`, Gemini's
+  `SAFETY`, OpenAI's `content_filter`) and the `refusal` part (OpenAI's
+  model declining in its own words, sent with finish reason `stop`).
+  Either refuses `parse-filtered`, whether or not the text reads, before
+  anything is read: before the reader, `parse-ambiguous`, truncation and
+  every format. The issue named only the finish reason; the refusal part
+  is included because without it OpenAI's declines keep the misdiagnosis
+  the issue reports, and a message (no finish reason) could not be
+  recognised at all.
+- **Before ambiguity.** `parse-truncated` lets `parse-ambiguous` come
+  first; this one does not: an ambiguous stopped reply reported as
+  ambiguous invites the re-ask the issue is about.
+- **`partial` is empty.** Nothing was read. A refusal part's text is
+  quoted in the hint; the caller holds the response for anything else.
+- **The name** is the issue's (`parse-filtered`, after lm15's
+  `content_filter`); functai 1.3 (unreleased) already raises it in four
+  languages, and drops its own check now.
+
+Costs, stated. **A new code under a patch number.** `errors.md` says
+adding a code is a minor change, and while the major is 0 a minor is
+breaking: every 0.8 artifact would refuse `version-incompatible`. No
+artifact changes meaning here, only replies that were never answers read
+differently, so the release is 0.8.6, as 0.8.5 made some inputs refuse
+under a patch; the rule in `errors.md` is unchanged and this is a stated
+exception. A frontend that switches on codes meets one it did not know;
+it was getting the wrong one before. Not covered: lm15's `error` finish
+reason (a stream that ended in error), which is also not an answer and
+is still read like any other reply; it needs its own code and is left
+for a decision.
+
+Ratified-by: Maxime Rivest, 2026-10-07 (in session): issues #3, #4 and #5
+as recommended (#5 as a kernel rule; #4's list fix and JSON hooks on the
+type binding, runtime only; #3 in the lm15 bridge). The choices made while
+building them and not in the recommendation are stated here and in D-61
+for review: the refusal part, the order before `parse-ambiguous`, the
+patch number, the names `to_json`/`from_json`, binding on import.

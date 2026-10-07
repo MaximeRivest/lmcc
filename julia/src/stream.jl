@@ -650,7 +650,7 @@ function feed!(s::Stream, delta)
     vcat(opening, _events!(s, false))
 end
 
-"End of stream. With `\"length\"` a cut output refuses `parse-truncated` (§4a)."
+"End of stream. With `\"length\"` a cut output refuses `parse-truncated`; with `\"content_filter\"` the reply refuses `parse-filtered` (§4a)."
 function finish!(s::Stream, finish_reason=nothing)
     s.finished && error("stream is already finished")
     s.finished = true

@@ -580,6 +580,7 @@ skeleton(p::Plan) = reader_skeleton(p.reader)
 function parse_with_captures(p::Plan, response; continued=true)
     cut = finish_reason(response) == "length"
     text, parts = response_text_and_parts(response)
+    _refuse_filtered(response, parts)   # §4a: before anything is read
     lead = continued && !isempty(p.prefill) ? p.prefill : ""
     text = lead * text
     atoms = _atoms(parts, p.find_rules, blen(lead))
@@ -657,6 +658,20 @@ function _read_forgiving(p::Plan, f::Field, c::Capture, repairs)
         push!(repairs, jobj("repair" => "value", "field" => f.name, "saw" => wstrip(text(c)), "as" => spell_value(f.shape, v, "field $(pyrepr(f.name))")))
         return v
     end
+end
+
+"§4a: a reply the provider stopped is not an answer, whether or not its text reads."
+function _refuse_filtered(response, parts)
+    i = findfirst(q -> get(q, "type", nothing) == "refusal", parts)
+    i === nothing && finish_reason(response) != "content_filter" && return
+    hint = if i !== nothing
+        t = get(parts[i], "text", "")
+        said = wstrip(t isa AbstractString ? t : "")
+        "the model declined to answer" * (isempty(said) ? "" : ": $(pyrepr(said))")
+    else
+        "the provider stopped the reply (finish_reason content_filter: its safety filter, or the model declining)"
+    end
+    refuse("parse-filtered", hint * "; the same request would be stopped again, so change the request or the model rather than asking again"; partial=JObj())
 end
 
 function _refuse_cut(p::Plan, where, partial; why="")

@@ -706,6 +706,7 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
   parseWithCaptures(response: unknown, continued = true): [Record<string, unknown>, Map<string, Capture>, Repair[]] {
     const cut = finishReason(response) === "length";
     let [text, parts] = responseTextAndParts(response);
+    this.refuseFiltered(response, parts); // §4a: before anything is read
     const lead = continued && this.prefill ? this.prefill : "";
     text = lead + text;
     const atoms = atomsOf(parts, this.findRules, lead.length);
@@ -780,6 +781,20 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
       repairs.push({ repair: "value", field: f.name, saw: strip(capture.text), as: spellValue(f.shape, value, `field ${pyRepr(f.name)}`) });
       return value;
     }
+  }
+
+  /** §4a: a reply the provider stopped is not an answer, whether or not its text reads. */
+  private refuseFiltered(response: unknown, parts: Part[]): void {
+    const refusal = parts.find((p) => p["type"] === "refusal");
+    if (refusal === undefined && finishReason(response) !== "content_filter") return;
+    let hint: string;
+    if (refusal !== undefined) {
+      const said = strip(typeof refusal["text"] === "string" ? refusal["text"] : "");
+      hint = "the model declined to answer" + (said ? `: ${pyRepr(said)}` : "");
+    } else {
+      hint = "the provider stopped the reply (finish_reason content_filter: its safety filter, or the model declining)";
+    }
+    refuse("parse-filtered", hint + "; the same request would be stopped again, so change the request or the model rather than asking again", { partial: {} });
   }
 
   private refuseCut(where: string, partial: Record<string, string>, why = ""): never {

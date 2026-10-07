@@ -460,6 +460,7 @@ skeleton <- function(p) p$reader$skeleton()
 parse_with_captures <- function(p, response, continued = TRUE) {
   cut <- identical(finish_reason_of(response), "length")
   tp <- response_text_and_parts(response); text <- tp[[1]]; parts <- tp[[2]]
+  refuse_filtered(response, parts)   # section 4a: before anything is read
   lead <- if (continued && nzchar(p$prefill)) p$prefill else ""
   text <- paste0(lead, text)
   atoms <- atoms_of(parts, p$find_rules, blen(lead))
@@ -522,6 +523,19 @@ read_forgiving <- function(p, f, c, rep_env) {
                                                              as = spell_value(f$shape, v, sprintf("field %s", pyrepr(f$name))))
     v
   })
+}
+
+# Section 4a: a reply the provider stopped is not an answer, whether or not its text reads.
+refuse_filtered <- function(response, parts) {
+  refusal <- NULL
+  for (q in parts) if (identical(get_key(q, "type"), "refusal")) { refusal <- q; break }
+  if (is.null(refusal) && !identical(finish_reason_of(response), "content_filter")) return(invisible(NULL))
+  hint <- if (!is.null(refusal)) {
+    t <- get_key(refusal, "text")
+    said <- wstrip(if (is_str(t)) t else "")
+    paste0("the model declined to answer", if (nzchar(said)) paste0(": ", pyrepr(said)) else "")
+  } else "the provider stopped the reply (finish_reason content_filter: its safety filter, or the model declining)"
+  refuse("parse-filtered", paste0(hint, "; the same request would be stopped again, so change the request or the model rather than asking again"), partial = jobj())
 }
 
 refuse_cut <- function(p, where, partial, why = "") {

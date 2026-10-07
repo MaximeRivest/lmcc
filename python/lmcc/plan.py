@@ -692,6 +692,7 @@ class Plan:
         """
         cut = core.finish_reason(response) == "length"
         text, parts = core.response_text_and_parts(response)
+        self._refuse_filtered(response, parts)   # §4a: before anything is read
         lead = self.prefill if continued and self.prefill else ""
         text = lead + text              # the reply continues the prefill (§3)
         atoms = _atoms(parts, self.find_rules, len(lead))   # §4b: non-text parts, placed
@@ -770,6 +771,23 @@ class Plan:
             if isinstance(ann, type) and issubclass(ann, enum.Enum) and value is not None:
                 value = ann(value)
             return value
+
+    def _refuse_filtered(self, response: object, parts: list[dict]) -> None:
+        """Kernel §4a: a reply the provider stopped is not an answer, whether
+        or not its text reads: lm15's ``finish_reason: "content_filter"``, or
+        a ``refusal`` part (the model declining in its own words)."""
+        refusal = next((p for p in parts if p.get("type") == "refusal"), None)
+        if refusal is None and core.finish_reason(response) != "content_filter":
+            return
+        if refusal is not None:
+            said = core.strip(refusal.get("text") or "")
+            hint = "the model declined to answer" + (f": {said!r}" if said else "")
+        else:
+            hint = ("the provider stopped the reply (finish_reason content_filter: its "
+                    "safety filter, or the model declining)")
+        refuse("parse-filtered", hint + "; the same request would be stopped again, so "
+                                        "change the request or the model rather than asking again",
+               partial={})
 
     def _refuse_cut(self, where: str, partial: dict, *, why: str = "") -> None:
         """Kernel §4a: the provider cut the reply; say where, keep what ended."""

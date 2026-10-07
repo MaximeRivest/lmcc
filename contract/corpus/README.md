@@ -1,5 +1,17 @@
 # The corpus
 
+**Filtered replies (kernel 0.8.6, D-60).** Cases 252–256 were typed by
+hand from kernel §4a (Filtered) before any kernel read them: a stopped
+reply with no text (252), one whose text reads (253: refused, not read),
+a model's `refusal` part in a bare message (254) and beside an answer that
+reads under `finish_reason: "stop"` (255), and a stopped reply whose text
+is also ambiguous (256: the stop is reported, not the ambiguity). Every
+kernel failed all five before the rule (252 and 254 as
+`parse-missing-fields`, 253 and 255 by returning the text as the answer,
+256 as `parse-ambiguous`). Case 156 (`parse-truncated`) is unchanged. The
+twelve cases that report the running kernel's version (08, 13, 26, 62,
+95, 121, 125, 144, 191, 198, 221, 230) move to 0.8.6, as at 0.8.5.
+
 **Kernel 0.8.5 (the release of D-58 and D-59).** Twelve cases move only
 the kernel version the implementation reports (a dumped entry's
 `versions.kernel`, case 13's `fix.provides`): 08, 13, 26, 62, 95, 121,

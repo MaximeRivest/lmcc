@@ -730,7 +730,7 @@ export class Stream<O = Record<string, unknown>> {
     return [...opening, ...this.events(false)];
   }
 
-  /** End of stream. With `"length"` a cut output refuses `parse-truncated` (§4a). */
+  /** End of stream. With `"length"` a cut output refuses `parse-truncated`; with `"content_filter"` the reply refuses `parse-filtered` (§4a). */
   finish(finishReason: string | null = null): StreamResult<O> {
     if (this.finished) throw new Error("stream is already finished");
     this.finished = true;

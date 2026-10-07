@@ -117,7 +117,7 @@ function canonical(response: Response | Message): Record<string, unknown> {
   return "message" in response ? Response.toJSON(response as Response) : Message.toJSON(response as Message);
 }
 
-/** Typed values and repairs (§4a) from an lm15 `Response` or `Message`; a cut response refuses `parse-truncated`. */
+/** Typed values and repairs (§4a) from an lm15 `Response` or `Message`; a cut response refuses `parse-truncated`, a stopped one (`content_filter`, a refusal part) `parse-filtered`. */
 export function read<O>(plan: Plan<any, O>, response: Response | Message): Reading<O> {
   return plan.read(canonical(response));
 }
