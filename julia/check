@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The Julia kernel: unit tests, the corpus through the driver protocol (every
+# The Julia kernel: unit tests, the lm15 bridge against a real LM15.jl, the corpus through the driver protocol (every
 # stream trace compared with Python's), the differential check against
 # Python, and the recorded live traffic replayed through Python.
 # Julia comes from PATH, else from nixpkgs (julia-bin).
@@ -10,6 +10,9 @@ PY=${PYTHON:-python}
 $JULIA --project=julia -e 'using Pkg; Pkg.instantiate(; io=devnull); Pkg.test()' >/tmp/lmcc-julia-test.log 2>&1 \
   || { tail -40 /tmp/lmcc-julia-test.log; echo "julia unit tests failed" >&2; exit 1; }
 grep -E "^[a-zA-Z][^|]*\| +[0-9]" /tmp/lmcc-julia-test.log | sed 's/^/julia unit tests: /' || true
+# the lm15 bridge against a real LM15.jl at its pinned commit (installed once into julia/.lm15-env)
+$JULIA julia/bridge/test.jl >/tmp/lmcc-julia-bridge.log 2>&1 || { tail -40 /tmp/lmcc-julia-bridge.log; echo "julia lm15 bridge tests failed" >&2; exit 1; }
+grep -E "^[a-zA-Z][^|]*\| +[0-9]" /tmp/lmcc-julia-bridge.log | sed 's/^/julia lm15 bridge: /'
 CLAIM=$($PY contract/harness/claim.py)
 REPORT=$(cd python && PYTHONPATH=. $PY ../contract/harness/runner.py --driver "$JULIA --project=../julia ../julia/conform/driver.jl") || { echo "$REPORT"; exit 1; }
 echo "$REPORT"

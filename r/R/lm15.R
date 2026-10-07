@@ -89,3 +89,44 @@ lm15_stream <- function(p, client, request, on_event = NULL) {
   emit(result$events)
   list(events = env$events, result = result)
 }
+
+LM15_MEDIA_PARTS <- c(ImagePart = "image", AudioPart = "audio", VideoPart = "video", DocumentPart = "document", BinaryPart = "binary")
+
+#' lm15's media parts as field types and values
+#'
+#' `lm15_media(kind)` is a field whose shape is `shape_media(kind)` and whose
+#' type is lm15's part (`ImagePart`, `AudioPart`, `VideoPart`,
+#' `DocumentPart`, `BinaryPart`): an lm15 part (`lm15::image_part()`, ...)
+#' is its value, written as lm15's canonical part data, saved by
+#' [dump_turn()] as that data and rebuilt into the part by [load_turn()].
+#' Part data given as a named list still works. A part given by `path` keeps
+#' its path: lm15 reads the file when it sends. `lm15_install()` binds the
+#' five types in a registry; the default registry has them. The bindings
+#' call lm15 only when they meet an lm15 value or rebuild one.
+#' @param kind `"image"`, `"audio"`, `"video"`, `"document"` or `"binary"`.
+#' @param purpose,desc As for [field_spec()].
+#' @param reg A registry.
+#' @export
+lm15_media <- function(kind, purpose = "plain", desc = NULL) {
+  type <- names(LM15_MEDIA_PARTS)[LM15_MEDIA_PARTS == kind]
+  if (length(type) != 1L) stop(sprintf("lm15 has no %s part; use one of %s", pyrepr(kind), paste(LM15_MEDIA_PARTS, collapse = ", ")), call. = FALSE)
+  field_spec(shape_media(kind), purpose = purpose, desc = desc, type = type)
+}
+
+#' @rdname lm15_media
+#' @export
+lm15_install <- function(reg = default_registry()) {
+  for (name in names(LM15_MEDIA_PARTS)) local({
+    kind <- LM15_MEDIA_PARTS[[name]]
+    bind_type(reg, name,
+      # lm15's canonical part data, `type` included and first, so a part of another kind refuses
+      to_json = function(v) if (inherits(v, "lm15_value")) lm15_plain(v) else v,
+      from_json = function(d) {
+        if (!is_obj(d) || !identical(get_key(d, "type", kind), kind))
+          refuse("turn-invalid", sprintf("an lm15 %s part is rebuilt from %s part data, got %s", kind, kind, json_text(d)))
+        need_lm15()
+        lm15::from_dict(merge_obj(jobj(type = kind), drop_key(d, "type")), "part")
+      })
+  })
+  invisible(reg)
+}

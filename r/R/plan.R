@@ -57,7 +57,13 @@ placeholder <- function(p, f) {
 reply_format <- function(p) p$reader$format(lapply(p$visible_outputs, function(f) list(f$name, placeholder(p, f))))
 
 write_value <- function(p, f, value, fmt = NULL) {
+  own <- is.null(fmt) && startsWith(get_key(p$formats, f$name)$resolved_by, "runtime:")
   format <- fmt %||% format_for(p, f)
+  # a type bound with to_json reaches the format bound to it as itself,
+  # every other format (the artifact's, the kernel's) as its JSON form
+  if (!own && !is.null(host_of(p$registry, f$type)$to_json))
+    value <- tryCatch(host_json(p, f, value, sprintf("field %s", pyrepr(f$name))),
+                      lmcc_refusal = function(e) refuse("format-write-error", e$hint))
   written <- tryCatch(format$write(value, f), error = function(e) if (is_refusal(e)) stop(e) else refuse("format-write-error", sprintf("field %s: format failed to write: %s", pyrepr(f$name), conditionMessage(e))))
   as_parts(written, sprintf("field %s", pyrepr(f$name)))
 }
@@ -105,7 +111,59 @@ example_turn <- function(p, inputs, outputs) {
 }
 #' @rdname new_turn
 #' @export
-load_turn <- function(p, data) check_turn(p, turn_from_list(data), "turn", FALSE, TRUE)
+load_turn <- function(p, data) {
+  t <- check_turn(p, turn_from_list(data), "turn", FALSE, TRUE)
+  lift_all <- function(values, where) {
+    out <- values
+    for (m in members_of(values)) {
+      f <- field_named(p$signature, m[[1]]); hook <- host_of(p$registry, f$type)$from_json
+      if (is.null(hook) || is.null(m[[2]])) next
+      v <- tryCatch(hook(m[[2]]), error = function(e) if (is_refusal(e)) stop(e) else
+        refuse("turn-invalid", sprintf("%s.%s: cannot rebuild a %s from its JSON: %s", where, m[[1]], f$type, conditionMessage(e))))
+      out <- set_key(out, m[[1]], v)
+    }
+    out
+  }
+  map_host_values(t, lift_all)
+}
+
+#' @rdname new_turn
+#' @param turn A turn of the plan.
+#' @details `dump_turn()` is the turn as JSON data: each value of a field
+#'   whose type is bound with `to_json` (see [bind_type()]) is written by it,
+#'   every other as [turn_to_list()] writes it. [load_turn()] reads it back,
+#'   rebuilding each value whose type is bound with `from_json`.
+#' @export
+dump_turn <- function(p, turn) turn_to_list(host_values(p, check_turn(p, turn, "turn", FALSE, TRUE)))
+
+# The turn with each of its own values (inputs, model step outputs, outputs) mapped by fn(values, where).
+map_host_values <- function(t, fn) {
+  for (i in seq_along(t$steps)) if (t$steps[[i]]$kind == "model")
+    t$steps[[i]]$outputs <- fn(t$steps[[i]]$outputs, sprintf("turn.steps[%d].outputs", i - 1L))
+  t$inputs <- fn(t$inputs, "turn.inputs")
+  if (!is.null(t$outputs)) t$outputs <- fn(t$outputs, "turn.outputs")
+  t
+}
+
+# Every bound value as its JSON form.
+host_values <- function(p, t) map_host_values(t, function(values, where) json_values(p, values, where))
+json_values <- function(p, values, where) {
+  out <- values
+  for (m in members_of(values)) {
+    f <- field_named(p$signature, m[[1]])
+    if (!is.null(f)) out <- set_key(out, m[[1]], host_json(p, f, m[[2]], paste0(where, ".", m[[1]])))
+  }
+  out
+}
+
+# A field's value as its JSON form: its type's to_json when bound with one.
+host_json <- function(p, f, value, where) {
+  hook <- host_of(p$registry, f$type)$to_json
+  if (is.null(hook) || is.null(value)) return(value)
+  data <- tryCatch(hook(value), error = function(e) if (is_refusal(e)) stop(e) else
+    refuse("turn-invalid", sprintf("%s: %s's to_json failed: %s", where, f$type, conditionMessage(e))))
+  to_json(data, where)
+}
 
 check_names <- function(p, values, direction, where) {
   if (!is_obj(values)) refuse("turn-invalid", sprintf("%s: an object of %s field values", where, direction))
@@ -317,7 +375,7 @@ model_message <- function(p, s, ctx) {
   if (p$adapter$replay == "recorded" && !is.null(s$message)) {
     same <- tryCatch({
       r <- parse_with_captures(p, s$message, continued = FALSE)
-      json_equal(to_json(r[[1]]), to_json(s$outputs)) && !any(vapply(r[[3]], function(x) x[["repair"]] %in% c("marker", "unclosed", "value"), TRUE))
+      json_equal(to_json(json_values(p, r[[1]], "step.outputs")), to_json(json_values(p, s$outputs, "step.outputs"))) && !any(vapply(r[[3]], function(x) x[["repair"]] %in% c("marker", "unclosed", "value"), TRUE))
     }, lmcc_refusal = function(e) FALSE)
     if (same) {
       ctx$model_steps <- ctx$model_steps + 1L

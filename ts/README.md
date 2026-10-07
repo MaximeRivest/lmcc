@@ -169,6 +169,15 @@ assert.equal(lm15Request.model, "claude-haiku-4-5");
 // bridge.parse(plan, response); bridge.step(request, response); await bridge.stream(plan, router.stream(lm15Request));
 ```
 
+lm15's media parts are field types: `bridge.media.image()` (and `audio`,
+`video`, `document`, `binary`) is a `{media: "image"}` field typed
+`ImagePart`, whose value is an lm15 part (`image({path: "cat.png"})`). It is
+written as lm15's canonical part data (`media_type`, never lm15-ts's
+`mediaType`; a path stays a path, lm15 reads the file), `plan.dumpTurn(turn)`
+saves it as that data and `plan.loadTurn(saved)` rebuilds the part.
+Importing `lmcc/lm15` binds the five part types in `defaultRegistry`;
+`bridge.install(registry)` binds them in your own.
+
 ## Building on lmcc (a library such as functai)
 
 A frontend builds its own fields and signatures; `new Signature` validates
@@ -285,6 +294,13 @@ order included):
 - **Type names**: TypeScript types do not exist at run time, so the builders
   name no type unless you pass `type:` (Python writes `str`, `int`,
   `list[Person]`). Runtime format bindings match the field's type *name*.
+- **A type's JSON form** (`registry.format("Pages", {toJson, fromJson})`,
+  D-62) is found by the field's type name, never by the value (a plain
+  object carries no class; lm15-ts's parts are plain objects). So a turn is
+  saved with `plan.dumpTurn(turn)`, which knows each value's field;
+  `turn.toJSON()` (and `JSON.stringify(turn)`) writes values as they are, a
+  bound type's `toJSON` method included. Python finds the binding by the
+  value's class, so there `turn.to_dict()` applies it too.
 - **Regex (`pattern/legacy-re2`)**: bound to ECMAScript `RegExp` with the
   `s` and `u` flags (label `ecmascript:RegExp`); identity escapes of
   non-syntax characters (`\:`) refuse and `\d`/`\w` are ASCII. The contract

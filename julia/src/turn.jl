@@ -15,9 +15,28 @@ sha256_hex(text::AbstractString) = bytes2hex(SHA.sha256(String(text)))
 signature_fingerprint(sig::Signature) = sha256_of(Any[jobj("direction" => f.direction, "name" => f.name,
     "purpose" => isempty(f.purpose) ? "plain" : f.purpose, "shape" => f.shape, "type" => something(f.type, "")) for f in sig.fields])
 
-"A value as the JSON its field's shape describes; anything without a JSON form refuses `turn-invalid`."
-function to_json(value, where="turn")
+"""
+    to_json(value, where="turn"; registry=default_registry())
+
+A value as the JSON its field's shape describes. A type bound with `to_json`
+(`bind_type!(registry, T; to_json=...)`) gives its own; anything else without
+a JSON form refuses `turn-invalid`.
+"""
+function to_json(value, where="turn"; registry::Union{Nothing,Registry}=nothing)
     value === nothing && return nothing
+    reg = registry === nothing ? default_registry() : registry
+    hook = to_json_hook(reg, value)
+    if hook !== nothing
+        data = try
+            hook(value)
+        catch err
+            err isa Refusal && rethrow()
+            refuse("turn-invalid", "$where: $(typeof(value))'s to_json failed: $(sprint(showerror, err))")
+        end
+        typeof(data) === typeof(value) &&
+            refuse("turn-invalid", "$where: $(typeof(value))'s to_json returned a $(typeof(value)) again, not its JSON form")
+        return to_json(data, where; registry=reg)
+    end
     (value isa AbstractString || value isa Bool || value isa Integer) && return value isa AbstractString ? String(value) : value
     if value isa Real
         isfinite(value) || refuse("turn-invalid", "$where: $value has no JSON form")
@@ -25,16 +44,28 @@ function to_json(value, where="turn")
     end
     value isa Symbol && return String(value)
     value isa Enum && return string(value)
-    (isarr(value) || value isa Tuple) && return Any[to_json(v, "$where[$(i-1)]") for (i, v) in enumerate(value)]
+    (isarr(value) || value isa Tuple) && return Any[to_json(v, "$where[$(i-1)]"; registry=reg) for (i, v) in enumerate(value)]
     if isobj(value) || value isa NamedTuple
         out = JObj()
         for (k, v) in pairs(value)
             (k isa AbstractString || k isa Symbol) || refuse("turn-invalid", "$where: object keys must be strings, got $(repr(k))")
-            out[String(k)] = to_json(v, "$where.$k")
+            out[String(k)] = to_json(v, "$where.$k"; registry=reg)
         end
         return out
     end
-    refuse("turn-invalid", "$where: a $(typeof(value)) has no JSON form; a turn holds JSON values in their fields' shapes")
+    refuse("turn-invalid", "$where: a $(typeof(value)) has no JSON form; a turn holds JSON values in their fields' shapes (bind its JSON form with bind_type!(registry, $(typeof(value)); to_json=..., from_json=...))")
+end
+
+"""
+    lift(T, data; registry=default_registry())
+
+JSON → a host value of the annotation `T`: a type bound with `from_json` is
+rebuilt by it, from any JSON; anything else is returned unchanged.
+"""
+function lift(T, data; registry::Union{Nothing,Registry}=nothing)
+    (T === nothing || data === nothing) && return data
+    hook = from_json_hook(registry === nothing ? default_registry() : registry, T)
+    hook === nothing ? data : hook(data)
 end
 
 _get(o, k) = isobj(o) ? get(o, k, nothing) : nothing
@@ -74,16 +105,16 @@ end
 
 const Step = Union{ModelStep,ToolStep}
 
-function step_to_dict(s::ModelStep)
-    d = jobj("kind" => "model", "outputs" => to_json(s.outputs, "step.outputs"))
+function step_to_dict(s::ModelStep; registry=nothing)
+    d = jobj("kind" => "model", "outputs" => to_json(s.outputs, "step.outputs"; registry=registry))
     s.message === nothing || (d["message"] = s.message)
     s.request === nothing || (d["request"] = s.request)
     s.calls_field === nothing || (d["calls_field"] = s.calls_field)
     d
 end
-function step_to_dict(s::ToolStep)
+function step_to_dict(s::ToolStep; registry=nothing)
     d = jobj("kind" => "tool", "id" => s.id, "name" => s.name, "output" => Any[s.output...])
-    isempty(s.children) || (d["children"] = Any[turn_to_dict(c) for c in s.children])
+    isempty(s.children) || (d["children"] = Any[turn_to_dict(c; registry=registry) for c in s.children])
     d
 end
 
@@ -162,11 +193,13 @@ end
 
 isdone(t::Turn) = t.outputs !== nothing
 
-function turn_to_dict(t::Turn)
-    d = jobj("signature" => t.signature, "inputs" => to_json(t.inputs, "turn.inputs"), "steps" => Any[step_to_dict(s) for s in t.steps])
-    t.outputs === nothing || (d["outputs"] = to_json(t.outputs, "turn.outputs"))
+"A turn as JSON (schema/turn.schema.json); values by `to_json` with `registry`'s bindings (default: the default registry)."
+function turn_to_dict(t::Turn; registry=nothing)
+    d = jobj("signature" => t.signature, "inputs" => to_json(t.inputs, "turn.inputs"; registry=registry),
+             "steps" => Any[step_to_dict(s; registry=registry) for s in t.steps])
+    t.outputs === nothing || (d["outputs"] = to_json(t.outputs, "turn.outputs"; registry=registry))
     t.score === nothing || (d["score"] = t.score)
-    isempty(t.meta) || (d["meta"] = to_json(t.meta, "turn.meta"))
+    isempty(t.meta) || (d["meta"] = to_json(t.meta, "turn.meta"; registry=registry))
     d
 end
 

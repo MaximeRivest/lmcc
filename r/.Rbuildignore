@@ -4,3 +4,5 @@
 ^\.lib$
 ^\.lib-live$
 ^README\.md$
+^bridge$
+^\.lib-lm15$

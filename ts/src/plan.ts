@@ -26,7 +26,7 @@ import type { Signature } from "./signature.ts";
 import { branches, overTurns, renderNodes, validateNodes, type LoopNode, type Node, type RenderEnv } from "./template.ts";
 import { lstrip, pyRepr, pyTruthy, rstrip, strip, WHITESPACE } from "./text.ts";
 import { settingLeaves, spellTurn, Transport, validateSettingPath } from "./transport.ts";
-import { asMessage, callId, ModelStep, sha256, signatureFingerprint, toJson, ToolStep, Turn, type Step } from "./turn.ts";
+import { asMessage, callId, ModelStep, sha256, signatureFingerprint, toJson, ToolStep, Turn, type Step, type TurnJSON } from "./turn.ts";
 import { describeResolved, type PatternBinding, type Resolved as ResolvedExtension } from "./extensions.ts";
 import { describeStreaming, Stream } from "./stream.ts";
 import { brand } from "./brand.ts";
@@ -247,7 +247,21 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
   }
 
   write(f: Field, value: unknown, fmt?: Format): Part[] {
+    const own = fmt === undefined && this.formats.get(f.name)!.resolvedBy.startsWith("runtime:");
     const format = fmt ?? this.formatFor(f);
+    if (!own) {
+      // a type bound with toJson reaches the format bound to it as itself,
+      // every other format (the artifact's, the kernel's) as its JSON form
+      const hook = this.registry.host(f.type)?.toJson;
+      if (hook) {
+        try {
+          value = this.hostJson(f, value, `field ${pyRepr(f.name)}`);
+        } catch (err) {
+          if (!(err instanceof Refusal)) throw err;
+          refuse("format-write-error", err.hint);
+        }
+      }
+    }
     let written: unknown;
     try {
       written = format.write(value, f);
@@ -303,11 +317,75 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
     return new Turn(this.fingerprint, i, [], o);
   }
 
-  /** A turn from JSON, checked against this plan's signature. */
+  /**
+   * A turn from JSON, checked against this plan's signature; each value of
+   * a field whose type is bound with `fromJson` is rebuilt by it (§3a: a
+   * host lifts JSON to its own types).
+   */
   loadTurn(data: unknown): Turn {
-    const t = Turn.fromJSON(data);
-    this.checkTurn(t, "turn", false, true);
-    return t;
+    const t = this.checkTurn(Turn.fromJSON(data), "turn", false, true);
+    const lift = (values: Record<string, unknown>, where: string): Record<string, unknown> => {
+      const out: Record<string, unknown> = {};
+      for (const k of memberNames(values)) {
+        const v = values[k];
+        const f = this.signature.fieldNamed(k)!;
+        const hook = this.registry.host(f.type)?.fromJson;
+        if (!hook || v === null) {
+          setMember(out, k, v);
+          continue;
+        }
+        try {
+          setMember(out, k, hook(v));
+        } catch (err) {
+          if (err instanceof Refusal) throw err;
+          refuse("turn-invalid", `${where}.${k}: cannot rebuild a ${f.type} from its JSON: ${(err as Error).message}`);
+        }
+      }
+      return out;
+    };
+    const steps = t.steps.map((s, i) => (s instanceof ModelStep
+      ? new ModelStep(lift(s.outputs, `turn.steps[${i}].outputs`), s.message, s.request, s.callsField) : s));
+    return new Turn(t.signature, lift(t.inputs, "turn.inputs"), steps,
+      t.outputs === null ? null : lift(t.outputs, "turn.outputs"), t.score, t.meta);
+  }
+
+  /**
+   * A turn of this plan as JSON (schema/turn.schema.json): each value of a
+   * field whose type is bound with `toJson` is written by it, every other
+   * value as `turn.toJSON()` writes it. What `loadTurn` reads back.
+   */
+  dumpTurn(turn: Turn): TurnJSON {
+    return this.hostValues(this.checkTurn(turn, "turn", false, true)).toJSON();
+  }
+
+  /** The turn with every bound value replaced by its JSON form (for `dumpTurn` and replay). */
+  private hostValues(turn: Turn): Turn {
+    const json = (values: Record<string, unknown>, where: string): Record<string, unknown> => {
+      const out: Record<string, unknown> = {};
+      for (const k of memberNames(values)) {
+        const f = this.signature.fieldNamed(k);
+        setMember(out, k, f ? this.hostJson(f, values[k], `${where}.${k}`) : values[k]);
+      }
+      return out;
+    };
+    const steps = turn.steps.map((s, i) => (s instanceof ModelStep
+      ? new ModelStep(json(s.outputs, `turn.steps[${i}].outputs`), s.message, s.request, s.callsField) : s));
+    return new Turn(turn.signature, json(turn.inputs, "turn.inputs"), steps,
+      turn.outputs === null ? null : json(turn.outputs, "turn.outputs"), turn.score, turn.meta);
+  }
+
+  /** A field's value as its JSON form: its type's `toJson` when bound with one; `turn-invalid` naming `where` if that fails. */
+  private hostJson(f: Field, value: unknown, where: string): unknown {
+    const hook = this.registry.host(f.type)?.toJson;
+    if (!hook || value === null || value === undefined) return value;
+    let data: unknown;
+    try {
+      data = hook(value);
+    } catch (err) {
+      if (err instanceof Refusal) throw err;
+      refuse("turn-invalid", `${where}: ${f.type}'s toJson failed: ${(err as Error).message}`);
+    }
+    return toJson(data, where);
   }
 
   private checkNames(values: unknown, direction: string, where: string): void {
@@ -523,7 +601,8 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
       let same: boolean;
       try {
         const [values, , reps] = this.parseWithCaptures(step.message, false);
-        same = jsonEqual(toJson(values), toJson(step.outputs)) && !reps.some((r) => ["marker", "unclosed", "value"].includes(r["repair"] as string));
+        const json = (v: Record<string, unknown>) => this.hostValues(new Turn(this.fingerprint, {}, [], v)).outputs;
+        same = jsonEqual(toJson(json(values)), toJson(json(step.outputs))) && !reps.some((r) => ["marker", "unclosed", "value"].includes(r["repair"] as string));
       } catch (err) {
         if (!(err instanceof Refusal)) throw err;
         same = false;

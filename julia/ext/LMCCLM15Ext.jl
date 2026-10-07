@@ -7,8 +7,35 @@ a response is. Mirrors the Python bridge, `lmcc_lm15`.
 module LMCCLM15Ext
 
 using LMCC
-using LMCC: Plan, RenderResult, JObj, merge_settings
+using LMCC: Plan, RenderResult, JObj, merge_settings, refuse, pyrepr
 import LM15
+
+const MEDIA_PARTS = (LM15.ImagePart => "image", LM15.AudioPart => "audio", LM15.VideoPart => "video",
+                     LM15.DocumentPart => "document", LM15.BinaryPart => "binary")
+
+function LMCC.lm15_install!(reg::LMCC.Registry=LMCC.default_registry())
+    for (T, kind) in MEDIA_PARTS
+        LMCC.bind_type!(reg, T; name=String(nameof(T)), shape=Dict("media" => kind),
+            to_json=function (part)        # lm15's part data, `type` first as every kernel writes a part
+                d = LM15.to_dict(part)
+                out = JObj("type" => kind)
+                for (k, v) in d
+                    String(k) == "type" || (out[String(k)] = v)
+                end
+                out
+            end,
+            from_json=function (data)
+                (data isa AbstractDict && get(data, "type", kind) == kind) ||
+                    refuse("turn-invalid", "an lm15 $kind part is rebuilt from $kind part data, got $(pyrepr(data))")
+                d = Dict{String,Any}(String(k) => v for (k, v) in data)
+                d["type"] = kind
+                LM15.from_dict(T, d)
+            end)
+    end
+    reg
+end
+
+__init__() = LMCC.lm15_install!()
 
 _dict(r::Union{LM15.Response,LM15.Message}) = LM15.to_dict(r)
 

@@ -369,7 +369,7 @@ def summarize(text: Pages) -> str:
 sp = summarize.bind(adapter, registry=registry)
 done = sp.render(text=Pages([{"text": "page one", "png": b"\x89PNG"}])).step(
     "<summarize>\nOne page.\n</summarize>").finish()
-saved = json.loads(json.dumps(done.to_dict(registry=registry)))   # the bytes became text
+saved = json.loads(json.dumps(sp.dump_turn(done)))   # the bytes became text
 assert saved["inputs"]["text"] == [{"text": "page one", "png": "89504e47"}]
 assert type(sp.load_turn(saved).inputs["text"]) is Pages          # and came back as Pages
 ```

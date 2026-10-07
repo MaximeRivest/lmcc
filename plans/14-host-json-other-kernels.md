@@ -1,6 +1,6 @@
 # Plan 14 — host types' JSON form and lm15 media parts in TypeScript, Julia and R
 
-**Status: open. Python done in kernel 0.8.6 (D-61, issues #3 and #4).**
+**Status: done 2026-10-07 (D-62). Python was done in kernel 0.8.6 (D-61, issues #3 and #4).**
 
 **Motivation.** A frontend that logs, caches or replays calls keeps every
 input as JSON (a turn, kernel §3a) and must get its host values back. In

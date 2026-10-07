@@ -304,6 +304,13 @@ class Plan:
                     None if t.outputs is None else lift_all(t.outputs, "turn.outputs"),
                     t.score, dict(t.meta))
 
+    def dump_turn(self, turn: Turn) -> dict:
+        """A turn of this plan as JSON (``schema/turn.schema.json``): values
+        by ``to_json`` with this plan's registry, so each type bound with
+        ``to_json`` is written by it. What ``load_turn`` reads back; the same
+        call in every kernel (``dumpTurn``, ``dump_turn``)."""
+        return self._check_turn(turn, "turn", past=False, pending_ok=True).to_dict(registry=self.registry)
+
     @property
     def fingerprint(self) -> str:
         return signature_fingerprint(self.signature)

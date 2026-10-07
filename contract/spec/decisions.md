@@ -1946,3 +1946,60 @@ own form (TypeScript cannot recognise an lm15 part by its value; it
 writes an lm15-ts image with `mediaType`, which lm15 refuses only at
 send), and none rebuilds host types from a turn: plan 14. No corpus case:
 host types are not data.
+
+**D-62 · A type's JSON form and lm15's media parts in TypeScript, Julia
+and R (plan 14; no kernel change).** Asked by the maintainer on
+2026-10-07 ("fix in all languages") after D-61 did Python. The rule is
+D-61's in every kernel: a type binding may carry the type's JSON form both
+ways; the format bound to the type receives the value itself, live or
+replayed; every other format receives the JSON form; `load_turn` rebuilds
+it. One call is new in all four: **`plan.dump_turn(turn)`** (`dumpTurn` in
+TypeScript), the counterpart of `load_turn`, which writes each value by its
+binding.
+
+- **Finding the binding.** Python and Julia find it by the value (class,
+  `isa`), so `to_json`, `turn.to_dict()` and `turn_to_dict` apply it
+  without a plan. TypeScript and R find it by the field's type name, as
+  they already found format bindings: a plain object carries no class
+  (lm15-ts's parts are plain objects), and R binds by name. There a turn
+  must be saved with `dump_turn`; `turn.toJSON()`/`turn_to_list()` write
+  values as they are. Each README states it.
+- **The surfaces.** TypeScript: `registry.format(type, {toJson, fromJson,
+  shape?})`, overloaded so a binding with a format still returns a
+  `Format`. Julia: `bind_type!(reg, T; to_json, from_json, name)`; `name`
+  is new because `string(T)` reads `LM15.ImagePart` or `ImagePart`
+  depending on the caller's imports, and the type name is in a
+  signature's fingerprint and in an artifact's format keys. R:
+  `bind_type(reg, type, to_json =, from_json =)`; R has no type lowering,
+  so no `shape`. In all three, binding a name again replaces it (R
+  already did) and a binding with only a JSON form binds no format.
+- **The bridges.** TypeScript: `media.image()` (`audio`, `video`,
+  `document`, `binary`) are fields typed `ImagePart`, …; the JSON form is
+  lm15's `Part.toJSON` (lm15-ts's camelCase `mediaType` becomes
+  `media_type`), and part data given as it is passes through. Importing
+  `lmcc/lm15` binds them in `defaultRegistry`, so `package.json`'s
+  `sideEffects` now names that module instead of `false`. Julia: loading
+  the extension binds `LM15.ImagePart`, … (`lm15_install!`), JSON form
+  `LM15.to_dict` with `type` first as the other kernels write it, names
+  Python's. R: `lm15_media(kind)` fields; the default registry has the
+  bindings (`lm15_install()` for another), which call lm15 only when they
+  meet an lm15 value. Every bridge keeps a `path` for lm15 to read.
+- **Checks.** Each kernel has a unit test of the rule (Python
+  `test_host_json.py`, TypeScript `host_json.test.ts`, Julia's testset, R
+  `test-host-json.R`) and a bridge test against a real lm15, offline:
+  Python's against its pinned release; TypeScript's against the installed
+  `@lm15/lm15`; Julia's (`julia/bridge/test.jl`) against LM15.jl at commit
+  `34c1167` (1.0.0, not in the General registry); R's
+  (`r/bridge/test-lm15.R`) against lm15 for R `v1.1.0` (not on CRAN). The
+  last two also check `parse-filtered` through lm15 objects. `./check`
+  installs both once (network the first time), like Python's.
+
+Costs, stated. In TypeScript and R a media field declared without the
+bridge's type (`t.media("image")`, `shape_media("image")`) does not see
+the binding: given an lm15-ts part, TypeScript still writes `mediaType`,
+which lm15 refuses when the request is built; given an lm15 R part, R
+writes it with lm15's empty members (`"url": null`, …), which lm15
+accepts but which makes a request differ from the typed field's. Use the
+bridge's fields. A kernel rule refusing unknown members in a media value
+would close both everywhere; it is a contract change and is left for a
+decision. `./check` now downloads LM15.jl and lm15 for R once.

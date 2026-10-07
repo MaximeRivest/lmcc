@@ -152,7 +152,18 @@ end
 reply_format(p::Plan) = reader_format(p.reader, [(f.name, placeholder(p, f)) for f in p.visible_outputs])
 
 function write_value(p::Plan, f::Field, value; fmt=nothing)
+    own = fmt === nothing && startswith(p.formats[f.name].resolved_by, "runtime:")
     format = fmt === nothing ? format_for(p, f) : fmt
+    if !own && to_json_hook(p.registry, value) !== nothing
+        # a type bound with to_json reaches the format bound to it as itself,
+        # every other format (the artifact's, the kernel's) as its JSON form
+        value = try
+            to_json(value, "field $(pyrepr(f.name))"; registry=p.registry)
+        catch err
+            err isa Refusal || rethrow()
+            refuse("format-write-error", err.hint)
+        end
+    end
     written = try
         format.write(value, f)
     catch err
@@ -204,11 +215,33 @@ function example(p::Plan, inputs, outputs)
     Turn(fingerprint(p), i, Step[], o, nothing, JObj())
 end
 
-"A turn from JSON, checked against this plan's signature."
+"""
+A turn from JSON, checked against this plan's signature; each value whose
+field's type is bound with `from_json` is rebuilt by it (§3a).
+"""
 function load_turn(p::Plan, data)
-    t = turn_from_dict(data)
-    _check_turn(p, t, "turn", false, true)
+    t = _check_turn(p, turn_from_dict(data), "turn", false, true)
+    function lift_all(values, where)
+        out = JObj()
+        for (k, v) in values
+            ann = field_named(p.signature, k).annotation
+            out[k] = try
+                lift(ann, v; registry=p.registry)
+            catch err
+                err isa Refusal && rethrow()
+                refuse("turn-invalid", "$where.$k: cannot rebuild a $(ann) from its JSON: $(sprint(showerror, err))")
+            end
+        end
+        out
+    end
+    steps = Step[s isa ModelStep ? ModelStep(lift_all(s.outputs, "turn.steps[$(i-1)].outputs"), s.message, s.request, s.calls_field) : s
+                 for (i, s) in enumerate(t.steps)]
+    Turn(t.signature, lift_all(t.inputs, "turn.inputs"), steps,
+         t.outputs === nothing ? nothing : lift_all(t.outputs, "turn.outputs"), t.score, t.meta)
 end
+
+"A turn of this plan as JSON: values by `to_json` with the plan's registry. What `load_turn` reads back."
+dump_turn(p::Plan, t::Turn) = turn_to_dict(_check_turn(p, t, "turn", false, true); registry=p.registry)
 
 function _check_names(p::Plan, values, direction, where)
     isobj(values) || refuse("turn-invalid", "$where: an object of $direction field values")
@@ -413,7 +446,7 @@ function _model_message(p::Plan, s::ModelStep, ctx)
     if p.adapter.replay == "recorded" && s.message !== nothing
         same = try
             values, _, reps = parse_with_captures(p, s.message; continued=false)
-            json_equal(to_json(values), to_json(s.outputs)) && !any(r -> r["repair"] in ("marker", "unclosed", "value"), reps)
+            json_equal(to_json(values; registry=p.registry), to_json(s.outputs; registry=p.registry)) && !any(r -> r["repair"] in ("marker", "unclosed", "value"), reps)
         catch err
             err isa Refusal || rethrow()
             false
@@ -1425,3 +1458,18 @@ function lm15_request end
 Drive `stream(plan)` from lm15 stream events (needs `using LM15`).
 """
 function lm15_stream end
+
+"""
+    lm15_install!(registry=default_registry()) -> registry
+
+Bind lm15's media part types (`LM15.ImagePart`, `AudioPart`, `VideoPart`,
+`DocumentPart`, `BinaryPart`; needs `using LM15`) in `registry`: each lowers
+to `{"media": kind}`, crosses by the format that shape resolves (the
+kernel's media default unless the artifact binds one), and has lm15's
+canonical part data (`LM15.to_dict`, `type` included) as its JSON form, so
+an lm15 part is a value for a media field of its kind, a turn saves it as
+that data and `load_turn` rebuilds the part. A part given by `path` keeps
+its path: lm15 reads the file. Loading the extension binds them in the
+default registry.
+"""
+function lm15_install! end

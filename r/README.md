@@ -97,6 +97,13 @@ stopifnot(render(agent, t)$messages[[3]]$parts[[1]]$text == "Result of get_weath
 # lm15_stream(plan, router, lm15_request(r, "claude-haiku-4-5"), on_event = print)
 ```
 
+lm15's media parts are field types: `inputs = list(picture = lm15_media("image"))`
+is a `{"media": "image"}` field typed `ImagePart`, whose value is an lm15
+part (`lm15::image_part(path = "cat.png")`), written as lm15's canonical
+part data (a path stays a path; lm15 reads the file), saved by
+`dump_turn(plan, turn)` and rebuilt by `load_turn()`. The default registry
+has the five part types; `lm15_install(registry)` binds them in your own.
+
 lm15 for R 1.0.0's `new_router()` rejects every API key from its default
 environment lookup (the values keep the `Dlist` class its key check
 refuses); pass `env = unclass(Sys.getenv())` until lm15 fixes it.
@@ -111,6 +118,11 @@ Python, member order included.
 - **Shipped code (UDF formats)**: this runtime places no UDF language; the six
   corpus cases that need `udf:python` are unclaimed. A format built from R
   functions binds at runtime (`bind_type()`); `dump_adapter()` refuses to ship it.
+- **A type's JSON form** (`bind_type(reg, "Pages", to_json =, from_json =)`,
+  D-62) is found by the field's type name, as a format binding is. So a turn
+  is saved with `dump_turn(plan, turn)`, which knows each value's field;
+  `turn_to_list(turn)` writes values as they are. Python finds the binding
+  by the value's class, so there `turn.to_dict()` applies it too.
 - **Numbers**: R has no 64-bit integer. Integers are `integer` within 32 bits,
   whole doubles up to 2^53, and beyond that exact `lmcc_int` decimal text. An
   integer field accepts a whole double (`3`, R's usual literal); Python

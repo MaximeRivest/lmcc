@@ -12,7 +12,10 @@
   "engines": {
     "node": ">=22.6.0"
   },
-  "sideEffects": false,
+  "sideEffects": [
+    "./src/lm15.ts",
+    "./dist/lm15.js"
+  ],
   "exports": {
     ".": {
       "lmcc-source": "./src/index.ts",

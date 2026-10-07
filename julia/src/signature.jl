@@ -171,7 +171,9 @@ function signature(instructions::AbstractString; inputs=(;), outputs=(;), regist
             name = String(k)
             s = spec isa FieldSpec ? spec : FieldSpec(spec, "plain", nothing, nothing)
             shape = annotation_to_shape(s.annotation; registry=registry, field_name=name)
-            push!(fields, Field(name, direction, shape; type=something(s.type, typename_of(s.annotation), Some(nothing)),
+            bound = s.annotation isa Type ? host_of(registry === nothing ? default_registry() : registry, s.annotation) : nothing
+            bound_name = bound === nothing ? nothing : bound.name
+            push!(fields, Field(name, direction, shape; type=something(s.type, bound_name, typename_of(s.annotation), Some(nothing)),
                 purpose=s.purpose, desc=s.desc, annotation=s.annotation isa Type ? s.annotation : nothing))
         end
     end

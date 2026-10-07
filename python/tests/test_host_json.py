@@ -61,6 +61,7 @@ def test_a_registered_type_is_written_saved_lifted_and_written_again_the_same():
     turn = live.step("<summary>\nOne page.\n</summary>").finish()
     data = turn.to_dict(registry=reg)
     assert data["inputs"] == {"document": [{"text": "page 1", "png": "iVBORw=="}]}
+    assert plan.dump_turn(turn) == data   # the call every kernel has
 
     replayed = plan.load_turn(data)
     assert type(replayed.inputs["document"]) is Pages and replayed.inputs["document"] == DOC
