@@ -16,7 +16,12 @@ its text reads (§4a). Such a reply used to be read like any other: as
 the answer when its text fit the pattern, the model's refusal becoming
 the value, or as `parse-missing-fields`, which hid the cause and invited
 a re-ask. No artifact changes meaning and every 0.8 artifact loads; only
-replies that were never answers read differently (cases 252–256).
+replies that were never answers read differently (cases 252–256). A
+response that ended in error (`finish_reason: "error"`) is read as a cut
+one, refusing `parse-interrupted` when an output may be incomplete
+(§4a, cases 260–262). A media value of lm15's five part kinds is written
+as lm15 serializes the part: an unknown member refuses `value-invalid`, an
+empty one is left out (§7b, cases 257–259; D-63).
 
 **What 0.8.5 changes (D-58).** Names are data and members keep their
 order, in every kernel (§1): a field, slot, purpose, artifact key or JSON
@@ -318,7 +323,7 @@ effectively wrote; a recorded message is read whole, never re-prefixed.
 **Parse input** is a string (the reply text), an lm15 message
 (`{"role", "parts"}`; the role is not read), or an lm15 response
 (`{"message": {…}, "finish_reason"?, …}`; only `message` and
-`finish_reason` are read — the latter for truncation and filtering, §4a). Past exchanges and
+`finish_reason` are read — the latter for truncation, interruption and filtering, §4a). Past exchanges and
 examples enter a request only as turns (§3a).
 
 **A data part in the reply** (lm15 `data`: the answer to a `json_schema`
@@ -774,6 +779,16 @@ a message carries no finish reason and is read as before. A cut reply
 whose outputs all ended before the cut is read normally: the model was
 talking after its answer.
 
+**Interrupted.** An lm15 response whose `finish_reason` is `"error"` (the
+stream or response ended in error) was cut as well, by something other
+than its length limit. It is read exactly as a truncated one, with the
+code `parse-interrupted` in place of `parse-truncated`: refused when a
+visible output is missing or its capture ran to the end of the text,
+`partial` carrying the outputs that ended before; read normally when
+every output ended before the error (cases 260–262). The codes differ
+because the remedies do: a cut at the length limit asks for more tokens
+or less output, an error may pass when the same request is sent again.
+
 **Filtered.** A reply the provider stopped is not an answer. Two lm15
 signals say so: a response whose `finish_reason` is `"content_filter"`
 (the provider's safety filter, or the model declining: lm15 maps
@@ -1070,6 +1085,19 @@ type from its capture as its data **without** the `type` key: the field's
 shape already says the type, so a value round-trips unchanged whether it
 was given with `type` or not. Nothing structured has a default.
 
+For lm15's media part kinds (`image`, `audio`, `video`, `document`,
+`binary`) the value is written exactly as lm15 serializes that part (the
+pinned contract's `spec/types.md`): its members are `media_type`, `data`,
+`url`, `file_id`, `path`, `continuation` and, for `image` only, `detail`,
+besides `type`. Any other member refuses `value-invalid` naming it, so a
+host object spelled another way (lm15-ts's `mediaType`), a misspelling or
+an extra key never reaches the wire, where lm15 would refuse it late or
+drop it. A member lm15 omits when empty (`null`, `""`, `[]`, `{}`) is left
+out, except `media_type`, which lm15 always writes; the others keep the
+value's order. lm15's own invariants (a non-empty `media_type`, exactly one
+source) are lm15's to check when it builds the request. Any other kind
+(`function`, …) is written as given (D-63; cases 257–259).
+
 ## 8. Streaming parse (sans-I/O)
 
 Streaming is a *refinement* of batch parse, never a second parser:
@@ -1087,7 +1115,7 @@ host-typed value as `parse()` (and therefore need not be JSON data).
 `stream.finish(finish_reason?)` marks end-of-stream
 and returns `StreamResult(events, values, repairs)`: the final events caused by
 EOF and the same typed values and repairs as batch `read`. `finish_reason`
-is the lm15 stream end's (§4a truncation and filtering); absent, none is known. EOF can end a field and
+is the lm15 stream end's (§4a truncation, interruption and filtering); absent, none is known. EOF can end a field and
 release its held trailing whitespace, so final events cannot honestly
 be returned by `feed`; this is why `finish` returns both. Calling
 `feed` after `finish`, or `finish` twice, is host API misuse, not a

@@ -516,7 +516,8 @@ skeleton <- function(p) p$reader$skeleton()
 # ------------------------------------------------------------------ parse
 
 parse_with_captures <- function(p, response, continued = TRUE) {
-  cut <- identical(finish_reason_of(response), "length")
+  reason <- finish_reason_of(response)
+  cut <- if (is_str(reason) && reason %in% c("length", "error")) reason else NULL   # section 4a: truncated, interrupted
   tp <- response_text_and_parts(response); text <- tp[[1]]; parts <- tp[[2]]
   refuse_filtered(response, parts)   # section 4a: before anything is read
   lead <- if (continued && nzchar(p$prefill)) p$prefill else ""
@@ -539,20 +540,20 @@ parse_with_captures <- function(p, response, continued = TRUE) {
     } else as_obj(p$reader$split(text, names_out))
   }, error = function(e) {
     if (is_refusal(e)) {
-      if (cut && !derived) refuse_cut(p, "", jobj(), e$hint)
+      if (!is.null(cut) && !derived) refuse_cut(p, cut, "", jobj(), e$hint)
       if (!(e$code == "parse-missing-fields" && is_obj(e$partial))) stop(e)
       missing_err <<- e
       return(as_obj(e$partial))
     }
-    if (cut && !derived) refuse_cut(p, "", jobj(), conditionMessage(e))
+    if (!is.null(cut) && !derived) refuse_cut(p, cut, "", jobj(), conditionMessage(e))
     refuse("reader-error", sprintf("reader %s failed to read the reply: %s", pyrepr(p$adapter$reader[["kind"]]), conditionMessage(e)))
   })
   missing <- names_out[!vapply(names_out, function(n) has_key(raw, n), TRUE)]
-  if (cut) {
+  if (!is.null(cut)) {
     ended <- as_obj(raw[setdiff(names(raw), to_end)])
-    if (length(missing)) refuse_cut(p, sprintf("before field %s", pyrepr(missing[[1]])), ended)
-    if (length(to_end)) refuse_cut(p, sprintf("inside field %s", pyrepr(names_out[names_out %in% to_end][[1]])), ended)
-    if (!derived) refuse_cut(p, "", ended)
+    if (length(missing)) refuse_cut(p, cut, sprintf("before field %s", pyrepr(missing[[1]])), ended)
+    if (length(to_end)) refuse_cut(p, cut, sprintf("inside field %s", pyrepr(names_out[names_out %in% to_end][[1]])), ended)
+    if (!derived) refuse_cut(p, cut, "", ended)
   }
   if (length(missing) && !complete) {
     if (!is.null(missing_err)) stop(missing_err)
@@ -596,11 +597,16 @@ refuse_filtered <- function(response, parts) {
   refuse("parse-filtered", paste0(hint, "; the same request would be stopped again, so change the request or the model rather than asking again"), partial = jobj())
 }
 
-refuse_cut <- function(p, where, partial, why = "") {
-  hint <- if (nzchar(where)) paste0("the provider cut the reply at its length limit ", where)
-          else paste0(sprintf("the provider cut the reply at its length limit; reader %s cannot tell which outputs ended before it", pyrepr(p$adapter$reader[["kind"]])),
+# Section 4a: the provider cut the reply (at its length limit, or by an error); say where, keep what ended.
+refuse_cut <- function(p, reason, where, partial, why = "") {
+  error <- identical(reason, "error")
+  cause <- if (error) "the provider ended the reply in error" else "the provider cut the reply at its length limit"
+  remedy <- if (error) "send the request again" else "raise max_tokens or ask for less"
+  hint <- if (nzchar(where)) paste(cause, where)
+          else paste0(sprintf("%s; reader %s cannot tell which outputs ended before it", cause, pyrepr(p$adapter$reader[["kind"]])),
                       if (nzchar(why)) sprintf(" (%s)", why) else "")
-  refuse("parse-truncated", paste0(hint, "; raise max_tokens or ask for less"), partial = partial)
+  if (error) refuse("parse-interrupted", paste0(hint, "; ", remedy), partial = partial)
+  refuse("parse-truncated", paste0(hint, "; ", remedy), partial = partial)
 }
 
 #' Read a reply

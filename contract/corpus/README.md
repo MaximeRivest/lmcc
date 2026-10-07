@@ -1,5 +1,20 @@
 # The corpus
 
+**Media members, interrupted replies (kernel 0.8.6, D-63).** Cases
+257–262 were typed by hand from kernel §7b and §4a (Interrupted) before
+any kernel ran them: an unknown member of an image value refuses (257, the
+lm15-ts spelling `mediaType`), members lm15 omits when empty are left out
+(258), `detail` belongs to images only (259); a response that ended in
+error refuses `parse-interrupted` when an output may be cut (260, 262) and
+reads when every output ended before the error (261, which the parents
+already read). Every kernel failed 257–260 and 262 before the rules. Three
+older cases changed, deliberately: 184, 185 and 187 (D-47) spelled their
+image as `{"source": {"type": "url", "url": …}}`, Anthropic's wire shape,
+not lm15's; lm15 drops `source` and then refuses the part for its missing
+`media_type`, so case 185's expected request was one lm15 would not send.
+Their image is now lm15's `{"media_type": "image/png", "url": …}`; no
+other byte moved.
+
 **Filtered replies (kernel 0.8.6, D-60).** Cases 252–256 were typed by
 hand from kernel §4a (Filtered) before any kernel read them: a stopped
 reply with no text (252), one whose text reads (253: refused, not read),

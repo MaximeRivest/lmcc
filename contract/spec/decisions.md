@@ -2003,3 +2003,50 @@ accepts but which makes a request differ from the typed field's. Use the
 bridge's fields. A kernel rule refusing unknown members in a media value
 would close both everywhere; it is a contract change and is left for a
 decision. `./check` now downloads LM15.jl and lm15 for R once.
+
+**D-63 · A media value is written as lm15 serializes the part; a reply
+ended in error refuses `parse-interrupted`; R gets the helpers (kernel
+0.8.6, before its release).** Asked by the maintainer on 2026-10-07
+("go") after D-62 left two kernel gaps and a parity gap.
+
+- **Media members (§7b).** For lm15's five media part kinds the kernel
+  writes exactly lm15's part: members from the pinned contract's
+  `spec/types.md` (`media_type`, `data`, `url`, `file_id`, `path`,
+  `continuation`, `detail` for images), anything else refuses
+  `value-invalid` naming it, and a member lm15 omits when empty (`null`,
+  `""`, `[]`, `{}`) is left out, `media_type` excepted. This closes
+  D-62's stated gaps in every kernel: an lm15-ts part in an untyped field
+  refuses before the wire naming `mediaType` (lm15 refused it late and
+  obscurely), and an lm15 R part writes the same bytes as through the
+  typed field (its empty members are gone). It extends the precedent of
+  the pinned `Config` field list (D-35): lm15's names are pinned, a new
+  lm15 member is a deliberate pin bump. lm15's invariants (a non-empty
+  `media_type`, exactly one source) stay lm15's to check; it refuses them
+  before sending. Other kinds (`function`, used by puts into
+  `request.tools`) are written as given: they are not lm15 media parts.
+  Cases 257–259. Cases 184, 185 and 187 used an Anthropic-shaped image
+  (`source`) that lm15 never delivers and would refuse to send; they now
+  hold lm15's (`corpus/README.md`).
+- **Interrupted (§4a).** lm15's finish reason `error` is read as a cut
+  reply, with its own code, `parse-interrupted`, because the remedy
+  differs from `parse-truncated`'s (send again, not more tokens). Same
+  rule otherwise: refused when an output may be cut, read when every
+  output ended first. Cases 260–262. This closes the gap D-60 stated.
+- **R helpers (plan 13).** `find_between`, `find_lines`, `find_pattern`,
+  `find_part`, `put_system`/`developer`/`user`/`request`, `when_has`/
+  `lacks`/`all`/`any`, and `choose_transport`: the data Python's helpers
+  return, byte for byte (`tests/testthat/test-helpers.R` pins Python's
+  JSON). The choice is `choose_transport` because R's `choose()` is the
+  binomial coefficient and an exported `choose` would mask it.
+
+Costs, stated. A media value with a member lm15 does not know used to be
+sent (and lm15 dropped it, or refused late); it now refuses at render, a
+behaviour change for anyone passing extra keys (`alt`, `mime`; lmcc's own
+test passed `mime`). `value-invalid` fires in a new place and
+`parse-interrupted` is a new code, both under 0.8.6 for D-60's reason; 0.8.6
+is not yet released, so no published version reads differently twice. A
+frontend reading `parse-truncated` to mean any cut now also meets
+`parse-interrupted`.
+
+Ratified-by: Maxime Rivest, 2026-10-07 (in session): "go" on the media
+rule, the `error` finish reason and the R helpers as recommended.

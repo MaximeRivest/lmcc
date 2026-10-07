@@ -667,7 +667,8 @@ class Stream:
 
     def finish(self, finish_reason: str | None = None) -> StreamResult:
         """End of stream. ``finish_reason`` is the lm15 stream end's; with
-        ``"length"`` a cut output refuses ``parse-truncated``; with
+        ``"length"`` a cut output refuses ``parse-truncated``, with ``"error"``
+        ``parse-interrupted``; with
         ``"content_filter"`` the reply refuses ``parse-filtered`` (kernel §4a)."""
         if self._finished:
             raise RuntimeError("stream is already finished")

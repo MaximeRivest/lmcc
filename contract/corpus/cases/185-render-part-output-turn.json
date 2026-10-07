@@ -70,10 +70,8 @@
     "outputs": {
      "caption": "A cat",
      "picture": {
-      "source": {
-       "type": "url",
-       "url": "https://example.com/cat.png"
-      }
+      "media_type": "image/png",
+      "url": "https://example.com/cat.png"
      },
      "note": "done"
     }
@@ -102,10 +100,8 @@
       },
       {
        "type": "image",
-       "source": {
-        "type": "url",
-        "url": "https://example.com/cat.png"
-       }
+       "media_type": "image/png",
+       "url": "https://example.com/cat.png"
       },
       {
        "type": "text",

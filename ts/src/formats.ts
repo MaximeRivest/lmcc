@@ -18,7 +18,7 @@
 import { refuse } from "./errors.ts";
 import { Capture, isObj, nullableBase, isMedia, readValue, shapeSummary, spellValue, structuralKeys, SCALAR_TYPES, type Field, type Part } from "./core.ts";
 import { pyRepr, pyStr } from "./text.ts";
-import { memberNames, setMember } from "./json.ts";
+import { hasOwn, isPlainObject, memberNames, setMember } from "./json.ts";
 
 export type Direction = "in" | "out" | "both";
 
@@ -85,6 +85,18 @@ export const SCALAR_DEFAULT: Format = Object.freeze({
 });
 
 /** Kernel §7b: a media value is its part's data; reading takes the first part of the kind. */
+const MEDIA_MEMBERS = ["media_type", "data", "url", "file_id", "path", "continuation"] as const;
+/** lm15's media parts and their members besides `type` (the pinned contract's spec/types.md); §7b writes these kinds exactly as lm15 serializes them. */
+export const MEDIA_PART_MEMBERS = {
+  image: ["media_type", "data", "url", "file_id", "path", "detail", "continuation"],
+  audio: [...MEDIA_MEMBERS], video: [...MEDIA_MEMBERS], document: [...MEDIA_MEMBERS], binary: [...MEDIA_MEMBERS],
+} as const satisfies Record<string, readonly string[]>;
+
+/** lm15's omission rule: null, "", [] and {} are left out (undefined is absent anyway). */
+function isEmptyMember(v: unknown): boolean {
+  return v === null || v === undefined || v === "" || (Array.isArray(v) && v.length === 0) || (isPlainObject(v) && memberNames(v).length === 0);
+}
+
 export const MEDIA_DEFAULT: Format = Object.freeze({
   name: "kernel-media",
   accepts: ["media:*"],
@@ -100,7 +112,20 @@ export const MEDIA_DEFAULT: Format = Object.freeze({
       refuse("value-invalid", `field ${pyRepr(field.name)}: a ${pyRepr(value["type"])} part given where a ${pyRepr(kind)} part is declared`);
     }
     const part: Record<string, unknown> = { type: kind };
-    for (const k of memberNames(value)) if (k !== "type") setMember(part, k, value[k]);
+    const members: readonly string[] | null = hasOwn(MEDIA_PART_MEMBERS, kind) ? MEDIA_PART_MEMBERS[kind as keyof typeof MEDIA_PART_MEMBERS] : null;
+    for (const k of memberNames(value)) {
+      if (k === "type") continue;
+      if (members === null) {
+        setMember(part, k, value[k]); // not one of lm15's media parts: written as given
+        continue;
+      }
+      // §7b: exactly as lm15 serializes the part
+      if (!members.includes(k)) {
+        refuse("value-invalid", `field ${pyRepr(field.name)}: ${pyRepr(k)} is not a member of lm15's ${kind} part (${members.join(", ")}); give the part's data, or an lm15 part through its bridge`);
+      }
+      if (k !== "media_type" && isEmptyMember(value[k])) continue; // lm15's omission rule
+      setMember(part, k, value[k]);
+    }
     return [part as Part];
   },
   read: (capture: Capture, field: Field) => {

@@ -123,6 +123,7 @@ def parse(plan: Plan, response: Response | Message) -> dict:
 def read(plan: Plan, response: Response | Message) -> Reading:
     """Typed values and repairs (kernel §4a) from an lm15 ``Response`` or
     ``Message``; a response cut at its length limit refuses ``parse-truncated``,
+    one that ended in error ``parse-interrupted`` (when an output may be cut),
     and one the provider stopped (``finish_reason: "content_filter"``, or a
     ``RefusalPart``) refuses ``parse-filtered``."""
     if isinstance(response, Message):

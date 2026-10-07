@@ -39,6 +39,9 @@ test_that("lm15 media parts are field types and values (issue #3)", {
   saved$inputs$picture$type <- "audio"
   expect_equal(tryCatch(load_turn(p, saved), lmcc_refusal = function(e) e$code), "turn-invalid")
 
+  # a media field without lm15's type writes an lm15 part as lm15 does too (kernel section 7b: empty members left out)
+  plain <- lmcc_bind(ask, lmcc_signature("x", inputs = list(picture = shape_media("image")), outputs = list(colour = shape_string())), list(instruct = TRUE))
+  expect_equal(json_text(part_of(render(plain, list(picture = picture)))), json_text(part_of(r)))
   reg <- lm15_install(lmcc_registry())
   expect_equal(vapply(describe_registry(reg)$type_bindings, function(b) b$type, ""), c("ImagePart", "AudioPart", "VideoPart", "DocumentPart", "BinaryPart"))
   expect_equal(json_text(part_of(render(colour(reg), list(picture = picture)))), json_text(part_of(r)))

@@ -611,7 +611,8 @@ skeleton(p::Plan) = reader_skeleton(p.reader)
 
 "The one batch parse path, shared by `read`, `parse` and stream EOF: `(values, captures, repairs)`."
 function parse_with_captures(p::Plan, response; continued=true)
-    cut = finish_reason(response) == "length"
+    reason = finish_reason(response)
+    cut = reason in ("length", "error") ? reason : nothing   # §4a: truncated, interrupted
     text, parts = response_text_and_parts(response)
     _refuse_filtered(response, parts)   # §4a: before anything is read
     lead = continued && !isempty(p.prefill) ? p.prefill : ""
@@ -638,21 +639,21 @@ function parse_with_captures(p::Plan, response; continued=true)
         end
     catch err
         if err isa Refusal
-            cut && !derived && _refuse_cut(p, "", JObj(); why=err.hint)
+            cut !== nothing && !derived && _refuse_cut(p, cut, "", JObj(); why=err.hint)
             (err.code == "parse-missing-fields" && err.partial isa AbstractDict) || rethrow()
             missing_err = err
             JObj(String(k) => v for (k, v) in err.partial)
         else
-            cut && !derived && _refuse_cut(p, "", JObj(); why=sprint(showerror, err))
+            cut !== nothing && !derived && _refuse_cut(p, cut, "", JObj(); why=sprint(showerror, err))
             refuse("reader-error", "reader $(pyrepr(p.adapter.reader["kind"])) failed to read the reply: $(sprint(showerror, err))")
         end
     end
     missing = [n for n in names if !haskey(raw, n)]
-    if cut
+    if cut !== nothing
         ended = JObj(k => v for (k, v) in raw if !(k in to_end))
-        isempty(missing) || _refuse_cut(p, "before field $(pyrepr(missing[1]))", ended)
-        isempty(to_end) || _refuse_cut(p, "inside field $(pyrepr(names[findfirst(n -> n in to_end, names)]))", ended)
-        derived || _refuse_cut(p, "", ended)
+        isempty(missing) || _refuse_cut(p, cut, "before field $(pyrepr(missing[1]))", ended)
+        isempty(to_end) || _refuse_cut(p, cut, "inside field $(pyrepr(names[findfirst(n -> n in to_end, names)]))", ended)
+        derived || _refuse_cut(p, cut, "", ended)
     end
     if !isempty(missing) && !complete
         missing_err === nothing || throw(missing_err)
@@ -707,13 +708,18 @@ function _refuse_filtered(response, parts)
     refuse("parse-filtered", hint * "; the same request would be stopped again, so change the request or the model rather than asking again"; partial=JObj())
 end
 
-function _refuse_cut(p::Plan, where, partial; why="")
+"§4a: the provider cut the reply (at its length limit, or by an error); say where, keep what ended."
+function _refuse_cut(p::Plan, reason, where, partial; why="")
+    error = reason == "error"
+    cause = error ? "the provider ended the reply in error" : "the provider cut the reply at its length limit"
+    remedy = error ? "send the request again" : "raise max_tokens or ask for less"
     hint = if !isempty(where)
-        "the provider cut the reply at its length limit $where"
+        "$cause $where"
     else
-        "the provider cut the reply at its length limit; reader $(pyrepr(p.adapter.reader["kind"])) cannot tell which outputs ended before it" * (isempty(why) ? "" : " ($why)")
+        "$cause; reader $(pyrepr(p.adapter.reader["kind"])) cannot tell which outputs ended before it" * (isempty(why) ? "" : " ($why)")
     end
-    refuse("parse-truncated", hint * "; raise max_tokens or ask for less"; partial=partial)
+    error && refuse("parse-interrupted", hint * "; " * remedy; partial=partial)
+    refuse("parse-truncated", hint * "; " * remedy; partial=partial)
 end
 
 """

@@ -203,6 +203,18 @@ def test_rendered_step_refuses_a_cut_reply():
     assert err.value.code == "parse-truncated"
 
 
+def test_a_reply_ended_in_error_is_read_as_a_cut_one_with_its_own_code():
+    """Kernel §4a, Interrupted: the remedy differs (send again), so the code does."""
+    cut = "<reasoning>\nx\n</reasoning>\n<answer>\n4"
+    assert outcome(plan(), cut, finish_reason="error") == ("refuse", "parse-interrupted")
+    assert outcome(plan(), cut, [cut[:5], cut[5:]], finish_reason="error") == ("refuse", "parse-interrupted")
+    with pytest.raises(lmcc.Refusal) as err:
+        plan().read({"message": {"role": "assistant", "parts": [{"type": "text", "text": cut}]},
+                     "finish_reason": "error"})
+    assert err.value.partial == {"reasoning": "x"} and "send the request again" in err.value.hint
+    assert outcome(plan(), cut + "\n</answer>", finish_reason="error")[:2] == ("ok", {"reasoning": "x", "answer": 4})
+
+
 # ------------------------------------------------------------- filtered
 
 

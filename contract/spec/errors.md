@@ -48,7 +48,7 @@ parameters, is breaking.
 | `turns-unplaced` | render | — | turns supplied for a slot the template does not place (or for the reserved `steps`), or a current turn with steps rendered by a template that places no slot |
 | `unmapped-type` | signature | `edit-signature` | an annotation resolves to no shape |
 | `missing-input` | render | — | no value supplied for a rendered field |
-| `value-invalid` | render | — | a kernel-default format cannot spell the value (wrong kind, non-finite, null where not nullable, bad media part) |
+| `value-invalid` | render | — | a kernel-default format cannot spell the value (wrong kind, non-finite, null where not nullable, bad media part: another kind, or a member lm15's part of that kind does not have, kernel §7b) |
 | `format-write-error` | render | — | a format's `write` raised; hint names the field |
 | `format-read-error` | parse | — | a format's `read` raised; hint names the field |
 | `value-collides` | render | — | a spelled turn value contains a marker the reader or its writer reads |
@@ -57,6 +57,7 @@ parameters, is breaking.
 | `parse-ambiguous` | parse | — | an anchor, close, tail, or JSON member appears twice — refused, never guessed; also two repaired marker spans that overlap (kernel §4a) |
 | `parse-truncated` | parse | — | the provider cut the reply (`finish_reason: "length"`) and an output is missing or its capture ran to the end of the text; `partial` carries the outputs that ended before the cut (kernel §4a) |
 | `parse-filtered` | parse | — | the provider stopped the reply: its `finish_reason` is `"content_filter"` (its safety filter, or the model declining), or the reply carries a `refusal` part; refused before anything is read, whether or not its text reads; `partial` is empty; asking again with the same request would be stopped again (kernel §4a) |
+| `parse-interrupted` | parse | — | the provider ended the reply in error (`finish_reason: "error"`) and an output is missing or its capture ran to the end of the text; `partial` carries the outputs that ended before the error; sending the same request again may work (kernel §4a) |
 | `reader-error` | parse | — | the reply does not fit the reader's document form at all |
 | `response-malformed` | parse | — | the response is neither text nor an object with a content part list, or a part is not an object with string kind and optional string text (also checked at feed) |
 

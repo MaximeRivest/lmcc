@@ -717,7 +717,8 @@ class Plan:
         Returning captures internally lets streaming prove that its emitted
         raw deltas equal the batch captures without inventing another parser.
         """
-        cut = core.finish_reason(response) == "length"
+        reason = core.finish_reason(response)
+        cut = reason if reason in ("length", "error") else None   # §4a: truncated, interrupted
         text, parts = core.response_text_and_parts(response)
         self._refuse_filtered(response, parts)   # §4a: before anything is read
         lead = self.prefill if continued and self.prefill else ""
@@ -743,24 +744,24 @@ class Plan:
                 raw = self.reader.split(text, names)
         except Refusal as err:
             if cut and not derived:
-                self._refuse_cut("", {}, why=err.hint)
+                self._refuse_cut(cut, "", {}, why=err.hint)
             if not (err.code == "parse-missing-fields" and isinstance(err.partial, dict)):
                 raise
             raw, missing_err = dict(err.partial), err
         except Exception as exc:  # noqa: BLE001
             if cut and not derived:
-                self._refuse_cut("", {}, why=str(exc))
+                self._refuse_cut(cut, "", {}, why=str(exc))
             refuse("reader-error",
                    f"reader {self.adapter.reader.get('kind')!r} failed to read the reply: {exc}")
         missing = [n for n in names if n not in raw]
         if cut:
             ended = {k: v for k, v in raw.items() if k not in to_end}
             if missing:
-                self._refuse_cut(f"before field {missing[0]!r}", ended)
+                self._refuse_cut(cut, f"before field {missing[0]!r}", ended)
             if to_end:
-                self._refuse_cut(f"inside field {next(n for n in names if n in to_end)!r}", ended)
+                self._refuse_cut(cut, f"inside field {next(n for n in names if n in to_end)!r}", ended)
             if not derived:
-                self._refuse_cut("", ended)
+                self._refuse_cut(cut, "", ended)
         if missing and not complete:   # a call turn omits what it did not write (§6)
             if missing_err is not None:
                 raise missing_err
@@ -816,16 +817,25 @@ class Plan:
                                         "change the request or the model rather than asking again",
                partial={})
 
-    def _refuse_cut(self, where: str, partial: dict, *, why: str = "") -> None:
-        """Kernel §4a: the provider cut the reply; say where, keep what ended."""
-        if where:
-            hint = f"the provider cut the reply at its length limit {where}"
+    def _refuse_cut(self, reason: str, where: str, partial: dict, *, why: str = "") -> None:
+        """Kernel §4a: the provider cut the reply (at its length limit, or by
+        an error); say where, keep what ended."""
+        if reason == "error":
+            code, cause, remedy = ("parse-interrupted", "the provider ended the reply in error",
+                                   "send the request again")
         else:
-            hint = (f"the provider cut the reply at its length limit; reader "
-                    f"{self.adapter.reader.get('kind')!r} cannot tell which outputs ended before it")
+            code, cause, remedy = ("parse-truncated", "the provider cut the reply at its length limit",
+                                   "raise max_tokens or ask for less")
+        if where:
+            hint = f"{cause} {where}"
+        else:
+            hint = (f"{cause}; reader {self.adapter.reader.get('kind')!r} cannot tell which "
+                    f"outputs ended before it")
             if why:
                 hint += f" ({why})"
-        refuse("parse-truncated", hint + "; raise max_tokens or ask for less", partial=partial)
+        if code == "parse-interrupted":
+            refuse("parse-interrupted", hint + "; " + remedy, partial=partial)
+        refuse("parse-truncated", hint + "; " + remedy, partial=partial)
 
     def read(self, response: object) -> Reading:
         """The typed values of a reply and every repair the reader made to

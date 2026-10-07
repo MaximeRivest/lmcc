@@ -118,6 +118,12 @@ test("an lm15 part is written as lm15's canonical part data, never mediaType", (
     (e: lmcc.Refusal) => e.code === "value-invalid" && e.hint.includes("'audio'"));
 });
 
+test("a media field without lm15's type refuses an lm15-ts part before the wire, naming mediaType (kernel §7b)", () => {
+  const sig = lmcc.signature("The main colour.", { inputs: { picture: lmcc.t.media("image") }, outputs: { colour: lmcc.t.string() } });
+  const plan = lmcc.bind(TAGS, sig, { instruct: true }, new lmcc.Registry());
+  assert.throws(() => plan.render({ picture: PICTURE as never }), (e: lmcc.Refusal) => e.code === "value-invalid" && e.hint.includes("'mediaType'"));
+});
+
 test("an lm15 part is saved as its part data and rebuilt by loadTurn", () => {
   const plan = colour();
   const turn = plan.render({ picture: PICTURE }).step("<colour>\nred\n</colour>").finish();

@@ -783,7 +783,8 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
 
   /** The one batch parse path, shared by `read`, `parse` and stream EOF: `[values, captures, repairs]`. */
   parseWithCaptures(response: unknown, continued = true): [Record<string, unknown>, Map<string, Capture>, Repair[]] {
-    const cut = finishReason(response) === "length";
+    const reason = finishReason(response);
+    const cut = reason === "length" || reason === "error" ? reason : null; // §4a: truncated, interrupted
     let [text, parts] = responseTextAndParts(response);
     this.refuseFiltered(response, parts); // §4a: before anything is read
     const lead = continued && this.prefill ? this.prefill : "";
@@ -812,12 +813,12 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
       }
     } catch (err) {
       if (err instanceof Refusal) {
-        if (cut && !derived) this.refuseCut("", {}, err.hint);
+        if (cut && !derived) this.refuseCut(cut, "", {}, err.hint);
         if (!(err.code === "parse-missing-fields" && isObj(err.partial))) throw err;
         raw = copyObject<string>(err.partial as object);
         missingErr = err;
       } else {
-        if (cut && !derived) this.refuseCut("", {}, (err as Error).message);
+        if (cut && !derived) this.refuseCut(cut, "", {}, (err as Error).message);
         refuse("reader-error", `reader ${pyRepr(this.adapter.reader["kind"])} failed to read the reply: ${(err as Error).message}`);
       }
     }
@@ -825,9 +826,9 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
     if (cut) {
       const ended: Record<string, string> = {};
       for (const k of memberNames(raw)) if (!toEnd.has(k)) setMember(ended, k, raw[k]);
-      if (missing.length) this.refuseCut(`before field ${pyRepr(missing[0])}`, ended);
-      if (toEnd.size) this.refuseCut(`inside field ${pyRepr(names.find((n) => toEnd.has(n)))}`, ended);
-      if (!derived) this.refuseCut("", ended);
+      if (missing.length) this.refuseCut(cut, `before field ${pyRepr(missing[0])}`, ended);
+      if (toEnd.size) this.refuseCut(cut, `inside field ${pyRepr(names.find((n) => toEnd.has(n)))}`, ended);
+      if (!derived) this.refuseCut(cut, "", ended);
     }
     if (missing.length && !complete) {
       if (missingErr !== null) throw missingErr;
@@ -876,16 +877,22 @@ export class Plan<I = Record<string, unknown>, O = Record<string, unknown>> {
     refuse("parse-filtered", hint + "; the same request would be stopped again, so change the request or the model rather than asking again", { partial: {} });
   }
 
-  private refuseCut(where: string, partial: Record<string, string>, why = ""): never {
+  /** §4a: the provider cut the reply (at its length limit, or by an error); say where, keep what ended. */
+  private refuseCut(reason: string, where: string, partial: Record<string, string>, why = ""): never {
+    const error = reason === "error";
+    const cause = error ? "the provider ended the reply in error" : "the provider cut the reply at its length limit";
+    const remedy = error ? "send the request again" : "raise max_tokens or ask for less";
     let hint: string;
     if (where) {
-      hint = `the provider cut the reply at its length limit ${where}`;
+      hint = `${cause} ${where}`;
     } else {
-      hint = `the provider cut the reply at its length limit; reader ${pyRepr(this.adapter.reader["kind"])} cannot tell which outputs ended before it`;
+      hint = `${cause}; reader ${pyRepr(this.adapter.reader["kind"])} cannot tell which outputs ended before it`;
       if (why) hint += ` (${why})`;
     }
-    refuse("parse-truncated", hint + "; raise max_tokens or ask for less", { partial });
+    if (error) refuse("parse-interrupted", hint + "; " + remedy, { partial });
+    refuse("parse-truncated", hint + "; " + remedy, { partial });
   }
+
 
   /** The typed values of a reply and every repair made to read them (§4a). Pure. */
   read(response: unknown): Reading<O> {

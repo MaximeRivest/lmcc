@@ -87,6 +87,21 @@ t <- tool_result(t, "call_1", "Sunny, 22C")
 stopifnot(render(agent, t)$messages[[3]]$parts[[1]]$text == "Result of get_weather (call_1):\nSunny, 22C")
 ```
 
+## Transports with helpers
+
+`find_between()`, `find_lines()`, `find_pattern()`, `find_part()`, `put_*()`,
+`when_*()` and `choose_transport()` return the plain data you could write
+by hand, the same as Python's `lmcc.find`/`put`/`when`/`choose`:
+
+```r
+think_aloud <- new_transport(when = when_lacks("native_reasoning"), in_template = FALSE,
+  tell = jobj(system = "Wrap every thought in <think>...</think>."),
+  find = list(find_between("<think>", "</think>", remove = TRUE, repair = TRUE)))
+reasoning <- choose_transport(list(when = when_has("native_reasoning"), use = "native_reasoning"),
+                              otherwise = think_aloud, registry = reg)
+stopifnot(length(reasoning$choose) == 2L)
+```
+
 ## Sending it with lm15
 
 ```r
@@ -139,6 +154,8 @@ Python, member order included.
   `"name"` when there is no `"na"`; use `[["na"]]`, which matches exactly
   (lmcc's own driver and probe run with R's partial-match warnings as
   errors).
+- **`choose_transport()`** is Python's `lmcc.choose`: R's own `choose()` is
+  the binomial coefficient, which lmcc does not mask.
 - **Type names**: the builders name no type unless given `type =`; a
   signature from `signature_from_list()` is identical in every kernel.
 - **Names** that R's base packages use (`parse`, `load`, `system`, `step`) are
