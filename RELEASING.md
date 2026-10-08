@@ -65,3 +65,10 @@ order through `lmcc/lm15`. npm's second factor needs a terminal: without one
 the link; run it in a terminal, or under `script -qfc "npm publish --access
 public" LOG`, and open the `https://www.npmjs.com/auth/cli/...` link it
 prints in a browser signed in to npm (a security key is asked there).
+0.8.6 on 2026-10-08 from commit b616fc1 (npm by hand, under `script`, the
+link opened by the maintainer); the registry showed it about a minute after
+`+ lmcc@0.8.6`. A fresh `npm i lmcc@0.8.6 @lm15/lm15` wrote an lm15-ts image
+through `media.image()` as `media_type` and refused `content_filter` and
+`error` replies as `parse-filtered` and `parse-interrupted`. A publish whose
+link is not confirmed before the command stops ends with `error canceled`
+and publishes nothing.
