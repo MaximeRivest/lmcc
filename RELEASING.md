@@ -25,7 +25,12 @@ git tag v$(python -c 'import sys; sys.path.insert(0, "."); import lmcc; print(lm
 
 0.8.0 was published this way on 2026-09-23 (https://pypi.org/project/lmcc/);
 a fresh `pip install "lmcc[lm15]==0.8.0"` from PyPI ran the package README's
-example. The PyPI trusted publisher is MaximeRivest/lmcc, `release.yml`,
+example. 0.8.6 on 2026-10-08 from commit 7231a28 (the merge of PR #6),
+through the release workflow; a fresh `pip install "lmcc[lm15]==0.8.6"` from
+PyPI took an `lm15.ImagePart` as a field type and refused `content_filter`
+and `error` replies as `parse-filtered` and `parse-interrupted`. PyPI's JSON
+API kept answering 0.8.5 for about a minute after the upload; ask for the
+version's own page (`/pypi/lmcc/0.8.6/json`) or install it. The PyPI trusted publisher is MaximeRivest/lmcc, `release.yml`,
 environment `pypi`.
 
 ## npm (TypeScript)
