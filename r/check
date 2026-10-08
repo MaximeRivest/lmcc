@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# The R kernel: installed from source, its unit tests, the
-# corpus through the driver protocol (every stream trace compared with
+# The R kernel: installed from source, its unit tests, the lm15 bridge against
+# a real lm15 for R, the corpus through the driver protocol (every stream trace compared with
 # Python's), the differential check against Python, and the recorded live
 # traffic replayed through Python. R, testthat and a C toolchain come from
 # PATH, else from nixpkgs. R CMD check (the CRAN audit) is run by hand:
-#   R CMD build r && R CMD check --no-manual lmcc_*.tar.gz   (Status: OK on 2026-09-27)
+#   R CMD build r && R CMD check --no-manual lmcc_*.tar.gz   (Status: OK on 2026-10-07)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 if command -v Rscript >/dev/null 2>&1 && Rscript -e 'library(testthat)' >/dev/null 2>&1 && command -v cc >/dev/null 2>&1; then
@@ -13,10 +13,23 @@ else
   RUN="nix shell --impure --expr 'let pkgs = (builtins.getFlake \"nixpkgs\").legacyPackages.\${builtins.currentSystem}; in pkgs.buildEnv { name = \"lmcc-r\"; paths = [ (pkgs.rWrapper.override { packages = [ pkgs.rPackages.testthat ]; }) pkgs.gcc pkgs.gnumake ]; }' -c"
 fi
 r() { eval "$RUN" "$@"; }
+# lm15 for R, for the bridge's test: an exact release tag (lm15 for R is not on CRAN yet),
+# installed once into r/.lib-lm15, again whenever the pin changes; its imports come from nixpkgs.
+LM15_R_PIN=v1.1.0
+RUNL="nix shell --impure --expr 'let pkgs = (builtins.getFlake \"nixpkgs\").legacyPackages.\${builtins.currentSystem}; in pkgs.buildEnv { name = \"lmcc-r-lm15\"; paths = [ (pkgs.rWrapper.override { packages = with pkgs.rPackages; [ testthat askpass curl jsonlite openssl ]; }) pkgs.gcc pkgs.gnumake ]; }' -c"
+rl() { eval "$RUNL" "$@"; }
 PY=${PYTHON:-python}
 mkdir -p r/.lib
 r R CMD INSTALL --no-test-load --library=r/.lib r >/tmp/lmcc-r-install.log 2>&1 || { tail -30 /tmp/lmcc-r-install.log; exit 1; }
 ( cd r/tests && LMCC_ROOT="$PWD/../.." R_LIBS=../.lib eval "$RUN" Rscript -e "'library(testthat); library(lmcc); r <- as.data.frame(test_dir(\"testthat\", reporter = \"silent\", stop_on_failure = TRUE)); cat(sprintf(\"R unit tests: %d expectations, %d failed\\n\", sum(r\$nb), sum(r\$failed)))'" )
+if [ "$(cat r/.lib-lm15/.pin 2>/dev/null)" != "$LM15_R_PIN" ]; then
+  echo "installing lm15 for R $LM15_R_PIN into r/.lib-lm15 ..."
+  rm -rf r/.lib-lm15 && mkdir -p r/.lib-lm15
+  curl -fsSL "https://github.com/lm15-dev/lm15-r/archive/refs/tags/$LM15_R_PIN.tar.gz" -o r/.lib-lm15/lm15.tar.gz
+  rl R CMD INSTALL --no-test-load --library=r/.lib-lm15 r/.lib-lm15/lm15.tar.gz >/tmp/lmcc-r-lm15-install.log 2>&1 || { tail -30 /tmp/lmcc-r-lm15-install.log; exit 1; }
+  echo "$LM15_R_PIN" > r/.lib-lm15/.pin
+fi
+R_LIBS=r/.lib:r/.lib-lm15 rl Rscript -e "'r <- as.data.frame(testthat::test_file(\"r/bridge/test-lm15.R\", reporter = \"silent\", stop_on_failure = TRUE)); cat(sprintf(\"R lm15 bridge: %d expectations, %d failed\\n\", sum(r\$nb), sum(r\$failed)))'"
 CLAIM=$($PY contract/harness/claim.py)
 REPORT=$(cd python && PYTHONPATH=. $PY ../contract/harness/runner.py --driver "$RUN Rscript ../r/conform/driver.R") || { echo "$REPORT"; exit 1; }
 echo "$REPORT"

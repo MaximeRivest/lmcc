@@ -116,9 +116,12 @@ def test_media_default_writes_parts_and_reads_them():
     adp = lmcc.adapter(messages=[lmcc.system("{% for f in outputs %}<{f.name}>{f.value}{% endfor %}"),
                                  lmcc.user("{text}{photo}")])
     plan = adp.bind(sig)
-    req = plan.render(text="see", photo={"data": "b64", "mime": "image/png"})
+    req = plan.render(text="see", photo={"data": "b64", "media_type": "image/png", "url": None})
     assert req.messages[0]["parts"] == [{"type": "text", "text": "see"},
-                                          {"type": "image", "data": "b64", "mime": "image/png"}]
+                                          {"type": "image", "data": "b64", "media_type": "image/png"}]
+    with pytest.raises(lmcc.Refusal) as err:      # §7b: only lm15's members, never guessed
+        plan.render(text="see", photo={"data": "b64", "mime": "image/png"})
+    assert err.value.code == "value-invalid" and "'mime'" in err.value.hint
     with pytest.raises(lmcc.Refusal) as err:
         plan.render(text="see", photo="not a part")
     assert err.value.code == "value-invalid"

@@ -1,0 +1,59 @@
+{
+ "name": "refuse-parse-filtered-readable",
+ "kind": "refuse",
+ "entry": {
+  "name": "filtered_v1",
+  "versions": {
+   "kernel": "0.8.6",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "role": "user",
+    "text": "{text}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Summarize the text.",
+  "fields": [
+   {
+    "name": "text",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "summary",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "response": {
+  "message": {
+   "role": "assistant",
+   "parts": [
+    {
+     "type": "text",
+     "text": "<summary>\nI cannot help with that.\n</summary>"
+    }
+   ]
+  },
+  "finish_reason": "content_filter"
+ },
+ "expect": {
+  "code": "parse-filtered",
+  "at": "parse"
+ }
+}

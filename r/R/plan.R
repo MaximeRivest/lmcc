@@ -57,7 +57,13 @@ placeholder <- function(p, f) {
 reply_format <- function(p) p$reader$format(lapply(p$visible_outputs, function(f) list(f$name, placeholder(p, f))))
 
 write_value <- function(p, f, value, fmt = NULL) {
+  own <- is.null(fmt) && startsWith(get_key(p$formats, f$name)$resolved_by, "runtime:")
   format <- fmt %||% format_for(p, f)
+  # a type bound with to_json reaches the format bound to it as itself,
+  # every other format (the artifact's, the kernel's) as its JSON form
+  if (!own && !is.null(host_of(p$registry, f$type)$to_json))
+    value <- tryCatch(host_json(p, f, value, sprintf("field %s", pyrepr(f$name))),
+                      lmcc_refusal = function(e) refuse("format-write-error", e$hint))
   written <- tryCatch(format$write(value, f), error = function(e) if (is_refusal(e)) stop(e) else refuse("format-write-error", sprintf("field %s: format failed to write: %s", pyrepr(f$name), conditionMessage(e))))
   as_parts(written, sprintf("field %s", pyrepr(f$name)))
 }
@@ -105,7 +111,59 @@ example_turn <- function(p, inputs, outputs) {
 }
 #' @rdname new_turn
 #' @export
-load_turn <- function(p, data) check_turn(p, turn_from_list(data), "turn", FALSE, TRUE)
+load_turn <- function(p, data) {
+  t <- check_turn(p, turn_from_list(data), "turn", FALSE, TRUE)
+  lift_all <- function(values, where) {
+    out <- values
+    for (m in members_of(values)) {
+      f <- field_named(p$signature, m[[1]]); hook <- host_of(p$registry, f$type)$from_json
+      if (is.null(hook) || is.null(m[[2]])) next
+      v <- tryCatch(hook(m[[2]]), error = function(e) if (is_refusal(e)) stop(e) else
+        refuse("turn-invalid", sprintf("%s.%s: cannot rebuild a %s from its JSON: %s", where, m[[1]], f$type, conditionMessage(e))))
+      out <- set_key(out, m[[1]], v)
+    }
+    out
+  }
+  map_host_values(t, lift_all)
+}
+
+#' @rdname new_turn
+#' @param turn A turn of the plan.
+#' @details `dump_turn()` is the turn as JSON data: each value of a field
+#'   whose type is bound with `to_json` (see [bind_type()]) is written by it,
+#'   every other as [turn_to_list()] writes it. [load_turn()] reads it back,
+#'   rebuilding each value whose type is bound with `from_json`.
+#' @export
+dump_turn <- function(p, turn) turn_to_list(host_values(p, check_turn(p, turn, "turn", FALSE, TRUE)))
+
+# The turn with each of its own values (inputs, model step outputs, outputs) mapped by fn(values, where).
+map_host_values <- function(t, fn) {
+  for (i in seq_along(t$steps)) if (t$steps[[i]]$kind == "model")
+    t$steps[[i]]$outputs <- fn(t$steps[[i]]$outputs, sprintf("turn.steps[%d].outputs", i - 1L))
+  t$inputs <- fn(t$inputs, "turn.inputs")
+  if (!is.null(t$outputs)) t$outputs <- fn(t$outputs, "turn.outputs")
+  t
+}
+
+# Every bound value as its JSON form.
+host_values <- function(p, t) map_host_values(t, function(values, where) json_values(p, values, where))
+json_values <- function(p, values, where) {
+  out <- values
+  for (m in members_of(values)) {
+    f <- field_named(p$signature, m[[1]])
+    if (!is.null(f)) out <- set_key(out, m[[1]], host_json(p, f, m[[2]], paste0(where, ".", m[[1]])))
+  }
+  out
+}
+
+# A field's value as its JSON form: its type's to_json when bound with one.
+host_json <- function(p, f, value, where) {
+  hook <- host_of(p$registry, f$type)$to_json
+  if (is.null(hook) || is.null(value)) return(value)
+  data <- tryCatch(hook(value), error = function(e) if (is_refusal(e)) stop(e) else
+    refuse("turn-invalid", sprintf("%s: %s's to_json failed: %s", where, f$type, conditionMessage(e))))
+  to_json(data, where)
+}
 
 check_names <- function(p, values, direction, where) {
   if (!is_obj(values)) refuse("turn-invalid", sprintf("%s: an object of %s field values", where, direction))
@@ -317,7 +375,7 @@ model_message <- function(p, s, ctx) {
   if (p$adapter$replay == "recorded" && !is.null(s$message)) {
     same <- tryCatch({
       r <- parse_with_captures(p, s$message, continued = FALSE)
-      json_equal(to_json(r[[1]]), to_json(s$outputs)) && !any(vapply(r[[3]], function(x) x[["repair"]] %in% c("marker", "unclosed", "value"), TRUE))
+      json_equal(to_json(json_values(p, r[[1]], "step.outputs")), to_json(json_values(p, s$outputs, "step.outputs"))) && !any(vapply(r[[3]], function(x) x[["repair"]] %in% c("marker", "unclosed", "value"), TRUE))
     }, lmcc_refusal = function(e) FALSE)
     if (same) {
       ctx$model_steps <- ctx$model_steps + 1L
@@ -458,8 +516,10 @@ skeleton <- function(p) p$reader$skeleton()
 # ------------------------------------------------------------------ parse
 
 parse_with_captures <- function(p, response, continued = TRUE) {
-  cut <- identical(finish_reason_of(response), "length")
+  reason <- finish_reason_of(response)
+  cut <- if (is_str(reason) && reason %in% c("length", "error")) reason else NULL   # section 4a: truncated, interrupted
   tp <- response_text_and_parts(response); text <- tp[[1]]; parts <- tp[[2]]
+  refuse_filtered(response, parts)   # section 4a: before anything is read
   lead <- if (continued && nzchar(p$prefill)) p$prefill else ""
   text <- paste0(lead, text)
   atoms <- atoms_of(parts, p$find_rules, blen(lead))
@@ -480,20 +540,20 @@ parse_with_captures <- function(p, response, continued = TRUE) {
     } else as_obj(p$reader$split(text, names_out))
   }, error = function(e) {
     if (is_refusal(e)) {
-      if (cut && !derived) refuse_cut(p, "", jobj(), e$hint)
+      if (!is.null(cut) && !derived) refuse_cut(p, cut, "", jobj(), e$hint)
       if (!(e$code == "parse-missing-fields" && is_obj(e$partial))) stop(e)
       missing_err <<- e
       return(as_obj(e$partial))
     }
-    if (cut && !derived) refuse_cut(p, "", jobj(), conditionMessage(e))
+    if (!is.null(cut) && !derived) refuse_cut(p, cut, "", jobj(), conditionMessage(e))
     refuse("reader-error", sprintf("reader %s failed to read the reply: %s", pyrepr(p$adapter$reader[["kind"]]), conditionMessage(e)))
   })
   missing <- names_out[!vapply(names_out, function(n) has_key(raw, n), TRUE)]
-  if (cut) {
+  if (!is.null(cut)) {
     ended <- as_obj(raw[setdiff(names(raw), to_end)])
-    if (length(missing)) refuse_cut(p, sprintf("before field %s", pyrepr(missing[[1]])), ended)
-    if (length(to_end)) refuse_cut(p, sprintf("inside field %s", pyrepr(names_out[names_out %in% to_end][[1]])), ended)
-    if (!derived) refuse_cut(p, "", ended)
+    if (length(missing)) refuse_cut(p, cut, sprintf("before field %s", pyrepr(missing[[1]])), ended)
+    if (length(to_end)) refuse_cut(p, cut, sprintf("inside field %s", pyrepr(names_out[names_out %in% to_end][[1]])), ended)
+    if (!derived) refuse_cut(p, cut, "", ended)
   }
   if (length(missing) && !complete) {
     if (!is.null(missing_err)) stop(missing_err)
@@ -524,11 +584,29 @@ read_forgiving <- function(p, f, c, rep_env) {
   })
 }
 
-refuse_cut <- function(p, where, partial, why = "") {
-  hint <- if (nzchar(where)) paste0("the provider cut the reply at its length limit ", where)
-          else paste0(sprintf("the provider cut the reply at its length limit; reader %s cannot tell which outputs ended before it", pyrepr(p$adapter$reader[["kind"]])),
+# Section 4a: a reply the provider stopped is not an answer, whether or not its text reads.
+refuse_filtered <- function(response, parts) {
+  refusal <- NULL
+  for (q in parts) if (identical(get_key(q, "type"), "refusal")) { refusal <- q; break }
+  if (is.null(refusal) && !identical(finish_reason_of(response), "content_filter")) return(invisible(NULL))
+  hint <- if (!is.null(refusal)) {
+    t <- get_key(refusal, "text")
+    said <- wstrip(if (is_str(t)) t else "")
+    paste0("the model declined to answer", if (nzchar(said)) paste0(": ", pyrepr(said)) else "")
+  } else "the provider stopped the reply (finish_reason content_filter: its safety filter, or the model declining)"
+  refuse("parse-filtered", paste0(hint, "; the same request would be stopped again, so change the request or the model rather than asking again"), partial = jobj())
+}
+
+# Section 4a: the provider cut the reply (at its length limit, or by an error); say where, keep what ended.
+refuse_cut <- function(p, reason, where, partial, why = "") {
+  error <- identical(reason, "error")
+  cause <- if (error) "the provider ended the reply in error" else "the provider cut the reply at its length limit"
+  remedy <- if (error) "send the request again" else "raise max_tokens or ask for less"
+  hint <- if (nzchar(where)) paste(cause, where)
+          else paste0(sprintf("%s; reader %s cannot tell which outputs ended before it", cause, pyrepr(p$adapter$reader[["kind"]])),
                       if (nzchar(why)) sprintf(" (%s)", why) else "")
-  refuse("parse-truncated", paste0(hint, "; raise max_tokens or ask for less"), partial = partial)
+  if (error) refuse("parse-interrupted", paste0(hint, "; ", remedy), partial = partial)
+  refuse("parse-truncated", paste0(hint, "; ", remedy), partial = partial)
 }
 
 #' Read a reply

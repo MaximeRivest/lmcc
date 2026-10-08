@@ -108,7 +108,7 @@ lmcc_registry <- function(extensions = NULL, allow_udf = FALSE) {
 #' The registry `lmcc_bind`, `load_adapter` and `dump_adapter` use by default
 #' @export
 default_registry <- function() {
-  if (is.null(.default$reg)) .default$reg <- lmcc_registry()
+  if (is.null(.default$reg)) .default$reg <- lm15_install(lmcc_registry())   # lm15's media parts (lm15.R)
   .default$reg
 }
 
@@ -140,20 +140,35 @@ register_reader <- function(reg, name, factory, version = "0.1.0", exist_ok = FA
   invisible(reg)
 }
 
-#' Bind a type name to a format, per runtime (never serialized)
+#' Bind a type name, per runtime (never serialized)
+#'
+#' A type name, as a signature's field spells it, gets a format and/or its
+#' JSON form both ways. `to_json(value)` gives the value's JSON form:
+#' [dump_turn()] writes it and every format but the one bound here receives
+#' it. `from_json(data)` rebuilds the value: [load_turn()] gives it to the
+#' format bound here, which so always receives the value itself, live or
+#' replayed. With neither `format` nor `use`, no format is bound (the field's
+#' shape resolves one). Binding the same name again replaces its binding.
 #' @param reg A registry.
 #' @param type The type name as a signature's field spells it.
 #' @param format A format ([make_format()]), or `NULL` with `use`.
 #' @param use,options A registered format's name and options.
+#' @param to_json,from_json The type's JSON form, both ways (functions), or `NULL`.
 #' @export
-bind_type <- function(reg, type, format = NULL, use = NULL, options = jobj()) {
-  reg$type_bindings <- set_key(reg$type_bindings, type, if (!is.null(use)) list(use = use, options = options) else format)
+bind_type <- function(reg, type, format = NULL, use = NULL, options = jobj(), to_json = NULL, from_json = NULL) {
+  for (hook in list(list("to_json", to_json), list("from_json", from_json)))
+    if (!is.null(hook[[2]]) && !is.function(hook[[2]])) malformed(hook[[1]], sprintf("%s: %s must be a function", pyrepr(type), hook[[1]]))
+  binding <- if (!is.null(use)) list(use = use, options = options) else format
+  if (is.null(binding) && is.null(to_json) && is.null(from_json)) malformed("write", "a format needs at least write")
+  reg$type_bindings <- set_key(reg$type_bindings, type, structure(list(binding = binding, to_json = to_json, from_json = from_json), class = "lmcc_host_type"))
   invisible(reg)
 }
 
+host_of <- function(reg, type) if (is_str(type)) get_key(reg$type_bindings, type) else NULL
+
 type_binding <- function(reg, type) {
-  if (!is_str(type) || !has_key(reg$type_bindings, type)) return(NULL)
-  b <- get_key(reg$type_bindings, type)
+  b <- host_of(reg, type)$binding
+  if (is.null(b)) return(NULL)
   if (is_format(b)) b else named_format(reg, b$use, b$options)
 }
 
@@ -203,7 +218,11 @@ versions_of <- function(m) { n <- ssort(names(m)); as_obj(structure(lapply(n, fu
 #' @export
 describe_registry <- function(x) {
   jobj(formats = versions_of(x$formats),
-       type_bindings = lapply(members_of(x$type_bindings), function(m) { t <- m[[1]]; b <- m[[2]]; jobj(type = t, format = if (is_format(b)) b$name %||% "(inline)" else b$use) }),
+       type_bindings = lapply(members_of(x$type_bindings), function(m) {
+         h <- m[[2]]; b <- h$binding
+         jobj(type = m[[1]], format = if (is.null(b)) NULL else if (is_format(b)) b$name %||% "(inline)" else b$use,
+              json = as.list(c("to_json", "from_json")[c(!is.null(h$to_json), !is.null(h$from_json))]))
+       }),
        transports = versions_of(x$transports), readers = merge_obj(jobj(derived = "kernel"), versions_of(x$readers)), allow_udf = x$allow_udf,
        extensions = as_obj(lapply(x$extensions[ssort(names(x$extensions))], function(b) jobj(version = b$version, binding = b$binding))))
 }

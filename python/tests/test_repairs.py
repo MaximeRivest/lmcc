@@ -1,4 +1,4 @@
-"""Kernel §4a: marker repairs, the report, truncation — and streaming
+"""Kernel §4a: marker repairs, the report, truncation, filtered replies — and streaming
 agreeing with batch on all of it (§8)."""
 
 import dataclasses
@@ -201,6 +201,83 @@ def test_rendered_step_refuses_a_cut_reply():
         rendered.step({"message": {"role": "assistant", "parts": [{"type": "text", "text": "<reasoning>\nx"}]},
                        "finish_reason": "length"})
     assert err.value.code == "parse-truncated"
+
+
+def test_a_reply_ended_in_error_is_read_as_a_cut_one_with_its_own_code():
+    """Kernel §4a, Interrupted: the remedy differs (send again), so the code does."""
+    cut = "<reasoning>\nx\n</reasoning>\n<answer>\n4"
+    assert outcome(plan(), cut, finish_reason="error") == ("refuse", "parse-interrupted")
+    assert outcome(plan(), cut, [cut[:5], cut[5:]], finish_reason="error") == ("refuse", "parse-interrupted")
+    with pytest.raises(lmcc.Refusal) as err:
+        plan().read({"message": {"role": "assistant", "parts": [{"type": "text", "text": cut}]},
+                     "finish_reason": "error"})
+    assert err.value.partial == {"reasoning": "x"} and "send the request again" in err.value.hint
+    assert outcome(plan(), cut + "\n</answer>", finish_reason="error")[:2] == ("ok", {"reasoning": "x", "answer": 4})
+
+
+# ------------------------------------------------------------- filtered
+
+
+FULL = "<reasoning>\nx\n</reasoning>\n<answer>\n4\n</answer>"
+
+
+@pytest.mark.parametrize("reply", ["", "<reasoning>\nI cannot help", FULL])
+def test_a_filtered_reply_refuses_whether_or_not_it_reads(reply):
+    assert outcome(plan(), reply, finish_reason="content_filter") == ("refuse", "parse-filtered")
+    chunks = [reply[i:i + 3] for i in range(0, len(reply), 3)]
+    assert outcome(plan(), reply, chunks, finish_reason="content_filter") == ("refuse", "parse-filtered")
+
+
+def test_a_filtered_reply_has_an_empty_partial_and_says_why():
+    with pytest.raises(lmcc.Refusal) as err:
+        plan().read({"message": {"role": "assistant", "parts": [{"type": "text", "text": FULL}]},
+                     "finish_reason": "content_filter"})
+    assert err.value.partial == {} and "content_filter" in err.value.hint
+
+
+def test_a_refusal_part_refuses_and_is_quoted():
+    message = {"role": "assistant", "parts": [{"type": "text", "text": FULL},
+                                              {"type": "refusal", "text": "I can't help with that."}]}
+    for reply in (message, {"message": message, "finish_reason": "stop"}):
+        with pytest.raises(lmcc.Refusal) as err:
+            plan().read(reply)
+        assert err.value.code == "parse-filtered" and "I can't help with that." in err.value.hint
+    s = plan().stream()
+    for part in message["parts"]:
+        s.feed(part)
+    with pytest.raises(lmcc.Refusal) as err:
+        s.finish()
+    assert err.value.code == "parse-filtered"
+
+
+def test_filtered_comes_before_ambiguous_and_truncated():
+    twice = FULL + "\n" + FULL
+    assert outcome(plan(), twice, finish_reason="content_filter") == ("refuse", "parse-filtered")
+    assert outcome(plan(), twice, finish_reason="stop") == ("refuse", "parse-ambiguous")
+
+
+def test_rendered_step_refuses_a_filtered_reply():
+    rendered = plan().render(question="q")
+    with pytest.raises(lmcc.Refusal) as err:
+        rendered.step({"message": {"role": "assistant", "parts": [{"type": "text", "text": FULL}]},
+                       "finish_reason": "content_filter"})
+    assert err.value.code == "parse-filtered"
+
+
+def test_a_recorded_refusal_is_written_from_its_values_on_replay():
+    """A past step whose message the plan no longer reads back is written
+    from its values (§3a), so a hand-made turn holding a refusal part never
+    sends that part back."""
+    p = solve.bind(lmcc.adapter(messages=TAGS.template[:1] + [lmcc.turns(), lmcc.user("{question}")]),
+                   capabilities={"instruct": True})
+    rendered = p.render(question="q")
+    turn = rendered.step(FULL)
+    data = turn.finish().to_dict()
+    data["steps"][0]["message"]["parts"].append({"type": "refusal", "text": "no"})
+    past = p.load_turn(data)
+    request = p.render(question="r", turns=[past]).request()
+    sent = [part for m in request["messages"] for part in m["parts"]]
+    assert all(part["type"] != "refusal" for part in sent)
 
 
 # ------------------------------------------------------------- streaming

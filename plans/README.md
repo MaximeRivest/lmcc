@@ -27,4 +27,5 @@ code is at the git tag `kernel-0.6`.
 | `10-declared-extensions.md` | ✅ phase 1 (kernel 0.3): declared extensions, host bindings, scoped claims, `pattern/legacy-re2` default tier declared by the constructor · phase 2 demand-driven: exact tiers by binding an engine, never authoring one | L |
 | `11-heredoc-turns.md` | ✅ kernel 0.6: formatted arguments and explicit turns samples; raw-code heredoc writer/reader, portable tests and runnable notebook | M |
 | `12-turns.md` | ✅ kernel 0.7 (Python): one `Turn` record replaces `demos` and `history`; named slots as messages or text, guards, writers for hidden fields, recorded or value replay, unique ids · open: Go port, live-provider checks, dspy_session on turns | L |
-| `13-helpers.md` | ✅ `lmcc.find` / `put` / `when` / `choose` helpers that return today's plain data, for autocompletion | S |
+| `13-helpers.md` | ✅ `lmcc.find` / `put` / `when` / `choose` helpers that return today's plain data, for autocompletion; in all four kernels since D-63 (R: `choose_transport`) | S |
+| `14-host-json-other-kernels.md` | ✅ a host type's JSON form both ways (`dump_turn`/`load_turn`) and lm15's media parts as field types and values, in all four kernels (D-61, D-62) | M |

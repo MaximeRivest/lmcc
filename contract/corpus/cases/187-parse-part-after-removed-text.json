@@ -90,10 +90,8 @@
    },
    {
     "type": "image",
-    "source": {
-     "type": "url",
-     "url": "https://example.com/cat.png"
-    }
+    "media_type": "image/png",
+    "url": "https://example.com/cat.png"
    },
    {
     "type": "text",
@@ -105,10 +103,8 @@
   "values": {
    "caption": "A cat",
    "picture": {
-    "source": {
-     "type": "url",
-     "url": "https://example.com/cat.png"
-    }
+    "media_type": "image/png",
+    "url": "https://example.com/cat.png"
    },
    "note": "done",
    "reasoning": "a long line of thought about cats"

@@ -22,6 +22,8 @@ import typing
 from lmcc import core
 from lmcc.errors import Refusal
 from lmcc.formats import Format
+from lmcc.registry import default_registry
+from lmcc.turn import lift as _lift
 
 from . import jsontext
 
@@ -59,8 +61,12 @@ class JsonFormat(Format):
 
 
 def lower(value):
-    """Native → plain data: dataclasses, pydantic models, Enums, and
-    containers of them. Plain data passes through."""
+    """Native → plain data: a type bound with ``to_json`` (in the default
+    registry), dataclasses, pydantic models, Enums, and containers of them.
+    Plain data passes through."""
+    hook = default_registry.to_json_hook(value)
+    if hook is not None:
+        return lower(hook(value))
     if isinstance(value, enum.Enum):
         return value.value
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
@@ -76,31 +82,10 @@ def lower(value):
 
 
 def lift(annotation, data):
-    """Plain data → native, guided by the annotation; unknown annotations
+    """Plain data → native, guided by the annotation: the kernel's
+    ``lmcc.turn.lift`` with the default registry; unknown annotations
     return the data unchanged."""
-    if annotation is None:
-        return data
-    origin, args = typing.get_origin(annotation), typing.get_args(annotation)
-    if origin is typing.Union or (origin is not None and getattr(origin, "__name__", "") == "UnionType"):
-        if data is None:
-            return None
-        real = [a for a in args if a is not type(None)]
-        return lift(real[0], data) if len(real) == 1 else data
-    if origin in (list, typing.List) and isinstance(data, list) and args:
-        return [lift(args[0], v) for v in data]
-    if origin in (dict, typing.Dict) and isinstance(data, dict) and len(args) == 2:
-        return {k: lift(args[1], v) for k, v in data.items()}
-    if isinstance(annotation, type):
-        if issubclass(annotation, enum.Enum):
-            return annotation(data)
-        if dataclasses.is_dataclass(annotation) and isinstance(data, dict):
-            hints = typing.get_type_hints(annotation)
-            return annotation(**{f.name: lift(hints.get(f.name), data[f.name])
-                                 for f in dataclasses.fields(annotation) if f.name in data})
-        validate = getattr(annotation, "model_validate", None)
-        if callable(validate) and isinstance(data, (dict, str)):
-            return validate(data)
-    return data
+    return _lift(annotation, data)
 
 
 class TableFormat(Format):

@@ -5,8 +5,10 @@ transports. This module defines what a runtime registers:
 
 - **named formats**: ``factory(options) -> Format`` under a name the
   artifact can reference (``{"use": "json"}``), with a version;
-- **type bindings**: a host type → a Format (or a named format), per
-  runtime, never serialized — the ``lmcc.format(Person, ...)`` surface;
+- **host types**: a host type → its format (or a named format), the
+  shape it lowers to, and its JSON form both ways (``to_json``,
+  ``from_json``), per runtime, never serialized — the
+  ``lmcc.format(Person, ...)`` surface;
 - **transports**: named factories ``factory(options) -> Transport``;
 - **readers**: named factories ``factory(reader_spec) -> Reader``
   (``derived`` is kernel grammar, never registered).
@@ -37,12 +39,25 @@ class _Named:
     version: str
 
 
+@dataclass
+class HostType:
+    """How one host type crosses in this runtime (never serialized): the
+    format bound to it (``None``: its shape's format resolves as usual), the
+    shape it lowers to (``None``: lowered as the language's own construct,
+    else ``{}``), and its JSON form, both ways (kernel §3a: a turn holds
+    JSON; a host lifts it back to its own types)."""
+    host_type: object
+    binding: "Format | dict | None" = None
+    shape: dict | None = None
+    to_json: object = None
+    from_json: object = None
+
+
 class Registry:
     def __init__(self, *, allow_udf: bool = False,
                  extensions: "list[str] | tuple[str, ...] | None" = None) -> None:
         self.formats: dict[str, _Named] = {}
-        self.type_bindings: list[tuple[object, Format | dict]] = []
-        self.type_shapes: list[tuple[object, dict]] = []   # host type -> the shape it lowers to
+        self.host_types: list[HostType] = []
         self.transports: dict[str, _Named] = {}
         self.readers: dict[str, _Named] = {}
         self.allow_udf = allow_udf
@@ -98,27 +113,57 @@ class Registry:
 
     def format(self, host_type, *, write=None, read=None, describe=None,
                use: str | None = None, options: dict | None = None, shape: dict | None = None,
-               **facts) -> Format:
-        """Bind a host type to a format, per runtime — ``lmcc.format(Person,
+               to_json=None, from_json=None, **facts) -> Format | None:
+        """Bind a host type, per runtime — ``lmcc.format(Person,
         write=..., read=...)`` or ``lmcc.format(pd.DataFrame, use="table",
         options={...})``. Never serialized; ``ship`` does that on request.
 
-        A type the kernel cannot lower itself (not a scalar, list, dict,
-        Literal, Enum or dataclass) lowers to ``shape`` in signatures built
-        with this registry: a JSON-Schema dict, default ``{}`` — structured,
-        contents unknown, so the bound format carries it (kernel §1, §5)."""
+        ``shape``: the JSON-Schema dict the type lowers to in signatures
+        built with this registry. Without it, a type the kernel lowers
+        itself (a scalar, list, dict, Literal, Enum or dataclass) is lowered
+        as usual, and any other type lowers to ``{}`` — structured, contents
+        unknown, so the bound format carries it (kernel §1, §5).
+
+        ``to_json(value) -> JSON`` and ``from_json(data) -> value``: the
+        type's JSON form in that shape, both ways. A turn holds it
+        (``lmcc.turn.to_json``), ``plan.load_turn`` rebuilds the value from
+        it (``lmcc.turn.lift``), and every format but the one bound here
+        receives it, so the format bound here always receives the type
+        itself, live or replayed. Without them, a dataclass or a pydantic
+        model (``model_dump``/``model_validate``) crosses as before.
+
+        With neither ``write`` nor ``use``, no format is bound: the type
+        crosses by the format its shape resolves (a media shape: the
+        kernel's media default). Binding the same type again replaces its
+        binding. Returns the bound format, or ``None``."""
         if shape is not None and not isinstance(shape, dict):
             refuse("unmapped-type", f"{core.typename(host_type)}: shape must be a JSON-Schema dict",
                    fix={"action": "edit-signature"})
+        for name, hook in (("to_json", to_json), ("from_json", from_json)):
+            if hook is not None and not callable(hook):
+                refuse("entry-malformed", f"{core.typename(host_type)}: {name} must be a function",
+                       fix={"action": "edit-entry", "path": name})
+        binding: Format | dict | None
         if use is not None:
-            binding: Format | dict = {"use": use, "options": options or {}}
-        else:
-            if write is None:
-                refuse("entry-malformed", "a format needs at least write",
-                       fix={"action": "edit-entry", "path": "write"})
+            binding = {"use": use, "options": options or {}}
+        elif write is not None:
             binding = make(write=write, read=read, describe=describe, **facts)
-        self.type_bindings.append((host_type, binding))
-        self.type_shapes.append((host_type, dict(shape) if shape is not None else {}))
+        elif read is not None or describe is not None or facts or options is not None or (
+                shape is None and to_json is None and from_json is None):
+            refuse("entry-malformed", "a format needs at least write",
+                   fix={"action": "edit-entry", "path": "write"})
+        else:
+            binding = None
+        record = HostType(host_type, binding, dict(shape) if shape is not None else None,
+                          to_json, from_json)
+        for i, known in enumerate(self.host_types):
+            if known.host_type is host_type:
+                self.host_types[i] = record      # bound again: the new binding replaces it
+                break
+        else:
+            self.host_types.append(record)
+        if binding is None:
+            return None
         return binding if isinstance(binding, Format) else self.named_format(use, options)
 
     @staticmethod
@@ -127,22 +172,47 @@ class Registry:
             isinstance(annotation, type) and isinstance(host_type, type)
             and issubclass(annotation, host_type))
 
-    def shape_of(self, annotation: object) -> dict | None:
-        """The shape a bound host type lowers to, or None when it is not bound."""
-        for host_type, shape in self.type_shapes:
-            if annotation is not None and self._matches(annotation, host_type):
-                return dict(shape)
-        return None
-
-    def type_binding(self, annotation: object) -> Format | None:
+    def host(self, annotation: object) -> HostType | None:
+        """The binding of a host type (or of a class it derives from), or None."""
         if annotation is None:
             return None
-        for host_type, binding in self.type_bindings:
-            if self._matches(annotation, host_type):
-                if isinstance(binding, dict):
-                    return self.named_format(binding["use"], binding.get("options"))
-                return binding
-        return None
+        return next((h for h in self.host_types if self._matches(annotation, h.host_type)), None)
+
+    def to_json_hook(self, value: object):
+        """The ``to_json`` bound to a value's type (by ``isinstance``), or None."""
+        if type(value) in _PLAIN:
+            return None
+        return next((h.to_json for h in self.host_types if h.to_json is not None
+                     and isinstance(h.host_type, type) and isinstance(value, h.host_type)), None)
+
+    def from_json_hook(self, annotation: object):
+        """The ``from_json`` bound to a host type (or a class it derives from), or None."""
+        if annotation is None:
+            return None
+        return next((h.from_json for h in self.host_types if h.from_json is not None
+                     and self._matches(annotation, h.host_type)), None)
+
+    def declared_shape(self, annotation: object) -> dict | None:
+        """The shape a host type was bound with, or None when none was given."""
+        h = self.host(annotation)
+        return dict(h.shape) if h is not None and h.shape is not None else None
+
+    def shape_of(self, annotation: object) -> dict | None:
+        """The shape a bound host type lowers to (``{}`` when it was bound
+        without one), or None when it is not bound."""
+        h = self.host(annotation)
+        if h is None:
+            return None
+        return dict(h.shape) if h.shape is not None else {}
+
+    def type_binding(self, annotation: object) -> Format | None:
+        h = next((h for h in self.host_types if h.binding is not None
+                  and annotation is not None and self._matches(annotation, h.host_type)), None)
+        if h is None:
+            return None
+        if isinstance(h.binding, dict):
+            return self.named_format(h.binding["use"], h.binding.get("options"))
+        return h.binding
 
     # ---------------------------------------------------------- transports
 
@@ -220,10 +290,12 @@ class Registry:
         return {
             "formats": {n: e.version for n, e in sorted(self.formats.items())},
             "type_bindings": [
-                {"type": core.typename(t), "format": (b["use"] if isinstance(b, dict)
-                                                     else b.name or "(inline)"),
-                 "shape": shape}
-                for (t, b), (_, shape) in zip(self.type_bindings, self.type_shapes)],
+                {"type": core.typename(h.host_type),
+                 "format": (None if h.binding is None else h.binding["use"]
+                            if isinstance(h.binding, dict) else h.binding.name or "(inline)"),
+                 "shape": h.shape if h.shape is not None else {},
+                 "json": [k for k in ("to_json", "from_json") if getattr(h, k) is not None]}
+                for h in self.host_types],
             "transports": {n: e.version for n, e in sorted(self.transports.items())},
             "readers": {"derived": "kernel",
                        **{n: e.version for n, e in sorted(self.readers.items())}},
@@ -232,6 +304,8 @@ class Registry:
         }
 
 
+_PLAIN = (type(None), str, int, float, bool, list, dict, tuple)
+
 default_registry = Registry()
 
-__all__ = ["Registry", "default_registry", "Format"]
+__all__ = ["HostType", "Registry", "default_registry", "Format"]

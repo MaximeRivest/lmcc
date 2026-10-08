@@ -7,3 +7,4 @@ dist/
 research/
 .venv-dspy/
 .venv-lm15/
+julia/.lm15-env/

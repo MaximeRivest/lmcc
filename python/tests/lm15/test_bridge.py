@@ -123,6 +123,29 @@ def test_a_response_cut_at_its_length_limit_refuses_in_parse_step_and_stream():
     assert lmcc_lm15.parse(plan, _response(TextPart("<answer>\n4"))) == {"reasoning": "", "answer": 4}
 
 
+def test_a_stopped_response_refuses_filtered_in_parse_step_and_stream():
+    """lm15's content_filter finish reason, and its RefusalPart, are a stop,
+    never an answer (kernel §4a): even a reply whose text reads."""
+    from lm15 import RefusalPart
+    plan = plan_for("native_reasoning", {"instruct": True, "native_reasoning": True})
+    readable = TextPart("<answer>\n4\n</answer>")
+    for response in (_response(readable, finish_reason="content_filter"),
+                     _response(TextPart(""), finish_reason="content_filter"),
+                     _response(readable, RefusalPart("I can't help with that."))):
+        for attempt in (lambda: lmcc_lm15.parse(plan, response),
+                        lambda: lmcc_lm15.step(plan.render(problem="2+2"), response)):
+            with pytest.raises(lmcc.Refusal) as err:
+                attempt()
+            assert err.value.code == "parse-filtered"
+    with pytest.raises(lmcc.Refusal) as err:
+        lmcc_lm15.stream(plan, [StreamDeltaEvent(delta=TextDelta(text="<answer>\n4\n</answer>", part_index=0)),
+                                StreamEndEvent(finish_reason="content_filter")])
+    assert err.value.code == "parse-filtered"
+    with pytest.raises(lmcc.Refusal) as err:
+        lmcc_lm15.parse(plan, Message.assistant([RefusalPart("No.")]))
+    assert err.value.code == "parse-filtered" and "'No.'" in err.value.hint
+
+
 def test_read_reports_repairs_on_an_lm15_response():
     plan = plan_for("native_reasoning", {"instruct": True, "native_reasoning": True})
     reading = lmcc_lm15.read(plan, _response(TextPart("<Answer>\n4\n</Answer>")))
@@ -176,3 +199,77 @@ def test_a_judgment_answer_reads_through_lm15_data_parts():
     done = s.finish("stop")
     assert (done.values, done.probabilities, done.measured_by) == \
         (reading.values, reading.probabilities, reading.measured_by)
+
+
+# ------------------------------------------------------------ media parts (issue #3)
+
+from lm15 import AudioPart, DocumentPart, ImagePart  # noqa: E402
+
+PICTURE = ImagePart(media_type="image/png", data="iVBORw0KGgo=")
+ASK = lmcc.adapter(messages=[
+    lmcc.system("{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"),
+    lmcc.turns(), lmcc.user("{% for f in inputs %}{f.value}{% endfor %}")])
+
+
+@lmcc.fn
+def colour(picture: ImagePart) -> str:
+    """The main colour."""
+
+
+def test_an_lm15_media_part_is_a_field_type():
+    (picture, _) = colour.signature.fields
+    assert (picture.shape, picture.type) == ({"media": "image"}, "ImagePart")
+    for cls, kind in lmcc_lm15.MEDIA_PARTS.items():
+        sig = lmcc.signature("x", inputs={"m": cls}, outputs={"a": str})
+        assert sig.fields[0].shape == {"media": kind}
+    plan = colour.bind(ASK, capabilities={"instruct": True})
+    assert plan.describe()["inputs"][0]["resolved_by"] == "kernel"   # the kernel's media default
+    rendered = plan.render(picture=PICTURE)
+    assert rendered.request("m")["messages"][0]["parts"] == [
+        {"type": "image", "media_type": "image/png", "data": "iVBORw0KGgo="}]
+    assert isinstance(lmcc_lm15.request(rendered, model="m").messages[0].parts[0], ImagePart)
+
+
+def test_an_lm15_part_is_a_value_for_a_media_field_of_its_kind_only():
+    @lmcc.fn
+    def look(picture: {"media": "image"}) -> str:
+        """Look."""
+
+    plan = look.bind(ASK, capabilities={"instruct": True})
+    assert plan.render(picture=PICTURE).request("m")["messages"][0]["parts"][0]["type"] == "image"
+    assert plan.render(picture={"media_type": "image/png", "data": "AA=="}).request("m")  # data still works
+    with pytest.raises(lmcc.Refusal) as err:
+        plan.render(picture=AudioPart(media_type="audio/wav", data="AAAA"))
+    assert err.value.code == "value-invalid" and "'audio'" in err.value.hint
+
+
+def test_a_path_part_keeps_its_path_for_lm15_to_read():
+    plan = colour.bind(ASK, capabilities={"instruct": True})
+    part = ImagePart(media_type="image/png", path="cat.png")
+    assert plan.render(picture=part).request("m")["messages"][0]["parts"] == [
+        {"type": "image", "media_type": "image/png", "path": "cat.png"}]
+
+
+def test_a_part_is_saved_as_its_part_data_and_rebuilt_on_load():
+    plan = colour.bind(ASK, capabilities={"instruct": True})
+    rendered = plan.render(picture=PICTURE)
+    turn = rendered.step("<colour>\nred\n</colour>").finish()
+    data = turn.to_dict()
+    assert data["inputs"] == {"picture": {"type": "image", "media_type": "image/png", "data": "iVBORw0KGgo="}}
+    back = plan.load_turn(data)
+    assert back.inputs["picture"] == PICTURE
+    assert plan.render(picture=PICTURE, turns=[turn]).request("m") == \
+        plan.render(picture=PICTURE, turns=[back]).request("m")
+    data["inputs"]["picture"]["type"] = "audio"
+    with pytest.raises(lmcc.Refusal) as err:
+        plan.load_turn(data)
+    assert err.value.code == "turn-invalid"
+
+
+def test_a_registry_without_the_bridge_says_to_import_it():
+    with pytest.raises(lmcc.Refusal) as err:
+        lmcc.signature("x", inputs={"d": DocumentPart}, outputs={"a": str}, registry=lmcc.Registry())
+    assert err.value.code == "unmapped-type" and "import lmcc_lm15" in err.value.hint
+    reg = lmcc_lm15.install(lmcc.Registry())
+    assert lmcc.signature("x", inputs={"d": DocumentPart}, outputs={"a": str},
+                          registry=reg).fields[0].shape == {"media": "document"}

@@ -21,7 +21,7 @@
  * ```
  */
 
-import { defaultRegistry } from "./registry.ts";
+import { defaultRegistry, type HostSpec } from "./registry.ts";
 import type { FormatSpec, Format } from "./formats.ts";
 import type { JsonObject } from "./json.ts";
 
@@ -33,7 +33,7 @@ export { makeFormat, MEDIA_DEFAULT, SCALAR_DEFAULT, type Format, type FormatSpec
 export { Reader, DerivedReader, type ReaderStream } from "./reader.ts";
 export { Plan, Reading, RenderResult, bind } from "./plan.ts";
 export { Stream, StreamResult, type StreamEvent } from "./stream.ts";
-export { Registry, type RegistryOptions } from "./registry.ts";
+export { Registry, type RegistryOptions, type HostSpec, type TypeBinding } from "./registry.ts";
 export { KERNEL_VERSION, dump, load } from "./serde.ts";
 export { Transport } from "./transport.ts";
 export { LegacyRE2, nativeExtensions, type ExtensionBinding, type PatternBinding } from "./extensions.ts";
@@ -45,8 +45,10 @@ export { strip } from "./text.ts";
 
 export { defaultRegistry };
 
-/** Bind a type name to a format in the default registry (per runtime, never serialized). */
-export function format(type: string, spec: (FormatSpec | { use: string; options?: Record<string, unknown> }) & { shape?: JsonObject }): Format {
+/** Bind a type name in the default registry (per runtime, never serialized): see `Registry.format`. */
+export function format(type: string, spec: (FormatSpec | { use: string; options?: Record<string, unknown> }) & HostSpec): Format;
+export function format(type: string, spec: HostSpec): null;
+export function format(type: string, spec: any): Format | null {
   return defaultRegistry.format(type, spec);
 }
 

@@ -1848,3 +1848,205 @@ Ratified-by: Maxime Rivest, 2026-09-29 (in session): the record as a
 permanent protocol of lm15 and lmcc, and the release of D-58 and D-59 as
 kernel 0.8.5, the patch D-58 proposed. lm15 1.0.0-rc.3 was published the
 same day; lmcc requires it.
+
+**D-60 · A reply the provider stopped refuses `parse-filtered` (kernel
+0.8.6, a patch).** GitHub issue #5, from a real extraction run
+(2026-10-02): Claude stopped partway through toxicology papers; the
+frontend saw `parse-missing-fields`, asked again with a hint, sent the
+empty reply back (which Claude refuses), and the user was told the reply
+"could not be read". The cause and the fix (another model) took a person
+reading the log. Reproduced with lmcc 0.8.5 alone: an empty stopped reply
+refused `parse-missing-fields`; a stopped reply whose text fit the pattern
+was returned as the answer.
+
+- **The rule (kernel §4a, Filtered).** lm15 gives two signals for one
+  event, both in the pinned contract: the finish reason `content_filter`
+  ("provider safety/refusal stop": Anthropic's `refusal`, Gemini's
+  `SAFETY`, OpenAI's `content_filter`) and the `refusal` part (OpenAI's
+  model declining in its own words, sent with finish reason `stop`).
+  Either refuses `parse-filtered`, whether or not the text reads, before
+  anything is read: before the reader, `parse-ambiguous`, truncation and
+  every format. The issue named only the finish reason; the refusal part
+  is included because without it OpenAI's declines keep the misdiagnosis
+  the issue reports, and a message (no finish reason) could not be
+  recognised at all.
+- **Before ambiguity.** `parse-truncated` lets `parse-ambiguous` come
+  first; this one does not: an ambiguous stopped reply reported as
+  ambiguous invites the re-ask the issue is about.
+- **`partial` is empty.** Nothing was read. A refusal part's text is
+  quoted in the hint; the caller holds the response for anything else.
+- **The name** is the issue's (`parse-filtered`, after lm15's
+  `content_filter`); functai 1.3 (unreleased) already raises it in four
+  languages, and drops its own check now.
+
+Costs, stated. **A new code under a patch number.** `errors.md` says
+adding a code is a minor change, and while the major is 0 a minor is
+breaking: every 0.8 artifact would refuse `version-incompatible`. No
+artifact changes meaning here, only replies that were never answers read
+differently, so the release is 0.8.6, as 0.8.5 made some inputs refuse
+under a patch; the rule in `errors.md` is unchanged and this is a stated
+exception. A frontend that switches on codes meets one it did not know;
+it was getting the wrong one before. Not covered: lm15's `error` finish
+reason (a stream that ended in error), which is also not an answer and
+is still read like any other reply; it needs its own code and is left
+for a decision.
+
+Ratified-by: Maxime Rivest, 2026-10-07 (in session): issues #3, #4 and #5
+as recommended (#5 as a kernel rule; #4's list fix and JSON hooks on the
+type binding, runtime only; #3 in the lm15 bridge). The choices made while
+building them and not in the recommendation are stated here and in D-61
+for review: the refusal part, the order before `parse-ambiguous`, the
+patch number, the names `to_json`/`from_json`, binding on import.
+
+**D-61 · A host type's JSON form is part of its binding; lm15's media
+parts are bound by the bridge (Python; no kernel change).** GitHub issues
+#4 and #3.
+
+- **#4, the bug.** `lmcc.turn.lift` called `model_validate` only for an
+  object or a text, so a list-like type (or a number-like one) came back
+  as plain JSON when a turn was loaded, and the format bound to it
+  received a `Pages` live and a list of base64 dicts on replay. `lift`
+  now rebuilds from any JSON; `lmcc_std`'s copy of `lift` is the kernel's.
+- **#4, the hook.** `lmcc.format(T, ..., to_json=, from_json=)`: the
+  type's JSON form, both ways, on the binding that already holds its
+  format and shape, never serialized (D-07). This is the 2026-09-02
+  answer to "lower/lift feel like what codecs is trying to be" (conversation
+  `01a061fe`): a type's local materialization belongs to its binding, not
+  to a layer of its own. A turn writes it (`to_json`, by `isinstance`),
+  `plan.load_turn` rebuilds with it (`lift`), and **the format bound to
+  the type receives the type itself, live or replayed; every other
+  format (the artifact's, the kernel's defaults) receives the JSON form.**
+  Without hooks, dataclasses and pydantic models cross as before. The
+  issue's names `dump`/`load` were not taken: lmcc's `dump`/`load` are
+  the artifact's.
+- **Binding refinements.** A binding with neither `write` nor `use` binds
+  no format, only a shape and a JSON form (the type crosses by its
+  shape's format); a declared `shape` now wins over the mechanical
+  lowering of a dataclass (it was silently ignored); binding the same
+  type again replaces its binding (the second one was silently dead).
+- **#3.** `import lmcc_lm15` binds `ImagePart`, `AudioPart`, `VideoPart`,
+  `DocumentPart`, `BinaryPart` in the default registry (`install(registry)`
+  for another): shape `{"media": kind}`, no format (the kernel's media
+  default or the artifact's), JSON form lm15's own `part_to_dict`, `type`
+  included so a part of another kind refuses `value-invalid`. A part given
+  by `path` keeps its path; lm15 reads the file when it sends. lmcc never
+  touches the file system. The kernel never imports lm15 (it only names
+  the bridge in an `unmapped-type` hint).
+
+Costs, stated. `to_json`, `Turn.to_dict` and `lift` look in the default
+registry unless given one: a program with its own registry passes it
+(`turn.to_dict(registry=...)`); `plan.load_turn` passes the plan's; the
+standard formats, which see no registry, use the default. The bridge
+binds on import (a side effect on the default registry); a later
+`lmcc.format(ImagePart, ...)` replaces it. A hooked value nested inside
+another value reaches an artifact's format as its JSON form only through
+`to_json` or `lmcc_std.lower`; a pack that walks values its own way does
+not see the hook. TypeScript, Julia and R have the same gaps, each in its
+own form (TypeScript cannot recognise an lm15 part by its value; it
+writes an lm15-ts image with `mediaType`, which lm15 refuses only at
+send), and none rebuilds host types from a turn: plan 14. No corpus case:
+host types are not data.
+
+**D-62 · A type's JSON form and lm15's media parts in TypeScript, Julia
+and R (plan 14; no kernel change).** Asked by the maintainer on
+2026-10-07 ("fix in all languages") after D-61 did Python. The rule is
+D-61's in every kernel: a type binding may carry the type's JSON form both
+ways; the format bound to the type receives the value itself, live or
+replayed; every other format receives the JSON form; `load_turn` rebuilds
+it. One call is new in all four: **`plan.dump_turn(turn)`** (`dumpTurn` in
+TypeScript), the counterpart of `load_turn`, which writes each value by its
+binding.
+
+- **Finding the binding.** Python and Julia find it by the value (class,
+  `isa`), so `to_json`, `turn.to_dict()` and `turn_to_dict` apply it
+  without a plan. TypeScript and R find it by the field's type name, as
+  they already found format bindings: a plain object carries no class
+  (lm15-ts's parts are plain objects), and R binds by name. There a turn
+  must be saved with `dump_turn`; `turn.toJSON()`/`turn_to_list()` write
+  values as they are. Each README states it.
+- **The surfaces.** TypeScript: `registry.format(type, {toJson, fromJson,
+  shape?})`, overloaded so a binding with a format still returns a
+  `Format`. Julia: `bind_type!(reg, T; to_json, from_json, name)`; `name`
+  is new because `string(T)` reads `LM15.ImagePart` or `ImagePart`
+  depending on the caller's imports, and the type name is in a
+  signature's fingerprint and in an artifact's format keys. R:
+  `bind_type(reg, type, to_json =, from_json =)`; R has no type lowering,
+  so no `shape`. In all three, binding a name again replaces it (R
+  already did) and a binding with only a JSON form binds no format.
+- **The bridges.** TypeScript: `media.image()` (`audio`, `video`,
+  `document`, `binary`) are fields typed `ImagePart`, …; the JSON form is
+  lm15's `Part.toJSON` (lm15-ts's camelCase `mediaType` becomes
+  `media_type`), and part data given as it is passes through. Importing
+  `lmcc/lm15` binds them in `defaultRegistry`, so `package.json`'s
+  `sideEffects` now names that module instead of `false`. Julia: loading
+  the extension binds `LM15.ImagePart`, … (`lm15_install!`), JSON form
+  `LM15.to_dict` with `type` first as the other kernels write it, names
+  Python's. R: `lm15_media(kind)` fields; the default registry has the
+  bindings (`lm15_install()` for another), which call lm15 only when they
+  meet an lm15 value. Every bridge keeps a `path` for lm15 to read.
+- **Checks.** Each kernel has a unit test of the rule (Python
+  `test_host_json.py`, TypeScript `host_json.test.ts`, Julia's testset, R
+  `test-host-json.R`) and a bridge test against a real lm15, offline:
+  Python's against its pinned release; TypeScript's against the installed
+  `@lm15/lm15`; Julia's (`julia/bridge/test.jl`) against LM15.jl at commit
+  `34c1167` (1.0.0, not in the General registry); R's
+  (`r/bridge/test-lm15.R`) against lm15 for R `v1.1.0` (not on CRAN). The
+  last two also check `parse-filtered` through lm15 objects. `./check`
+  installs both once (network the first time), like Python's.
+
+Costs, stated. In TypeScript and R a media field declared without the
+bridge's type (`t.media("image")`, `shape_media("image")`) does not see
+the binding: given an lm15-ts part, TypeScript still writes `mediaType`,
+which lm15 refuses when the request is built; given an lm15 R part, R
+writes it with lm15's empty members (`"url": null`, …), which lm15
+accepts but which makes a request differ from the typed field's. Use the
+bridge's fields. A kernel rule refusing unknown members in a media value
+would close both everywhere; it is a contract change and is left for a
+decision. `./check` now downloads LM15.jl and lm15 for R once.
+
+**D-63 · A media value is written as lm15 serializes the part; a reply
+ended in error refuses `parse-interrupted`; R gets the helpers (kernel
+0.8.6, before its release).** Asked by the maintainer on 2026-10-07
+("go") after D-62 left two kernel gaps and a parity gap.
+
+- **Media members (§7b).** For lm15's five media part kinds the kernel
+  writes exactly lm15's part: members from the pinned contract's
+  `spec/types.md` (`media_type`, `data`, `url`, `file_id`, `path`,
+  `continuation`, `detail` for images), anything else refuses
+  `value-invalid` naming it, and a member lm15 omits when empty (`null`,
+  `""`, `[]`, `{}`) is left out, `media_type` excepted. This closes
+  D-62's stated gaps in every kernel: an lm15-ts part in an untyped field
+  refuses before the wire naming `mediaType` (lm15 refused it late and
+  obscurely), and an lm15 R part writes the same bytes as through the
+  typed field (its empty members are gone). It extends the precedent of
+  the pinned `Config` field list (D-35): lm15's names are pinned, a new
+  lm15 member is a deliberate pin bump. lm15's invariants (a non-empty
+  `media_type`, exactly one source) stay lm15's to check; it refuses them
+  before sending. Other kinds (`function`, used by puts into
+  `request.tools`) are written as given: they are not lm15 media parts.
+  Cases 257–259. Cases 184, 185 and 187 used an Anthropic-shaped image
+  (`source`) that lm15 never delivers and would refuse to send; they now
+  hold lm15's (`corpus/README.md`).
+- **Interrupted (§4a).** lm15's finish reason `error` is read as a cut
+  reply, with its own code, `parse-interrupted`, because the remedy
+  differs from `parse-truncated`'s (send again, not more tokens). Same
+  rule otherwise: refused when an output may be cut, read when every
+  output ended first. Cases 260–262. This closes the gap D-60 stated.
+- **R helpers (plan 13).** `find_between`, `find_lines`, `find_pattern`,
+  `find_part`, `put_system`/`developer`/`user`/`request`, `when_has`/
+  `lacks`/`all`/`any`, and `choose_transport`: the data Python's helpers
+  return, byte for byte (`tests/testthat/test-helpers.R` pins Python's
+  JSON). The choice is `choose_transport` because R's `choose()` is the
+  binomial coefficient and an exported `choose` would mask it.
+
+Costs, stated. A media value with a member lm15 does not know used to be
+sent (and lm15 dropped it, or refused late); it now refuses at render, a
+behaviour change for anyone passing extra keys (`alt`, `mime`; lmcc's own
+test passed `mime`). `value-invalid` fires in a new place and
+`parse-interrupted` is a new code, both under 0.8.6 for D-60's reason; 0.8.6
+is not yet released, so no published version reads differently twice. A
+frontend reading `parse-truncated` to mean any cut now also meets
+`parse-interrupted`.
+
+Ratified-by: Maxime Rivest, 2026-10-07 (in session): "go" on the media
+rule, the `error` finish reason and the R helpers as recommended.

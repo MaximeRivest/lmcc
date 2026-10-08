@@ -44,14 +44,28 @@ const SCALAR_DEFAULT = Format("kernel-scalar", ["string", "integer", "number", "
     (c, f) -> read_value(f.shape, text(c), "field $(pyrepr(f.name))"),
     f -> (s = shape_summary(f.shape); isempty(s) ? nothing : s), nothing)
 
+const _MEDIA_MEMBERS = ["media_type", "data", "url", "file_id", "path", "continuation"]
+"lm15's media parts and their members besides `type` (the pinned contract's spec/types.md); §7b writes these kinds exactly as lm15 serializes them."
+media_part_members(kind) = kind == "image" ? ["media_type", "data", "url", "file_id", "path", "detail", "continuation"] :
+    kind in ("audio", "video", "document", "binary") ? _MEDIA_MEMBERS : nothing
+"lm15's omission rule: null, \"\", [] and {} are left out."
+_empty_member(v) = v === nothing || (v isa AbstractString && isempty(v)) || ((v isa AbstractVector || v isa Tuple || v isa AbstractDict) && isempty(v))
+
 function _media_write(value, f::Field)
     kind = f.shape["media"]
     isobj(value) || refuse("value-invalid", "field $(pyrepr(f.name)): a media value must be a Dict of part data")
     haskey(value, "type") && value["type"] != kind &&
         refuse("value-invalid", "field $(pyrepr(f.name)): a $(pyrepr(value["type"])) part given where a $(pyrepr(kind)) part is declared")
     part = jobj("type" => kind)
+    members = media_part_members(kind)
     for (k, v) in value
-        String(k) == "type" || (part[String(k)] = v)
+        k = String(k)
+        k == "type" && continue
+        if members !== nothing          # §7b: exactly as lm15 serializes the part
+            k in members || refuse("value-invalid", "field $(pyrepr(f.name)): $(pyrepr(k)) is not a member of lm15's $kind part ($(join(members, ", "))); give the part's data, or an lm15 part through its bridge")
+            k != "media_type" && _empty_member(v) && continue   # lm15's omission rule
+        end
+        part[k] = v
     end
     Any[part]
 end

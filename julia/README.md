@@ -99,6 +99,13 @@ t = tool(t, "call_1", "Sunny, 22C")
 # events, result = lm15_stream(plan, LM15.stream(LMRouter(), req))
 ```
 
+With LM15 loaded, its media parts are field types: `inputs=(picture=LM15.ImagePart,)`
+is a `{"media": "image"}` field whose value is an lm15 part, written as
+lm15's canonical part data (a path stays a path; lm15 reads the file), saved
+by `dump_turn` and rebuilt by `load_turn`. Loading the extension binds the
+five part types in the default registry; `lm15_install!(registry)` binds
+them in your own.
+
 ## Where Julia differs, stated
 
 The differential check (`python contract/harness/differential.py --probe
@@ -114,7 +121,13 @@ names against Python, member order included.
   Python annotations have different fingerprints. `signature_from_dict` never
   differs.
 - **Values** are JSON: ordered `Dict`s, `Vector{Any}`, `nothing`; integers
-  `Int64`, or `BigInt` beyond it. Nothing is lifted into structs.
+  `Int64`, or `BigInt` beyond it. Nothing is lifted into structs, except a
+  type bound with its JSON form: `bind_type!(reg, T; to_json, from_json)`
+  (D-62), which `to_json`, `turn_to_dict` and `dump_turn(plan, turn)` write
+  (found by `isa`, as Python finds it by class) and `load_turn` rebuilds.
+  `bind_type!`'s `name` sets the type name a signature records, which
+  `string(T)` otherwise spells by what the caller imported
+  (`LM15.ImagePart` or `ImagePart`); the lm15 extension gives Python's.
 - **A `Dict` has no order**: Julia's `Dict` iterates in hash order, and lmcc
   writes an object's members in the order the value holds them (kernel §1),
   so a `Dict` given as a value or a shape is written in hash order (a

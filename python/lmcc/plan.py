@@ -226,7 +226,15 @@ class Plan:
         return self.reader.format([(f.name, self.placeholder(f)) for f in self.visible_outputs])
 
     def write(self, f: core.Field, value: object, *, fmt: _formats.Format | None = None) -> list[dict]:
+        own = fmt is None and self.formats[f.name].resolved_by.startswith("runtime:")
         fmt = fmt or self.format_for(f)
+        if not own and self.registry.to_json_hook(value) is not None:
+            # a type bound with to_json reaches the format bound to it as itself,
+            # every other format (the artifact's, the kernel's) as its JSON form
+            try:
+                value = to_json(value, where=f"field {f.name!r}", registry=self.registry)
+            except Refusal as err:
+                refuse("format-write-error", err.hint)
         try:
             written = fmt.write(value, f)
         except Refusal:
@@ -276,14 +284,32 @@ class Plan:
         t = Turn.from_dict(data)
         self._check_turn(t, "turn", past=False, pending_ok=True)
 
-        def lift_all(values: dict) -> dict:
-            return {k: lift_value(self.signature.field_named(k).annotation, v)
-                    for k, v in values.items()}
+        def lift_one(where: str, k: str, v: object) -> object:
+            ann = self.signature.field_named(k).annotation
+            try:
+                return lift_value(ann, v, registry=self.registry)
+            except Refusal:
+                raise
+            except Exception as exc:  # noqa: BLE001 — a host constructor; name the value
+                refuse("turn-invalid", f"{where}.{k}: cannot rebuild a {core.typename(ann)} from "
+                                       f"its JSON: {exc}")
 
-        steps = tuple(ModelStep(lift_all(s.outputs), s.message, s.request, s.calls_field)
-                      if isinstance(s, ModelStep) else s for s in t.steps)
-        return Turn(t.signature, lift_all(t.inputs), steps,
-                    None if t.outputs is None else lift_all(t.outputs), t.score, dict(t.meta))
+        def lift_all(values: dict, where: str = "turn") -> dict:
+            return {k: lift_one(where, k, v) for k, v in values.items()}
+
+        steps = tuple(ModelStep(lift_all(s.outputs, f"turn.steps[{i}].outputs"), s.message,
+                                s.request, s.calls_field)
+                      if isinstance(s, ModelStep) else s for i, s in enumerate(t.steps))
+        return Turn(t.signature, lift_all(t.inputs, "turn.inputs"), steps,
+                    None if t.outputs is None else lift_all(t.outputs, "turn.outputs"),
+                    t.score, dict(t.meta))
+
+    def dump_turn(self, turn: Turn) -> dict:
+        """A turn of this plan as JSON (``schema/turn.schema.json``): values
+        by ``to_json`` with this plan's registry, so each type bound with
+        ``to_json`` is written by it. What ``load_turn`` reads back; the same
+        call in every kernel (``dumpTurn``, ``dump_turn``)."""
+        return self._check_turn(turn, "turn", past=False, pending_ok=True).to_dict(registry=self.registry)
 
     @property
     def fingerprint(self) -> str:
@@ -506,7 +532,8 @@ class Plan:
             try:
                 values, _c, reps = self._parse_with_captures(step.message, continued=False)
                 reading = Reading(values, reps)
-                same = to_json(reading.values) == to_json(step.outputs) and not any(
+                same = to_json(reading.values, registry=self.registry) == to_json(
+                    step.outputs, registry=self.registry) and not any(
                     r["repair"] in ("marker", "unclosed", "value") for r in reading.repairs)
             except Refusal:
                 same = False
@@ -690,8 +717,10 @@ class Plan:
         Returning captures internally lets streaming prove that its emitted
         raw deltas equal the batch captures without inventing another parser.
         """
-        cut = core.finish_reason(response) == "length"
+        reason = core.finish_reason(response)
+        cut = reason if reason in ("length", "error") else None   # §4a: truncated, interrupted
         text, parts = core.response_text_and_parts(response)
+        self._refuse_filtered(response, parts)   # §4a: before anything is read
         lead = self.prefill if continued and self.prefill else ""
         text = lead + text              # the reply continues the prefill (§3)
         atoms = _atoms(parts, self.find_rules, len(lead))   # §4b: non-text parts, placed
@@ -715,24 +744,24 @@ class Plan:
                 raw = self.reader.split(text, names)
         except Refusal as err:
             if cut and not derived:
-                self._refuse_cut("", {}, why=err.hint)
+                self._refuse_cut(cut, "", {}, why=err.hint)
             if not (err.code == "parse-missing-fields" and isinstance(err.partial, dict)):
                 raise
             raw, missing_err = dict(err.partial), err
         except Exception as exc:  # noqa: BLE001
             if cut and not derived:
-                self._refuse_cut("", {}, why=str(exc))
+                self._refuse_cut(cut, "", {}, why=str(exc))
             refuse("reader-error",
                    f"reader {self.adapter.reader.get('kind')!r} failed to read the reply: {exc}")
         missing = [n for n in names if n not in raw]
         if cut:
             ended = {k: v for k, v in raw.items() if k not in to_end}
             if missing:
-                self._refuse_cut(f"before field {missing[0]!r}", ended)
+                self._refuse_cut(cut, f"before field {missing[0]!r}", ended)
             if to_end:
-                self._refuse_cut(f"inside field {next(n for n in names if n in to_end)!r}", ended)
+                self._refuse_cut(cut, f"inside field {next(n for n in names if n in to_end)!r}", ended)
             if not derived:
-                self._refuse_cut("", ended)
+                self._refuse_cut(cut, "", ended)
         if missing and not complete:   # a call turn omits what it did not write (§6)
             if missing_err is not None:
                 raise missing_err
@@ -771,16 +800,42 @@ class Plan:
                 value = ann(value)
             return value
 
-    def _refuse_cut(self, where: str, partial: dict, *, why: str = "") -> None:
-        """Kernel §4a: the provider cut the reply; say where, keep what ended."""
-        if where:
-            hint = f"the provider cut the reply at its length limit {where}"
+    def _refuse_filtered(self, response: object, parts: list[dict]) -> None:
+        """Kernel §4a: a reply the provider stopped is not an answer, whether
+        or not its text reads: lm15's ``finish_reason: "content_filter"``, or
+        a ``refusal`` part (the model declining in its own words)."""
+        refusal = next((p for p in parts if p.get("type") == "refusal"), None)
+        if refusal is None and core.finish_reason(response) != "content_filter":
+            return
+        if refusal is not None:
+            said = core.strip(refusal.get("text") or "")
+            hint = "the model declined to answer" + (f": {said!r}" if said else "")
         else:
-            hint = (f"the provider cut the reply at its length limit; reader "
-                    f"{self.adapter.reader.get('kind')!r} cannot tell which outputs ended before it")
+            hint = ("the provider stopped the reply (finish_reason content_filter: its "
+                    "safety filter, or the model declining)")
+        refuse("parse-filtered", hint + "; the same request would be stopped again, so "
+                                        "change the request or the model rather than asking again",
+               partial={})
+
+    def _refuse_cut(self, reason: str, where: str, partial: dict, *, why: str = "") -> None:
+        """Kernel §4a: the provider cut the reply (at its length limit, or by
+        an error); say where, keep what ended."""
+        if reason == "error":
+            code, cause, remedy = ("parse-interrupted", "the provider ended the reply in error",
+                                   "send the request again")
+        else:
+            code, cause, remedy = ("parse-truncated", "the provider cut the reply at its length limit",
+                                   "raise max_tokens or ask for less")
+        if where:
+            hint = f"{cause} {where}"
+        else:
+            hint = (f"{cause}; reader {self.adapter.reader.get('kind')!r} cannot tell which "
+                    f"outputs ended before it")
             if why:
                 hint += f" ({why})"
-        refuse("parse-truncated", hint + "; raise max_tokens or ask for less", partial=partial)
+        if code == "parse-interrupted":
+            refuse("parse-interrupted", hint + "; " + remedy, partial=partial)
+        refuse("parse-truncated", hint + "; " + remedy, partial=partial)
 
     def read(self, response: object) -> Reading:
         """The typed values of a reply and every repair the reader made to

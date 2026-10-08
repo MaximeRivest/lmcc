@@ -19,7 +19,7 @@ finish(s, finish_reason = NULL)
 
 \item{delta}{Text, or one lm15 part delta (a named list).}
 
-\item{finish_reason}{The lm15 stream end's; `"length"` means cut.}
+\item{finish_reason}{The lm15 stream end's; `"length"` means cut (`"error"` too: `parse-interrupted`), `"content_filter"` means stopped (refuses `parse-filtered`).}
 }
 \description{
 A pure, sans-I/O parser (section 8): `feed()` takes one text delta or one

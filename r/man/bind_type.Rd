@@ -2,9 +2,17 @@
 % Please edit documentation in R/registry.R
 \name{bind_type}
 \alias{bind_type}
-\title{Bind a type name to a format, per runtime (never serialized)}
+\title{Bind a type name, per runtime (never serialized)}
 \usage{
-bind_type(reg, type, format = NULL, use = NULL, options = jobj())
+bind_type(
+  reg,
+  type,
+  format = NULL,
+  use = NULL,
+  options = jobj(),
+  to_json = NULL,
+  from_json = NULL
+)
 }
 \arguments{
 \item{reg}{A registry.}
@@ -14,7 +22,15 @@ bind_type(reg, type, format = NULL, use = NULL, options = jobj())
 \item{format}{A format ([make_format()]), or `NULL` with `use`.}
 
 \item{use, options}{A registered format's name and options.}
+
+\item{to_json, from_json}{The type's JSON form, both ways (functions), or `NULL`.}
 }
 \description{
-Bind a type name to a format, per runtime (never serialized)
+A type name, as a signature's field spells it, gets a format and/or its
+JSON form both ways. `to_json(value)` gives the value's JSON form:
+[dump_turn()] writes it and every format but the one bound here receives
+it. `from_json(data)` rebuilds the value: [load_turn()] gives it to the
+format bound here, which so always receives the value itself, live or
+replayed. With neither `format` nor `use`, no format is bound (the field's
+shape resolves one). Binding the same name again replaces its binding.
 }

@@ -414,7 +414,7 @@ feed <- function(s, delta) {
 }
 
 #' @rdname reply_stream
-#' @param finish_reason The lm15 stream end's; `"length"` means cut.
+#' @param finish_reason The lm15 stream end's; `"length"` means cut (`"error"` too: `parse-interrupted`), `"content_filter"` means stopped (refuses `parse-filtered`).
 #' @export
 finish <- function(s, finish_reason = NULL) {
   if (s$finished) stop("stream is already finished")

@@ -112,6 +112,19 @@ class ScalarFormat(Format):
         return value
 
 
+_MEDIA_MEMBERS = ("media_type", "data", "url", "file_id", "path", "continuation")
+MEDIA_PART_MEMBERS = {"image": _MEDIA_MEMBERS[:5] + ("detail",) + _MEDIA_MEMBERS[5:],
+                      "audio": _MEDIA_MEMBERS, "video": _MEDIA_MEMBERS,
+                      "document": _MEDIA_MEMBERS, "binary": _MEDIA_MEMBERS}
+"""lm15's media parts and their members besides ``type`` (the pinned contract's
+spec/types.md); kernel §7b writes these kinds exactly as lm15 serializes them."""
+
+
+def _empty(v: object) -> bool:
+    """lm15's omission rule: null, "", [] and {} are left out."""
+    return v is None or (isinstance(v, (str, list, tuple, dict)) and len(v) == 0)
+
+
 class MediaFormat(Format):
     """Kernel §7b: a media value that is already a part passes through as
     that part; reading takes the first part of the field's media kind."""
@@ -133,7 +146,22 @@ class MediaFormat(Format):
             refuse("value-invalid",
                    f"field {field.name!r}: a {value['type']!r} part given where a {kind!r} "
                    f"part is declared")
-        return [{"type": kind, **{k: v for k, v in value.items() if k != "type"}}]
+        members = MEDIA_PART_MEMBERS.get(kind)
+        if members is None:              # not one of lm15's media parts: written as given
+            return [{"type": kind, **{k: v for k, v in value.items() if k != "type"}}]
+        part: dict = {"type": kind}
+        for k, v in value.items():       # §7b: exactly as lm15 serializes the part
+            if k == "type":
+                continue
+            if k not in members:
+                refuse("value-invalid",
+                       f"field {field.name!r}: {k!r} is not a member of lm15's {kind} part "
+                       f"({', '.join(members)}); give the part's data, or an lm15 part through "
+                       f"its bridge")
+            if k != "media_type" and _empty(v):
+                continue                 # lm15's omission rule
+            part[k] = v
+        return [part]
 
     def read(self, capture, field):
         parts = capture.of(field.shape.get("media"))

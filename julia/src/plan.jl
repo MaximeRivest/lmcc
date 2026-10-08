@@ -152,7 +152,18 @@ end
 reply_format(p::Plan) = reader_format(p.reader, [(f.name, placeholder(p, f)) for f in p.visible_outputs])
 
 function write_value(p::Plan, f::Field, value; fmt=nothing)
+    own = fmt === nothing && startswith(p.formats[f.name].resolved_by, "runtime:")
     format = fmt === nothing ? format_for(p, f) : fmt
+    if !own && to_json_hook(p.registry, value) !== nothing
+        # a type bound with to_json reaches the format bound to it as itself,
+        # every other format (the artifact's, the kernel's) as its JSON form
+        value = try
+            to_json(value, "field $(pyrepr(f.name))"; registry=p.registry)
+        catch err
+            err isa Refusal || rethrow()
+            refuse("format-write-error", err.hint)
+        end
+    end
     written = try
         format.write(value, f)
     catch err
@@ -204,11 +215,33 @@ function example(p::Plan, inputs, outputs)
     Turn(fingerprint(p), i, Step[], o, nothing, JObj())
 end
 
-"A turn from JSON, checked against this plan's signature."
+"""
+A turn from JSON, checked against this plan's signature; each value whose
+field's type is bound with `from_json` is rebuilt by it (§3a).
+"""
 function load_turn(p::Plan, data)
-    t = turn_from_dict(data)
-    _check_turn(p, t, "turn", false, true)
+    t = _check_turn(p, turn_from_dict(data), "turn", false, true)
+    function lift_all(values, where)
+        out = JObj()
+        for (k, v) in values
+            ann = field_named(p.signature, k).annotation
+            out[k] = try
+                lift(ann, v; registry=p.registry)
+            catch err
+                err isa Refusal && rethrow()
+                refuse("turn-invalid", "$where.$k: cannot rebuild a $(ann) from its JSON: $(sprint(showerror, err))")
+            end
+        end
+        out
+    end
+    steps = Step[s isa ModelStep ? ModelStep(lift_all(s.outputs, "turn.steps[$(i-1)].outputs"), s.message, s.request, s.calls_field) : s
+                 for (i, s) in enumerate(t.steps)]
+    Turn(t.signature, lift_all(t.inputs, "turn.inputs"), steps,
+         t.outputs === nothing ? nothing : lift_all(t.outputs, "turn.outputs"), t.score, t.meta)
 end
+
+"A turn of this plan as JSON: values by `to_json` with the plan's registry. What `load_turn` reads back."
+dump_turn(p::Plan, t::Turn) = turn_to_dict(_check_turn(p, t, "turn", false, true); registry=p.registry)
 
 function _check_names(p::Plan, values, direction, where)
     isobj(values) || refuse("turn-invalid", "$where: an object of $direction field values")
@@ -413,7 +446,7 @@ function _model_message(p::Plan, s::ModelStep, ctx)
     if p.adapter.replay == "recorded" && s.message !== nothing
         same = try
             values, _, reps = parse_with_captures(p, s.message; continued=false)
-            json_equal(to_json(values), to_json(s.outputs)) && !any(r -> r["repair"] in ("marker", "unclosed", "value"), reps)
+            json_equal(to_json(values; registry=p.registry), to_json(s.outputs; registry=p.registry)) && !any(r -> r["repair"] in ("marker", "unclosed", "value"), reps)
         catch err
             err isa Refusal || rethrow()
             false
@@ -578,8 +611,10 @@ skeleton(p::Plan) = reader_skeleton(p.reader)
 
 "The one batch parse path, shared by `read`, `parse` and stream EOF: `(values, captures, repairs)`."
 function parse_with_captures(p::Plan, response; continued=true)
-    cut = finish_reason(response) == "length"
+    reason = finish_reason(response)
+    cut = reason in ("length", "error") ? reason : nothing   # §4a: truncated, interrupted
     text, parts = response_text_and_parts(response)
+    _refuse_filtered(response, parts)   # §4a: before anything is read
     lead = continued && !isempty(p.prefill) ? p.prefill : ""
     text = lead * text
     atoms = _atoms(parts, p.find_rules, blen(lead))
@@ -604,21 +639,21 @@ function parse_with_captures(p::Plan, response; continued=true)
         end
     catch err
         if err isa Refusal
-            cut && !derived && _refuse_cut(p, "", JObj(); why=err.hint)
+            cut !== nothing && !derived && _refuse_cut(p, cut, "", JObj(); why=err.hint)
             (err.code == "parse-missing-fields" && err.partial isa AbstractDict) || rethrow()
             missing_err = err
             JObj(String(k) => v for (k, v) in err.partial)
         else
-            cut && !derived && _refuse_cut(p, "", JObj(); why=sprint(showerror, err))
+            cut !== nothing && !derived && _refuse_cut(p, cut, "", JObj(); why=sprint(showerror, err))
             refuse("reader-error", "reader $(pyrepr(p.adapter.reader["kind"])) failed to read the reply: $(sprint(showerror, err))")
         end
     end
     missing = [n for n in names if !haskey(raw, n)]
-    if cut
+    if cut !== nothing
         ended = JObj(k => v for (k, v) in raw if !(k in to_end))
-        isempty(missing) || _refuse_cut(p, "before field $(pyrepr(missing[1]))", ended)
-        isempty(to_end) || _refuse_cut(p, "inside field $(pyrepr(names[findfirst(n -> n in to_end, names)]))", ended)
-        derived || _refuse_cut(p, "", ended)
+        isempty(missing) || _refuse_cut(p, cut, "before field $(pyrepr(missing[1]))", ended)
+        isempty(to_end) || _refuse_cut(p, cut, "inside field $(pyrepr(names[findfirst(n -> n in to_end, names)]))", ended)
+        derived || _refuse_cut(p, cut, "", ended)
     end
     if !isempty(missing) && !complete
         missing_err === nothing || throw(missing_err)
@@ -659,13 +694,32 @@ function _read_forgiving(p::Plan, f::Field, c::Capture, repairs)
     end
 end
 
-function _refuse_cut(p::Plan, where, partial; why="")
-    hint = if !isempty(where)
-        "the provider cut the reply at its length limit $where"
+"§4a: a reply the provider stopped is not an answer, whether or not its text reads."
+function _refuse_filtered(response, parts)
+    i = findfirst(q -> get(q, "type", nothing) == "refusal", parts)
+    i === nothing && finish_reason(response) != "content_filter" && return
+    hint = if i !== nothing
+        t = get(parts[i], "text", "")
+        said = wstrip(t isa AbstractString ? t : "")
+        "the model declined to answer" * (isempty(said) ? "" : ": $(pyrepr(said))")
     else
-        "the provider cut the reply at its length limit; reader $(pyrepr(p.adapter.reader["kind"])) cannot tell which outputs ended before it" * (isempty(why) ? "" : " ($why)")
+        "the provider stopped the reply (finish_reason content_filter: its safety filter, or the model declining)"
     end
-    refuse("parse-truncated", hint * "; raise max_tokens or ask for less"; partial=partial)
+    refuse("parse-filtered", hint * "; the same request would be stopped again, so change the request or the model rather than asking again"; partial=JObj())
+end
+
+"§4a: the provider cut the reply (at its length limit, or by an error); say where, keep what ended."
+function _refuse_cut(p::Plan, reason, where, partial; why="")
+    error = reason == "error"
+    cause = error ? "the provider ended the reply in error" : "the provider cut the reply at its length limit"
+    remedy = error ? "send the request again" : "raise max_tokens or ask for less"
+    hint = if !isempty(where)
+        "$cause $where"
+    else
+        "$cause; reader $(pyrepr(p.adapter.reader["kind"])) cannot tell which outputs ended before it" * (isempty(why) ? "" : " ($why)")
+    end
+    error && refuse("parse-interrupted", hint * "; " * remedy; partial=partial)
+    refuse("parse-truncated", hint * "; " * remedy; partial=partial)
 end
 
 """
@@ -1410,3 +1464,18 @@ function lm15_request end
 Drive `stream(plan)` from lm15 stream events (needs `using LM15`).
 """
 function lm15_stream end
+
+"""
+    lm15_install!(registry=default_registry()) -> registry
+
+Bind lm15's media part types (`LM15.ImagePart`, `AudioPart`, `VideoPart`,
+`DocumentPart`, `BinaryPart`; needs `using LM15`) in `registry`: each lowers
+to `{"media": kind}`, crosses by the format that shape resolves (the
+kernel's media default unless the artifact binds one), and has lm15's
+canonical part data (`LM15.to_dict`, `type` included) as its JSON form, so
+an lm15 part is a value for a media field of its kind, a turn saves it as
+that data and `load_turn` rebuilds the part. A part given by `path` keeps
+its path: lm15 reads the file. Loading the extension binds them in the
+default registry.
+"""
+function lm15_install! end

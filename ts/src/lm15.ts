@@ -16,6 +16,13 @@
  * - `read`/`parse(plan, response)` → typed values from a `Response` or `Message`.
  * - `stream(plan, events)` → drive a plan's sans-I/O stream from lm15 stream events.
  * - `step(rendered, response)` → the turn with this reply recorded (§3a).
+ * - `media.image()` (`audio`, `video`, `document`, `binary`) → a field whose
+ *   type is lm15's part (`ImagePart`, …) and whose shape is `{media: kind}`:
+ *   an lm15 part is its value, written as lm15's canonical part data (never
+ *   lm15-ts's `mediaType`), saved by `plan.dumpTurn` as that data and
+ *   rebuilt into the part by `plan.loadTurn`. Importing this module binds
+ *   the five part types in `defaultRegistry`; `install(registry)` binds them
+ *   in another. A part given by `path` keeps its path: lm15 reads the file.
  */
 
 import * as lm15 from "@lm15/lm15";
@@ -24,6 +31,10 @@ import type { JsonObject } from "@lm15/lm15";
 import type { Plan, Reading, RenderResult } from "./plan.ts";
 import type { StreamEvent as LmccEvent, StreamResult } from "./stream.ts";
 import type { Turn } from "./turn.ts";
+import { refuse } from "./errors.ts";
+import { defaultRegistry, type Registry } from "./registry.ts";
+import { field, t, type FieldSpec } from "./signature.ts";
+import { pyRepr } from "./text.ts";
 import { isObj } from "./core.ts";
 import { MEMBER_ORDER, copyObject, forgetOrder, hasOwn, isPlainObject, jsonEqual, jsonText, memberNames, setMember } from "./json.ts";
 
@@ -117,7 +128,7 @@ function canonical(response: Response | Message): Record<string, unknown> {
   return "message" in response ? Response.toJSON(response as Response) : Message.toJSON(response as Message);
 }
 
-/** Typed values and repairs (§4a) from an lm15 `Response` or `Message`; a cut response refuses `parse-truncated`. */
+/** Typed values and repairs (§4a) from an lm15 `Response` or `Message`; a cut response refuses `parse-truncated`, a stopped one (`content_filter`, a refusal part) `parse-filtered`. */
 export function read<O>(plan: Plan<any, O>, response: Response | Message): Reading<O> {
   return plan.read(canonical(response));
 }
@@ -158,3 +169,51 @@ export async function stream<O>(plan: Plan<any, O>, events: AsyncIterable<Stream
 export function step(rendered: RenderResult, response: Response | Message): Turn {
   return rendered.step(canonical(response));
 }
+
+// ------------------------------------------------------------ media parts
+
+/** lm15's media part types, by the name a field's `type` spells. */
+export const MEDIA_PARTS = { ImagePart: "image", AudioPart: "audio", VideoPart: "video", DocumentPart: "document", BinaryPart: "binary" } as const;
+
+/**
+ * An lm15 part's JSON form: lm15's canonical part data (`Part.toJSON`),
+ * `type` included, so a part of another kind given to a media field
+ * refuses. Part data given as it is (snake_case, as lmcc reads it) passes
+ * through: only an lm15-ts part carries `mediaType`.
+ */
+function partData(value: unknown): unknown {
+  return isObj(value) && hasOwn(value, "mediaType") ? lm15.Part.toJSON(value as unknown as lm15.Part) : value;
+}
+
+function partOf(kind: string): (data: unknown) => lm15.Part {
+  return (data) => {
+    if (!isObj(data) || (hasOwn(data, "type") && data["type"] !== kind)) {
+      refuse("turn-invalid", `an lm15 ${kind} part is rebuilt from ${kind} part data, got ${pyRepr(data)}`);
+    }
+    return lm15.Part.fromJSON(copyObject(data, { type: kind }) as JsonObject);
+  };
+}
+
+/** Bind lm15's media part types in `registry`: their media shape, no format (the shape's resolves), part data as their JSON form. */
+export function install(registry: Registry): Registry {
+  for (const name of memberNames(MEDIA_PARTS)) {
+    const kind = MEDIA_PARTS[name as keyof typeof MEDIA_PARTS];
+    registry.format(name, { shape: { media: kind }, toJson: partData, fromJson: partOf(kind) });
+  }
+  return registry;
+}
+
+install(defaultRegistry);
+
+type FieldOpts = { purpose?: string; desc?: string };
+const mediaField = <P>(kind: string, type: string) => (opts: FieldOpts = {}): FieldSpec<P> =>
+  field(t.media(kind), { purpose: opts.purpose, desc: opts.desc, type }) as unknown as FieldSpec<P>;
+
+/** Fields typed by lm15's media parts: `signature("…", {inputs: {picture: media.image()}})`. */
+export const media = {
+  image: mediaField<lm15.ImagePart>("image", "ImagePart"),
+  audio: mediaField<lm15.AudioPart>("audio", "AudioPart"),
+  video: mediaField<lm15.VideoPart>("video", "VideoPart"),
+  document: mediaField<lm15.DocumentPart>("document", "DocumentPart"),
+  binary: mediaField<lm15.BinaryPart>("binary", "BinaryPart"),
+};

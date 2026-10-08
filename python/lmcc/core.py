@@ -351,14 +351,23 @@ def annotation_to_shape(ann: object, registry=None, *, field_name: str = "?") ->
             refuse("unmapped-type", f"field {field_name!r}: enum {ann.__name__} mixes member kinds",
                    fix={"action": "edit-signature", "field": field_name})
         return shape
+    if registry is None:
+        from .registry import default_registry as registry
+    declared = registry.declared_shape(ann)   # bound with lmcc.format(T, shape=...): it wins
+    if declared is not None:
+        return declared
     if isinstance(ann, type) and dataclasses.is_dataclass(ann):
         # the language's own construct: lowered mechanically, still structured
         hints = typing.get_type_hints(ann)
-        props = {f.name: annotation_to_shape(hints[f.name], registry, field_name=f"{field_name}.{f.name}")
-                 for f in dataclasses.fields(ann)}
+        try:
+            props = {f.name: annotation_to_shape(hints[f.name], registry, field_name=f"{field_name}.{f.name}")
+                     for f in dataclasses.fields(ann)}
+        except Refusal as err:
+            if err.code != "unmapped-type" or not _lm15_hint(ann):
+                raise
+            refuse("unmapped-type", f"field {field_name!r}: {typename(ann)} is lm15's" + _lm15_hint(ann),
+                   fix={"action": "edit-signature", "field": field_name})
         return {"type": "object", "properties": props, "required": [f.name for f in dataclasses.fields(ann)]}
-    if registry is None:
-        from .registry import default_registry as registry
     bound = registry.shape_of(ann)      # the host socket: a type bound with lmcc.format
     if bound is not None:
         return bound
@@ -367,6 +376,11 @@ def annotation_to_shape(ann: object, registry=None, *, field_name: str = "?") ->
            f"bind the type with lmcc.format({typename(ann)}, ...), pass a JSON-Schema "
            f"dict, or lower it in your frontend",
            fix={"action": "edit-signature", "field": field_name})
+
+
+def _lm15_hint(ann: object) -> str:
+    return ("; lm15's part types are bound by its bridge: import lmcc_lm15"
+            if str(getattr(ann, "__module__", "")).split(".")[0] == "lm15" else "")
 
 
 _SCALAR_TYPES = ("string", "integer", "number", "boolean")

@@ -48,6 +48,64 @@ end
     @test err isa Refusal && err.code == "signature-malformed"
 end
 
+# A type's JSON form, both ways (D-61, D-62): the format bound to a type
+# receives the value itself, live or replayed; every other format its JSON form.
+struct Pages
+    pages::Vector{Tuple{String,Vector{UInt8}}}
+end
+pages_to_json(p::Pages) = Any[jobj("text" => t, "png" => bytes2hex(b)) for (t, b) in p.pages]
+pages_from_json(d) = Pages([(x["text"], hex2bytes(x["png"])) for x in d])
+const DOC = Pages([("page 1", UInt8[0x89, 0x50, 0x4e, 0x47])])
+const TAGS = adapter(; messages=[LMCC.system("{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"),
+                                turns(), LMCC.user("{% for f in inputs %}{f.value}\n{% endfor %}")])
+
+@testset "a bound type's JSON form, both ways" begin
+    seen = Any[]
+    reg = Registry()
+    bind_type!(reg, Pages; write=(v, f) -> (push!(seen, v); join(first.(v.pages), "\n")), to_json=pages_to_json, from_json=pages_from_json)
+    sig = signature("Summarize."; inputs=(document=Pages,), outputs=(summary=String,), registry=reg)
+    plan = LMCC.bind(TAGS, sig; capabilities=Dict("instruct" => true), registry=reg)
+    turn = LMCC.finish(LMCC.step(render(plan; document=DOC), "<summary>\nOne page.\n</summary>"))
+    saved = parse_json(json_text(dump_turn(plan, turn)))
+    @test saved["inputs"] == Dict("document" => Any[Dict("text" => "page 1", "png" => "89504e47")])
+    back = load_turn(plan, saved)
+    @test back.inputs["document"] isa Pages && back.inputs["document"].pages == DOC.pages
+    @test LMCC.request(render(plan, (document=DOC,); turns=[turn]), "m") == LMCC.request(render(plan, (document=DOC,); turns=[back]), "m")
+    @test !isempty(seen) && all(v -> v isa Pages, seen)
+    @test LMCC.to_json(DOC; registry=reg) == saved["inputs"]["document"]
+
+    # every other format gets the JSON form: std json for a list
+    std = Std.install!(Registry())
+    bind_type!(std, Pages; shape=Dict("type" => "array"), to_json=pages_to_json, from_json=pages_from_json)
+    j = adapter(; messages=TAGS.template, formats=Dict("list[*]" => Dict("use" => "json", "options" => Dict("indent" => nothing))))
+    p2 = LMCC.bind(j, signature("Summarize."; inputs=(document=Pages,), outputs=(summary=String,), registry=std); capabilities=Dict("instruct" => true), registry=std)
+    @test occursin("\"png\": \"89504e47\"", LMCC.request(render(p2; document=DOC), "m")["messages"][1]["parts"][1]["text"])
+
+    # binding again replaces; a binding needs something; hooks are functions; the name a signature records
+    r = Registry()
+    bind_type!(r, Pages; write=(v, f) -> "one")
+    bind_type!(r, Pages; write=(v, f) -> "two", to_json=pages_to_json, name="Pages")
+    @test length(r.type_bindings) == 1
+    @test LMCC.describe(r)["type_bindings"] == Any[Dict("type" => "Pages", "format" => "(inline)", "shape" => Dict(), "json" => Any["to_json"])]
+    for kw in ((;), (read=(c, f) -> 1, shape=Dict()), (write=(v, f) -> "", to_json="no"))
+        err = try bind_type!(r, Pages; kw...) catch e e end
+        @test err isa Refusal && err.code == "entry-malformed"
+    end
+    @test bind_type!(r, Pages; shape=Dict("media" => "image"), name="Doc") === nothing
+    @test signature("x"; inputs=(d=Pages,), outputs=(a=String,), registry=r).fields[1].type == "Doc"
+
+    # failures name the value
+    broken(_) = error("boom")
+    b = Registry()
+    bind_type!(b, Pages; shape=Dict("media" => "image"), to_json=broken, from_json=broken)
+    pb = LMCC.bind(TAGS, signature("S."; inputs=(document=Pages,), outputs=(summary=String,), registry=b); capabilities=Dict("instruct" => true), registry=b)
+    err = try render(pb; document=DOC) catch e e end
+    @test err isa Refusal && err.code == "format-write-error" && occursin("boom", err.hint)
+    ex = example(pb, (document=Dict("media_type" => "image/png", "data" => "AA=="),), (summary="s",))
+    err = try load_turn(pb, turn_to_dict(ex)) catch e e end
+    @test err isa Refusal && err.code == "turn-invalid" && occursin("turn.inputs.document", err.hint)
+end
+
 @testset "host differences are the stated ones" begin
     sig = signature("Count."; inputs=(n=Int,), outputs=(big=Int,))
     plan = LMCC.bind(adapter(; messages=[LMCC.system("<big>{big}</big>"), LMCC.user("{n}")]), sig)

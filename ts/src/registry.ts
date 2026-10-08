@@ -3,9 +3,10 @@
  *
  * - named formats: `factory(options) → Format` under a name an artifact can
  *   reference (`{"use": "json"}`), with a version;
- * - type bindings: a type name → a format, per runtime, never serialized
- *   (kernel §5 step 3). TypeScript types are erased, so a binding matches
- *   the field's `type` name as the frontend spelled it;
+ * - type bindings: a type name → its format, its shape and its JSON form
+ *   both ways, per runtime, never serialized (kernel §5 step 3, §3a).
+ *   TypeScript types are erased, so a binding matches the field's `type`
+ *   name as the frontend spelled it;
  * - transports: `factory(options) → Transport` (or its data);
  * - readers: `factory(spec) → Reader` (`derived` is kernel grammar);
  * - extensions: the execution contracts this runtime binds (kernel §10).
@@ -21,7 +22,7 @@ import { Transport } from "./transport.ts";
 import { describeBinding, nativeExtensions, type ExtensionBinding } from "./extensions.ts";
 import { brand, brandedByAnyVersion } from "./brand.ts";
 import { KERNEL_VERSION } from "./version.ts";
-import { copyObject, orderedObject, type Json, type JsonObject } from "./json.ts";
+import { copyObject, isPlainObject, orderedObject, type Json, type JsonObject } from "./json.ts";
 
 export interface Named<F> {
   readonly factory: F;
@@ -32,7 +33,27 @@ export type FormatFactory = (options: Record<string, unknown>) => Format;
 export type TransportFactory = (options: Record<string, unknown>) => Transport | Record<string, unknown>;
 export type ReaderFactory = (spec: Record<string, unknown>) => Reader;
 
-type TypeBinding = { readonly type: string; readonly binding: Format | { use: string; options: Record<string, unknown> }; readonly shape: JsonObject };
+/**
+ * How one type name crosses in this runtime: its format (`null`: the format
+ * its shape resolves), its shape (`null`: none declared), and its JSON form
+ * both ways (`toJson`, `fromJson`; `null`: the value is its own JSON).
+ */
+export interface TypeBinding {
+  readonly type: string;
+  readonly binding: Format | { use: string; options: Record<string, unknown> } | null;
+  readonly shape: JsonObject | null;
+  readonly toJson: ((value: any) => unknown) | null;
+  readonly fromJson: ((data: any) => unknown) | null;
+}
+
+/** What `registry.format(type, ...)` takes besides a format: the shape and the JSON form. */
+export interface HostSpec {
+  readonly shape?: JsonObject;
+  /** The value's JSON form in its field's shape: what a turn holds and every other format receives. */
+  readonly toJson?: (value: any) => unknown;
+  /** The value rebuilt from its JSON form: what `plan.loadTurn` gives the format bound here. */
+  readonly fromJson?: (data: any) => unknown;
+}
 
 export interface RegistryOptions {
   /** This runtime places no UDF language; `true` only changes which refusal a shipped format meets. */
@@ -99,35 +120,72 @@ export class Registry {
   }
 
   /**
-   * Bind a type name to a format, per runtime — `registry.format("Person",
-   * {write, read})` or `registry.format("DataFrame", {use: "table",
-   * options: {...}})`. Never serialized. `shape` is what the type lowers to
-   * (default `{}`: structured, contents unknown).
+   * Bind a type name, per runtime — `registry.format("Person", {write,
+   * read})` or `registry.format("DataFrame", {use: "table", options: {...}})`.
+   * Never serialized.
+   *
+   * `shape`: what the type lowers to (default `{}`: structured, contents
+   * unknown). `toJson(value)` and `fromJson(data)`: the type's JSON form,
+   * both ways. `plan.dumpTurn` writes it, `plan.loadTurn` rebuilds the value
+   * from it, and every format but the one bound here receives it, so the
+   * format bound here always receives the value itself, live or replayed.
+   *
+   * With neither `write` nor `use`, no format is bound: the type crosses by
+   * the format its shape resolves. Binding the same name again replaces its
+   * binding. Returns the bound format, or `null`.
    */
-  format(type: string, spec: (FormatSpec | { use: string; options?: Record<string, unknown> }) & { shape?: JsonObject }): Format {
-    const shape = spec.shape ?? {};
-    if ("use" in spec && typeof spec.use === "string") {
-      const binding = { use: spec.use, options: copyObject(spec.options) };
-      this.typeBindings.push({ type, binding, shape });
-      return this.namedFormat(binding.use, binding.options);
+  format(type: string, spec: (FormatSpec | { use: string; options?: Record<string, unknown> }) & HostSpec): Format;
+  format(type: string, spec: HostSpec): null;
+  format(type: string, spec: (Partial<FormatSpec> | { use: string; options?: Record<string, unknown> }) & HostSpec): Format | null {
+    const host = spec as HostSpec;
+    if (host.shape !== undefined && !isPlainObject(host.shape)) {
+      refuse("unmapped-type", `${type}: shape must be a JSON-Schema object`, { fix: { action: "edit-signature" } });
     }
-    const s = spec as FormatSpec;
-    if (typeof s.write !== "function") refuse("entry-malformed", "a format needs at least write", { fix: { action: "edit-entry", path: "write" } });
-    const fmt = makeFormat(s);
-    this.typeBindings.push({ type, binding: fmt, shape });
-    return fmt;
+    for (const name of ["toJson", "fromJson"] as const) {
+      if (host[name] !== undefined && typeof host[name] !== "function") {
+        refuse("entry-malformed", `${type}: ${name} must be a function`, { fix: { action: "edit-entry", path: name } });
+      }
+    }
+    const shape = host.shape === undefined ? null : copyObject<Json>(host.shape);
+    const toJson = host.toJson ?? null;
+    const fromJson = host.fromJson ?? null;
+    let binding: TypeBinding["binding"];
+    if ("use" in spec && typeof spec.use === "string") {
+      binding = { use: spec.use, options: copyObject(spec.options) };
+    } else {
+      const s = spec as Partial<FormatSpec> & { options?: unknown };
+      if (typeof s.write === "function") {
+        binding = makeFormat(s as FormatSpec);
+      } else if (s.write !== undefined || s.read !== undefined || s.describe !== undefined || s.options !== undefined
+        || (shape === null && toJson === null && fromJson === null)) {
+        refuse("entry-malformed", "a format needs at least write", { fix: { action: "edit-entry", path: "write" } });
+      } else {
+        binding = null;
+      }
+    }
+    const record: TypeBinding = { type, binding, shape, toJson, fromJson };
+    const at = this.typeBindings.findIndex((b) => b.type === type);
+    if (at >= 0) this.typeBindings[at] = record; // bound again: the new binding replaces it
+    else this.typeBindings.push(record);
+    if (binding === null) return null;
+    return isFormat(binding) ? binding : this.namedFormat(binding.use, binding.options);
   }
 
-  /** The shape a bound type name lowers to, or `null`. */
+  /** The binding of a type name, or `null`. */
+  host(type: string | null | undefined): TypeBinding | null {
+    if (!type) return null;
+    return this.typeBindings.find((b) => b.type === type) ?? null;
+  }
+
+  /** The shape a bound type name lowers to (`{}` when bound without one), or `null`. */
   shapeOf(type: string): JsonObject | null {
-    const hit = this.typeBindings.find((b) => b.type === type);
-    return hit ? copyObject<Json>(hit.shape) : null;
+    const hit = this.host(type);
+    return hit ? copyObject<Json>(hit.shape ?? {}) : null;
   }
 
   typeBinding(type: string | null): Format | null {
-    if (!type) return null;
-    const hit = this.typeBindings.find((b) => b.type === type);
-    if (!hit) return null;
+    const hit = this.host(type);
+    if (!hit || hit.binding === null) return null;
     return isFormat(hit.binding) ? hit.binding : this.namedFormat(hit.binding.use, hit.binding.options);
   }
 
@@ -204,8 +262,9 @@ export class Registry {
       formats: versions(this.formats),
       type_bindings: this.typeBindings.map((b) => ({
         type: b.type,
-        format: isFormat(b.binding) ? b.binding.name ?? "(inline)" : b.binding.use,
-        shape: b.shape,
+        format: b.binding === null ? null : isFormat(b.binding) ? b.binding.name ?? "(inline)" : b.binding.use,
+        shape: b.shape ?? {},
+        json: (["toJson", "fromJson"] as const).filter((k) => b[k] !== null).map((k) => (k === "toJson" ? "to_json" : "from_json")),
       })),
       transports: versions(this.transports),
       readers: copyObject({ derived: "kernel" }, versions(this.readers)),

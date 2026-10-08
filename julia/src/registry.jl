@@ -128,6 +128,25 @@ struct Named
 end
 
 """
+    HostType
+
+How one Julia type crosses in this runtime (never serialized): its format
+(`nothing`: the format its shape resolves), the shape it lowers to
+(`nothing`: none declared), and its JSON form both ways (`to_json`,
+`from_json`; kernel §3a: a turn holds JSON, a host lifts it back), and
+the type name a signature records for it (`nothing`: `string(T)`, which
+depends on what the caller's module imports).
+"""
+struct HostType
+    type::Any
+    name::Union{Nothing,String}
+    binding::Any            # a Format, (use, options), or nothing
+    shape::Union{Nothing,JObj}
+    to_json::Any
+    from_json::Any
+end
+
+"""
     Registry(; allow_udf=false, extensions=nothing)
 
 Named formats, transports and readers (with versions), runtime type bindings,
@@ -137,7 +156,7 @@ one it is given.
 """
 mutable struct Registry
     formats::OrderedDict{String,Named}
-    type_bindings::Vector{Tuple{Any,Any,JObj}}      # (Julia type, Format or (use, options), shape)
+    type_bindings::Vector{HostType}
     transports::OrderedDict{String,Named}
     readers::OrderedDict{String,Named}
     extensions::OrderedDict{String,ExtensionBinding}
@@ -146,7 +165,7 @@ end
 
 function Registry(; allow_udf::Bool=false, extensions=nothing)
     natives = OrderedDict(ext_name(b) => b for b in native_extensions())
-    reg = Registry(OrderedDict{String,Named}(), Tuple{Any,Any,JObj}[], OrderedDict{String,Named}(), OrderedDict{String,Named}(),
+    reg = Registry(OrderedDict{String,Named}(), HostType[], OrderedDict{String,Named}(), OrderedDict{String,Named}(),
         OrderedDict{String,ExtensionBinding}(), allow_udf)
     for name in (extensions === nothing ? collect(keys(natives)) : extensions)
         haskey(natives, name) || throw(ArgumentError("no native binding for extension $(repr(name)); use register_extension! with your own"))
@@ -183,40 +202,89 @@ function named_format(reg::Registry, name, options; where=nothing)
 end
 
 """
-    bind_type!(reg, T; write, read, describe, use, options, shape, kwargs...)
+    bind_type!(reg, T; write, read, describe, use, options, shape, to_json, from_json, name, kwargs...)
 
-Bind a Julia type to a format, per runtime, never serialized: a format built
-from functions, or a named one (`use="table", options=Dict(...)`). A type the
-kernel cannot lower lowers to `shape` (default `{}`: structured, contents unknown).
+Bind a Julia type, per runtime, never serialized: a format built from
+functions, or a named one (`use="table", options=Dict(...)`). A type the
+kernel cannot lower lowers to `shape` (default `{}`: structured, contents
+unknown).
+
+`to_json(value)` and `from_json(data)`: the type's JSON form, both ways. A
+turn writes it (`to_json`, `dump_turn`), `load_turn` rebuilds the value from
+it, and every format but the one bound here receives it, so the format bound
+here always receives the value itself, live or replayed.
+
+With neither `write` nor `use`, no format is bound: the type crosses by the
+format its shape resolves (and, without `shape`, lowers as usual). `name`
+is the type name a signature records and formats resolve by (default
+`string(T)`, which reads `LM15.ImagePart` or `ImagePart` depending on what
+the caller imported); give it to match the other kernels. Binding
+the same type again replaces its binding. Returns the bound format, or
+`nothing`.
 """
-function bind_type!(reg::Registry, T; write=nothing, read=nothing, describe=nothing, use=nothing, options=nothing, shape=nothing, kwargs...)
-    shp = shape === nothing ? JObj() : JObj(String(k) => v for (k, v) in shape)
-    if use !== nothing
-        push!(reg.type_bindings, (T, (use, options === nothing ? JObj() : options), shp))
-        return named_format(reg, use, options)
+function bind_type!(reg::Registry, T; write=nothing, read=nothing, describe=nothing, use=nothing, options=nothing, shape=nothing,
+                    to_json=nothing, from_json=nothing, name=nothing, kwargs...)
+    shape === nothing || shape isa AbstractDict ||
+        refuse("unmapped-type", "$(T): shape must be a JSON-Schema Dict"; fix=jobj("action" => "edit-signature"))
+    for (name, hook) in (("to_json", to_json), ("from_json", from_json))
+        hook === nothing || hook isa Base.Callable || hook isa Function ||
+            _malformed(name, "$(T): $name must be a function")
     end
-    write === nothing && _malformed("write", "a format needs at least write")
-    fmt = make_format(; write=write, read=read, describe=describe, kwargs...)
-    push!(reg.type_bindings, (T, fmt, shp))
-    fmt
+    shp = shape === nothing ? nothing : JObj(String(k) => v for (k, v) in shape)
+    binding = if use !== nothing
+        (use, options === nothing ? JObj() : options)
+    elseif write !== nothing
+        make_format(; write=write, read=read, describe=describe, kwargs...)
+    elseif read !== nothing || describe !== nothing || !isempty(kwargs) || options !== nothing ||
+           (shp === nothing && to_json === nothing && from_json === nothing)
+        _malformed("write", "a format needs at least write")
+    else
+        nothing
+    end
+    name === nothing || name isa AbstractString || _malformed("name", "$(T): name must be a string")
+    record = HostType(T, name === nothing ? nothing : String(name), binding, shp, to_json, from_json)
+    i = findfirst(h -> h.type === T, reg.type_bindings)
+    i === nothing ? push!(reg.type_bindings, record) : (reg.type_bindings[i] = record)   # bound again: replaced
+    binding === nothing && return nothing
+    binding isa Format ? binding : named_format(reg, use, options)
 end
 
 _matches(ann, T) = ann === T || ann == T || (ann isa Type && T isa Type && ann <: T)
 
+"The binding of a type (or of a type it subtypes), or `nothing`."
+host_of(reg::Registry, ann) = ann === nothing ? nothing : (i = findfirst(h -> _matches(ann, h.type), reg.type_bindings); i === nothing ? nothing : reg.type_bindings[i])
+
+"The shape a bound type lowers to (`{}` when bound with a format and no shape), or `nothing`."
 function shape_of(reg::Registry, ann)
-    for (T, _, shp) in reg.type_bindings
-        ann !== nothing && _matches(ann, T) && return deepcopy_json(shp)
-    end
-    nothing
+    h = host_of(reg, ann)
+    h === nothing && return nothing
+    h.shape !== nothing && return deepcopy_json(h.shape)
+    h.binding === nothing ? nothing : JObj()
 end
 
 function type_binding(reg::Registry, ann)
     ann === nothing && return nothing
-    for (T, b, _) in reg.type_bindings
-        _matches(ann, T) || continue
-        return b isa Format ? b : named_format(reg, b[1], b[2])
+    for h in reg.type_bindings
+        (h.binding !== nothing && _matches(ann, h.type)) || continue
+        return h.binding isa Format ? h.binding : named_format(reg, h.binding[1], h.binding[2])
     end
     nothing
+end
+
+const _PLAIN_JSON = Union{Nothing,AbstractString,Bool,Number,Symbol,AbstractDict,AbstractVector,Tuple,NamedTuple}
+
+"The `to_json` bound to a value's type (by `isa`), or `nothing`."
+function to_json_hook(reg::Registry, value)
+    value isa _PLAIN_JSON && return nothing
+    i = findfirst(h -> h.to_json !== nothing && h.type isa Type && value isa h.type, reg.type_bindings)
+    i === nothing ? nothing : reg.type_bindings[i].to_json
+end
+
+"The `from_json` bound to a type (or a type it subtypes), or `nothing`."
+function from_json_hook(reg::Registry, ann)
+    ann === nothing && return nothing
+    i = findfirst(h -> h.from_json !== nothing && _matches(ann, h.type), reg.type_bindings)
+    i === nothing ? nothing : reg.type_bindings[i].from_json
 end
 
 function register_transport!(reg::Registry, name, factory; version="0.1.0", exist_ok=false)
@@ -269,8 +337,11 @@ _versions(m) = JObj(n => e.version for (n, e) in sort(collect(m); by=first))
 
 function describe(reg::Registry)
     jobj("formats" => _versions(reg.formats),
-        "type_bindings" => Any[jobj("type" => string(T), "format" => b isa Format ? something(b.name, "(inline)") : b[1], "shape" => s)
-                               for (T, b, s) in reg.type_bindings],
+        "type_bindings" => Any[jobj("type" => something(h.name, string(h.type)),
+                                    "format" => h.binding === nothing ? nothing : h.binding isa Format ? something(h.binding.name, "(inline)") : h.binding[1],
+                                    "shape" => something(h.shape, JObj()),
+                                    "json" => Any[k for k in ("to_json", "from_json") if getfield(h, Symbol(k)) !== nothing])
+                               for h in reg.type_bindings],
         "transports" => _versions(reg.transports),
         "readers" => merge(jobj("derived" => "kernel"), _versions(reg.readers)),
         "allow_udf" => reg.allow_udf,

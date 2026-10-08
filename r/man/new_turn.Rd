@@ -4,6 +4,7 @@
 \alias{new_turn}
 \alias{example_turn}
 \alias{load_turn}
+\alias{dump_turn}
 \title{Turns of a plan's signature}
 \usage{
 new_turn(p, inputs = list())
@@ -11,6 +12,8 @@ new_turn(p, inputs = list())
 example_turn(p, inputs, outputs)
 
 load_turn(p, data)
+
+dump_turn(p, turn)
 }
 \arguments{
 \item{p}{A plan.}
@@ -18,8 +21,16 @@ load_turn(p, data)
 \item{inputs, outputs}{Named lists.}
 
 \item{data}{A turn record.}
+
+\item{turn}{A turn of the plan.}
 }
 \description{
 `new_turn()` has no steps; `example_turn()` has inputs and outputs (an
 example); `load_turn()` reads a turn record, checked against the plan.
+}
+\details{
+`dump_turn()` is the turn as JSON data: each value of a field
+  whose type is bound with `to_json` (see [bind_type()]) is written by it,
+  every other as [turn_to_list()] writes it. [load_turn()] reads it back,
+  rebuilding each value whose type is bound with `from_json`.
 }
