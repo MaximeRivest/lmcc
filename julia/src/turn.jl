@@ -60,12 +60,25 @@ end
     lift(T, data; registry=default_registry())
 
 JSON → a host value of the annotation `T`: a type bound with `from_json` is
-rebuilt by it, from any JSON; anything else is returned unchanged.
+rebuilt by it, from any JSON; `Union{T, Nothing}` as `T`; a `Vector{T}` item by
+item (as Python's `lift` does `Optional[T]` and `list[T]`); anything else is
+returned unchanged.
 """
 function lift(T, data; registry::Union{Nothing,Registry}=nothing)
     (T === nothing || data === nothing) && return data
-    hook = from_json_hook(registry === nothing ? default_registry() : registry, T)
-    hook === nothing ? data : hook(data)
+    reg = registry === nothing ? default_registry() : registry
+    hook = from_json_hook(reg, T)
+    hook === nothing || return hook(data)
+    if T isa Union                                    # Union{T, Nothing}: T's
+        real = [p for p in Base.uniontypes(T) if p !== Nothing]
+        return length(real) == 1 ? lift(real[1], data; registry=reg) : data
+    end
+    if T isa Type && T !== Union{} && T <: AbstractVector && isarr(data) && eltype(T) !== Any
+        E = eltype(T)                                 # a Vector{T}: each item as T
+        items = Any[lift(E, v; registry=reg) for v in data]
+        return all(x -> x isa E, items) ? convert(Vector{E}, items) : items
+    end
+    data
 end
 
 _get(o, k) = isobj(o) ? get(o, k, nothing) : nothing

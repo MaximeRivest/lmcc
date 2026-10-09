@@ -100,16 +100,25 @@ LM15_MEDIA_PARTS <- c(ImagePart = "image", AudioPart = "audio", VideoPart = "vid
 #' is its value, written as lm15's canonical part data, saved by
 #' [dump_turn()] as that data and rebuilt into the part by [load_turn()].
 #' Part data given as a named list still works. A part given by `path` keeps
-#' its path: lm15 reads the file when it sends. `lm15_install()` binds the
-#' five types in a registry; the default registry has them. The bindings
-#' call lm15 only when they meet an lm15 value or rebuild one.
+#' its path: lm15 reads the file when it sends. `list = TRUE` is several parts
+#' of the kind (`list[ImagePart]`, written as their parts in order),
+#' `nullable = TRUE` one or `NULL` (`Optional[ImagePart]`, `NULL` written as
+#' the text `null`), the names Python's frontend spells. `lm15_install()` binds
+#' the five types, their lists and their nullable forms in a registry; the
+#' default registry has them. The bindings call lm15 only when they meet an
+#' lm15 value or rebuild one.
 #' @param kind `"image"`, `"audio"`, `"video"`, `"document"` or `"binary"`.
 #' @param purpose,desc As for [field_spec()].
+#' @param list Several parts of the kind, in order.
+#' @param nullable One part of the kind, or `NULL`.
 #' @param reg A registry.
 #' @export
-lm15_media <- function(kind, purpose = "plain", desc = NULL) {
+lm15_media <- function(kind, purpose = "plain", desc = NULL, list = FALSE, nullable = FALSE) {
   type <- names(LM15_MEDIA_PARTS)[LM15_MEDIA_PARTS == kind]
   if (length(type) != 1L) stop(sprintf("lm15 has no %s part; use one of %s", pyrepr(kind), paste(LM15_MEDIA_PARTS, collapse = ", ")), call. = FALSE)
+  if (isTRUE(list) && isTRUE(nullable)) stop("a list of lm15 parts that may be null has no kernel default: give list = TRUE or nullable = TRUE, not both", call. = FALSE)
+  if (isTRUE(list)) return(field_spec(shape_list(shape_media(kind)), purpose = purpose, desc = desc, type = sprintf("list[%s]", type)))
+  if (isTRUE(nullable)) return(field_spec(shape_nullable(shape_media(kind)), purpose = purpose, desc = desc, type = sprintf("Optional[%s]", type)))
   field_spec(shape_media(kind), purpose = purpose, desc = desc, type = type)
 }
 
@@ -118,15 +127,22 @@ lm15_media <- function(kind, purpose = "plain", desc = NULL) {
 lm15_install <- function(reg = default_registry()) {
   for (name in names(LM15_MEDIA_PARTS)) local({
     kind <- LM15_MEDIA_PARTS[[name]]
-    bind_type(reg, name,
-      # lm15's canonical part data, `type` included and first, so a part of another kind refuses
-      to_json = function(v) if (inherits(v, "lm15_value")) lm15_plain(v) else v,
+    # lm15's canonical part data, `type` included and first, so a part of another kind refuses
+    to_json <- function(v) if (inherits(v, "lm15_value")) lm15_plain(v) else v
+    from_json <- function(d) {
+      if (!is_obj(d) || !identical(get_key(d, "type", kind), kind))
+        refuse("turn-invalid", sprintf("an lm15 %s part is rebuilt from %s part data, got %s", kind, kind, json_text(d)))
+      need_lm15()
+      lm15::from_dict(merge_obj(jobj(type = kind), drop_key(d, "type")), "part")
+    }
+    bind_type(reg, name, to_json = to_json, from_json = from_json)
+    bind_type(reg, sprintf("list[%s]", name),
+      to_json = function(v) if (is_arr(v)) lapply(v, to_json) else v,
       from_json = function(d) {
-        if (!is_obj(d) || !identical(get_key(d, "type", kind), kind))
-          refuse("turn-invalid", sprintf("an lm15 %s part is rebuilt from %s part data, got %s", kind, kind, json_text(d)))
-        need_lm15()
-        lm15::from_dict(merge_obj(jobj(type = kind), drop_key(d, "type")), "part")
+        if (!is_arr(d)) refuse("turn-invalid", sprintf("a list of lm15 %s parts is rebuilt from a list of %s part data, got %s", kind, kind, json_text(d)))
+        lapply(d, from_json)
       })
+    bind_type(reg, sprintf("Optional[%s]", name), to_json = to_json, from_json = from_json)
   })
   invisible(reg)
 }

@@ -10,7 +10,7 @@
 
 import { refuse, Refusal, type Fix } from "./errors.ts";
 import {
-  asParts, Capture, forgiveValue, finishReason, formatKey, isObj, makeMessage, mergeTextParts, partText, replyProbabilities,
+  asParts, Capture, forgiveValue, finishReason, formatKey, holdsMedia, isObj, makeMessage, namesMedia, mergeTextParts, partText, replyProbabilities,
   responseTextAndParts, shapeSummary, spellValue, structuralKeys, textPart, type Field, type Message, type Part,
 } from "./core.ts";
 import { isDescription, type Adapter, type Reference } from "./adapter.ts";
@@ -1322,21 +1322,36 @@ function resolveFormat(plan: Plan<any, any>, f: Field): FormatChoice {
   return choice;
 }
 
+/** A format's declared `writes` is text, read without running it: a shipped format's entry says so (text when it says nothing). */
+function writesText(binding: unknown, key: string, materialize: (b: unknown, k: string) => Format): boolean {
+  if (isObj(binding) && !isFormat(binding) && !("use" in binding)) return (hasOwn(binding, "writes") ? binding["writes"] : "text") === "text";
+  return materialize(binding, key).writes === "text";
+}
+
 function chooseFormat(plan: Plan<any, any>, f: Field, materialize: (b: unknown, k: string) => Format, check: (fmt: Format, by: string, key: string) => FormatChoice): FormatChoice {
   const adp = plan.adapter;
   const has = (k: string) => Object.prototype.hasOwnProperty.call(adp.formats, k) && !isDescription(adp.formats[k]);
   if (f.type && has(f.type)) return check(materialize(adp.formats[f.type], f.type), `artifact:${f.type}`, f.type);
+  // §5: a key written for every value never writes media as text
+  const media = holdsMedia(f.shape);
+  const passedOver = (key: string) => media && !namesMedia(key) && writesText(adp.formats[key], key, materialize);
   for (const key of structuralKeys(f.shape)) {
-    if (has(key)) return check(materialize(adp.formats[key], key), `artifact:${key}`, key);
+    if (has(key) && !passedOver(key)) return check(materialize(adp.formats[key], key), `artifact:${key}`, key);
   }
   const bound = plan.registry.typeBinding(f.type);
   if (bound) return check(bound, `runtime:${f.type}`, formatKey(f.type, f.shape));
   const fallback = kernelDefault(f.shape);
   if (fallback) return { format: fallback, resolvedBy: "kernel", described: null, describedBy: null };
-  if (Object.prototype.hasOwnProperty.call(adp.formats, "*")) return check(materialize(adp.formats["*"], "*"), "artifact:*", "*");
+  if (Object.prototype.hasOwnProperty.call(adp.formats, "*") && !passedOver("*")) return check(materialize(adp.formats["*"], "*"), "artifact:*", "*");
+  const key = formatKey(f.type, f.shape);
+  if (media) {
+    refuse("no-format",
+      `field ${pyRepr(f.name)} (${f.type ?? pyRepr(f.shape)}) holds media, which text cannot carry to a model, and no format that writes parts is bound for it — bind one in the artifact under ${pyRepr(key)}, register one for its type at runtime, or ship one (a format bound under ${pyRepr(key)} is taken even if it writes text)`,
+      { fix: { action: "bind-format", field: f.name, key } });
+  }
   refuse("no-format",
     `field ${pyRepr(f.name)} (${f.type ?? pyRepr(f.shape)}) has a structured shape and no format — bind one in the artifact under its type name or a structural key, register one for its type at runtime, or ship one`,
-    { fix: { action: "bind-format", field: f.name, key: formatKey(f.type, f.shape) } });
+    { fix: { action: "bind-format", field: f.name, key } });
 }
 
 // ------------------------------------------------------------------ bind

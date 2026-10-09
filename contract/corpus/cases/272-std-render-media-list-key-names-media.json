@@ -1,0 +1,83 @@
+{
+ "name": "std-render-media-list-key-names-media",
+ "kind": "render",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "dspy_like_v1",
+  "versions": {
+   "kernel": "0.8.7",
+   "vocab": {
+    "format/json": "0.1.0"
+   }
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "role": "user",
+    "text": "{% for f in inputs %}[[ ## {f.name} ## ]]\n{f.value}\n{% endfor %}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  },
+  "formats": {
+   "list[media:image]": {
+    "use": "json",
+    "options": {
+     "indent": null
+    }
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Which address is a photo?",
+  "fields": [
+   {
+    "name": "pictures",
+    "direction": "input",
+    "shape": {
+     "type": "array",
+     "items": {
+      "media": "image"
+     }
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "pictures": [
+   {
+    "media_type": "image/png",
+    "url": "https://example.com/a.png"
+   }
+  ]
+ },
+ "expect": {
+  "request": {
+   "system": "Which address is a photo?\n<answer>\n...\n</answer>\n",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "[[ ## pictures ## ]]\n[{\"media_type\": \"image/png\", \"url\": \"https://example.com/a.png\"}]\n"
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

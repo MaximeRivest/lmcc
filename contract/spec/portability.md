@@ -24,13 +24,13 @@ needed to implement it: `between` and `line_prefixed` are plain scans.
 
 | core operation | kernel | evidence (corpus) |
 |---|---|---|
-| signature validity, shape table, nullable and enum forms | §1 | 43, 48–52 |
+| signature validity, shape table, nullable and enum forms | §1 | 43, 48–52, 273, 274 |
 | template constructs: slots, loops, escapes, syntax refusal | §2 | 01, 05, 47, 79 |
-| turns: record, slots (messages and text), guards, writers, projections, replay, ids, media parts | §3, §3a, §7b | 02–04, 53, 54, 103, 107, 116, 122, 128–148 |
+| turns: record, slots (messages and text), guards, writers, projections, replay, ids, media parts | §3, §3a, §7b | 02–04, 53, 54, 103, 107, 116, 122, 128–148, 257–259, 263–269, 273, 274 |
 | canonical JSON: §7a numbers, code-point key order (fingerprints, request hashes, `{input}`) | §3a, §6, §7a | 128, 203, 209–211 |
 | derived reader: anchors, closes, tails, bare slots, ambiguity, collisions | §4 | 20, 21, 27, 30–33, 38, 39, 69, 70, 80 |
 | scalar text rules: strip, integer and number grammars, spelling, overflow | §7a | 35–37, 44, 51, 52, 89, 90 |
-| format resolution order and bind-time format refusals | §5 | 14, 48–50, 55, 56, 67, 68 |
+| format resolution order and bind-time format refusals; no catch-all writes media as text | §5 | 14, 48–50, 55, 56, 67, 68, 270–272 |
 | vocabulary references, factory failures, version pins, unknown names | §5, §6, §9 | 09, 13, 24, 26, 77, 81, 82 |
 | shipped-format admission (never run at load); placement refusals | §5 | 57–62 (`udf:python`) |
 | transports: predicates, `choose`, `requires`, tell, request_settings, put, visibility | §6 | 10, 34, 63–66, 73–76, 78 |
@@ -84,10 +84,10 @@ Plans expose required contracts, resolved versions and binding labels
 
 | kernel | core | extensions | not claimed | beyond the corpus |
 |---|---|---|---|---|
-| Python (`python/`, reference) | 0.8.6, every case | `pattern/legacy-re2` (`python:re`), `udf:python` | — | — |
-| TypeScript (`ts/`) | 0.8.6, every case | `pattern/legacy-re2` (`ecmascript:RegExp`) | `udf:python` (6 cases) | differential and live replay: 0 differences |
-| Julia (`julia/`) | 0.8.6, every case | `pattern/legacy-re2` (`julia:PCRE2`) | `udf:python` (6 cases) | differential and live replay: 0 differences |
-| R (`r/`) | 0.8.6, every case | `pattern/legacy-re2` (`r:PCRE2`) | `udf:python` (6 cases) | differential and live replay: 0 differences |
+| Python (`python/`, reference) | 0.8.7, every case | `pattern/legacy-re2` (`python:re`), `udf:python` | — | — |
+| TypeScript (`ts/`) | 0.8.7, every case | `pattern/legacy-re2` (`ecmascript:RegExp`) | `udf:python` (6 cases) | differential and live replay: 0 differences |
+| Julia (`julia/`) | 0.8.7, every case | `pattern/legacy-re2` (`julia:PCRE2`) | `udf:python` (6 cases) | differential and live replay: 0 differences |
+| R (`r/`) | 0.8.7, every case | `pattern/legacy-re2` (`r:PCRE2`) | `udf:python` (6 cases) | differential and live replay: 0 differences |
 
 Every stream trace of every claimed parse case equals Python's. The
 standard vocabulary is claimed in full by all four.

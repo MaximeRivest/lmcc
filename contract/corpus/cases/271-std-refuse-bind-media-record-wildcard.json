@@ -1,0 +1,84 @@
+{
+ "name": "std-refuse-bind-media-record-wildcard",
+ "kind": "refuse",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "dspy_like_v1",
+  "versions": {
+   "kernel": "0.8.7",
+   "vocab": {
+    "format/json": "0.1.0"
+   }
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "role": "user",
+    "text": "{% for f in inputs %}[[ ## {f.name} ## ]]\n{f.value}\n{% endfor %}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  },
+  "formats": {
+   "*": {
+    "use": "json"
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Describe the shot.",
+  "fields": [
+   {
+    "name": "shot",
+    "direction": "input",
+    "shape": {
+     "type": "object",
+     "properties": {
+      "photo": {
+       "media": "image"
+      },
+      "caption": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "photo",
+      "caption"
+     ]
+    },
+    "type": "Shot"
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "shot": {
+   "photo": {
+    "media_type": "image/png",
+    "data": "AAAA"
+   },
+   "caption": "dusk"
+  }
+ },
+ "expect": {
+  "code": "no-format",
+  "fix": {
+   "action": "bind-format",
+   "field": "shot",
+   "key": "Shot"
+  },
+  "at": "bind"
+ }
+}

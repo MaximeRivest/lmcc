@@ -20,9 +20,12 @@
  *   type is lm15's part (`ImagePart`, …) and whose shape is `{media: kind}`:
  *   an lm15 part is its value, written as lm15's canonical part data (never
  *   lm15-ts's `mediaType`), saved by `plan.dumpTurn` as that data and
- *   rebuilt into the part by `plan.loadTurn`. Importing this module binds
- *   the five part types in `defaultRegistry`; `install(registry)` binds them
- *   in another. A part given by `path` keeps its path: lm15 reads the file.
+ *   rebuilt into the part by `plan.loadTurn`. `media.list(media.image())`
+ *   is several (`list[ImagePart]`), `media.nullable(media.image())` one or
+ *   `null` (`Optional[ImagePart]`). Importing this module binds the five
+ *   part types, their lists and their nullable forms in `defaultRegistry`;
+ *   `install(registry)` binds them in another. A part given by `path` keeps
+ *   its path: lm15 reads the file.
  */
 
 import * as lm15 from "@lm15/lm15";
@@ -194,11 +197,30 @@ function partOf(kind: string): (data: unknown) => lm15.Part {
   };
 }
 
-/** Bind lm15's media part types in `registry`: their media shape, no format (the shape's resolves), part data as their JSON form. */
+function listOf(kind: string): (data: unknown) => lm15.Part[] {
+  const one = partOf(kind);
+  return (data) => {
+    if (!Array.isArray(data)) refuse("turn-invalid", `a list of lm15 ${kind} parts is rebuilt from a list of ${kind} part data, got ${pyRepr(data)}`);
+    return data.map(one);
+  };
+}
+
+/**
+ * Bind lm15's media part types in `registry`: their media shape, no format
+ * (the shape's resolves), part data as their JSON form. A list of them
+ * (`list[ImagePart]`) and an optional one (`Optional[ImagePart]`), the names
+ * Python's frontend spells, are bound the same way, item by item.
+ */
 export function install(registry: Registry): Registry {
   for (const name of memberNames(MEDIA_PARTS)) {
     const kind = MEDIA_PARTS[name as keyof typeof MEDIA_PARTS];
     registry.format(name, { shape: { media: kind }, toJson: partData, fromJson: partOf(kind) });
+    registry.format(`list[${name}]`, {
+      shape: t.list(t.media(kind)),
+      toJson: (value: unknown) => (Array.isArray(value) ? value.map(partData) : value),
+      fromJson: listOf(kind),
+    });
+    registry.format(`Optional[${name}]`, { shape: t.nullable(t.media(kind)), toJson: partData, fromJson: partOf(kind) });
   }
   return registry;
 }
@@ -209,11 +231,31 @@ type FieldOpts = { purpose?: string; desc?: string };
 const mediaField = <P>(kind: string, type: string) => (opts: FieldOpts = {}): FieldSpec<P> =>
   field(t.media(kind), { purpose: opts.purpose, desc: opts.desc, type }) as unknown as FieldSpec<P>;
 
-/** Fields typed by lm15's media parts: `signature("…", {inputs: {picture: media.image()}})`. */
+function partField(spec: FieldSpec<unknown>, how: string): string {
+  if (spec.type === null || !hasOwn(MEDIA_PARTS, spec.type)) {
+    throw new TypeError(`media.${how} takes a field of lm15's media parts (media.image(), …), got one typed ${pyRepr(spec.type)}`);
+  }
+  return spec.type;
+}
+
+/**
+ * Fields typed by lm15's media parts: `signature("…", {inputs: {picture:
+ * media.image()}})`. `media.list(media.image())` is several pictures
+ * (`list[ImagePart]`, written as their parts in order) and
+ * `media.nullable(media.image())` a picture or `null` (`Optional[ImagePart]`).
+ */
 export const media = {
   image: mediaField<lm15.ImagePart>("image", "ImagePart"),
   audio: mediaField<lm15.AudioPart>("audio", "AudioPart"),
   video: mediaField<lm15.VideoPart>("video", "VideoPart"),
   document: mediaField<lm15.DocumentPart>("document", "DocumentPart"),
   binary: mediaField<lm15.BinaryPart>("binary", "BinaryPart"),
+  list: <P>(spec: FieldSpec<P>, opts: FieldOpts = {}): FieldSpec<P[]> => {
+    const type = partField(spec as FieldSpec<unknown>, "list");
+    return field(t.list(spec.shape), { purpose: opts.purpose ?? spec.purpose, desc: opts.desc ?? spec.desc ?? undefined, type: `list[${type}]` });
+  },
+  nullable: <P>(spec: FieldSpec<P>, opts: FieldOpts = {}): FieldSpec<P | null> => {
+    const type = partField(spec as FieldSpec<unknown>, "nullable");
+    return field(t.nullable(spec.shape), { purpose: opts.purpose ?? spec.purpose, desc: opts.desc ?? spec.desc ?? undefined, type: `Optional[${type}]` });
+  },
 };

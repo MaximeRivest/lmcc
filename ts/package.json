@@ -1,6 +1,6 @@
 {
   "name": "lmcc",
-  "version": "0.8.6",
+  "version": "0.8.7",
   "description": "The language model calling convention: where each argument goes, how the result comes back, how each type crosses. TypeScript kernel of the lmcc contract.",
   "type": "module",
   "license": "Apache-2.0",

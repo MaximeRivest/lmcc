@@ -175,8 +175,16 @@ lm15's media parts are field types: `bridge.media.image()` (and `audio`,
 written as lm15's canonical part data (`media_type`, never lm15-ts's
 `mediaType`; a path stays a path, lm15 reads the file), `plan.dumpTurn(turn)`
 saves it as that data and `plan.loadTurn(saved)` rebuilds the part.
-Importing `lmcc/lm15` binds the five part types in `defaultRegistry`;
-`bridge.install(registry)` binds them in your own.
+Several pictures are `bridge.media.list(bridge.media.image())` (typed
+`list[ImagePart]`: the parts go where the field sits, in order) and an
+optional one `bridge.media.nullable(bridge.media.image())`
+(`Optional[ImagePart]`: `null` is the text `null`). Importing `lmcc/lm15`
+binds the five part types, their lists and their nullable forms in
+`defaultRegistry`; `bridge.install(registry)` binds them in your own. A
+format written for every value (`"*"`, `"object"`, `"list[*]"`) that writes
+text never catches a field holding pictures (kernel §5): a record with a
+picture member refuses `no-format` until a format that writes parts is
+bound for it.
 
 ## Building on lmcc (a library such as functai)
 

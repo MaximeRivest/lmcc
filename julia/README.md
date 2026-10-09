@@ -102,9 +102,15 @@ t = tool(t, "call_1", "Sunny, 22C")
 With LM15 loaded, its media parts are field types: `inputs=(picture=LM15.ImagePart,)`
 is a `{"media": "image"}` field whose value is an lm15 part, written as
 lm15's canonical part data (a path stays a path; lm15 reads the file), saved
-by `dump_turn` and rebuilt by `load_turn`. Loading the extension binds the
-five part types in the default registry; `lm15_install!(registry)` binds
-them in your own.
+by `dump_turn` and rebuilt by `load_turn`. `Vector{LM15.ImagePart}` is
+several pictures (their parts where the field sits, in order) and
+`Union{LM15.ImagePart, Nothing}` an optional one (`nothing` is the text
+`null`); `load_turn` rebuilds both. Loading the extension binds the five part
+types in the default registry; `lm15_install!(registry)` binds them in your
+own. A format written for every value (`"*"`, `"object"`, `"list[*]"`) that
+writes text never catches a field holding pictures (kernel §5): a record
+with a picture member refuses `no-format` until a format that writes parts
+is bound for it.
 
 ## Where Julia differs, stated
 

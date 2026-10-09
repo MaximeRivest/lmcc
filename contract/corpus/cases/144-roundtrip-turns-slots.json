@@ -49,7 +49,7 @@
   "entry": {
    "name": "turns_v1",
    "versions": {
-    "kernel": "0.8.6",
+    "kernel": "0.8.7",
     "vocab": {}
    },
    "replay": "values",

@@ -388,9 +388,10 @@ _SCALAR_TYPES = ("string", "integer", "number", "boolean")
 
 def nullable_base(shape: dict) -> tuple[dict, bool]:
     """Kernel §1: a nullable form of a scalar/enum shape is that shape plus
-    null. Returns ``(base_shape, is_nullable)``; non-nullable shapes come
-    back unchanged. Only the two spellings the spec names are recognized:
-    ``{"type": [T, "null"]}`` and ``{"anyOf": [S, {"type": "null"}]}``."""
+    null, and so is a media shape's (only the ``anyOf`` form: a media shape
+    has no ``type``). Returns ``(base_shape, is_nullable)``; non-nullable
+    shapes come back unchanged. Only the two spellings the spec names are
+    recognized: ``{"type": [T, "null"]}`` and ``{"anyOf": [S, {"type": "null"}]}``."""
     t = shape.get("type")
     if isinstance(t, list):
         others = [x for x in t if x != "null"]
@@ -405,7 +406,7 @@ def nullable_base(shape: dict) -> tuple[dict, bool]:
         others = [a for a in alts if a not in nulls]
         if len(nulls) == 1 and len(others) == 1 and isinstance(others[0], dict):
             base = others[0]
-            if "enum" in base or base.get("type") in _SCALAR_TYPES:
+            if "enum" in base or base.get("type") in _SCALAR_TYPES or is_media(base):
                 return base, True
     return shape, False
 
@@ -418,6 +419,9 @@ def shape_summary(shape: dict) -> str:
         return "one of: " + ", ".join(str(v) for v in shape["enum"])
     if "media" in shape:
         return f"({shape['media']})"
+    kind = media_list_kind(shape)
+    if kind is not None:
+        return f"({kind}, ...)"
     t = shape.get("type")
     if t in ("integer", "number", "boolean"):
         return f"({t})"
@@ -426,6 +430,49 @@ def shape_summary(shape: dict) -> str:
 
 def is_media(shape: dict) -> bool:
     return "media" in shape
+
+
+def media_list_kind(shape: dict) -> object:
+    """Kernel §7b: the media type of a list of one media kind
+    (``{"type": "array", "items": {"media": type}}``, its items exactly a
+    media shape, not a nullable one), else None."""
+    items = shape.get("items")
+    if shape.get("type") == "array" and isinstance(items, dict) and is_media(items):
+        return items["media"]
+    return None
+
+
+_SUBSCHEMA_ONE = ("additionalProperties",)
+_SUBSCHEMA_LIST = ("prefixItems", "anyOf", "oneOf", "allOf")
+_SUBSCHEMA_MAP = ("properties", "patternProperties", "$defs")
+
+
+def holds_media(shape: object) -> bool:
+    """Kernel §5: whether a shape is a media shape or one of its subschemas
+    holds media (``items``, ``prefixItems``, ``additionalProperties``, the
+    members of ``properties``, ``patternProperties`` and ``$defs``,
+    ``anyOf``, ``oneOf``, ``allOf``)."""
+    if not isinstance(shape, dict):
+        return False
+    if is_media(shape):
+        return True
+    subs: list = []
+    items = shape.get("items")
+    subs += items if isinstance(items, list) else [items]
+    subs += [shape.get(k) for k in _SUBSCHEMA_ONE]
+    for k in _SUBSCHEMA_LIST:
+        if isinstance(shape.get(k), list):
+            subs += shape[k]
+    for k in _SUBSCHEMA_MAP:
+        if isinstance(shape.get(k), dict):
+            subs += list(shape[k].values())
+    return any(holds_media(s) for s in subs)
+
+
+def names_media(key: str) -> bool:
+    """Kernel §5: a structural key that names media: one holding ``media:``
+    (``media:image``, ``media:*``, ``list[media:image]``, ``list[media:*]``, …)."""
+    return "media:" in key
 
 
 def is_structured(shape: dict) -> bool:
@@ -581,8 +628,7 @@ def structural_keys(shape: dict) -> list[str]:
     if t == "array":
         items = base.get("items") or {}
         inner = structural_keys(items) if isinstance(items, dict) else []
-        keys = [f"list[{k}]" for k in inner if not k.startswith("media")]
-        return keys + ["list[*]"]
+        return [f"list[{k}]" for k in inner] + ["list[*]"]
     if t == "object":
         return ["object"]
     return []

@@ -10,7 +10,7 @@
  */
 
 import { refuse, Refusal } from "./errors.ts";
-import { copyObject, formatNumber, isPlainObject, jsonEqual, jsonText, memberNames, setMember, type JsonObject } from "./json.ts";
+import { copyObject, formatNumber, isPlainObject, jsonEqual, jsonText, memberNames, ownValue, setMember, type JsonObject } from "./json.ts";
 import { asciiLower, pyRepr, pyStr, readBoolean, readInteger, readNumber, strip, WHITESPACE } from "./text.ts";
 import { brand } from "./brand.ts";
 
@@ -49,8 +49,9 @@ export function isObj(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Kernel §1: a nullable form of a scalar/enum shape is that shape plus null.
- * Returns `[base, nullable]`; only the two spellings the spec names count.
+ * Kernel §1: a nullable form of a scalar/enum shape is that shape plus null,
+ * and so is a media shape's (only the `anyOf` form: a media shape has no
+ * `type`). Returns `[base, nullable]`; only the two spellings the spec names count.
  */
 export function nullableBase(shape: Shape): [Shape, boolean] {
   const t = shape["type"];
@@ -71,7 +72,7 @@ export function nullableBase(shape: Shape): [Shape, boolean] {
     const others = alts.filter((a) => !isNull(a));
     if (nulls.length === 1 && others.length === 1 && isObj(others[0])) {
       const base = others[0] as Shape;
-      if ("enum" in base || SCALARS.has(base["type"] as string)) return [base, true];
+      if ("enum" in base || SCALARS.has(base["type"] as string) || isMedia(base)) return [base, true];
     }
   }
   return [shape, false];
@@ -82,6 +83,8 @@ export function shapeSummary(shape: Shape): string {
   const [base] = nullableBase(shape);
   if ("enum" in base) return "one of: " + (base["enum"] as unknown[]).map(pyStr).join(", ");
   if ("media" in base) return `(${pyStr(base["media"])})`;
+  const kind = mediaListKind(base);
+  if (kind !== null) return `(${pyStr(kind)}, ...)`;
   const t = base["type"];
   if (t === "integer" || t === "number" || t === "boolean") return `(${t})`;
   return "";
@@ -89,6 +92,45 @@ export function shapeSummary(shape: Shape): string {
 
 export function isMedia(shape: Shape): boolean {
   return "media" in shape;
+}
+
+/**
+ * Kernel §7b: the media type of a list of one media kind (`{type: "array",
+ * items: {media: type}}`, its items exactly a media shape, not a nullable
+ * one), else `null`.
+ */
+export function mediaListKind(shape: Shape): unknown {
+  const items = ownValue(shape, "items");
+  return ownValue(shape, "type") === "array" && isObj(items) && isMedia(items as Shape) ? (items as Shape)["media"] : null;
+}
+
+/**
+ * Kernel §5: whether a shape is a media shape or one of its subschemas holds
+ * media (`items`, `prefixItems`, `additionalProperties`, the members of
+ * `properties`, `patternProperties` and `$defs`, `anyOf`, `oneOf`, `allOf`).
+ */
+export function holdsMedia(shape: unknown): boolean {
+  if (!isObj(shape)) return false;
+  if (isMedia(shape as Shape)) return true;
+  const subs: unknown[] = [];
+  const items = ownValue(shape, "items");
+  if (Array.isArray(items)) subs.push(...items);
+  else subs.push(items);
+  subs.push(ownValue(shape, "additionalProperties"));
+  for (const k of ["prefixItems", "anyOf", "oneOf", "allOf"]) {
+    const v = ownValue(shape, k);
+    if (Array.isArray(v)) subs.push(...v);
+  }
+  for (const k of ["properties", "patternProperties", "$defs"]) {
+    const v = ownValue(shape, k);
+    if (isObj(v)) for (const name of memberNames(v)) subs.push(ownValue(v, name));
+  }
+  return subs.some(holdsMedia);
+}
+
+/** Kernel §5: a structural key that names media: one holding `media:` (`media:image`, `list[media:*]`, …). */
+export function namesMedia(key: string): boolean {
+  return key.includes("media:");
 }
 
 /** Kernel §1: object/array and every uninterpreted shape need a format. */
@@ -216,7 +258,7 @@ export function structuralKeys(shape: Shape): string[] {
   if (t === "array") {
     const items = (base["items"] as unknown) || {};
     const inner = isObj(items) ? structuralKeys(items as Shape) : [];
-    return [...inner.filter((k) => !k.startsWith("media")).map((k) => `list[${k}]`), "list[*]"];
+    return [...inner.map((k) => `list[${k}]`), "list[*]"];
   }
   if (t === "object") return ["object"];
   return [];

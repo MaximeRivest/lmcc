@@ -1,0 +1,131 @@
+{
+ "name": "render-media-list-output-turn",
+ "kind": "render",
+ "entry": {
+  "name": "parts_v1",
+  "versions": {
+   "kernel": "0.8.7",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "directive": "turns"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Illustrate.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "caption",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "pictures",
+    "direction": "output",
+    "shape": {
+     "type": "array",
+     "items": {
+      "media": "image"
+     }
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "q": "two dogs"
+ },
+ "turns": {
+  "turns": [
+   {
+    "inputs": {
+     "q": "two cats"
+    },
+    "steps": [],
+    "outputs": {
+     "caption": "Two cats",
+     "pictures": [
+      {
+       "media_type": "image/png",
+       "data": "AAAA"
+      },
+      {
+       "type": "image",
+       "media_type": "image/jpeg",
+       "url": "https://example.com/b.jpg"
+      }
+     ]
+    }
+   }
+  ]
+ },
+ "expect": {
+  "request": {
+   "system": "Illustrate.\n<caption>\n...\n</caption>\n<pictures>\n(image, ...)\n</pictures>\n",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "two cats"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "parts": [
+      {
+       "type": "text",
+       "text": "<caption>\nTwo cats\n</caption>\n<pictures>\n"
+      },
+      {
+       "type": "image",
+       "media_type": "image/png",
+       "data": "AAAA"
+      },
+      {
+       "type": "image",
+       "media_type": "image/jpeg",
+       "url": "https://example.com/b.jpg"
+      },
+      {
+       "type": "text",
+       "text": "\n</pictures>"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "two dogs"
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

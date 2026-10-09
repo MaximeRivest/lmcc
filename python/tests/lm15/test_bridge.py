@@ -273,3 +273,68 @@ def test_a_registry_without_the_bridge_says_to_import_it():
     reg = lmcc_lm15.install(lmcc.Registry())
     assert lmcc.signature("x", inputs={"d": DocumentPart}, outputs={"a": str},
                           registry=reg).fields[0].shape == {"media": "document"}
+
+
+# ------------------------------------------- several pictures (issue #7)
+
+import dataclasses  # noqa: E402
+import typing  # noqa: E402
+
+import lmcc_std  # noqa: E402
+
+NIGHT = ImagePart(media_type="image/jpeg", url="https://example.com/night.jpg")
+WILDCARD = lmcc.adapter(messages=ASK.template, formats={"*": lmcc.use("json")})   # as most artifacts carry
+lmcc_std.install(lmcc.default_registry, exist_ok=True)
+
+
+@lmcc.fn
+def compare(pictures: list[ImagePart], reference: typing.Optional[ImagePart]) -> str:
+    """Which picture is brighter?"""
+
+
+def test_a_list_of_lm15_parts_is_sent_as_its_parts_under_a_wildcard_json():
+    plan = compare.bind(WILDCARD, capabilities={"instruct": True})
+    by = {f["name"]: f["resolved_by"] for f in plan.describe()["inputs"]}
+    assert by == {"pictures": "kernel", "reference": "kernel"}
+    rendered = plan.render(pictures=[PICTURE, NIGHT], reference=None)
+    assert rendered.request("m")["messages"][0]["parts"] == [
+        {"type": "image", "media_type": "image/png", "data": "iVBORw0KGgo="},
+        {"type": "image", "media_type": "image/jpeg", "url": "https://example.com/night.jpg"},
+        {"type": "text", "text": "null"}]
+    request = lmcc_lm15.request(rendered, model="m")
+    assert [type(p) for p in request.messages[0].parts] == [ImagePart, ImagePart, lm15.TextPart]
+    one = plan.render(pictures=[], reference=NIGHT).request("m")["messages"][0]["parts"]
+    assert one == [{"type": "image", "media_type": "image/jpeg", "url": "https://example.com/night.jpg"}]
+    with pytest.raises(lmcc.Refusal) as err:
+        plan.render(pictures=[PICTURE, AudioPart(media_type="audio/wav", data="AAAA")], reference=None)
+    assert err.value.code == "value-invalid" and "'pictures'[1]" in err.value.hint
+
+
+def test_a_list_of_lm15_parts_is_saved_and_rebuilt_part_by_part():
+    plan = compare.bind(WILDCARD, capabilities={"instruct": True})
+    turn = plan.render(pictures=[PICTURE, NIGHT], reference=NIGHT).step("<compare>\nleft\n</compare>").finish()
+    data = plan.dump_turn(turn)
+    assert data["inputs"]["pictures"][1] == {"type": "image", "media_type": "image/jpeg",
+                                             "url": "https://example.com/night.jpg"}
+    back = plan.load_turn(data)
+    assert back.inputs == {"pictures": [PICTURE, NIGHT], "reference": NIGHT}
+    assert plan.render(pictures=[], reference=None, turns=[turn]).request("m") == \
+        plan.render(pictures=[], reference=None, turns=[back]).request("m")
+
+
+@dataclasses.dataclass
+class Shot:
+    photo: ImagePart
+    caption: str
+
+
+@lmcc.fn
+def describe_shot(shot: Shot) -> str:
+    """Describe the shot."""
+
+
+def test_a_record_holding_an_lm15_part_refuses_instead_of_sending_base64_text():
+    with pytest.raises(lmcc.Refusal) as err:
+        describe_shot.bind(WILDCARD, capabilities={"instruct": True})
+    assert err.value.code == "no-format" and "holds media" in err.value.hint
+    assert err.value.fix == {"action": "bind-format", "field": "shot", "key": "Shot"}

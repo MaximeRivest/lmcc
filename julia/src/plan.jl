@@ -163,6 +163,16 @@ function write_value(p::Plan, f::Field, value; fmt=nothing)
             err isa Refusal || rethrow()
             refuse("format-write-error", err.hint)
         end
+    elseif format === MEDIA_LIST_DEFAULT && (value isa AbstractVector || value isa Tuple)
+        # the kernel's list of media writes each item as one media value: an item
+        # of a type bound with to_json (an lm15 part) as its JSON form
+        value = try
+            Any[to_json_hook(p.registry, v) === nothing ? v : to_json(v, "field $(pyrepr(f.name))[$(i - 1)]"; registry=p.registry)
+                for (i, v) in enumerate(value)]
+        catch err
+            err isa Refusal || rethrow()
+            refuse("format-write-error", err.hint)
+        end
     end
     written = try
         format.write(value, f)
@@ -1010,12 +1020,21 @@ function _resolve_format(p::Plan, f::Field)
         FormatChoice(fmt, by, nothing, nothing)
     end
     has(k) = haskey(adp.formats, k) && !isdescription(adp.formats[k])
+    # §5: a key written for every value never writes media as text; whether a format
+    # writes text is what it declares, read without running it (a shipped one: text
+    # when it says nothing)
+    media = holds_media(f.shape)
+    function writes_text(b, key)
+        isobj(b) && !(b isa Format) && !isreference(b) && return get(b, "writes", "text") == "text"
+        materialize(b, key).writes == "text"
+    end
+    passed_over(key) = media && !names_media(key) && writes_text(adp.formats[key], key)
     choice = if f.type !== nothing && has(f.type)
         check(materialize(adp.formats[f.type], f.type), "artifact:$(f.type)", f.type)
     else
         c = nothing
         for key in structural_keys(f.shape)
-            if has(key)
+            if has(key) && !passed_over(key)
                 c = check(materialize(adp.formats[key], key), "artifact:$key", key)
                 break
             end
@@ -1028,11 +1047,14 @@ function _resolve_format(p::Plan, f::Field)
                 d = kernel_default(f.shape)
                 if d !== nothing
                     c = FormatChoice(d, "kernel", nothing, nothing)
-                elseif haskey(adp.formats, "*")
+                elseif haskey(adp.formats, "*") && !passed_over("*")
                     c = check(materialize(adp.formats["*"], "*"), "artifact:*", "*")
                 else
+                    key = format_key(f.type, f.shape)
+                    media && refuse("no-format", "field $(pyrepr(f.name)) ($(something(f.type, pyrepr(f.shape)))) holds media, which text cannot carry to a model, and no format that writes parts is bound for it — bind one in the artifact under $(pyrepr(key)), register one for its type at runtime, or ship one (a format bound under $(pyrepr(key)) is taken even if it writes text)";
+                        fix=jobj("action" => "bind-format", "field" => f.name, "key" => key))
                     refuse("no-format", "field $(pyrepr(f.name)) ($(something(f.type, pyrepr(f.shape)))) has a structured shape and no format — bind one in the artifact under its type name or a structural key, register one for its type at runtime, or ship one";
-                        fix=jobj("action" => "bind-format", "field" => f.name, "key" => format_key(f.type, f.shape)))
+                        fix=jobj("action" => "bind-format", "field" => f.name, "key" => key))
                 end
             end
         end

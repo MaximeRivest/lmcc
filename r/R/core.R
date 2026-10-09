@@ -9,7 +9,8 @@ new_field <- function(name, direction, shape, type = NULL, purpose = "plain", de
   structure(list(name = name, direction = direction, shape = shape, type = type, purpose = purpose, desc = desc), class = "lmcc_field")
 }
 
-#' Kernel section 1: a nullable scalar/enum shape is that shape plus null.
+#' Kernel section 1: a nullable scalar/enum shape is that shape plus null, and so
+#' is a media shape's (only the anyOf form: a media shape has no type).
 #' @noRd
 nullable_base <- function(shape) {
   t <- get_key(shape, "type")
@@ -29,7 +30,7 @@ nullable_base <- function(shape) {
     others <- alts[!isnull]
     if (sum(isnull) == 1L && length(others) == 1L && is_obj(others[[1]])) {
       base <- others[[1]]
-      if (has_key(base, "enum") || isTRUE(get_key(base, "type") %in% SCALAR_TYPES)) return(list(base, TRUE))
+      if (has_key(base, "enum") || isTRUE(get_key(base, "type") %in% SCALAR_TYPES) || is_media(base)) return(list(base, TRUE))
     }
   }
   list(shape, FALSE)
@@ -39,12 +40,41 @@ shape_summary <- function(shape) {
   base <- nullable_base(shape)[[1]]
   if (has_key(base, "enum")) return(paste0("one of: ", paste(vapply(base[["enum"]], pystr, ""), collapse = ", ")))
   if (has_key(base, "media")) return(paste0("(", pystr(base[["media"]]), ")"))
+  kind <- media_list_kind(base)
+  if (!is.null(kind)) return(paste0("(", pystr(kind), ", ...)"))
   t <- get_key(base, "type")
   if (is_str(t) && t %in% c("integer", "number", "boolean")) return(paste0("(", t, ")"))
   ""
 }
 
 is_media <- function(shape) has_key(shape, "media")
+
+# Kernel section 7b: the media type of a list of one media kind (its items
+# exactly a media shape, not a nullable one), else NULL.
+media_list_kind <- function(shape) {
+  items <- get_key(shape, "items")
+  if (identical(get_key(shape, "type"), "array") && is_obj(items) && is_media(items)) get_key(items, "media") else NULL
+}
+
+# Kernel section 5: whether a shape is a media shape or one of its subschemas
+# holds media (items, prefixItems, additionalProperties, the members of
+# properties, patternProperties and $defs, anyOf, oneOf, allOf).
+holds_media <- function(shape) {
+  if (!is_obj(shape)) return(FALSE)
+  if (is_media(shape)) return(TRUE)
+  items <- get_key(shape, "items")
+  subs <- if (is_arr(items)) items else list(items)
+  subs <- c(subs, list(get_key(shape, "additionalProperties")))
+  for (k in c("prefixItems", "anyOf", "oneOf", "allOf")) { v <- get_key(shape, k); if (is_arr(v)) subs <- c(subs, v) }
+  for (k in c("properties", "patternProperties", "$defs")) {
+    v <- get_key(shape, k)
+    if (is_obj(v)) subs <- c(subs, lapply(members_of(v), function(m) m[[2]]))
+  }
+  any(vapply(subs, holds_media, TRUE))
+}
+
+# Kernel section 5: a structural key that names media: one holding "media:".
+names_media <- function(key) grepl("media:", key, fixed = TRUE)
 
 in_enum <- function(members, v) any(vapply(members, function(m) json_equal(m, v), TRUE))
 
@@ -146,7 +176,6 @@ structural_keys <- function(shape) {
     items <- get_key(base, "items")
     items <- if (pytruthy(items)) items else jobj()
     inner <- if (is_obj(items)) structural_keys(items) else character(0)
-    inner <- inner[!startsWith(inner, "media")]
     return(c(if (length(inner)) paste0("list[", inner, "]") else character(0), "list[*]"))
   }
   if (identical(t, "object")) return("object")

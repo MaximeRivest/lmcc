@@ -1,0 +1,73 @@
+{
+ "name": "render-media-list-empty",
+ "kind": "render",
+ "entry": {
+  "name": "sections_v1",
+  "versions": {
+   "kernel": "0.8.7",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "role": "user",
+    "text": "{question}\n{pictures}\nthanks"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Compare.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "pictures",
+    "direction": "input",
+    "shape": {
+     "type": "array",
+     "items": {
+      "media": "image"
+     }
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "question": "what changed?",
+  "pictures": []
+ },
+ "expect": {
+  "request": {
+   "system": "Compare.\n<answer>\n...\n</answer>\n",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "what changed?\n\nthanks"
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

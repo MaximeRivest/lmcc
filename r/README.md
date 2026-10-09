@@ -116,8 +116,15 @@ lm15's media parts are field types: `inputs = list(picture = lm15_media("image")
 is a `{"media": "image"}` field typed `ImagePart`, whose value is an lm15
 part (`lm15::image_part(path = "cat.png")`), written as lm15's canonical
 part data (a path stays a path; lm15 reads the file), saved by
-`dump_turn(plan, turn)` and rebuilt by `load_turn()`. The default registry
-has the five part types; `lm15_install(registry)` binds them in your own.
+`dump_turn(plan, turn)` and rebuilt by `load_turn()`. `lm15_media("image",
+list = TRUE)` is several pictures (`list[ImagePart]`: their parts where the
+field sits, in order) and `lm15_media("image", nullable = TRUE)` an optional
+one (`Optional[ImagePart]`: `NULL` is the text `null`). The default registry
+has the five part types, their lists and their nullable forms;
+`lm15_install(registry)` binds them in your own. A format written for every
+value (`"*"`, `"object"`, `"list[*]"`) that writes text never catches a field
+holding pictures (kernel section 5): a record with a picture member refuses
+`no-format` until a format that writes parts is bound for it.
 
 lm15 for R 1.0.0's `new_router()` rejects every API key from its default
 environment lookup (the values keep the `Dlist` class its key check

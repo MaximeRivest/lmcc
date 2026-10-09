@@ -132,9 +132,18 @@ resolve_format <- function(p, f) {
     list(format = fmt, resolved_by = by, described = NULL, described_by = NULL)
   }
   has <- function(k) !is.null(k) && nzchar(k) && !is.null(adp$formats[[k]]) && !is_description(adp$formats[[k]])
+  # section 5: a key written for every value never writes media as text; whether a
+  # format writes text is what it declares, read without running it (a shipped one:
+  # text when it says nothing)
+  media <- holds_media(f$shape)
+  writes_text <- function(b, key) {
+    if (is_obj(b) && !is_format(b) && !is_reference(b)) return(identical(get_key(b, "writes", "text"), "text"))
+    identical(materialize(b, key)$writes, "text")
+  }
+  passed_over <- function(key) media && !names_media(key) && writes_text(get_key(adp$formats, key), key)
   choice <- NULL
   if (has(f$type)) choice <- check(materialize(adp$formats[[f$type]], f$type), paste0("artifact:", f$type), f$type)
-  if (is.null(choice)) for (key in structural_keys(f$shape)) if (has(key)) { choice <- check(materialize(adp$formats[[key]], key), paste0("artifact:", key), key); break }
+  if (is.null(choice)) for (key in structural_keys(f$shape)) if (has(key) && !passed_over(key)) { choice <- check(materialize(adp$formats[[key]], key), paste0("artifact:", key), key); break }
   if (is.null(choice)) {
     bound <- type_binding(reg, f$type)
     if (!is.null(bound)) choice <- check(bound, paste0("runtime:", f$type), format_key(f$type, f$shape))
@@ -142,9 +151,14 @@ resolve_format <- function(p, f) {
   if (is.null(choice)) {
     d <- kernel_default(f$shape)
     if (!is.null(d)) choice <- list(format = d, resolved_by = "kernel", described = NULL, described_by = NULL)
-    else if (!is.null(adp$formats[["*"]])) choice <- check(materialize(adp$formats[["*"]], "*"), "artifact:*", "*")
-    else refuse("no-format", sprintf("field %s (%s) has a structured shape and no format \u2014 bind one in the artifact under its type name or a structural key, register one for its type at runtime, or ship one",
-                                     pyrepr(f$name), f$type %||% pyrepr(f$shape)), fix = jobj(action = "bind-format", field = f$name, key = format_key(f$type, f$shape)))
+    else if (!is.null(adp$formats[["*"]]) && !passed_over("*")) choice <- check(materialize(adp$formats[["*"]], "*"), "artifact:*", "*")
+    else {
+      key <- format_key(f$type, f$shape)
+      if (media) refuse("no-format", sprintf("field %s (%s) holds media, which text cannot carry to a model, and no format that writes parts is bound for it \u2014 bind one in the artifact under %s, register one for its type at runtime, or ship one (a format bound under %s is taken even if it writes text)",
+                                             pyrepr(f$name), f$type %||% pyrepr(f$shape), pyrepr(key), pyrepr(key)), fix = jobj(action = "bind-format", field = f$name, key = key))
+      refuse("no-format", sprintf("field %s (%s) has a structured shape and no format \u2014 bind one in the artifact under its type name or a structural key, register one for its type at runtime, or ship one",
+                                  pyrepr(f$name), f$type %||% pyrepr(f$shape)), fix = jobj(action = "bind-format", field = f$name, key = key))
+    }
   }
   keys <- c(if (!is.null(f$type) && nzchar(f$type)) f$type, structural_keys(f$shape), if (choice$resolved_by == "artifact:*") "*")
   for (key in keys) {
