@@ -51,38 +51,75 @@ media_part_members(kind) = kind == "image" ? ["media_type", "data", "url", "file
 "lm15's omission rule: null, \"\", [] and {} are left out."
 _empty_member(v) = v === nothing || (v isa AbstractString && isempty(v)) || ((v isa AbstractVector || v isa Tuple || v isa AbstractDict) && isempty(v))
 
-function _media_write(value, f::Field)
-    kind = f.shape["media"]
-    isobj(value) || refuse("value-invalid", "field $(pyrepr(f.name)): a media value must be a Dict of part data")
+"The field's media type, and whether its shape is the nullable form."
+function _media_kind(f::Field)
+    base, nullable = nullable_base(f.shape)
+    (base["media"], nullable)
+end
+
+"Kernel §7b: one media value as its lm15 part; `where` names it in a refusal (`field 'photo'`, `field 'pictures'[1]`)."
+function write_media(value, kind, where)
+    isobj(value) || refuse("value-invalid", "$where: a media value must be a Dict of part data")
     haskey(value, "type") && value["type"] != kind &&
-        refuse("value-invalid", "field $(pyrepr(f.name)): a $(pyrepr(value["type"])) part given where a $(pyrepr(kind)) part is declared")
+        refuse("value-invalid", "$where: a $(pyrepr(value["type"])) part given where a $(pyrepr(kind)) part is declared")
     part = jobj("type" => kind)
     members = media_part_members(kind)
     for (k, v) in value
         k = String(k)
         k == "type" && continue
         if members !== nothing          # §7b: exactly as lm15 serializes the part
-            k in members || refuse("value-invalid", "field $(pyrepr(f.name)): $(pyrepr(k)) is not a member of lm15's $kind part ($(join(members, ", "))); give the part's data, or an lm15 part through its bridge")
+            k in members || refuse("value-invalid", "$where: $(pyrepr(k)) is not a member of lm15's $kind part ($(join(members, ", "))); give the part's data, or an lm15 part through its bridge")
             k != "media_type" && _empty_member(v) && continue   # lm15's omission rule
         end
         part[k] = v
     end
-    Any[part]
+    part
+end
+
+_part_data(p) = JObj(k => v for (k, v) in p if k != "type")
+
+function _media_write(value, f::Field)
+    kind, nullable = _media_kind(f)
+    value === nothing && nullable && return Any[textpart("null")]
+    Any[write_media(value, kind, "field $(pyrepr(f.name))")]
 end
 
 function _media_read(c::Capture, f::Field)
-    ps = parts_of(c, f.shape["media"])
-    isempty(ps) && refuse("parse-value", "field $(pyrepr(f.name)): no $(pystr(f.shape["media"])) part in the capture")
-    JObj(k => v for (k, v) in ps[1] if k != "type")
+    kind, nullable = _media_kind(f)
+    ps = parts_of(c, kind)
+    if isempty(ps)
+        nullable && return nothing
+        refuse("parse-value", "field $(pyrepr(f.name)): no $(pystr(kind)) part in the capture")
+    end
+    _part_data(ps[1])
 end
 
+"""
+Kernel §7b: a media value is its part's data; reading takes the first part of
+the kind. The nullable form writes `null` as the text `null` and reads
+`nothing` from a capture without a part of its kind.
+"""
 const MEDIA_DEFAULT = Format("kernel-media", ["media:*"], "both", "parts", true, ["*"], _media_write, _media_read,
-    f -> "(" * pystr(f.shape["media"]) * ")", nothing)
+    f -> "(" * pystr(_media_kind(f)[1]) * ")", nothing)
+
+function _media_list_write(value, f::Field)
+    kind = media_list_kind(f.shape)
+    (value isa AbstractVector || value isa Tuple) ||
+        refuse("value-invalid", "field $(pyrepr(f.name)): a list of $kind values must be a list, got $(_typename(value))")
+    Any[write_media(v, kind, "field $(pyrepr(f.name))[$(i - 1)]") for (i, v) in enumerate(value)]
+end
+
+_media_list_read(c::Capture, f::Field) = Any[_part_data(p) for p in parts_of(c, media_list_kind(f.shape))]
+
+"Kernel §7b: a list of one media kind is its items' parts, in order; reading takes every part of that kind, in order."
+const MEDIA_LIST_DEFAULT = Format("kernel-media-list", ["list[media:*]"], "both", "parts", true, ["*"],
+    _media_list_write, _media_list_read, f -> "(" * pystr(media_list_kind(f.shape)) * ", ...)", nothing)
 
 function kernel_default(shape)
     base, _ = nullable_base(shape)
     is_media(base) && return MEDIA_DEFAULT
     (haskey(base, "enum") || get(base, "type", nothing) in SCALAR_TYPES) && return SCALAR_DEFAULT
+    media_list_kind(shape) !== nothing && return MEDIA_LIST_DEFAULT
     nothing
 end
 

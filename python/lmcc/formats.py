@@ -125,9 +125,47 @@ def _empty(v: object) -> bool:
     return v is None or (isinstance(v, (str, list, tuple, dict)) and len(v) == 0)
 
 
+def _media_kind(field: core.Field) -> tuple[object, bool]:
+    """The field's media type, and whether its shape is the nullable form."""
+    base, nullable = core.nullable_base(field.shape)
+    return base.get("media"), nullable
+
+
+def write_media(value: object, kind: object, where: str) -> dict:
+    """Kernel §7b: one media value as its lm15 part. ``where`` names it in a
+    refusal (``field 'photo'``, ``field 'pictures'[1]``)."""
+    if not isinstance(value, dict):
+        refuse("value-invalid", f"{where}: a media value must be a plain dict of part data")
+    if "type" in value and value["type"] != kind:
+        refuse("value-invalid",
+               f"{where}: a {value['type']!r} part given where a {kind!r} part is declared")
+    members = MEDIA_PART_MEMBERS.get(kind)
+    if members is None:              # not one of lm15's media parts: written as given
+        return {"type": kind, **{k: v for k, v in value.items() if k != "type"}}
+    part: dict = {"type": kind}
+    for k, v in value.items():       # §7b: exactly as lm15 serializes the part
+        if k == "type":
+            continue
+        if k not in members:
+            refuse("value-invalid",
+                   f"{where}: {k!r} is not a member of lm15's {kind} part "
+                   f"({', '.join(members)}); give the part's data, or an lm15 part through "
+                   f"its bridge")
+        if k != "media_type" and _empty(v):
+            continue                 # lm15's omission rule
+        part[k] = v
+    return part
+
+
+def _part_data(part: dict) -> dict:
+    return {k: v for k, v in part.items() if k != "type"}
+
+
 class MediaFormat(Format):
     """Kernel §7b: a media value that is already a part passes through as
-    that part; reading takes the first part of the field's media kind."""
+    that part; reading takes the first part of the field's media kind. The
+    nullable form writes ``null`` as the text ``null`` and reads ``null``
+    from a capture without a part of its kind."""
 
     name = "kernel-media"
     accepts = ("media:*",)
@@ -135,43 +173,50 @@ class MediaFormat(Format):
     reads = ("*",)
 
     def describe(self, field):
-        return f"({field.shape.get('media')})"
+        return f"({_media_kind(field)[0]})"
 
     def write(self, value, field):
-        kind = field.shape.get("media")
-        if not isinstance(value, dict):
-            refuse("value-invalid",
-                   f"field {field.name!r}: a media value must be a plain dict of part data")
-        if "type" in value and value["type"] != kind:
-            refuse("value-invalid",
-                   f"field {field.name!r}: a {value['type']!r} part given where a {kind!r} "
-                   f"part is declared")
-        members = MEDIA_PART_MEMBERS.get(kind)
-        if members is None:              # not one of lm15's media parts: written as given
-            return [{"type": kind, **{k: v for k, v in value.items() if k != "type"}}]
-        part: dict = {"type": kind}
-        for k, v in value.items():       # §7b: exactly as lm15 serializes the part
-            if k == "type":
-                continue
-            if k not in members:
-                refuse("value-invalid",
-                       f"field {field.name!r}: {k!r} is not a member of lm15's {kind} part "
-                       f"({', '.join(members)}); give the part's data, or an lm15 part through "
-                       f"its bridge")
-            if k != "media_type" and _empty(v):
-                continue                 # lm15's omission rule
-            part[k] = v
-        return [part]
+        kind, nullable = _media_kind(field)
+        if value is None and nullable:
+            return [core.text_part("null")]
+        return [write_media(value, kind, f"field {field.name!r}")]
 
     def read(self, capture, field):
-        parts = capture.of(field.shape.get("media"))
+        kind, nullable = _media_kind(field)
+        parts = capture.of(kind)
         if not parts:
-            refuse("parse-value", f"field {field.name!r}: no {field.shape.get('media')} part in the capture")
-        return {k: v for k, v in parts[0].items() if k != "type"}
+            if nullable:
+                return None
+            refuse("parse-value", f"field {field.name!r}: no {kind} part in the capture")
+        return _part_data(parts[0])
+
+
+class MediaListFormat(Format):
+    """Kernel §7b: a list of one media kind is its items' parts, in order;
+    reading takes every part of that kind in the capture, in order."""
+
+    name = "kernel-media-list"
+    accepts = ("list[media:*]",)
+    writes = "parts"
+    reads = ("*",)
+
+    def describe(self, field):
+        return f"({core.media_list_kind(field.shape)}, ...)"
+
+    def write(self, value, field):
+        kind = core.media_list_kind(field.shape)
+        if not isinstance(value, (list, tuple)):
+            refuse("value-invalid", f"field {field.name!r}: a list of {kind} values must be a list, "
+                                    f"got {type(value).__name__}")
+        return [write_media(v, kind, f"field {field.name!r}[{i}]") for i, v in enumerate(value)]
+
+    def read(self, capture, field):
+        return [_part_data(p) for p in capture.of(core.media_list_kind(field.shape))]
 
 
 SCALAR_DEFAULT = ScalarFormat()
 MEDIA_DEFAULT = MediaFormat()
+MEDIA_LIST_DEFAULT = MediaListFormat()
 
 
 def kernel_default(shape: dict) -> Format | None:
@@ -180,6 +225,8 @@ def kernel_default(shape: dict) -> Format | None:
         return MEDIA_DEFAULT
     if "enum" in base or base.get("type") in STRUCTURAL_SCALARS:
         return SCALAR_DEFAULT
+    if core.media_list_kind(shape) is not None:
+        return MEDIA_LIST_DEFAULT
     return None
 
 

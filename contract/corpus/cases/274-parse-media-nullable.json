@@ -1,0 +1,94 @@
+{
+ "name": "parse-media-nullable",
+ "kind": "parse",
+ "entry": {
+  "name": "parts_v1",
+  "versions": {
+   "kernel": "0.8.7",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "directive": "turns"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Illustrate.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "sketch",
+    "direction": "output",
+    "shape": {
+     "anyOf": [
+      {
+       "media": "image"
+      },
+      {
+       "type": "null"
+      }
+     ]
+    }
+   },
+   {
+    "name": "photo",
+    "direction": "output",
+    "shape": {
+     "anyOf": [
+      {
+       "type": "null"
+      },
+      {
+       "media": "image"
+      }
+     ]
+    }
+   }
+  ]
+ },
+ "response": {
+  "role": "assistant",
+  "parts": [
+   {
+    "type": "text",
+    "text": "<sketch>\nnull\n</sketch>\n<photo>\n"
+   },
+   {
+    "type": "image",
+    "media_type": "image/png",
+    "url": "https://example.com/p.png"
+   },
+   {
+    "type": "text",
+    "text": "\n</photo>"
+   }
+  ]
+ },
+ "expect": {
+  "values": {
+   "sketch": null,
+   "photo": {
+    "media_type": "image/png",
+    "url": "https://example.com/p.png"
+   }
+  }
+ }
+}

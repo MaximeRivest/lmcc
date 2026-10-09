@@ -1,5 +1,29 @@
 # The corpus
 
+**Pictures are never text by a catch-all (kernel 0.8.7, D-64).** Cases
+263–274 were typed by hand from kernel §5 and §7b before any kernel ran
+them: a list of pictures under `{"*": json}` is sent as its parts while a
+list of strings beside it stays JSON (263, the issue); the empty list
+writes nothing (264); a value that is not a list (265) and an item with
+lm15-ts's `mediaType` (266) refuse `value-invalid`; a list of pictures as
+a past output is written at its hole and described `(image, ...)` (267);
+reading takes every image of the section in order, not an audio part
+beside them, and reports a stray image before the first marker (268); a
+section with no image reads `[]` (269); `list[*]` writing text spells the
+list of strings and is passed over for the pictures (270); a record
+holding a picture under `*` refuses `no-format` with the type name as the
+key (271); a key naming media is the author's choice even for a format
+writing text (272); a nullable picture writes `null` as text (273) and
+reads `null` when its section holds no image (274). All four kernels at
+0.8.6 failed all twelve, run through their drivers before the rules (263
+and 270 wrote the pictures as JSON text, 271 rendered, the others refused
+`no-format`). Each
+rule was then broken on purpose in the reference kernel and caught: no
+catch-all rule (270, 271), no list default (263–270), no nullable media
+(273, 274), no key naming media (272), reading every part kind (268),
+`null` written as nothing (273). Twelve cases move only their reported
+kernel version, as at 0.8.6.
+
 **Media members, interrupted replies (kernel 0.8.6, D-63).** Cases
 257–262 were typed by hand from kernel §7b and §4a (Interrupted) before
 any kernel ran them: an unknown member of an image value refuses (257, the

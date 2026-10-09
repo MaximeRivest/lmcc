@@ -2050,3 +2050,91 @@ frontend reading `parse-truncated` to mean any cut now also meets
 
 Ratified-by: Maxime Rivest, 2026-10-07 (in session): "go" on the media
 rule, the `error` finish reason and the R helpers as recommended.
+
+**D-64 · Pictures are never written as text by a key written for every
+value; a list of one media kind and a nullable media value have kernel
+defaults (kernel 0.8.7, a patch).** GitHub issue #7, reproduced with lmcc
+0.8.6 and lm15 1.1.0 through FunctAI's `xml` layout: a field
+`list[ImagePart]` (`{"type": "array", "items": {"media": "image"}}`) had
+no default, so an artifact's `{"*": {"use": "json"}}`, which most real
+artifacts carry, caught it and wrote the pictures into the prompt as
+base64 inside a JSON array. The call succeeded and the model guessed.
+`Optional[ImagePart]` and a record with a picture member (`{"properties":
+{"photo": {"media": "image"}}}`) failed the same way.
+
+- **Kernel defaults (§7b).** A list whose items are exactly a media shape
+  writes its items' parts at the hole, in order, each as one media value
+  (D-63's member rule, the refusal naming the index), and reads every part
+  of that kind in its capture, in order; `[]` writes nothing and reads
+  back. It round-trips, so it writes turns. The nullable form of a media
+  shape (only `anyOf`: a media shape has no `type`) writes `null` as the
+  text `null`, as a nullable scalar is written, and reads `null` when its
+  capture holds no part of its kind. Its structural keys are its base's;
+  a list of media answers to `list[media:<type>]`, `list[media:*]` before
+  `list[*]`, the issue's proposal.
+- **The catch-all rule (§5).** For a field whose shape holds media (any
+  JSON Schema subschema of a value: `items`, `prefixItems`,
+  `additionalProperties`, `properties`, `patternProperties`, `$defs`,
+  `anyOf`, `oneOf`, `allOf`), a format that writes text is passed over
+  when it comes from `*` or from a structural key that does not hold
+  `media:`. Resolution goes on; a record holding a picture that nothing
+  writing parts catches refuses `no-format` at bind, the hint naming the
+  media. Whether a format writes text is its declared `writes`, read
+  without running it (a shipped entry without one writes text), so every
+  kernel decides alike whether or not it places the code.
+- **Why a kernel rule rather than the issue's second proposal** (`json`
+  refusing a value holding media, `format-write-error`). That refusal
+  would fire at render, from a fact known at bind (the shape); it would
+  cover one format of one pack, not `table` or another pack's text
+  formats; and an artifact carrying `{"list[*]": json}` could never reach
+  the list default: no artifact entry names the kernel's format, so the
+  refusal would be permanent. Passing over a catch-all mirrors resolution
+  step 5's existing rule, a wildcard never overrides a scalar default. A
+  format bound by the field's type name, by a key naming media, or at
+  runtime is the author's choice and is taken, text or not: writing an
+  image as its caption or its address for a model that reads no images is
+  legitimate (case 272). So `format/json` is unchanged (still 0.1.0).
+- **Bridges.** Python and Julia find a binding by the value, so
+  `list[ImagePart]` (`Vector{LM15.ImagePart}`) and `Optional[ImagePart]`
+  (`Union{LM15.ImagePart, Nothing}`) take lm15 parts as they are: the
+  list default receives each bound item's JSON form, as D-61 gives the
+  kernel's defaults a bound value's. Julia's `lift`, which only applied
+  the annotation's own hook, now rebuilds `Union{T, Nothing}` as `T` and a
+  `Vector{T}` item by item, as Python's does, so `load_turn` rebuilds the
+  parts. TypeScript and R find bindings by type name (D-62), so the
+  bridges bind `list[ImagePart]` and `Optional[ImagePart]` (Python's
+  spellings, so one artifact's format keys hold in every language), item
+  by item, and give fields for them: `media.list(media.image())`,
+  `media.nullable(media.image())`; `lm15_media("image", list = TRUE)`,
+  `lm15_media("image", nullable = TRUE)`.
+
+Costs, stated. **Behaviour changes under a patch number**, for D-60's
+reason: no artifact changes meaning for a field that holds no media, and
+every 0.8 artifact loads; what reads differently are fields that were
+being sent wrongly. A list of pictures under `*` or `list[*]` that wrote
+JSON text now sends parts; an `Optional` picture given `null` used to
+write the text `null` through `json`, and still does through the default.
+A record holding a picture under `*` or `object` used to render (as
+base64 text) and now refuses at bind: a program that "worked" stops, by
+design. **Not covered, stated:** a list of nullable media, a nullable list
+of media, a list of lists of media and a record holding media have no
+default (the first cannot tell an item `null` from one left out; the
+others need a layout that is vocabulary): each refuses `no-format` unless
+a format is bound for it. A value holding media under a shape that does
+not say so is not seen: Python's frontend lowers `dict[str, ImagePart]`
+to `{"type": "object"}` (changing that would change fingerprints), and
+`lmcc_dspy` lowers `list[dspy.Image]` and `Optional[dspy.Image]` through
+pydantic, as an object with a `url`, so `json` under `*` still writes
+those as text; the DSPy frontend's media types are a separate piece of
+work (its single `Image` already writes no `media_type`, which lm15
+needs). A format written for every value that writes parts and was not
+written for media is taken, as before. In Julia a `Vector{LM15.ImagePart}`
+field is still named by `string(T)`, which depends on the caller's
+imports, as every unbound Julia name is (D-62 gave bound types a `name`).
+FunctAI's warning for media below a function's top level (its stopgap for
+this issue) can drop the list and optional cases on lmcc 0.8.7.
+
+Ratified-by: Maxime Rivest, 2026-10-09 (in session): "fix issue 7 fully
+and excellently, publish a new version". The choice of the kernel rule
+over the issue's `json` refusal, the nullable default and the bridge
+spellings were made while building it and are stated here for review.

@@ -5,7 +5,13 @@
 \alias{lm15_install}
 \title{lm15's media parts as field types and values}
 \usage{
-lm15_media(kind, purpose = "plain", desc = NULL)
+lm15_media(
+  kind,
+  purpose = "plain",
+  desc = NULL,
+  list = FALSE,
+  nullable = FALSE
+)
 
 lm15_install(reg = default_registry())
 }
@@ -13,6 +19,10 @@ lm15_install(reg = default_registry())
 \item{kind}{`"image"`, `"audio"`, `"video"`, `"document"` or `"binary"`.}
 
 \item{purpose, desc}{As for [field_spec()].}
+
+\item{list}{Several parts of the kind, in order.}
+
+\item{nullable}{One part of the kind, or `NULL`.}
 
 \item{reg}{A registry.}
 }
@@ -23,7 +33,11 @@ type is lm15's part (`ImagePart`, `AudioPart`, `VideoPart`,
 is its value, written as lm15's canonical part data, saved by
 [dump_turn()] as that data and rebuilt into the part by [load_turn()].
 Part data given as a named list still works. A part given by `path` keeps
-its path: lm15 reads the file when it sends. `lm15_install()` binds the
-five types in a registry; the default registry has them. The bindings
-call lm15 only when they meet an lm15 value or rebuild one.
+its path: lm15 reads the file when it sends. `list = TRUE` is several parts
+of the kind (`list[ImagePart]`, written as their parts in order),
+`nullable = TRUE` one or `NULL` (`Optional[ImagePart]`, `NULL` written as
+the text `null`), the names Python's frontend spells. `lm15_install()` binds
+the five types, their lists and their nullable forms in a registry; the
+default registry has them. The bindings call lm15 only when they meet an
+lm15 value or rebuild one.
 }

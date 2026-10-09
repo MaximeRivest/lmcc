@@ -137,10 +137,70 @@ test("an lm15 part is saved as its part data and rebuilt by loadTurn", () => {
   assert.throws(() => plan.loadTurn(saved), (e: lmcc.Refusal) => e.code === "turn-invalid");
 });
 
-test("install binds the five part types in another registry", () => {
+test("install binds the five part types, their lists and their nullable forms in another registry", () => {
   const reg = installLm15(new lmcc.Registry());
-  assert.deepEqual(reg.typeBindings.map((b) => [b.type, b.shape]),
-    [["ImagePart", { media: "image" }], ["AudioPart", { media: "audio" }], ["VideoPart", { media: "video" }],
-      ["DocumentPart", { media: "document" }], ["BinaryPart", { media: "binary" }]]);
+  const kinds = [["ImagePart", "image"], ["AudioPart", "audio"], ["VideoPart", "video"], ["DocumentPart", "document"], ["BinaryPart", "binary"]];
+  assert.deepEqual(reg.typeBindings.map((b) => [b.type, b.shape]), kinds.flatMap(([name, kind]) => [
+    [name, { media: kind }], [`list[${name}]`, { type: "array", items: { media: kind } }],
+    [`Optional[${name}]`, { anyOf: [{ media: kind }, { type: "null" }] }]]));
   assert.deepEqual((colour(reg).render({ picture: PICTURE }).request("m") as any).messages[0].parts[0]["media_type"], "image/png");
+});
+
+// ------------------------------------------- several pictures (issue #7)
+
+const NIGHT = lm15.image({ url: "https://example.com/night.jpg", mediaType: "image/jpeg" });
+const WILDCARD = lmcc.adapter({ messages: TAGS.template, formats: { "*": lmcc.use("json") } }); // as most artifacts carry
+
+function compare() {
+  const reg = installLm15(new lmcc.Registry());
+  installStd(reg);
+  const sig = lmcc.signature("Which picture is brighter?", {
+    inputs: { pictures: media.list(media.image()), reference: media.nullable(media.image()) },
+    outputs: { answer: lmcc.t.string() },
+  });
+  assert.deepEqual(sig.fields.slice(0, 2).map((f) => [f.type, f.shape]), [
+    ["list[ImagePart]", { type: "array", items: { media: "image" } }],
+    ["Optional[ImagePart]", { anyOf: [{ media: "image" }, { type: "null" }] }]]);
+  return lmcc.bind(WILDCARD, sig, { instruct: true }, reg);
+}
+
+test("a list of lm15 parts is sent as its parts under a wildcard json, an optional one as its part or null", () => {
+  const plan = compare();
+  assert.deepEqual((plan.describe()["inputs"] as any).map((f: any) => f["resolved_by"]), ["kernel", "kernel"]);
+  assert.match(plan.render({ pictures: [], reference: null }).system as string, /^Which picture is brighter\?/);
+  const rendered = plan.render({ pictures: [PICTURE, NIGHT], reference: null });
+  assert.deepEqual((rendered.request("m") as any).messages[0].parts, [
+    { type: "image", media_type: "image/png", data: "iVBORw0KGgo=" },
+    { type: "image", media_type: "image/jpeg", url: "https://example.com/night.jpg" },
+    { type: "text", text: "\nnull\n" }]);
+  assert.deepEqual(lm15Request(rendered, { model: "m" }).messages[0]!.parts.map((p) => p.type), ["image", "image", "text"]);
+  assert.deepEqual((plan.render({ pictures: [], reference: NIGHT }).request("m") as any).messages[0].parts, [
+    { type: "text", text: "\n" }, { type: "image", media_type: "image/jpeg", url: "https://example.com/night.jpg" }, { type: "text", text: "\n" }]);
+  assert.throws(() => plan.render({ pictures: [PICTURE, lm15.audio({ data: "AAAA", mediaType: "audio/wav" }) as never], reference: null }),
+    (e: lmcc.Refusal) => e.code === "value-invalid" && e.hint.includes("'pictures'[1]"));
+});
+
+test("a list of lm15 parts is saved and rebuilt part by part", () => {
+  const plan = compare();
+  const turn = plan.render({ pictures: [PICTURE, NIGHT], reference: NIGHT }).step("<answer>\nleft\n</answer>").finish();
+  const saved = JSON.parse(JSON.stringify(plan.dumpTurn(turn)));
+  assert.deepEqual(saved.inputs.pictures[1], { type: "image", media_type: "image/jpeg", url: "https://example.com/night.jpg" });
+  const back = plan.loadTurn(saved);
+  assert.deepEqual(back.inputs, { pictures: [PICTURE, NIGHT], reference: NIGHT });
+  assert.deepEqual(plan.render({ pictures: [], reference: null }, { turns: [turn] }).request("m"),
+    plan.render({ pictures: [], reference: null }, { turns: [back] }).request("m"));
+  saved.inputs.pictures = saved.inputs.pictures[0];
+  assert.throws(() => plan.loadTurn(saved), (e: lmcc.Refusal) => e.code === "turn-invalid");
+  assert.throws(() => media.list(lmcc.field(lmcc.t.string())), TypeError);
+});
+
+test("a record holding a picture refuses no-format instead of sending base64 text", () => {
+  const sig = lmcc.signature("Describe the shot.", {
+    inputs: { shot: lmcc.field(lmcc.t.object({ photo: lmcc.t.media("image"), caption: lmcc.t.string() }), { type: "Shot" }) },
+    outputs: { answer: lmcc.t.string() },
+  });
+  const reg = new lmcc.Registry();
+  installStd(reg);
+  assert.throws(() => lmcc.bind(WILDCARD, sig, { instruct: true }, reg),
+    (e: lmcc.Refusal) => e.code === "no-format" && e.hint.includes("holds media") && e.fix?.["key"] === "Shot");
 });

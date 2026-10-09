@@ -1,0 +1,71 @@
+{
+ "name": "parse-media-list-empty",
+ "kind": "parse",
+ "entry": {
+  "name": "parts_v1",
+  "versions": {
+   "kernel": "0.8.7",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "directive": "turns"
+   },
+   {
+    "role": "user",
+    "text": "{q}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Illustrate.",
+  "fields": [
+   {
+    "name": "q",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "caption",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "pictures",
+    "direction": "output",
+    "shape": {
+     "type": "array",
+     "items": {
+      "media": "image"
+     }
+    }
+   }
+  ]
+ },
+ "response": {
+  "role": "assistant",
+  "parts": [
+   {
+    "type": "text",
+    "text": "<caption>\nNothing to draw\n</caption>\n<pictures>\n\n</pictures>"
+   }
+  ]
+ },
+ "expect": {
+  "values": {
+   "caption": "Nothing to draw",
+   "pictures": []
+  }
+ }
+}

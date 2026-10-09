@@ -1,0 +1,113 @@
+{
+ "name": "std-render-media-list-star-passed-over",
+ "kind": "render",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "dspy_like_v1",
+  "versions": {
+   "kernel": "0.8.7",
+   "vocab": {
+    "format/json": "0.1.0"
+   }
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "role": "user",
+    "text": "{% for f in inputs %}[[ ## {f.name} ## ]]\n{f.value}\n{% endfor %}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  },
+  "formats": {
+   "list[*]": {
+    "use": "json",
+    "options": {
+     "indent": null
+    }
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Which picture is brighter?",
+  "fields": [
+   {
+    "name": "pictures",
+    "direction": "input",
+    "shape": {
+     "type": "array",
+     "items": {
+      "media": "image"
+     }
+    }
+   },
+   {
+    "name": "tags",
+    "direction": "input",
+    "shape": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "pictures": [
+   {
+    "type": "image",
+    "media_type": "image/jpeg",
+    "url": "https://example.com/b.jpg"
+   },
+   {
+    "media_type": "image/png",
+    "data": "AAAA"
+   }
+  ],
+  "tags": []
+ },
+ "expect": {
+  "request": {
+   "system": "Which picture is brighter?\n<answer>\n...\n</answer>\n",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "[[ ## pictures ## ]]\n"
+      },
+      {
+       "type": "image",
+       "media_type": "image/jpeg",
+       "url": "https://example.com/b.jpg"
+      },
+      {
+       "type": "image",
+       "media_type": "image/png",
+       "data": "AAAA"
+      },
+      {
+       "type": "text",
+       "text": "\n[[ ## tags ## ]]\n[]\n"
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

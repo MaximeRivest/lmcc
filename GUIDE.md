@@ -376,7 +376,14 @@ assert type(sp.load_turn(saved).inputs["text"]) is Pages          # and came bac
 
 The lm15 bridge binds lm15's own media parts this way: after `import
 lmcc_lm15`, `picture: lm15.ImagePart` is a `{"media": "image"}` field and
-an lm15 part is a value for any media field of its kind.
+an lm15 part is a value for any media field of its kind. Several pictures
+(`pictures: list[lm15.ImagePart]`) and an optional one
+(`Optional[lm15.ImagePart]`) have kernel defaults too: their parts go where
+the field sits, in order, and an optional one with no picture is the text
+`null`. A format written for every value (`"*"`, `"object"`, `"list[*]"`)
+that writes text never catches a field holding pictures: text cannot carry
+a picture to a model, so a record with a picture member needs a format
+that writes parts, and refuses `no-format` at bind until it has one.
 
 That binding is per runtime — code, never serialized. An artifact can
 name a format for a type (`"formats": {"list[int]": {"use": "csv"}}`) or

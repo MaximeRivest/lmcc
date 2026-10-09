@@ -235,6 +235,15 @@ class Plan:
                 value = to_json(value, where=f"field {f.name!r}", registry=self.registry)
             except Refusal as err:
                 refuse("format-write-error", err.hint)
+        elif fmt is _formats.MEDIA_LIST_DEFAULT and isinstance(value, (list, tuple)):
+            # the kernel's list of media writes each item as one media value: an
+            # item of a type bound with to_json (an lm15 part) as its JSON form
+            try:
+                value = [to_json(v, where=f"field {f.name!r}[{i}]", registry=self.registry)
+                         if self.registry.to_json_hook(v) is not None else v
+                         for i, v in enumerate(value)]
+            except Refusal as err:
+                refuse("format-write-error", err.hint)
         try:
             written = fmt.write(value, f)
         except Refusal:
@@ -1308,12 +1317,26 @@ def _resolve_format(plan: Plan, f: core.Field) -> _FormatChoice:
     return choice
 
 
+def _writes_text(binding, key: str, materialize) -> bool:
+    """A format's declared ``writes`` is text, read without running it: a
+    shipped format's entry says so (text when it says nothing)."""
+    if isinstance(binding, dict) and "use" not in binding:
+        return binding.get("writes", "text") == "text"
+    return materialize(binding, key).writes == "text"
+
+
 def _choose_format(plan: Plan, f: core.Field, materialize, check) -> _FormatChoice:
     adp, reg = plan.adapter, plan.registry
     if f.type and f.type in adp.formats and not is_description(adp.formats[f.type]):
         return check(materialize(adp.formats[f.type], f.type), f"artifact:{f.type}", f.type)
+    # §5: a key written for every value never writes media as text
+    media = core.holds_media(f.shape)
+
+    def passed_over(key: str) -> bool:
+        return media and not core.names_media(key) and _writes_text(adp.formats[key], key, materialize)
+
     for key in _formats.structural_keys(f.shape):
-        if key in adp.formats and not is_description(adp.formats[key]):
+        if key in adp.formats and not is_description(adp.formats[key]) and not passed_over(key):
             return check(materialize(adp.formats[key], key), f"artifact:{key}", key)
     bound = reg.type_binding(f.annotation)
     if bound is not None:
@@ -1322,13 +1345,21 @@ def _choose_format(plan: Plan, f: core.Field, materialize, check) -> _FormatChoi
     default = _formats.kernel_default(f.shape)
     if default is not None:
         return _FormatChoice(default, "kernel")
-    if "*" in adp.formats:
+    if "*" in adp.formats and not passed_over("*"):
         return check(materialize(adp.formats["*"], "*"), "artifact:*", "*")
+    key = core.format_key(f.type, f.shape)
+    if media:
+        refuse("no-format",
+               f"field {f.name!r} ({f.type or f.shape}) holds media, which text cannot carry to "
+               f"a model, and no format that writes parts is bound for it — bind one in the "
+               f"artifact under {key!r}, register one for its type at runtime, or ship one "
+               f"(a format bound under {key!r} is taken even if it writes text)",
+               fix={"action": "bind-format", "field": f.name, "key": key})
     refuse("no-format",
            f"field {f.name!r} ({f.type or f.shape}) has a structured shape and no format — "
            f"bind one in the artifact under its type name or a structural key, register "
            f"one for its type at runtime, or ship one",
-           fix={"action": "bind-format", "field": f.name, "key": core.format_key(f.type, f.shape)})
+           fix={"action": "bind-format", "field": f.name, "key": key})
 
 
 # ------------------------------------------------------------------ bind

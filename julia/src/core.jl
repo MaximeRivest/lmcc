@@ -28,7 +28,7 @@ end
 Field(name, direction, shape; type=nothing, purpose="plain", desc=nothing, annotation=nothing) =
     Field(name, direction, shape, type, purpose, desc, annotation)
 
-"Kernel §1: a nullable scalar/enum shape is that shape plus null. `(base, nullable)`."
+"Kernel §1: a nullable scalar/enum/media shape is that shape plus null (media only in the `anyOf` form). `(base, nullable)`."
 function nullable_base(shape::AbstractDict)
     t = get(shape, "type", nothing)
     if isarr(t)
@@ -47,7 +47,7 @@ function nullable_base(shape::AbstractDict)
         others = [a for a in alts if !isnull(a)]
         if length(nulls) == 1 && length(others) == 1 && isobj(others[1])
             base = others[1]
-            (haskey(base, "enum") || get(base, "type", nothing) in SCALAR_TYPES) && return (base, true)
+            (haskey(base, "enum") || get(base, "type", nothing) in SCALAR_TYPES || is_media(base)) && return (base, true)
         end
     end
     (shape, false)
@@ -58,12 +58,46 @@ function shape_summary(shape::AbstractDict)
     base, _ = nullable_base(shape)
     haskey(base, "enum") && return "one of: " * join((pystr(v) for v in base["enum"]), ", ")
     haskey(base, "media") && return "(" * pystr(base["media"]) * ")"
+    kind = media_list_kind(base)
+    kind !== nothing && return "(" * pystr(kind) * ", ...)"
     t = get(base, "type", nothing)
     t in ("integer", "number", "boolean") && return "($t)"
     ""
 end
 
 is_media(shape) = haskey(shape, "media")
+
+"Kernel §7b: the media type of a list of one media kind (its items exactly a media shape, not a nullable one), else `nothing`."
+function media_list_kind(shape)
+    items = get(shape, "items", nothing)
+    get(shape, "type", nothing) == "array" && isobj(items) && is_media(items) ? items["media"] : nothing
+end
+
+"""
+Kernel §5: whether a shape is a media shape or one of its subschemas holds media
+(`items`, `prefixItems`, `additionalProperties`, the members of `properties`,
+`patternProperties` and `\$defs`, `anyOf`, `oneOf`, `allOf`).
+"""
+function holds_media(shape)
+    isobj(shape) || return false
+    is_media(shape) && return true
+    subs = Any[]
+    items = get(shape, "items", nothing)
+    isarr(items) ? append!(subs, items) : push!(subs, items)
+    push!(subs, get(shape, "additionalProperties", nothing))
+    for k in ("prefixItems", "anyOf", "oneOf", "allOf")
+        v = get(shape, k, nothing)
+        isarr(v) && append!(subs, v)
+    end
+    for k in ("properties", "patternProperties", "\$defs")
+        v = get(shape, k, nothing)
+        isobj(v) && append!(subs, collect(values(v)))
+    end
+    any(holds_media, subs)
+end
+
+"Kernel §5: a structural key that names media: one holding `media:` (`media:image`, `list[media:*]`, …)."
+names_media(key) = occursin("media:", key)
 
 function is_structured(shape)
     base, _ = nullable_base(shape)
@@ -179,7 +213,7 @@ function structural_keys(shape)
         items = get(base, "items", nothing)
         items = pytruthy(items) ? items : JObj()
         inner = isobj(items) ? structural_keys(items) : String[]
-        return [["list[$k]" for k in inner if !startswith(k, "media")]; "list[*]"]
+        return [["list[$k]" for k in inner]; "list[*]"]
     end
     t == "object" && return ["object"]
     String[]

@@ -1,0 +1,125 @@
+{
+ "name": "std-render-media-list-wildcard",
+ "kind": "render",
+ "vocab": [
+  "std"
+ ],
+ "entry": {
+  "name": "dspy_like_v1",
+  "versions": {
+   "kernel": "0.8.7",
+   "vocab": {
+    "format/json": "0.1.0"
+   }
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "role": "user",
+    "text": "{% for f in inputs %}[[ ## {f.name} ## ]]\n{f.value}\n{% endfor %}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  },
+  "formats": {
+   "*": {
+    "use": "json",
+    "options": {
+     "indent": null
+    }
+   }
+  }
+ },
+ "signature": {
+  "instructions": "Which picture is brighter?",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "pictures",
+    "direction": "input",
+    "shape": {
+     "type": "array",
+     "items": {
+      "media": "image"
+     }
+    },
+    "type": "list[ImagePart]"
+   },
+   {
+    "name": "tags",
+    "direction": "input",
+    "shape": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "question": "day or night?",
+  "pictures": [
+   {
+    "media_type": "image/png",
+    "data": "AAAA"
+   },
+   {
+    "type": "image",
+    "media_type": "image/jpeg",
+    "url": "https://example.com/b.jpg"
+   }
+  ],
+  "tags": [
+   "day",
+   "night"
+  ]
+ },
+ "expect": {
+  "request": {
+   "system": "Which picture is brighter?\n<answer>\n...\n</answer>\n",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "[[ ## question ## ]]\nday or night?\n[[ ## pictures ## ]]\n"
+      },
+      {
+       "type": "image",
+       "media_type": "image/png",
+       "data": "AAAA"
+      },
+      {
+       "type": "image",
+       "media_type": "image/jpeg",
+       "url": "https://example.com/b.jpg"
+      },
+      {
+       "type": "text",
+       "text": "\n[[ ## tags ## ]]\n[\"day\", \"night\"]\n"
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

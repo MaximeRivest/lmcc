@@ -1,6 +1,6 @@
 # The LMCC kernel — normative specification
 
-**Version 0.8.6** (kernel). Status: the v3 design (`plans/08`). Four
+**Version 0.8.7** (kernel). Status: the v3 design (`plans/08`). Four
 implementations pass the corpus: `python/lmcc`, the reference, and the
 TypeScript (`ts/`, D-54), Julia (`julia/`) and R (`r/`, D-56) kernels,
 which join through the driver protocol (§9) with their stream traces
@@ -8,6 +8,21 @@ compared to the reference's. The Go
 kernel that passed kernel 0.6 is kept at the git tag `kernel-0.6`
 (D-41). Where this document and the corpus disagree, fix the corpus first,
 then the implementations.
+
+**What 0.8.7 changes (D-64).** A format written for every value never
+writes pictures as text. A list of one media kind
+(`list[ImagePart]`, `{"type": "array", "items": {"media": "image"}}`)
+and the nullable form of a media shape (`Optional[ImagePart]`) have a
+kernel default: their parts at the hole, in order (§7b). A format that
+writes text, reached through `*` or a structural key that does not name
+media (`object`, `list[*]`, …), is passed over for a field whose shape
+holds media (§5): such a field used to be written as JSON text, the
+picture's bytes in base64, which the model never sees (GitHub issue #7).
+No artifact changes meaning for a field that holds no media, and every
+0.8 artifact loads. A list of pictures under `{"*": json}` now sends its
+pictures; a record holding a picture with no format that writes parts
+refuses `no-format` at bind instead of sending its bytes as text (cases
+263–274).
 
 **What 0.8.6 changes (D-60).** A reply the provider stopped (lm15's
 `finish_reason: "content_filter"`, or a `refusal` part: its safety
@@ -199,8 +214,9 @@ every other one untouched for formats to use:
 |---|---|
 | `{"type": "string" \| "integer" \| "number" \| "boolean"}` | kernel scalar (§5 defaults) |
 | `{"enum": [...]}` | membership; strings or integers |
-| nullable forms `{"type": [T, "null"]}`, `{"anyOf": [S, {"type": "null"}]}` | the scalar/enum plus `null` |
-| `{"media": type}` | an lm15 part of that `type` (`image`, `document`, `function`, …; §5 defaults) |
+| nullable forms `{"type": [T, "null"]}`, `{"anyOf": [S, {"type": "null"}]}` | the scalar/enum plus `null`; a media shape plus `null` (only the `anyOf` form: a media shape has no `type`) |
+| `{"media": type}` | an lm15 part of that `type` (`image`, `document`, `function`, …; §7b defaults) |
+| `{"type": "array", "items": {"media": type}}` | a list of lm15 parts of that `type` (§7b defaults) |
 | `{"type": "array", "items"?}` · `{"type": "object", ...}` · anything else | **structured**: needs a format, no default |
 
 `type` is the type's name **as the frontend spells it** (`Person`,
@@ -749,22 +765,25 @@ text, atom, text…, with the outer whitespace of the whole stripped and
 empty text pieces dropped. Its `.text` is exactly the section's text as
 without atoms (§4), so a text-reading format reads the same value as
 before; a format that reads parts (the kernel's media default reads the
-first part of its kind, §7b) gets them. Every other atom is reported as
-`{"repair": "ignored", "part": <type>}`, after the reader's tolerances, in
-reply order. A vocabulary reader sees no atoms.
+first part of its kind, its list default every one, §7b) gets them.
+Every other atom is reported as `{"repair": "ignored", "part": <type>}`,
+after the reader's tolerances, in reply order. A vocabulary reader sees no atoms.
 
 **Writing.** A visible output whose format writes parts (`writes:
 "parts"`, round-tripping) is written at its hole: the text before it, its
 parts, the text after it, in one message. So a past turn with an image
-output reads back as written (case 185). A text value containing U+FFFC
-(the placeholder for that spot) refuses `value-collides`.
+output reads back as written (case 185), and one with a list of images
+(case 267). A text value containing U+FFFC (the placeholder for that
+spot) refuses `value-collides`.
 
 Streaming is unchanged: field deltas are text; atoms arrive with the
 values at `finish`, which are batch's (§8). Not covered, stated: atoms
 inside a find rule's match (they are ignored, not given to that rule's
-field), and structured values made of several parts (a list of text and
-image pairs) — those need a format that reads a parts capture, which is
-vocabulary.
+field), and structured values made of several parts other than a list
+of one media kind (a list of text and image pairs, a record holding a
+picture) — those need a format that reads a parts capture, which is
+vocabulary (§5: no format that writes text catches them by a key written
+for every value).
 
 **Truncation.** An lm15 response whose `finish_reason` is `"length"`
 was cut by the provider. It is read as usual; then parse refuses
@@ -817,7 +836,7 @@ mechanical hint). A format declares:
 
 | fact | meaning |
 |---|---|
-| `accepts` | what it carries: type names, structural keys (`object`, `list[*]`, `list[object]`, `string`, `media:image`), or `*` |
+| `accepts` | what it carries: type names, structural keys (`object`, `list[*]`, `list[object]`, `string`, `media:image`, `list[media:image]`), or `*` |
 | `direction` | `in`, `out`, `both` |
 | `writes` | `text` or `parts` |
 | `round_trip` | whether `read(write(v)) == v`; a lossy format cannot write turns (`turn-not-renderable`) |
@@ -827,13 +846,39 @@ mechanical hint). A format declares:
 1. the artifact's `formats[type]` — exact type name;
 2. the artifact's most specific structural key: `list[object]` before
    `list[*]` before `object` before `string` …; `media:image` before
-   `media:*` — never `*` here;
+   `media:*`; `list[media:image]` before `list[media:*]` before
+   `list[*]` — never `*` here;
 3. the runtime's type binding (code, per language, never serialized);
 4. the kernel default: scalars, enums and nullables by §7a; a media
-   value that is already a part passes through;
+   value, a nullable one and a list of one media kind as parts (§7b);
 5. the artifact's `*` — so a wildcard format catches what nothing else
    spells, and never overrides a scalar default (cases 48, 49, 107);
 6. refuse `no-format`, naming the field and its shape.
+
+**A key written for every value never writes media as text.** A shape
+*holds media* when it is a media shape, or when one of its subschemas
+holds media; the subschemas are JSON Schema's for values: `items` (a
+schema or a list of them), `prefixItems`, `additionalProperties`, each
+member of `properties` and of `patternProperties`, `anyOf`, `oneOf`,
+`allOf`, and each member of `$defs`. For a field whose shape holds media,
+a format that writes text is passed over when it comes from `*` (step 5)
+or from a structural key that does not name media (step 2: `object`,
+`list[*]`, `list[object]`, …; a key names media when it holds `media:`:
+`media:<type>`, `media:*`, `list[media:<type>]`, …): resolution goes on
+as if the key were absent. Whether a format writes text is its declared
+fact (`writes`; a shipped format that declares none writes text), read
+without running it. Text cannot carry a picture to a model, and a key
+written for every value was not written for one: so a list of pictures
+under `{"*": json}` or `{"list[*]": json}` reaches the kernel's default,
+and a record holding a picture that no format writing parts catches
+refuses `no-format` at bind, its hint naming the media, where it used to
+be sent as JSON text with the picture's bytes in base64 (cases 263, 270,
+271). A format bound by the field's type name, by a key naming media or
+at runtime (steps 1, 2 and 3) is the author's choice and is taken, text
+or not: a format that writes an image as its caption is legitimate (case
+272). The `no-format` fix names the field's type name, else its most
+specific structural key, as for any field; a format that writes parts is
+taken there.
 
 A format owns the whole value it accepts; the kernel never nests
 formats. A format that composes (a list layout writing each element) asks
@@ -1098,6 +1143,33 @@ value's order. lm15's own invariants (a non-empty `media_type`, exactly one
 source) are lm15's to check when it builds the request. Any other kind
 (`function`, …) is written as given (D-63; cases 257–259).
 
+**A list of one media kind.** A field whose shape is `{"type": "array",
+"items": {"media": type}}` (its items exactly a media shape, not a
+nullable one) writes its value, a list, as its items' parts at the hole,
+in order, each written as one media value is; the empty list writes
+nothing. A value that is not a list refuses `value-invalid`, and so does
+an item that one media value could not be, the hint naming its index
+(`pictures[1]`). It reads every part of that type in the capture, in
+order, each as its data without `type`; a capture with none reads `[]`.
+It round-trips, so it writes turns (§3a, §4b). As for one media value,
+text beside the parts is not read. Its description is `(<type>, ...)`
+(cases 263–270).
+
+**A nullable media value.** A field whose shape is the nullable form of a
+media shape (`{"anyOf": [{"media": type}, {"type": "null"}]}`, either
+order, §1) writes `null` as the text `null`, as a nullable scalar is
+written, and any other value as one media value; it reads the first part
+of its type as one media value does, and `null` when the capture has
+none. Its description is the media one's, `(<type>)` (cases 273, 274).
+
+The structural keys of these shapes follow §5: a nullable media shape
+answers to its base's (`media:image`, `media:*`), a list of media to
+`list[media:image]`, `list[media:*]`, `list[*]`. A list of nullable
+media has no default (an item `null` writes no part, so it could not be
+read back), nor do a nullable list of media, a list of lists of media or
+a record holding media: each needs a format, and §5 keeps the keys
+written for every value from writing them as text.
+
 ## 8. Streaming parse (sans-I/O)
 
 Streaming is a *refinement* of batch parse, never a second parser:
@@ -1339,7 +1411,8 @@ normative.
 - §5 — structural keys are computed from a nullable's base shape [G1]; an
   enum resolves through `enum`, never through its members' scalar key [G2].
   Placeholders are mechanical: `(integer)`, `(number)`, `(boolean)`,
-  `one of: a, b` for an enum, `(<kind>)` for media, `...` for a string [F17, F18].
+  `one of: a, b` for an enum, `(<kind>)` for media, `(<kind>, ...)` for a
+  list of media (0.8.7), `...` for a string [F17, F18].
 - §6 — a `between` rule whose close never comes captures nothing and
   removes nothing; its field reads the empty capture [G17, G18, G26]. A
   removed `line_prefixed` line leaves its line feed [G19]. A message `put`

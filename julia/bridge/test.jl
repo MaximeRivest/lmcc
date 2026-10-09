@@ -69,3 +69,38 @@ end
     err = try LMCC.parse(p, refusal) catch e e end
     @test err isa Refusal && err.code == "parse-filtered" && occursin("'No.'", err.hint)
 end
+
+@testset "several lm15 parts, an optional one, a record holding one (issue #7)" begin
+    reg = lm15_install!(Registry())
+    LMCC.Std.install!(reg)
+    wildcard = adapter(; messages=[ASK.template[1], turns(), LMCC.user("{% for f in inputs %}{f.value}{% endfor %}")],
+                       formats=Dict("*" => use("json")))             # as most artifacts carry
+    sig = LMCC.signature("Which picture is brighter?"; inputs=(pictures=Vector{LM15.ImagePart}, reference=Union{LM15.ImagePart,Nothing}),
+                         outputs=(answer=String,), registry=reg)
+    @test [f.shape for f in sig.fields[1:2]] == [Dict("type" => "array", "items" => Dict("media" => "image")),
+                                                 Dict("anyOf" => [Dict("media" => "image"), Dict("type" => "null")])]
+    p = LMCC.bind(wildcard, sig; capabilities=Dict("instruct" => true), registry=reg)
+    @test [f["resolved_by"] for f in LMCC.describe(p)["inputs"]] == ["kernel", "kernel"]
+    night = LM15.ImagePart(; media_type="image/jpeg", url="https://example.com/night.jpg")
+    r = render(p; pictures=[PICTURE, night], reference=nothing)
+    @test LMCC.request(r, "m")["messages"][1]["parts"] == [
+        Dict("type" => "image", "media_type" => "image/png", "data" => "iVBORw0KGgo="),
+        Dict("type" => "image", "media_type" => "image/jpeg", "url" => "https://example.com/night.jpg"),
+        Dict("type" => "text", "text" => "null")]
+    @test [typeof(x) for x in LMCC.lm15_request(r; model="m").messages[1].parts] == [LM15.ImagePart, LM15.ImagePart, LM15.TextPart]
+    err = try render(p; pictures=[PICTURE, LM15.AudioPart(; media_type="audio/wav", data="AAAA")], reference=nothing) catch e e end
+    @test err isa Refusal && err.code == "value-invalid" && occursin("'pictures'[1]", err.hint)
+
+    turn = LMCC.finish(LMCC.step(render(p; pictures=[PICTURE, night], reference=night), "<answer>\nleft\n</answer>"))
+    saved = parse_json(json_text(dump_turn(p, turn)))
+    @test saved["inputs"]["pictures"][2] == Dict("type" => "image", "media_type" => "image/jpeg", "url" => "https://example.com/night.jpg")
+    back = load_turn(p, saved)
+    @test back.inputs["pictures"] == [PICTURE, night] && back.inputs["reference"] == night
+    @test LMCC.request(render(p, (pictures=LM15.ImagePart[], reference=nothing); turns=[turn]), "m") ==
+          LMCC.request(render(p, (pictures=LM15.ImagePart[], reference=nothing); turns=[back]), "m")
+
+    shot = LMCC.signature("Describe the shot."; inputs=(shot=field(Dict("type" => "object", "properties" => Dict("photo" => Dict("media" => "image"))); type="Shot"),),
+                          outputs=(answer=String,), registry=reg)
+    err = try LMCC.bind(wildcard, shot; capabilities=Dict("instruct" => true), registry=reg) catch e e end
+    @test err isa Refusal && err.code == "no-format" && occursin("holds media", err.hint) && err.fix["key"] == "Shot"
+end

@@ -1,6 +1,6 @@
 # The adapter (kernel section 2) and the artifact (serde: sections 5, 6, 9, 10).
 
-KERNEL_VERSION <- "0.8.6"
+KERNEL_VERSION <- "0.8.7"
 REPLAY <- c("recorded", "values", "verbatim")
 
 #' Template messages and the turn slot directive

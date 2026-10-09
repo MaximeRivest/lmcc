@@ -16,7 +16,7 @@
  */
 
 import { refuse } from "./errors.ts";
-import { Capture, isObj, nullableBase, isMedia, readValue, shapeSummary, spellValue, structuralKeys, SCALAR_TYPES, type Field, type Part } from "./core.ts";
+import { Capture, isObj, nullableBase, isMedia, mediaListKind, readValue, shapeSummary, spellValue, structuralKeys, textPart, SCALAR_TYPES, type Field, type Part } from "./core.ts";
 import { pyRepr, pyStr } from "./text.ts";
 import { hasOwn, isPlainObject, memberNames, setMember } from "./json.ts";
 
@@ -84,7 +84,6 @@ export const SCALAR_DEFAULT: Format = Object.freeze({
   read: (capture: Capture, field: Field) => readValue(field.shape, capture.text, `field ${pyRepr(field.name)}`),
 });
 
-/** Kernel §7b: a media value is its part's data; reading takes the first part of the kind. */
 const MEDIA_MEMBERS = ["media_type", "data", "url", "file_id", "path", "continuation"] as const;
 /** lm15's media parts and their members besides `type` (the pinned contract's spec/types.md); §7b writes these kinds exactly as lm15 serializes them. */
 export const MEDIA_PART_MEMBERS = {
@@ -97,6 +96,47 @@ function isEmptyMember(v: unknown): boolean {
   return v === null || v === undefined || v === "" || (Array.isArray(v) && v.length === 0) || (isPlainObject(v) && memberNames(v).length === 0);
 }
 
+/** The field's media type, and whether its shape is the nullable form. */
+function mediaKind(field: Field): [string, boolean] {
+  const [base, nullable] = nullableBase(field.shape as never);
+  return [base["media"] as string, nullable];
+}
+
+/** Kernel §7b: one media value as its lm15 part; `where` names it in a refusal (`field 'photo'`, `field 'pictures'[1]`). */
+export function writeMedia(value: unknown, kind: string, where: string): Part {
+  if (!isObj(value)) refuse("value-invalid", `${where}: a media value must be a plain object of part data`);
+  if ("type" in value && value["type"] !== kind) {
+    refuse("value-invalid", `${where}: a ${pyRepr(value["type"])} part given where a ${pyRepr(kind)} part is declared`);
+  }
+  const part: Record<string, unknown> = { type: kind };
+  const members: readonly string[] | null = hasOwn(MEDIA_PART_MEMBERS, kind) ? MEDIA_PART_MEMBERS[kind as keyof typeof MEDIA_PART_MEMBERS] : null;
+  for (const k of memberNames(value)) {
+    if (k === "type") continue;
+    if (members === null) {
+      setMember(part, k, value[k]); // not one of lm15's media parts: written as given
+      continue;
+    }
+    // §7b: exactly as lm15 serializes the part
+    if (!members.includes(k)) {
+      refuse("value-invalid", `${where}: ${pyRepr(k)} is not a member of lm15's ${kind} part (${members.join(", ")}); give the part's data, or an lm15 part through its bridge`);
+    }
+    if (k !== "media_type" && isEmptyMember(value[k])) continue; // lm15's omission rule
+    setMember(part, k, value[k]);
+  }
+  return part as Part;
+}
+
+function partData(part: Part): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const k of memberNames(part)) if (k !== "type") setMember(out, k, (part as Record<string, unknown>)[k]);
+  return out;
+}
+
+/**
+ * Kernel §7b: a media value is its part's data; reading takes the first part
+ * of the kind. The nullable form writes `null` as the text `null` and reads
+ * `null` from a capture without a part of its kind.
+ */
 export const MEDIA_DEFAULT: Format = Object.freeze({
   name: "kernel-media",
   accepts: ["media:*"],
@@ -104,43 +144,45 @@ export const MEDIA_DEFAULT: Format = Object.freeze({
   writes: "parts" as const,
   roundTrip: true,
   reads: ["*"],
-  describe: (field: Field) => `(${pyStr(field.shape["media"])})`,
+  describe: (field: Field) => `(${pyStr(mediaKind(field)[0])})`,
   write: (value: unknown, field: Field): Part[] => {
-    const kind = field.shape["media"] as string;
-    if (!isObj(value)) refuse("value-invalid", `field ${pyRepr(field.name)}: a media value must be a plain object of part data`);
-    if ("type" in value && value["type"] !== kind) {
-      refuse("value-invalid", `field ${pyRepr(field.name)}: a ${pyRepr(value["type"])} part given where a ${pyRepr(kind)} part is declared`);
-    }
-    const part: Record<string, unknown> = { type: kind };
-    const members: readonly string[] | null = hasOwn(MEDIA_PART_MEMBERS, kind) ? MEDIA_PART_MEMBERS[kind as keyof typeof MEDIA_PART_MEMBERS] : null;
-    for (const k of memberNames(value)) {
-      if (k === "type") continue;
-      if (members === null) {
-        setMember(part, k, value[k]); // not one of lm15's media parts: written as given
-        continue;
-      }
-      // §7b: exactly as lm15 serializes the part
-      if (!members.includes(k)) {
-        refuse("value-invalid", `field ${pyRepr(field.name)}: ${pyRepr(k)} is not a member of lm15's ${kind} part (${members.join(", ")}); give the part's data, or an lm15 part through its bridge`);
-      }
-      if (k !== "media_type" && isEmptyMember(value[k])) continue; // lm15's omission rule
-      setMember(part, k, value[k]);
-    }
-    return [part as Part];
+    const [kind, nullable] = mediaKind(field);
+    if (value === null && nullable) return [textPart("null")];
+    return [writeMedia(value, kind, `field ${pyRepr(field.name)}`)];
   },
   read: (capture: Capture, field: Field) => {
-    const parts = capture.of(field.shape["media"] as string);
-    if (!parts.length) refuse("parse-value", `field ${pyRepr(field.name)}: no ${pyStr(field.shape["media"])} part in the capture`);
-    const out: Record<string, unknown> = {};
-    for (const k of memberNames(parts[0])) if (k !== "type") setMember(out, k, parts[0][k]);
-    return out;
+    const [kind, nullable] = mediaKind(field);
+    const parts = capture.of(kind);
+    if (!parts.length) {
+      if (nullable) return null;
+      refuse("parse-value", `field ${pyRepr(field.name)}: no ${pyStr(kind)} part in the capture`);
+    }
+    return partData(parts[0]);
   },
+});
+
+/** Kernel §7b: a list of one media kind is its items' parts, in order; reading takes every part of that kind, in order. */
+export const MEDIA_LIST_DEFAULT: Format = Object.freeze({
+  name: "kernel-media-list",
+  accepts: ["list[media:*]"],
+  direction: "both" as const,
+  writes: "parts" as const,
+  roundTrip: true,
+  reads: ["*"],
+  describe: (field: Field) => `(${pyStr(mediaListKind(field.shape))}, ...)`,
+  write: (value: unknown, field: Field): Part[] => {
+    const kind = mediaListKind(field.shape) as string;
+    if (!Array.isArray(value)) refuse("value-invalid", `field ${pyRepr(field.name)}: a list of ${kind} values must be a list, got ${value === null ? "null" : typeof value}`);
+    return value.map((v, i) => writeMedia(v, kind, `field ${pyRepr(field.name)}[${i}]`));
+  },
+  read: (capture: Capture, field: Field) => capture.of(mediaListKind(field.shape) as string).map(partData),
 });
 
 export function kernelDefault(shape: Record<string, unknown>): Format | null {
   const [base] = nullableBase(shape as never);
   if (isMedia(base)) return MEDIA_DEFAULT;
   if ("enum" in base || (SCALAR_TYPES as readonly string[]).includes(base["type"] as string)) return SCALAR_DEFAULT;
+  if (mediaListKind(shape as never) !== null) return MEDIA_LIST_DEFAULT;
   return null;
 }
 

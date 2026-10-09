@@ -1,0 +1,100 @@
+{
+ "name": "render-media-nullable",
+ "kind": "render",
+ "entry": {
+  "name": "sections_v1",
+  "versions": {
+   "kernel": "0.8.7",
+   "vocab": {}
+  },
+  "template": [
+   {
+    "role": "system",
+    "text": "{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"
+   },
+   {
+    "role": "user",
+    "text": "{question}\nPhoto: {photo}\nReference: {reference}"
+   }
+  ],
+  "reader": {
+   "kind": "derived"
+  }
+ },
+ "signature": {
+  "instructions": "Compare.",
+  "fields": [
+   {
+    "name": "question",
+    "direction": "input",
+    "shape": {
+     "type": "string"
+    }
+   },
+   {
+    "name": "photo",
+    "direction": "input",
+    "shape": {
+     "anyOf": [
+      {
+       "media": "image"
+      },
+      {
+       "type": "null"
+      }
+     ]
+    }
+   },
+   {
+    "name": "reference",
+    "direction": "input",
+    "shape": {
+     "anyOf": [
+      {
+       "type": "null"
+      },
+      {
+       "media": "image"
+      }
+     ]
+    }
+   },
+   {
+    "name": "answer",
+    "direction": "output",
+    "shape": {
+     "type": "string"
+    }
+   }
+  ]
+ },
+ "inputs": {
+  "question": "same place?",
+  "photo": null,
+  "reference": {
+   "media_type": "image/png",
+   "data": "AAAA"
+  }
+ },
+ "expect": {
+  "request": {
+   "system": "Compare.\n<answer>\n...\n</answer>\n",
+   "messages": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "type": "text",
+       "text": "same place?\nPhoto: null\nReference: "
+      },
+      {
+       "type": "image",
+       "media_type": "image/png",
+       "data": "AAAA"
+      }
+     ]
+    }
+   ]
+  }
+ }
+}
