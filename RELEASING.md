@@ -30,7 +30,11 @@ through the release workflow; a fresh `pip install "lmcc[lm15]==0.8.6"` from
 PyPI took an `lm15.ImagePart` as a field type and refused `content_filter`
 and `error` replies as `parse-filtered` and `parse-interrupted`. PyPI's JSON
 API kept answering 0.8.5 for about a minute after the upload; ask for the
-version's own page (`/pypi/lmcc/0.8.6/json`) or install it. The PyPI trusted publisher is MaximeRivest/lmcc, `release.yml`,
+version's own page (`/pypi/lmcc/0.8.6/json`) or install it. 0.8.7 on
+2026-10-09 from commit a76fa21 (the merge of PR #8), through the release
+workflow; a fresh `pip install "lmcc[lm15]==0.8.7"` from PyPI sent a
+`list[ImagePart]` under `{"*": json}` as two image parts and refused a
+record holding an `ImagePart` with `no-format` at bind. The PyPI trusted publisher is MaximeRivest/lmcc, `release.yml`,
 environment `pypi`.
 
 ## npm (TypeScript)
