@@ -1,0 +1,42 @@
+name: release-npm
+
+# Publish ts/ to npm (lmcc) when a GitHub Release v<version> is published:
+# the same release that publishes python/ to PyPI (release.yml). npm trusted
+# publishing (OIDC): no token stored anywhere, no key touch per release,
+# provenance recorded. A version already on npm is skipped.
+
+on:
+  release:
+    types: [published]
+
+permissions: {}
+
+jobs:
+  publish:
+    if: startsWith(github.ref_name, 'v')
+    runs-on: ubuntu-latest
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/lmcc
+    permissions:
+      contents: read
+      id-token: write # npm trusted publishing and provenance
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          registry-url: https://registry.npmjs.org
+      - name: npm with trusted publishing (11.5.1 or later)
+        run: npm install -g npm@11
+      - name: Publish
+        working-directory: ts
+        # prepublishOnly builds, type-checks and runs every test first.
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          [ "$GITHUB_REF_NAME" = "v$VERSION" ] || { echo "::error::tag $GITHUB_REF_NAME does not match ts/package.json $VERSION"; exit 1; }
+          if npm view "lmcc@$VERSION" version >/dev/null 2>&1; then echo "lmcc $VERSION is already on npm"; exit 0; fi
+          npm ci --no-audit --no-fund
+          TAG=latest
+          if [[ "$VERSION" == *-* ]]; then TAG=next; fi
+          npm publish --provenance --access public --tag "$TAG"
