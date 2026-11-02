@@ -4,7 +4,7 @@
  * `plan.dumpTurn`, `plan.loadTurn`. The rule under test, the same in every
  * kernel (D-61, D-62): the format bound to a type receives the value itself,
  * live or replayed; every other format receives its JSON form. And lm15's
- * media parts through `lmcc/lm15` (issue #3).
+ * media parts through `lmcc/lm15` (issue #3), and lm15's numbers.
  */
 
 import assert from "node:assert/strict";
@@ -12,7 +12,7 @@ import { test } from "node:test";
 import * as lm15 from "@lm15/lm15";
 import * as lmcc from "../src/index.ts";
 import { install as installStd } from "../src/std/index.ts";
-import { install as installLm15, media, request as lm15Request } from "../src/lm15.ts";
+import { install as installLm15, media, read as lm15Read, request as lm15Request } from "../src/lm15.ts";
 
 const TAGS = lmcc.adapter({
   messages: [
@@ -203,4 +203,45 @@ test("a record holding a picture refuses no-format instead of sending base64 tex
   installStd(reg);
   assert.throws(() => lmcc.bind(WILDCARD, sig, { instruct: true }, reg),
     (e: lmcc.Refusal) => e.code === "no-format" && e.hint.includes("holds media") && e.fix?.["key"] === "Shot");
+});
+
+// A sure judgment: TypeSafe's Jev answers {"handed_over": 1.0, "still_talking": 0.0}.
+// lm15 keeps a number written with a zero fraction as its RawNumber (the
+// lexeme, so 1.0 is sent back as 1.0), which is not a JavaScript number.
+const JUDGED = lmcc.load({
+  name: "judged", versions: { kernel: "0.8.3", vocab: { "reader/json_object": "0.2.0" } },
+  template: [{ role: "system", text: "{instruction}" }, { role: "user", text: "{text}" }],
+  reader: { kind: "json_object", probabilities: "required" },
+}, { registry: (() => { const reg = new lmcc.Registry(); installStd(reg); return reg; })() });
+
+function judged() {
+  const reg = new lmcc.Registry();
+  installStd(reg);
+  return lmcc.bind(JUDGED, lmcc.signatureFromDict({ instructions: "Has the user handed the turn over?", fields: [
+    { name: "text", direction: "input", shape: { type: "string" } },
+    { name: "turn", direction: "output", shape: { enum: ["handed_over", "still_talking"] } }] }),
+  { native_structured_output: true }, reg);
+}
+
+const judgment = (probabilities: string) => lm15.Response.fromJSON(lm15.parseJson(`{"id": "r", "model": "jev",
+  "message": {"role": "assistant", "parts": [{"type": "data", "value": {"turn": "handed_over"},
+  "probabilities": {"turn": ${probabilities}}, "method": "provider_classification"}]},
+  "finish_reason": "stop", "usage": {}}`) as lm15.JsonObject);
+
+test("a sure answer's probabilities, written 1.0 and 0.0, read as numbers from an lm15 response", () => {
+  const sure = lm15Read(judged(), judgment('{"handed_over": 1.0, "still_talking": 0.0}'));
+  assert.deepEqual(sure.values, { turn: "handed_over" });
+  assert.deepEqual(sure.probabilities, { turn: { handed_over: 1, still_talking: 0 } });
+  assert.equal(lmcc.jsonText(sure.probabilities), '{"turn":{"handed_over":1,"still_talking":0}}');
+  const spelled = lm15Read(judged(), judgment('{"handed_over": 1e0, "still_talking": 0.25}'));
+  assert.deepEqual(spelled.probabilities, { turn: { handed_over: 1, still_talking: 0.25 } });
+});
+
+test("only lm15's number is read by its lexeme: a plain object holding one is no probability", () => {
+  const reply = (p: unknown) => ({ role: "assistant", parts: [{ type: "data", value: { turn: "handed_over" },
+    probabilities: { turn: { handed_over: p } }, method: "provider_classification" }] });
+  const malformed = (e: lmcc.Refusal) => e.code === "response-malformed" && e.hint.includes("number in [0, 1]");
+  assert.throws(() => judged().read(reply({ raw: "1.0" })), malformed);
+  assert.throws(() => judged().read(reply(new lm15.RawNumber("1.5"))), malformed);
+  assert.deepEqual(judged().read(reply(new lm15.RawNumber("1.0"))).probabilities, { turn: { handed_over: 1 } });
 });

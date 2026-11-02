@@ -369,6 +369,22 @@ function responseMessage(response: unknown): unknown {
   return response;
 }
 
+/**
+ * One probability as a number. lm15 hands a float written with a zero
+ * fraction (`1.0`, `0.0`: what a sure answer looks like) over as its
+ * `RawNumber`, the lexeme kept; it is recognized by shape, as lm15.ts does,
+ * so a reply from any copy of lm15 reads the same. Anything else: undefined.
+ */
+function probabilityOf(p: unknown): number | undefined {
+  if (typeof p === "number") return p;
+  if (typeof p === "bigint") return Number(p);
+  if (typeof p === "object" && p !== null && !Array.isArray(p) && Object.getPrototypeOf(p) !== Object.prototype) {
+    const raw = (p as { raw?: unknown }).raw;
+    if (typeof raw === "string" && /^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?$/.test(raw)) return Number(raw);
+  }
+  return undefined;
+}
+
 /** Kernel §3: `[probabilities, measuredBy]` from the reply's data parts, checked on intake. */
 export function replyProbabilities(response: unknown): [Record<string, Record<string, number>>, Record<string, string>] {
   const message = responseMessage(response);
@@ -389,9 +405,8 @@ export function replyProbabilities(response: unknown): [Record<string, Record<st
     for (const field of memberNames(dist)) {
       const keys = dist[field];
       const valid = isObj(keys) && memberNames(keys).every((k) => {
-        const p = keys[k];
-        const n = typeof p === "bigint" ? Number(p) : p;
-        return typeof n === "number" && n >= 0 && n <= 1;
+        const n = probabilityOf(keys[k]);
+        return n !== undefined && n >= 0 && n <= 1;
       });
       if (!valid) {
         refuse("response-malformed", `probabilities for ${pyRepr(field)} must map each answer key to a number in [0, 1]`);
@@ -399,7 +414,9 @@ export function replyProbabilities(response: unknown): [Record<string, Record<st
       if (Object.prototype.hasOwnProperty.call(probabilities, field)) {
         refuse("parse-ambiguous", `two data parts carry probabilities for ${pyRepr(field)} — refusing to guess which measured the answer`);
       }
-      setMember(probabilities, field, copyObject<number>(keys));
+      const read: Record<string, number> = {};
+      for (const k of memberNames(keys)) setMember(read, k, probabilityOf(keys[k]) as number);
+      setMember(probabilities, field, read);
       setMember(measuredBy, field, method);
     }
   }
