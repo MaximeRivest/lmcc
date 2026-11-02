@@ -1473,28 +1473,28 @@ function merge_settings(base::AbstractDict, extra::AbstractDict; path="", overri
 end
 
 """
-    lm15_request(rendered; model, config=nothing, override=false) -> LM15.Request
+    lm15_request(rendered; model, config=nothing, override=false) -> LanguageModel15.Request
 
-The lm15 request for a rendered plan (needs `using LM15`): the plan's request
-settings are the base, the caller's `LM15.Config` fills the rest.
+The lm15 request for a rendered plan (needs `using LanguageModel15`): the plan's request
+settings are the base, the caller's `Config` fills the rest.
 """
 function lm15_request end
 
 """
     lm15_stream(plan, events; on_event=nothing) -> (events, StreamResult)
 
-Drive `stream(plan)` from lm15 stream events (needs `using LM15`).
+Drive `stream(plan)` from lm15 stream events (needs `using LanguageModel15`).
 """
 function lm15_stream end
 
 """
     lm15_install!(registry=default_registry()) -> registry
 
-Bind lm15's media part types (`LM15.ImagePart`, `AudioPart`, `VideoPart`,
-`DocumentPart`, `BinaryPart`; needs `using LM15`) in `registry`: each lowers
+Bind lm15's media part types (`ImagePart`, `AudioPart`, `VideoPart`,
+`DocumentPart`, `BinaryPart`; needs `using LanguageModel15`) in `registry`: each lowers
 to `{"media": kind}`, crosses by the format that shape resolves (the
 kernel's media default unless the artifact binds one), and has lm15's
-canonical part data (`LM15.to_dict`, `type` included) as its JSON form, so
+canonical part data (`LanguageModel15.to_dict`, `type` included) as its JSON form, so
 an lm15 part is a value for a media field of its kind, a turn saves it as
 that data and `load_turn` rebuilds the part. A part given by `path` keeps
 its path: lm15 reads the file. Loading the extension binds them in the

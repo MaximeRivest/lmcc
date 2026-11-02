@@ -1,6 +1,6 @@
 {
   "name": "lmcc",
-  "version": "0.8.7",
+  "version": "0.8.8",
   "description": "The language model calling convention: where each argument goes, how the result comes back, how each type crosses. TypeScript kernel of the lmcc contract.",
   "type": "module",
   "license": "Apache-2.0",
@@ -49,7 +49,7 @@
     "prepare": "npm run build"
   },
   "peerDependencies": {
-    "@lm15/lm15": "^1.0.0-rc.3"
+    "@lm15/lm15": "^1.0.0-rc.3 || ^2.0.0"
   },
   "peerDependenciesMeta": {
     "@lm15/lm15": {
@@ -57,7 +57,7 @@
     }
   },
   "devDependencies": {
-    "@lm15/lm15": "1.0.0-rc.3",
+    "@lm15/lm15": "2.0.0",
     "@types/node": "^22",
     "esbuild": "^0.28.2",
     "typescript": "^5.9"

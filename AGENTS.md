@@ -215,7 +215,7 @@ takes are listed in `ts/README.md`; do not add one without a decision entry.
 The third and fourth kernels (D-56), each a port of the TypeScript kernel's
 structure with the same byte-offset string handling. `julia/` is the
 package `LMCC` (stdlib plus OrderedCollections; `LMCC.Std` is the standard
-pack; the lm15 bridge is a package extension loaded with `using LM15`).
+pack; the lm15 bridge is a package extension loaded with `using LanguageModel15`).
 `r/` is the package `lmcc` (base R plus `src/lmcc.c`: correctly rounded
 decimal reading, shortest number spelling, SHA-256; `install_std()`; the
 lm15 bridge `lm15_*()` needs the `lm15` package). Each has `check` (what

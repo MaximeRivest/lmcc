@@ -1,4 +1,4 @@
-# The Julia kernel against real models, through LM15.jl. Costs money: not
+# The Julia kernel against real models, through lm15 for Julia (LanguageModel15). Costs money: not
 # part of ./check. Run by hand from the repository root:
 #
 #     set -a; source ~/Projects/lm15-dev/.env; set +a
@@ -13,7 +13,8 @@ import Pkg
 Pkg.activate(; temp=true, io=devnull)
 Pkg.develop([Pkg.PackageSpec(path=joinpath(@__DIR__, "..")), Pkg.PackageSpec(path=expanduser("~/Projects/lm15-dev/lm15-jl"))]; io=devnull)
 
-using LMCC, LM15
+using LMCC, LanguageModel15
+const LM15 = LanguageModel15
 using LMCC: JObj, jobj, Std, json_text
 
 const reg = Std.install!(Registry())

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lmcc"
-version = "0.8.7"   # equals the kernel version (lmcc.KERNEL_VERSION)
+version = "0.8.8"   # equals the kernel version (lmcc.KERNEL_VERSION)
 description = "The language model calling convention: typed signatures to messages and replies to typed values"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -26,8 +26,9 @@ Specification = "https://github.com/MaximeRivest/lmcc/blob/master/contract/spec/
 
 [project.optional-dependencies]
 dspy = ["dspy>=3.0", "pydantic>=2"]
-# lm15 at an exact release, bumped deliberately (see python/lmcc_lm15/check)
-lm15 = ["lm15==1.0.1"]
+# lm15 2.x, which keeps its chat core stable within the major version;
+# python/lmcc_lm15/check tests the bridge against one exact release, LM15_PIN there
+lm15 = ["lm15>=2.0.0,<3"]
 
 [tool.setuptools]
 packages = ["lmcc", "lmcc_std", "lmcc_dspy", "lmcc_lm15"]

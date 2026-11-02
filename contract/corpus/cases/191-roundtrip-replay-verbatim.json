@@ -29,7 +29,7 @@
   "entry": {
    "name": "replay_v1",
    "versions": {
-    "kernel": "0.8.7",
+    "kernel": "0.8.8",
     "vocab": {}
    },
    "template": [

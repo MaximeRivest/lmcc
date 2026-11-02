@@ -1,5 +1,8 @@
 # The corpus
 
+**lm15 2 (kernel 0.8.8, D-65).** No case is added: the contract does not
+change. Twelve cases move only the kernel version they report.
+
 **Pictures are never text by a catch-all (kernel 0.8.7, D-64).** Cases
 263–274 were typed by hand from kernel §5 and §7b before any kernel ran
 them: a list of pictures under `{"*": json}` is sent as its parts while a

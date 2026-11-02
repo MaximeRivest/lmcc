@@ -1,5 +1,5 @@
 """
-lmcc × lm15 (loaded with `using LMCC, LM15`): typed convenience over a shared
+lmcc × lm15 (loaded with `using LMCC, LanguageModel15`): typed convenience over a shared
 wire. The kernel already speaks lm15's canonical JSON; this uses lm15's own
 serde both ways, so nothing here can drift from what lm15 says a request or
 a response is. Mirrors the Python bridge, `lmcc_lm15`.
@@ -8,7 +8,7 @@ module LMCCLM15Ext
 
 using LMCC
 using LMCC: Plan, RenderResult, JObj, merge_settings, refuse, pyrepr
-import LM15
+import LanguageModel15 as LM15
 
 const MEDIA_PARTS = (LM15.ImagePart => "image", LM15.AudioPart => "audio", LM15.VideoPart => "video",
                      LM15.DocumentPart => "document", LM15.BinaryPart => "binary")

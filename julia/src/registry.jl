@@ -217,7 +217,7 @@ here always receives the value itself, live or replayed.
 With neither `write` nor `use`, no format is bound: the type crosses by the
 format its shape resolves (and, without `shape`, lowers as usual). `name`
 is the type name a signature records and formats resolve by (default
-`string(T)`, which reads `LM15.ImagePart` or `ImagePart` depending on what
+`string(T)`, which reads `LanguageModel15.ImagePart` or `ImagePart` depending on what
 the caller imported); give it to match the other kernels. Binding
 the same type again replaces its binding. Returns the bound format, or
 `nothing`.

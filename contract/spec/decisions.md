@@ -2138,3 +2138,56 @@ Ratified-by: Maxime Rivest, 2026-10-09 (in session): "fix issue 7 fully
 and excellently, publish a new version". The choice of the kernel rule
 over the issue's `json` refusal, the nullable default and the bridge
 spellings were made while building it and are stated here for review.
+
+**D-65 · lm15 2 in every host (kernel 0.8.8, a patch; no contract
+change).** lm15 reached 2.0.0 in every language on 2026-11-01 (contract
+cfc3edc, MAP-19). FunctAI moved to it (branch `lm15-2`) and could not be
+installed beside lmcc in TypeScript or Julia: lmcc's npm peer range took
+only `@lm15/lm15` 1.x, and its Julia extension was keyed on the package
+name `LM15`, which lm15 for Julia dropped for `LanguageModel15` (same
+UUID; Julia's General registry refuses short acronym names).
+
+- **What lm15 2 changes, for lmcc.** The `Config` fields are lm15
+  1.0.1's (compared field by field in `spec/types.md` at 3763eec and
+  cfc3edc), and so are the parts and messages lmcc writes and reads. The
+  generation's one breaking change is what a usage counter means (input
+  includes cached tokens, output includes reasoning, on every provider);
+  no kernel reads usage. Other additions (a bounding box judgment, model
+  metadata, a tool without description left off the wire) arrive as data
+  lmcc already passes through. The pin moves to cfc3edc
+  (`contract/LM15_CONTRACT_PIN`, kernel §3).
+- **TypeScript.** The peer range is `^1.0.0-rc.3 || ^2.0.0`; the kernel
+  uses nothing lm15 2 removed. Development and `./check` move to
+  `@lm15/lm15` 2.0.0; 1.0.0-rc.3 was the last version checked under the
+  1.x range (`./check` green at 581972d).
+- **Julia.** The weak dependency is `LanguageModel15 = "2"` (same UUID),
+  imported in the extension as `LM15`, so the extension's code and the
+  type names it records are unchanged. Users write `using
+  LanguageModel15`. The bridge test pins LanguageModel15.jl at 014356f
+  (2.0.0, in General's queue, not yet registered: installed by URL).
+  lm15 for Julia 1.x was never registered under either name, so there is
+  no range to keep.
+- **Python.** The extra `lmcc[lm15]` takes `lm15>=2.0.0,<3` instead of
+  the exact `lm15==1.0.1`: an exact pin in a published extra conflicts
+  with any other package asking for a different lm15 2 release (FunctAI
+  does), and lm15 promises its chat core within 2.x. The bridge check
+  still runs one exact release, `LM15_PIN` in `python/lmcc_lm15/check`
+  (2.0.0), so `./check` stays reproducible; it no longer reads the pin
+  from `pyproject.toml`.
+- **R.** Nothing changes in the package (`Suggests: lm15`, no version);
+  the bridge test moves to lm15 for R `v2.0.0` (33 expectations green).
+- **Version.** 0.8.7 is on PyPI but was never published to npm; the
+  packages move together to 0.8.8, so one tag publishes PyPI and npm
+  from the same commit. Twelve corpus cases move only their reported
+  kernel version.
+
+Costs, stated. TypeScript's tests run against lm15 2.0.0 only from here
+on; the 1.x half of the peer range is no longer exercised by `./check`.
+Julia users can no longer use the old `LM15` name with lmcc 0.8.8.
+`lmcc[lm15]` may now install an lm15 2 release newer than the one
+`./check` tested.
+
+Ratified-by: Maxime Rivest, 2026-11-02 (in session): "go make sure it's
+good and commit it" with FunctAI's list of what lmcc needs for lm15 2.
+The Python range instead of an exact pin was chosen while doing it and
+is stated here for review.

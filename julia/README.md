@@ -6,9 +6,10 @@ It passes the same contract corpus as the Python, TypeScript and R kernels,
 byte for byte, and serializes the same data (artifacts, turns, plans,
 readings): a record written by one is read identically by the others.
 
-- **Standard library plus OrderedCollections**, the package LM15.jl already
-  uses. lmcc never touches the network.
-- **lm15 is optional.** With `using LM15`, the bridge extension adds
+- **Standard library plus OrderedCollections**, which lm15 for Julia
+  (`LanguageModel15`) already uses. lmcc never touches the network.
+- **lm15 is optional.** With `using LanguageModel15` (lm15 2; the package
+  was called `LM15` before 2.0), the bridge extension adds
   `lm15_request`, `lm15_stream`, and methods of `LMCC.read`, `LMCC.parse`
   and `LMCC.step` that take lm15's `Response` and `Message`.
 
@@ -93,18 +94,18 @@ t = tool(t, "call_1", "Sunny, 22C")
 ## Sending it with lm15
 
 ```julia
-# using LM15
+# using LanguageModel15
 # req = lm15_request(r; model="claude-haiku-4-5", config=Config(; max_tokens=300))
 # response = complete(LMRouter(), req); LMCC.read(plan, response); LMCC.step(r, response)
-# events, result = lm15_stream(plan, LM15.stream(LMRouter(), req))
+# events, result = lm15_stream(plan, LanguageModel15.stream(LMRouter(), req))
 ```
 
-With LM15 loaded, its media parts are field types: `inputs=(picture=LM15.ImagePart,)`
+With LanguageModel15 loaded, its media parts are field types: `inputs=(picture=ImagePart,)`
 is a `{"media": "image"}` field whose value is an lm15 part, written as
 lm15's canonical part data (a path stays a path; lm15 reads the file), saved
-by `dump_turn` and rebuilt by `load_turn`. `Vector{LM15.ImagePart}` is
+by `dump_turn` and rebuilt by `load_turn`. `Vector{ImagePart}` is
 several pictures (their parts where the field sits, in order) and
-`Union{LM15.ImagePart, Nothing}` an optional one (`nothing` is the text
+`Union{ImagePart, Nothing}` an optional one (`nothing` is the text
 `null`); `load_turn` rebuilds both. Loading the extension binds the five part
 types in the default registry; `lm15_install!(registry)` binds them in your
 own. A format written for every value (`"*"`, `"object"`, `"list[*]"`) that
@@ -133,7 +134,7 @@ names against Python, member order included.
   (found by `isa`, as Python finds it by class) and `load_turn` rebuilds.
   `bind_type!`'s `name` sets the type name a signature records, which
   `string(T)` otherwise spells by what the caller imported
-  (`LM15.ImagePart` or `ImagePart`); the lm15 extension gives Python's.
+  (`LanguageModel15.ImagePart` or `ImagePart`); the lm15 extension gives Python's.
 - **A `Dict` has no order**: Julia's `Dict` iterates in hash order, and lmcc
   writes an object's members in the order the value holds them (kernel §1),
   so a `Dict` given as a value or a shape is written in hash order (a

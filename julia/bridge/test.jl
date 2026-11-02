@@ -1,11 +1,12 @@
-# The lm15 bridge (ext/LMCCLM15Ext.jl) against a real LM15.jl, offline: no
-# network once installed, no keys. Run by julia/check. The pin is an exact
-# LM15.jl commit (LM15.jl is not in the General registry yet); the
-# environment is built in julia/.lm15-env, again whenever the pin changes.
-# Fails loudly if LM15 cannot be loaded, never skips.
+# The lm15 bridge (ext/LMCCLM15Ext.jl) against a real lm15 for Julia (the
+# package LanguageModel15), offline: no network once installed, no keys. Run
+# by julia/check. The pin is an exact LanguageModel15.jl commit (it is not in
+# the General registry yet); the environment is built in julia/.lm15-env,
+# again whenever the pin changes. Fails loudly if it cannot be loaded, never
+# skips.
 
 import Pkg
-const PIN = (url="https://github.com/lm15-dev/LM15.jl", rev="34c1167035c456e63209ec63c42e58fb289d5f1c")   # LM15.jl 1.0.0
+const PIN = (url="https://github.com/lm15-dev/LanguageModel15.jl", rev="014356f721c5f934a8ca700d3dcd695e0725b60d")   # LanguageModel15 2.0.0
 const ENV_DIR = joinpath(@__DIR__, "..", ".lm15-env")
 const MARK = joinpath(ENV_DIR, "lm15-pin")
 Pkg.activate(ENV_DIR; io=devnull)
@@ -17,7 +18,8 @@ if !isfile(MARK) || read(MARK, String) != PIN.rev
 end
 Pkg.instantiate(; io=devnull)
 
-using Test, LMCC, LM15
+using Test, LMCC, LanguageModel15
+const LM15 = LanguageModel15
 using LMCC: JObj, json_text, parse_json
 
 const ASK = adapter(; messages=[LMCC.system("{instruction}\n{% for f in outputs %}<{f.name}>\n{f.value}\n</{f.name}>\n{% endfor %}"),

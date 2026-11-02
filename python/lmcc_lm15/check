@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # The lm15 bridge's gate: lmcc_lm15 against a real lm15, offline.
-# The pin is an exact lm15 release (pyproject extra `lm15`), read from pyproject.
+# The pin is an exact lm15 release, inside the range the pyproject extra `lm15` allows.
 # Builds python/.venv-lm15 with uv, again whenever the pin changes;
 # fails loudly if lm15 cannot be imported — never skips.
 # Local development against a checkout: uv pip install -e ~/Projects/lm15-dev/lm15-python --python .venv-lm15/bin/python
 set -euo pipefail
 cd "$(dirname "$0")/.."
 VENV=.venv-lm15
-LM15_PIN=$(grep -o '"lm15[=@][^"]*"' pyproject.toml | tr -d '"')
+LM15_PIN=lm15==2.0.0
 if command -v uv >/dev/null 2>&1; then UV=uv; else UV="nix run nixpkgs#uv --"; fi
 if [ ! -x "$VENV/bin/python" ] || [ "$(cat "$VENV/.lm15-pin" 2>/dev/null)" != "$LM15_PIN" ]; then
   echo "building $VENV ($LM15_PIN + pytest) ..."

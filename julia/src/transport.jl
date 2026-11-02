@@ -6,7 +6,7 @@ const _TO = r"\A@purpose(\.[A-Za-z_][A-Za-z0-9_]*)?\z"
 const _PUT = r"\A(request\.[a-z_][a-z0-9_.]*|message:(system|developer|user|assistant))\z"
 const _FROM = r"\A(text|part:[a-z_]+)\z"
 
-"The pinned lm15 `Config` fields (lm15 1.0.1, contract 3763eec; kernel §3)."
+"The pinned lm15 `Config` fields (lm15 2.0.0, contract cfc3edc; kernel §3)."
 const LM15_CONFIG_FIELDS = Set(["max_tokens", "temperature", "top_p", "top_k", "stop", "response_format", "tool_choice",
     "reasoning", "cache", "seed", "frequency_penalty", "presence_penalty", "service_tier", "user_id", "store", "logprobs",
     "probabilities", "extensions"])

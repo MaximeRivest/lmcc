@@ -15,7 +15,7 @@ fi
 r() { eval "$RUN" "$@"; }
 # lm15 for R, for the bridge's test: an exact release tag (lm15 for R is not on CRAN yet),
 # installed once into r/.lib-lm15, again whenever the pin changes; its imports come from nixpkgs.
-LM15_R_PIN=v1.1.0
+LM15_R_PIN=v2.0.0
 RUNL="nix shell --impure --expr 'let pkgs = (builtins.getFlake \"nixpkgs\").legacyPackages.\${builtins.currentSystem}; in pkgs.buildEnv { name = \"lmcc-r-lm15\"; paths = [ (pkgs.rWrapper.override { packages = with pkgs.rPackages; [ testthat askpass curl jsonlite openssl ]; }) pkgs.gcc pkgs.gnumake ]; }' -c"
 rl() { eval "$RUNL" "$@"; }
 PY=${PYTHON:-python}

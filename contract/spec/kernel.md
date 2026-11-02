@@ -1,6 +1,6 @@
 # The LMCC kernel — normative specification
 
-**Version 0.8.7** (kernel). Status: the v3 design (`plans/08`). Four
+**Version 0.8.8** (kernel). Status: the v3 design (`plans/08`). Four
 implementations pass the corpus: `python/lmcc`, the reference, and the
 TypeScript (`ts/`, D-54), Julia (`julia/`) and R (`r/`, D-56) kernels,
 which join through the driver protocol (§9) with their stream traces
@@ -8,6 +8,13 @@ compared to the reference's. The Go
 kernel that passed kernel 0.6 is kept at the git tag `kernel-0.6`
 (D-41). Where this document and the corpus disagree, fix the corpus first,
 then the implementations.
+
+**What 0.8.8 changes (D-65).** Nothing in the contract. The wire is
+lm15 2.0.0 (contract cfc3edc), whose `Config` fields, parts and messages
+are lm15 1.0.1's; lm15 2 changes what its token counters mean, which no
+kernel reads. Each host accepts lm15 2 (Julia's lm15 package is now
+named `LanguageModel15`), and TypeScript reads a probability lm15 holds
+as its `RawNumber` (`1.0`, `0.0`) as a number.
 
 **What 0.8.7 changes (D-64).** A format written for every value never
 writes pictures as text. A list of one media kind
@@ -307,7 +314,7 @@ whose `config` keys are the pinned lm15 `Config` fields (`max_tokens`,
 `temperature`, `top_p`, `top_k`, `stop`, `response_format`,
 `tool_choice`, `reasoning`, `cache`, `seed`, `frequency_penalty`,
 `presence_penalty`, `service_tier`, `user_id`, `store`, `logprobs`,
-`probabilities`, `extensions` — lm15 1.0.1, contract 3763eec, D-53);
+`probabilities`, `extensions` — lm15 2.0.0, contract cfc3edc, D-53, D-65);
 anything else refuses `entry-malformed` at the control's
 path. Below those two levels the value is opaque, as in lm15. Two
 sources disagreeing on one leaf is `setting-conflict`; agreeing is fine.
